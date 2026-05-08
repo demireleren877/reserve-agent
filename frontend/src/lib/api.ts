@@ -15,15 +15,18 @@ export async function uploadExcel(
   file: File,
   opts: UploadOptions,
 ): Promise<{ triangle: Triangle; warnings: string[]; file_data?: Record<string, Record<string, Record<string, number>>> | null }> {
-  const form = new FormData();
-  form.append("file", file);
-  form.append("triangle_type", opts.triangle_type);
-  form.append("origin_granularity", opts.origin_granularity);
-  form.append("development_granularity", opts.development_granularity);
-  form.append("cumulative", String(opts.cumulative));
+  const buffer = await file.arrayBuffer();
+  const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer)));
   const res = await fetch(`${API_BASE}/v1/upload`, {
     method: "POST",
-    body: form,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      file_b64: base64,
+      triangle_type: opts.triangle_type,
+      origin_granularity: opts.origin_granularity,
+      development_granularity: opts.development_granularity,
+      cumulative: opts.cumulative,
+    }),
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({ detail: "Yükleme hatası" }));
@@ -139,12 +142,12 @@ export async function uploadPremiums(
   file: File,
   originGranularity: "yearly" | "quarterly" = "yearly",
 ): Promise<Record<string, number>> {
-  const form = new FormData();
-  form.append("file", file);
-  form.append("origin_granularity", originGranularity);
+  const buffer = await file.arrayBuffer();
+  const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer)));
   const res = await fetch(`${API_BASE}/v1/upload/premiums`, {
     method: "POST",
-    body: form,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ file_b64: base64, origin_granularity: originGranularity }),
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({ detail: "Yükleme hatası" }));

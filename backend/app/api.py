@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import os
 
+import base64
+
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from pydantic import BaseModel
 
 from app.agent.client import AgentClient
 from app.agent.loop import run_agent_turn
@@ -50,15 +53,24 @@ def list_models() -> ModelsResponse:
     return ModelsResponse(models=MODEL_CATALOG, default=default)
 
 
+class UploadJsonRequest(BaseModel):
+    file_b64: str
+    triangle_type: str = "paid"
+    origin_granularity: str = "yearly"
+    development_granularity: str = "yearly"
+    cumulative: bool = True
+
+
 @router.post("/upload", response_model=UploadResponse)
-async def upload_excel(
-    file: UploadFile = File(...),
-    triangle_type: str = Form(default="paid"),
-    origin_granularity: str = Form(default="yearly"),
-    development_granularity: str = Form(default="yearly"),
-    cumulative: bool = Form(default=True),
-) -> UploadResponse:
-    content = await file.read()
+async def upload_excel(body: UploadJsonRequest) -> UploadResponse:
+    try:
+        content = base64.b64decode(body.file_b64)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Geçersiz base64: {e}") from e
+    triangle_type = body.triangle_type
+    origin_granularity = body.origin_granularity
+    development_granularity = body.development_granularity
+    cumulative = body.cumulative
     try:
         tt = TriangleType(triangle_type)
         og = Granularity(origin_granularity)
@@ -84,14 +96,19 @@ async def upload_excel(
     )
 
 
+class UploadPremiumsRequest(BaseModel):
+    file_b64: str
+    origin_granularity: str = "yearly"
+
+
 @router.post("/upload/premiums")
-async def upload_premiums(
-    file: UploadFile = File(...),
-    origin_granularity: str = Form(default="yearly"),
-) -> dict:
-    content = await file.read()
+async def upload_premiums(body: UploadPremiumsRequest) -> dict:
     try:
-        og = Granularity(origin_granularity)
+        content = base64.b64decode(body.file_b64)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Geçersiz base64: {e}") from e
+    try:
+        og = Granularity(body.origin_granularity)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=f"Geçersiz granülarite: {e}") from e
     try:

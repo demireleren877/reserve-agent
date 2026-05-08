@@ -1,0 +1,130 @@
+import type { FileData, Granularity, LDFMethod, Triangle, TriangleType } from "./triangle";
+
+export type Frequency = "yearly" | "quarterly";
+
+export interface UploadSettings {
+  triangleType: TriangleType;
+  originGranularity: Granularity;
+  devGranularity: Granularity;
+  cumulative: boolean;
+}
+export type Window = number | "all";
+
+export type ChangeSource = "user" | "agent";
+
+export interface HistoryEntry {
+  id: string;
+  timestamp: string;
+  action: string;
+  source?: ChangeSource;
+  details?: Record<string, unknown>;
+}
+
+export interface Branch {
+  id: string;
+  name: string;
+  frequency: Frequency;
+  createdAt: string;
+  updatedAt: string;
+
+  triangle: Triangle | null;
+  triangleFileName?: string | null;
+  fileData?: FileData;
+
+  /** Ödeme (paid) üçgeni — DataTab görünümü ve Muallak hesabı için */
+  paidTriangle?: Triangle | null;
+  /** Gerçekleşen (incurred) üçgeni — DataTab görünümü ve Muallak hesabı için */
+  incurredTriangle?: Triangle | null;
+
+  method: LDFMethod;
+  window: Window;
+  excludedCells: string[];
+
+  premiums: Record<string, number>;
+  lrInputPerOrigin: Record<string, string>;
+  basisPerOrigin: Record<string, "cl" | "bf">;
+
+  /** Çeyreklik modellerde kaza yılı tamamlanmamış origin'ler için
+   *  annualization katsayısı. Örn. sadece Q1 görünüyorsa 4, Q1+Q2 için 2.
+   *  Missing / 1 → düzeltme yok. BF hesabında exposure bu katsayıyla
+   *  çarpılarak yıllığa tamamlanır; IBNR hesabında ultimate bu katsayıya
+   *  bölünerek kısmi döneme geri indirilir. */
+  correctionPerOrigin: Record<string, number>;
+
+  /** User-entered CDF per development period (stringified). Missing key → 1. */
+  cdfInitial: Record<string, number>;
+  /** Per-period choice: "initial" uses Selected CDF from LDF tab,
+   *  "user" uses the typed User Value. Missing key → "initial". */
+  cdfChoicePerPeriod: Record<string, "initial" | "user">;
+
+  history: HistoryEntry[];
+
+  uploadSettings: UploadSettings;
+}
+
+export interface Period {
+  id: string;
+  label: string;
+  createdAt: string;
+  branches: Branch[];
+}
+
+export interface Project {
+  periods: Period[];
+  activePeriodId: string | null;
+  activeFrequency: Frequency | null;
+  activeBranchId: string | null;
+}
+
+export type NavLevel = "root" | "period" | "frequency" | "branch";
+
+export function newId(): string {
+  return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+}
+
+export function makeBranch(name: string, frequency: Frequency): Branch {
+  const now = new Date().toISOString();
+  return {
+    id: newId(),
+    name,
+    frequency,
+    createdAt: now,
+    updatedAt: now,
+    triangle: null,
+    paidTriangle: null,
+    incurredTriangle: null,
+    method: "volume_weighted",
+    window: "all",
+    excludedCells: [],
+    premiums: {},
+    lrInputPerOrigin: {},
+    basisPerOrigin: {},
+    correctionPerOrigin: {},
+    cdfInitial: {},
+    cdfChoicePerPeriod: {},
+    uploadSettings: {
+      triangleType: "paid",
+      originGranularity: "yearly",
+      devGranularity: "quarterly",
+      cumulative: true,
+    },
+    history: [
+      {
+        id: newId(),
+        timestamp: now,
+        action: "branch_created",
+        source: "user",
+        details: { name, frequency },
+      },
+    ],
+  };
+}
+
+export function makePeriod(label: string): Period {
+  return {
+    id: newId(),
+    label,
+    createdAt: new Date().toISOString(),
+    branches: [],
+  };
+}

@@ -1,13 +1,3 @@
----
-title: Actuarial Workbench API
-emoji: 📊
-colorFrom: blue
-colorTo: indigo
-sdk: docker
-app_port: 7860
-pinned: false
----
-
 # Reserve Agent
 
 Aktüeryal rezerv analizi için chat-first, interaktif agent / arayüz.

@@ -3,6 +3,7 @@ services:
     name: actuarial-api
     runtime: docker
     dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
     envVars:
       - key: OPENROUTER_API_KEY
         sync: false

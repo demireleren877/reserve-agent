@@ -1,23 +1,28 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Triangle } from "@/types/triangle";
 import { formatFactor } from "@/lib/api";
-import { fitInversePower, fitExponential, fitWeibull } from "@/lib/tail-fit";
-
-type CdfChoice = "initial" | "user";
+import type { TailFit } from "@/lib/tail-fit";
+import { CurveFitModal } from "@/components/CurveFitModal";
 
 interface Props {
   triangle: Triangle | null;
   initialCDFs: number[];
-  /** Raw aggregated LDFs (pre-cascade) — used for tail fitting */
   selectedLDFs: number[];
   cdfInitial: Record<string, number>;
-  cdfChoicePerPeriod: Record<string, CdfChoice>;
-  onSetInitial: (devPeriod: string, value: number) => void;
-  onResetInitial: () => void;
-  onSetChoice: (devPeriod: string, choice: CdfChoice) => void;
-  onSetChoiceBulk: (items: { devPeriod: string; choice: CdfChoice }[]) => void;
+  cdfModelPerPeriod: Record<string, 1 | 2 | 3 | 4 | 5 | 6>;
+  curveIncludePerPeriod: Record<string, boolean>;
+  tailFits: {
+    exp: TailFit;
+    invPower: TailFit;
+    power: TailFit;
+    weibull: TailFit;
+  };
+  onSetUserValue: (devPeriod: string, value: number) => void;
+  onSetModel: (devPeriod: string, model: 1 | 2 | 3 | 4 | 5 | 6) => void;
+  onToggleInclude: (devPeriod: string, include: boolean) => void;
+  onReset: () => void;
 }
 
 export function CurveTab({
@@ -25,53 +30,24 @@ export function CurveTab({
   initialCDFs,
   selectedLDFs,
   cdfInitial,
-  cdfChoicePerPeriod,
-  onSetInitial,
-  onResetInitial,
-  onSetChoice,
-  onSetChoiceBulk,
+  cdfModelPerPeriod,
+  curveIncludePerPeriod,
+  tailFits,
+  onSetUserValue,
+  onSetModel,
+  onToggleInclude,
+  onReset,
 }: Props) {
-  const [dragChoice, setDragChoice] = useState<CdfChoice | null>(null);
-  const dragKeysRef = useRef<Set<string>>(new Set());
+  const [dragModel, setDragModel] = useState<1 | 2 | 3 | 4 | 5 | 6 | null>(null);
+  const draggedKeys = useRef<Set<string>>(new Set());
+  const [showChart, setShowChart] = useState(false);
 
   useEffect(() => {
-    if (dragChoice === null) return;
-    const end = () => {
-      setDragChoice(null);
-      dragKeysRef.current.clear();
-    };
-    window.addEventListener("mouseup", end);
-    window.addEventListener("dragend", end);
-    return () => {
-      window.removeEventListener("mouseup", end);
-      window.removeEventListener("dragend", end);
-    };
-  }, [dragChoice]);
-
-  // Tail fits — computed once per selectedLDFs change
-  const tailFits = useMemo(() => ({
-    inversePower: fitInversePower(selectedLDFs),
-    exponential: fitExponential(selectedLDFs),
-    weibull: fitWeibull(selectedLDFs),
-  }), [selectedLDFs]);
-
-  const rows = useMemo(() => {
-    if (!triangle) return [];
-    return triangle.development_periods.map((dev, i) => {
-      const key = String(dev);
-      return {
-        index: i + 1,
-        devPeriod: dev,
-        key,
-        initialSelection: i < initialCDFs.length ? initialCDFs[i] : 1,
-        userValue: cdfInitial[key] ?? 1,
-        choice: (cdfChoicePerPeriod[key] ?? "initial") as CdfChoice,
-        invPowerCDF: tailFits.inversePower.ok ? tailFits.inversePower.cdfs[i] : null,
-        expCDF: tailFits.exponential.ok ? tailFits.exponential.cdfs[i] : null,
-        weibullCDF: tailFits.weibull.ok ? tailFits.weibull.cdfs[i] : null,
-      };
-    });
-  }, [triangle, initialCDFs, cdfInitial, cdfChoicePerPeriod, tailFits]);
+    if (dragModel === null) return;
+    const stop = () => { setDragModel(null); draggedKeys.current.clear(); };
+    window.addEventListener("mouseup", stop);
+    return () => window.removeEventListener("mouseup", stop);
+  }, [dragModel]);
 
   if (!triangle) {
     return (
@@ -81,45 +57,104 @@ export function CurveTab({
     );
   }
 
-  const overrideCount = rows.filter(r => r.choice === "user").length;
-
-  function handleDown(key: string, choice: CdfChoice) {
-    setDragChoice(choice);
-    dragKeysRef.current = new Set([key]);
-    onSetChoice(key, choice);
+  function ldfAt(cdfs: number[], i: number): number | null {
+    if (i >= cdfs.length) return null;
+    const next = i + 1 < cdfs.length ? cdfs[i + 1] : 1;
+    return next > 0 ? cdfs[i] / next : null;
   }
 
-  function handleEnter(key: string) {
-    if (dragChoice === null) return;
-    if (dragKeysRef.current.has(key)) return;
-    dragKeysRef.current.add(key);
-    onSetChoice(key, dragChoice);
+  function startDrag(key: string, model: 1 | 2 | 3 | 4 | 5 | 6) {
+    draggedKeys.current = new Set([key]);
+    setDragModel(model);
+    onSetModel(key, model);
   }
 
-  // Param badges
-  const ipParams = tailFits.inversePower.params;
-  const exParams = tailFits.exponential.params;
-  const wbParams = tailFits.weibull.params;
+  function enterDrag(key: string) {
+    if (dragModel === null || draggedKeys.current.has(key)) return;
+    draggedKeys.current.add(key);
+    onSetModel(key, dragModel);
+  }
+
+  const rows = triangle.development_periods.map((dev, i) => {
+    const key = String(dev);
+    const model = cdfModelPerPeriod[key] ?? 1;
+    const initLDF = i < selectedLDFs.length ? selectedLDFs[i] : null;
+    const autoExcluded = initLDF !== null && initLDF <= 1;
+    const included = !autoExcluded && curveIncludePerPeriod[key] !== false;
+    const expLDF = tailFits.exp.ok ? ldfAt(tailFits.exp.cdfs, i) : null;
+    const ipLDF  = tailFits.invPower.ok ? ldfAt(tailFits.invPower.cdfs, i) : null;
+    const pwLDF  = tailFits.power.ok ? ldfAt(tailFits.power.cdfs, i) : null;
+    const wbLDF  = tailFits.weibull.ok ? ldfAt(tailFits.weibull.cdfs, i) : null;
+    const userCDF = cdfInitial[key] ?? null;
+
+    const expCDF = tailFits.exp.ok && i < tailFits.exp.cdfs.length ? tailFits.exp.cdfs[i] : null;
+    const ipCDF  = tailFits.invPower.ok && i < tailFits.invPower.cdfs.length ? tailFits.invPower.cdfs[i] : null;
+    const pwCDF  = tailFits.power.ok && i < tailFits.power.cdfs.length ? tailFits.power.cdfs[i] : null;
+    const wbCDF  = tailFits.weibull.ok && i < tailFits.weibull.cdfs.length ? tailFits.weibull.cdfs[i] : null;
+    const initCDF = i < initialCDFs.length ? initialCDFs[i] : 1;
+
+    const modelCDF =
+      model === 2 ? (expCDF ?? initCDF)
+      : model === 3 ? (ipCDF ?? initCDF)
+      : model === 4 ? (pwCDF ?? initCDF)
+      : model === 5 ? (wbCDF ?? initCDF)
+      : model === 6 ? (userCDF ?? 1)
+      : initCDF;
+
+    const selectedLdf =
+      model === 2 ? expLDF
+      : model === 3 ? ipLDF
+      : model === 4 ? pwLDF
+      : model === 5 ? wbLDF
+      : model === 6 ? (userCDF ?? 1)
+      : initLDF;
+
+    return { i, key, dev, model, included, autoExcluded, initLDF, expLDF, ipLDF, pwLDF, wbLDF, userCDF, modelCDF, selectedLdf };
+  });
+
+  const cumulPct = rows.map(r => (r.modelCDF > 0 ? 100 / r.modelCDF : 0));
+  const incrPct  = cumulPct.map((p, i) => i === 0 ? p : p - cumulPct[i - 1]);
+
+  const hasOverrides = rows.some(r => r.model !== 1);
+  const hasExcludes  = rows.some(r => !r.included);
+
+  const ip = tailFits.invPower.params;
+  const ep = tailFits.exp.params;
+  const pp = tailFits.power.params;
+  const wb = tailFits.weibull.params;
+
+  const includeFlags = rows.map(r => r.included);
 
   return (
     <div className="space-y-3">
+      {showChart && (
+        <CurveFitModal
+          selectedLDFs={selectedLDFs}
+          includeFlags={includeFlags}
+          devPeriods={triangle.development_periods}
+          fits={tailFits}
+          onClose={() => setShowChart(false)}
+        />
+      )}
       <div className="card p-2.5 flex items-center gap-3">
         <div className="flex flex-col leading-tight">
           <span className="text-[13px] font-medium">CDF Curve</span>
           <span className="text-[10px] text-[color:var(--muted)]">
-            tıkla · sürükle toplu seç · çift tıkla User Value gir
+            Tıkla veya sürükle seç · User Value: çift tık
           </span>
         </div>
         <div className="flex items-center gap-2 ml-auto">
-          <span className="text-[11px] text-[color:var(--muted-strong)] tabular">
-            {overrideCount}/{rows.length} override
-          </span>
-          {overrideCount > 0 && (
+          {(tailFits.exp.ok || tailFits.invPower.ok || tailFits.power.ok || tailFits.weibull.ok) && (
             <button
-              onClick={() => {
-                if (confirm("Tüm seçimler ve override'lar temizlensin mi?"))
-                  onResetInitial();
-              }}
+              onClick={() => setShowChart(true)}
+              className="btn text-[11px] py-1 px-2"
+            >
+              Grafik
+            </button>
+          )}
+          {(hasOverrides || hasExcludes) && (
+            <button
+              onClick={() => { if (confirm("Tüm seçimler ve override'lar temizlensin mi?")) onReset(); }}
               className="btn text-[11px] py-1 px-2"
             >
               Sıfırla
@@ -128,22 +163,30 @@ export function CurveTab({
         </div>
       </div>
 
-      {/* Fit param summary */}
-      {(tailFits.inversePower.ok || tailFits.exponential.ok || tailFits.weibull.ok) && (
+      {(tailFits.exp.ok || tailFits.invPower.ok || tailFits.power.ok || tailFits.weibull.ok) && (
         <div className="flex gap-2 flex-wrap text-[10px] text-[color:var(--muted-strong)]">
-          {tailFits.inversePower.ok && (
+          {tailFits.exp.ok && (
             <span className="px-2 py-0.5 rounded bg-[color:var(--surface-alt)] border border-[color:var(--border)]">
-              Inv. Power: c={ipParams.c?.toFixed(4)}, β={ipParams.beta?.toFixed(3)}
+              Exp: a={ep.a?.toFixed(4)}, b={ep.b?.toFixed(4)}
+              {tailFits.exp.r2 != null && <> R²={tailFits.exp.r2.toFixed(3)}</>}
             </span>
           )}
-          {tailFits.exponential.ok && (
+          {tailFits.invPower.ok && (
             <span className="px-2 py-0.5 rounded bg-[color:var(--surface-alt)] border border-[color:var(--border)]">
-              Exp.: c={exParams.c?.toFixed(4)}, β={exParams.beta?.toFixed(3)}
+              Inv.Power: a={ip.a?.toFixed(4)}, b={ip.b?.toFixed(4)}, c={ip.c?.toFixed(1)}
+              {tailFits.invPower.r2 != null && <> R²={tailFits.invPower.r2.toFixed(3)}</>}
+            </span>
+          )}
+          {tailFits.power.ok && (
+            <span className="px-2 py-0.5 rounded bg-[color:var(--surface-alt)] border border-[color:var(--border)]">
+              Power: a={pp.a?.toFixed(4)}, b={pp.b?.toFixed(4)}
+              {tailFits.power.r2 != null && <> R²={tailFits.power.r2.toFixed(3)}</>}
             </span>
           )}
           {tailFits.weibull.ok && (
             <span className="px-2 py-0.5 rounded bg-[color:var(--surface-alt)] border border-[color:var(--border)]">
-              Weibull: c={wbParams.c?.toFixed(4)}, β={wbParams.beta?.toFixed(3)}, γ={wbParams.gamma?.toFixed(1)}
+              Weibull: a={wb.a?.toFixed(4)}, b={wb.b?.toFixed(4)}
+              {tailFits.weibull.r2 != null && <> R²={tailFits.weibull.r2.toFixed(3)}</>}
             </span>
           )}
         </div>
@@ -151,50 +194,87 @@ export function CurveTab({
 
       <div className="card p-0 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="text-[12px] tabular w-full">
+          <table className="text-[12px] tabular w-full select-none">
             <thead>
               <tr className="text-[color:var(--muted-strong)] text-[10px] uppercase tracking-wide bg-[color:var(--surface-alt)]">
-                <th className="text-left px-2 py-1.5 font-semibold w-[90px]">Dev.</th>
-                <th className="text-right px-2 py-1.5 font-semibold w-[130px]">Initial</th>
-                <th className="text-right px-2 py-1.5 font-semibold w-[110px] text-[color:var(--muted)]">Inv. Power</th>
-                <th className="text-right px-2 py-1.5 font-semibold w-[110px] text-[color:var(--muted)]">Exponential</th>
-                <th className="text-right px-2 py-1.5 font-semibold w-[110px] text-[color:var(--muted)]">Weibull</th>
-                <th className="text-right px-2 py-1.5 font-semibold w-[130px]">User Value</th>
+                <th className="text-left px-2 py-1.5 font-semibold w-[70px]">Dev.</th>
+                <th className="text-center px-2 py-1.5 font-semibold w-[60px]">Include</th>
+                <th className="text-right px-2 py-1.5 font-semibold w-[90px]">Initial</th>
+                <th className="text-right px-2 py-1.5 font-semibold w-[90px] text-[color:var(--muted)]">Exp. Decay</th>
+                <th className="text-right px-2 py-1.5 font-semibold w-[90px] text-[color:var(--muted)]">Inv. Power</th>
+                <th className="text-right px-2 py-1.5 font-semibold w-[90px] text-[color:var(--muted)]">Power</th>
+                <th className="text-right px-2 py-1.5 font-semibold w-[90px] text-[color:var(--muted)]">Weibull</th>
+                <th className="text-right px-2 py-1.5 font-semibold w-[90px]">User Value</th>
+                <th className="text-right px-2 py-1.5 font-semibold w-[90px]">Selected</th>
+                <th className="text-right px-2 py-1.5 font-semibold w-[90px]">Cumul CDF</th>
+                <th className="text-right px-2 py-1.5 font-semibold w-[70px]">Cumul%</th>
+                <th className="text-right px-2 py-1.5 font-semibold w-[70px]">Incr%</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map(r => (
-                <tr key={r.key} className="border-t hover:bg-[color:var(--surface-alt)]/30">
-                  <td className="px-2 py-0.5 font-medium leading-tight tabular">{r.index}</td>
-                  <td className="p-0">
-                    <CdfCell
-                      value={r.initialSelection}
-                      selected={r.choice === "initial"}
-                      onMouseDown={() => handleDown(r.key, "initial")}
-                      onMouseEnter={() => handleEnter(r.key)}
-                    />
+              {rows.map((r, rowIdx) => (
+                <tr
+                  key={r.key}
+                  className={"border-t " + (!r.included ? "opacity-50 " : "") + "hover:bg-[color:var(--surface-alt)]/20"}
+                >
+                  <td className="px-2 py-0.5 font-medium leading-tight tabular text-[11px]">{r.i + 1}</td>
+
+                  {/* Include */}
+                  <td className="text-center px-2 py-0.5">
+                    <button
+                      onClick={() => !r.autoExcluded && onToggleInclude(r.key, !r.included)}
+                      disabled={r.autoExcluded}
+                      title={r.autoExcluded ? "LDF ≤ 1: otomatik hariç" : undefined}
+                      className={
+                        "text-[10px] font-semibold px-1.5 py-0.5 rounded transition " +
+                        (r.autoExcluded
+                          ? "bg-[color:var(--surface-alt)] text-[color:var(--muted)] opacity-40 cursor-not-allowed"
+                          : r.included
+                          ? "bg-[color:var(--success-soft)] text-[color:var(--success)]"
+                          : "bg-[color:var(--surface-alt)] text-[color:var(--muted)]")
+                      }
+                    >
+                      {r.included ? "Yes" : "No"}
+                    </button>
                   </td>
-                  <td className="text-right px-2 py-0.5 text-[color:var(--muted)] text-[11px]">
-                    {r.invPowerCDF != null ? formatFactor(r.invPowerCDF) : "—"}
+
+                  <DragCell value={r.initLDF} active={r.model === 1}
+                    onMouseDown={() => startDrag(r.key, 1)} onMouseEnter={() => enterDrag(r.key)} />
+                  <DragCell value={r.expLDF} active={r.model === 2} dim
+                    onMouseDown={() => startDrag(r.key, 2)} onMouseEnter={() => enterDrag(r.key)} />
+                  <DragCell value={r.ipLDF} active={r.model === 3} dim
+                    onMouseDown={() => startDrag(r.key, 3)} onMouseEnter={() => enterDrag(r.key)} />
+                  <DragCell value={r.pwLDF} active={r.model === 4} dim
+                    onMouseDown={() => startDrag(r.key, 4)} onMouseEnter={() => enterDrag(r.key)} />
+                  <DragCell value={r.wbLDF} active={r.model === 5} dim
+                    onMouseDown={() => startDrag(r.key, 5)} onMouseEnter={() => enterDrag(r.key)} />
+
+                  <UserValueCell
+                    value={r.userCDF}
+                    active={r.model === 6}
+                    onMouseDown={() => startDrag(r.key, 6)}
+                    onMouseEnter={() => enterDrag(r.key)}
+                    onCommit={v => { onSetUserValue(r.key, v); onSetModel(r.key, 6); }}
+                  />
+
+                  {/* Selected */}
+                  <td className="text-right px-2 py-0.5 font-semibold text-[color:var(--success)] text-[12px]">
+                    {r.selectedLdf != null ? formatFactor(r.selectedLdf) : "—"}
                   </td>
-                  <td className="text-right px-2 py-0.5 text-[color:var(--muted)] text-[11px]">
-                    {r.expCDF != null ? formatFactor(r.expCDF) : "—"}
+
+                  {/* Cumul CDF */}
+                  <td className="text-right px-2 py-0.5 text-[12px]">
+                    {formatFactor(r.modelCDF)}
                   </td>
-                  <td className="text-right px-2 py-0.5 text-[color:var(--muted)] text-[11px]">
-                    {r.weibullCDF != null ? formatFactor(r.weibullCDF) : "—"}
+
+                  {/* Cumul% */}
+                  <td className="text-right px-2 py-0.5 text-[11px] text-[color:var(--muted-strong)]">
+                    {cumulPct[rowIdx].toFixed(2)}%
                   </td>
-                  <td className="p-0">
-                    <EditableUserCell
-                      value={r.userValue}
-                      selected={r.choice === "user"}
-                      hasValue={cdfInitial[r.key] !== undefined}
-                      onMouseDown={() => handleDown(r.key, "user")}
-                      onMouseEnter={() => handleEnter(r.key)}
-                      onCommit={v => {
-                        onSetInitial(r.key, v);
-                        onSetChoice(r.key, "user");
-                      }}
-                    />
+
+                  {/* Incr% */}
+                  <td className="text-right px-2 py-0.5 text-[11px] text-[color:var(--muted)]">
+                    {incrPct[rowIdx].toFixed(2)}%
                   </td>
                 </tr>
               ))}
@@ -206,79 +286,87 @@ export function CurveTab({
   );
 }
 
-function CdfCell({
-  value, selected, onMouseDown, onMouseEnter,
+function DragCell({
+  value, active, dim, onMouseDown, onMouseEnter,
 }: {
-  value: number; selected: boolean; onMouseDown: () => void; onMouseEnter: () => void;
+  value: number | null; active: boolean; dim?: boolean;
+  onMouseDown: () => void; onMouseEnter: () => void;
 }) {
+  if (value == null) {
+    return <td className="text-right px-2 py-0.5 text-[color:var(--muted)] text-[11px]">—</td>;
+  }
   return (
-    <div
+    <td
       onMouseDown={e => { e.preventDefault(); onMouseDown(); }}
       onMouseEnter={onMouseEnter}
-      title={selected ? "Seçili" : "Tıkla / sürükle"}
       className={
-        "w-full h-full text-right px-2 py-0.5 text-[12px] tabular transition cursor-pointer select-none leading-tight " +
-        (selected
+        "text-right px-2 py-0.5 text-[12px] tabular cursor-pointer transition " +
+        (active
           ? "bg-[color:var(--success-soft)] text-[color:var(--success)] font-semibold"
+          : dim
+          ? "text-[color:var(--muted)] hover:bg-[color:var(--surface-alt)]"
           : "text-[color:var(--muted-strong)] hover:bg-[color:var(--surface-alt)]")
       }
     >
       {formatFactor(value)}
-    </div>
+    </td>
   );
 }
 
-function EditableUserCell({
-  value, selected, hasValue, onMouseDown, onMouseEnter, onCommit,
+function UserValueCell({
+  value, active, onMouseDown, onMouseEnter, onCommit,
 }: {
-  value: number; selected: boolean; hasValue: boolean;
-  onMouseDown: () => void; onMouseEnter: () => void; onCommit: (v: number) => void;
+  value: number | null; active: boolean;
+  onMouseDown: () => void; onMouseEnter: () => void;
+  onCommit: (v: number) => void;
 }) {
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(String(value));
+  const [draft, setDraft] = useState("");
   const ref = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { if (!editing) setDraft(String(value)); }, [value, editing]);
+  useEffect(() => { if (!editing) setDraft(String(value ?? 1)); }, [value, editing]);
   useEffect(() => { if (editing) ref.current?.select(); }, [editing]);
 
   if (editing) {
     return (
-      <input
-        ref={ref}
-        type="number"
-        step="0.0001"
-        value={draft}
-        onChange={e => setDraft(e.target.value)}
-        onBlur={() => {
-          const n = Number(draft);
-          if (Number.isFinite(n)) onCommit(n);
-          setEditing(false);
-        }}
-        onKeyDown={e => {
-          if (e.key === "Enter") e.currentTarget.blur();
-          else if (e.key === "Escape") { setDraft(String(value)); setEditing(false); }
-        }}
-        className="w-full text-right text-[12px] tabular bg-[color:var(--primary-soft)] border-0 outline-none px-2 py-0.5"
-      />
+      <td className="p-0">
+        <input
+          ref={ref}
+          type="number"
+          step="0.0001"
+          value={draft}
+          onChange={e => setDraft(e.target.value)}
+          onBlur={() => {
+            const n = Number(draft);
+            if (Number.isFinite(n) && n > 0) onCommit(n);
+            setEditing(false);
+          }}
+          onKeyDown={e => {
+            if (e.key === "Enter") e.currentTarget.blur();
+            else if (e.key === "Escape") setEditing(false);
+          }}
+          className="w-full text-right text-[12px] tabular bg-[color:var(--primary-soft)] border-0 outline-none px-2 py-0.5"
+        />
+      </td>
     );
   }
 
   return (
-    <div
+    <td
       onMouseDown={e => { e.preventDefault(); onMouseDown(); }}
       onMouseEnter={onMouseEnter}
-      onDoubleClick={() => setEditing(true)}
-      title={selected ? "Seçili · çift tıkla düzenle" : "Tıkla seç · çift tıkla düzenle"}
+      onDoubleClick={() => { setEditing(true); }}
+      title="Tıkla / sürükle · Çift tık: değer gir"
       className={
-        "w-full h-full text-right px-2 py-0.5 text-[12px] tabular transition cursor-pointer select-none leading-tight " +
-        (selected
+        "text-right px-2 py-0.5 text-[12px] tabular cursor-pointer transition " +
+        (active
           ? "bg-[color:var(--success-soft)] text-[color:var(--success)] font-semibold"
-          : hasValue
+          : value != null
           ? "text-[color:var(--foreground)] hover:bg-[color:var(--surface-alt)]"
           : "text-[color:var(--muted)] hover:bg-[color:var(--surface-alt)]")
       }
     >
-      {formatFactor(value)}
-    </div>
+      {formatFactor(value ?? 1)}
+    </td>
   );
 }

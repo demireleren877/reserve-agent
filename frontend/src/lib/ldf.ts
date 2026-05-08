@@ -113,12 +113,18 @@ export function cascadeCDFs(
   selectedLDFs: number[],
   cdfChoicePerPeriod: Record<string, "initial" | "user">,
   cdfInitial: Record<string, number>,
+  opts?: {
+    model?: Record<string, 1 | 2 | 3 | 4 | 5 | 6>;
+    fitCDFs?: { exp: number[]; invPower: number[]; power: number[]; weibull: number[] };
+  },
 ): { effective: number[]; initial: number[]; effLDFs: number[] } {
   const n = devs.length;
   const baseCDFs = cumulativeFactors(selectedLDFs);
   const selExt: number[] = [...baseCDFs, 1];
   const effective: number[] = new Array(n).fill(1);
   const initial: number[] = new Array(n).fill(1);
+  const fit = opts?.fitCDFs;
+  const modelMap = opts?.model ?? {};
 
   for (let i = n - 1; i >= 0; i--) {
     const key = String(devs[i]);
@@ -129,8 +135,22 @@ export function cascadeCDFs(
       const ldfStep = next !== 0 ? selExt[i] / next : 1;
       initial[i] = ldfStep * effective[i + 1];
     }
-    const choice = cdfChoicePerPeriod[key] ?? "initial";
-    effective[i] = choice === "user" ? cdfInitial[key] ?? 1 : initial[i];
+    const model: 1 | 2 | 3 | 4 | 5 | 6 =
+      modelMap[key] ??
+      (cdfChoicePerPeriod[key] === "user" ? 6 : 1);
+    if (model === 6) {
+      effective[i] = cdfInitial[key] ?? 1;
+    } else if (model === 2 && fit?.exp[i] != null) {
+      effective[i] = fit.exp[i];
+    } else if (model === 3 && fit?.invPower[i] != null) {
+      effective[i] = fit.invPower[i];
+    } else if (model === 4 && fit?.power[i] != null) {
+      effective[i] = fit.power[i];
+    } else if (model === 5 && fit?.weibull[i] != null) {
+      effective[i] = fit.weibull[i];
+    } else {
+      effective[i] = initial[i];
+    }
   }
 
   const effLDFs: number[] = [];

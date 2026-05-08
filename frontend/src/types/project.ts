@@ -54,8 +54,13 @@ export interface Branch {
   /** User-entered CDF per development period (stringified). Missing key → 1. */
   cdfInitial: Record<string, number>;
   /** Per-period choice: "initial" uses Selected CDF from LDF tab,
-   *  "user" uses the typed User Value. Missing key → "initial". */
+   *  "user" uses the typed User Value. Missing key → "initial".
+   *  @deprecated Use cdfModelPerPeriod instead. */
   cdfChoicePerPeriod: Record<string, "initial" | "user">;
+  /** Per-period model selection: 1=Initial, 2=Exp Decay, 3=Inv Power, 4=Power, 5=Weibull, 6=User Value. Missing → 1. */
+  cdfModelPerPeriod: Record<string, 1 | 2 | 3 | 4 | 5 | 6>;
+  /** Whether the period is included in the tail curve regression. Missing → true. */
+  curveIncludePerPeriod: Record<string, boolean>;
 
   history: HistoryEntry[];
 
@@ -102,6 +107,8 @@ export function makeBranch(name: string, frequency: Frequency): Branch {
     correctionPerOrigin: {},
     cdfInitial: {},
     cdfChoicePerPeriod: {},
+    cdfModelPerPeriod: {},
+    curveIncludePerPeriod: {},
     uploadSettings: {
       triangleType: "paid",
       originGranularity: "yearly",

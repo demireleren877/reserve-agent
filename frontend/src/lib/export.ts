@@ -1,7 +1,7 @@
 import * as XLSX from "xlsx";
 import type { Triangle } from "@/types/triangle";
 import type { BranchOriginRow } from "@/lib/reserve-pipeline";
-import { fitInversePower, fitExponential, fitWeibull } from "@/lib/tail-fit";
+import { fitInversePower, fitExponential, fitPower, fitWeibull } from "@/lib/tail-fit";
 
 export interface ExportData {
   branchName: string;
@@ -25,6 +25,7 @@ export interface ExportData {
   effectiveCDFs: number[];
   initialCDFs: number[];
   cdfChoicePerPeriod: Record<string, "initial" | "user">;
+  cdfModelPerPeriod?: Record<string, 1 | 2 | 3 | 4 | 5 | 6>;
   cdfInitial: Record<string, number>;
   premiums: Record<string, number>;
   lrInputPerOrigin: Record<string, string>;
@@ -130,25 +131,50 @@ export function exportToExcel(data: ExportData): void {
   // ── 3. Curve ──────────────────────────────────────────────────────────────
   if (tri && data.selectedLDFs.length) {
     const devs = tri.development_periods;
-    const ip = fitInversePower(data.selectedLDFs);
     const ex = fitExponential(data.selectedLDFs);
+    const ip = fitInversePower(data.selectedLDFs);
+    const pw = fitPower(data.selectedLDFs);
     const wb_ = fitWeibull(data.selectedLDFs);
 
+    const modelNames: Record<number, string> = {
+      1: "Initial", 2: "Exp.Decay", 3: "Inv.Power", 4: "Power", 5: "Weibull", 6: "User",
+    };
     const header = [
-      "Dev.", "Initial CDF", "Inv. Power CDF", "Exponential CDF",
-      "Weibull CDF", "User Value", "Seçim",
+      "Dev.", "Initial CDF", "Exp. Decay CDF", "Inv. Power CDF", "Power CDF",
+      "Weibull CDF", "User Value", "Model", "Selected CDF", "Cumul%", "Incr%",
     ];
+    let prevCumul = 0;
     const rows = devs.map((d, i) => {
       const key = String(d);
-      const choice = data.cdfChoicePerPeriod[key] ?? "initial";
+      const model = data.cdfModelPerPeriod?.[key] ?? (data.cdfChoicePerPeriod[key] === "user" ? 6 : 1);
+      const initCDF = i < data.initialCDFs.length ? data.initialCDFs[i] : 1;
+      const expCDF = ex.ok && i < ex.cdfs.length ? ex.cdfs[i] : null;
+      const ipCDF = ip.ok && i < ip.cdfs.length ? ip.cdfs[i] : null;
+      const pwCDF = pw.ok && i < pw.cdfs.length ? pw.cdfs[i] : null;
+      const wbCDF = wb_.ok && i < wb_.cdfs.length ? wb_.cdfs[i] : null;
+      const userCDF = data.cdfInitial[key] ?? null;
+      const selCDF =
+        model === 2 ? (expCDF ?? initCDF)
+        : model === 3 ? (ipCDF ?? initCDF)
+        : model === 4 ? (pwCDF ?? initCDF)
+        : model === 5 ? (wbCDF ?? initCDF)
+        : model === 6 ? (userCDF ?? 1)
+        : initCDF;
+      const cumulPct = selCDF > 0 ? 100 / selCDF : 0;
+      const incrPct = cumulPct - prevCumul;
+      prevCumul = cumulPct;
       return [
         i + 1,
-        i < data.initialCDFs.length ? data.initialCDFs[i].toFixed(5) : "",
-        ip.ok && i < ip.cdfs.length ? ip.cdfs[i].toFixed(5) : "",
-        ex.ok && i < ex.cdfs.length ? ex.cdfs[i].toFixed(5) : "",
-        wb_.ok && i < wb_.cdfs.length ? wb_.cdfs[i].toFixed(5) : "",
-        data.cdfInitial[key] != null ? (data.cdfInitial[key] as number).toFixed(5) : "",
-        choice === "user" ? "User" : "Initial",
+        initCDF.toFixed(5),
+        expCDF != null ? expCDF.toFixed(5) : "",
+        ipCDF != null ? ipCDF.toFixed(5) : "",
+        pwCDF != null ? pwCDF.toFixed(5) : "",
+        wbCDF != null ? wbCDF.toFixed(5) : "",
+        userCDF != null ? userCDF.toFixed(5) : "",
+        modelNames[model] ?? String(model),
+        selCDF.toFixed(5),
+        cumulPct.toFixed(2) + "%",
+        incrPct.toFixed(2) + "%",
       ];
     });
     const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);

@@ -567,6 +567,8 @@ export interface BranchSetters {
   setCdfChoiceBulk: (
     items: { devPeriod: string; choice: "initial" | "user" }[],
   ) => void;
+  setCdfModel: (devPeriod: string, model: 1 | 2 | 3 | 4 | 5 | 6) => void;
+  setCurveInclude: (devPeriod: string, include: boolean) => void;
   setUploadSettings: (s: UploadSettings) => void;
 }
 
@@ -743,7 +745,12 @@ export function useBranchSetters(source: ChangeSource = "user"): BranchSetters {
         ),
       resetCdfInitial: () =>
         actions.updateActiveBranch(
-          () => ({ cdfInitial: {}, cdfChoicePerPeriod: {} }),
+          () => ({
+            cdfInitial: {},
+            cdfChoicePerPeriod: {},
+            cdfModelPerPeriod: {},
+            curveIncludePerPeriod: {},
+          }),
           "curve_reset",
           undefined,
           source,
@@ -769,6 +776,30 @@ export function useBranchSetters(source: ChangeSource = "user"): BranchSetters {
           },
           "curve_choice_bulk",
           { count: items.length },
+          source,
+        ),
+      setCdfModel: (devPeriod, model) =>
+        actions.updateActiveBranch(
+          (prev) => ({
+            cdfModelPerPeriod: {
+              ...(prev.cdfModelPerPeriod ?? {}),
+              [devPeriod]: model,
+            },
+          }),
+          "curve_model_set",
+          { devPeriod, model },
+          source,
+        ),
+      setCurveInclude: (devPeriod, include) =>
+        actions.updateActiveBranch(
+          (prev) => ({
+            curveIncludePerPeriod: {
+              ...(prev.curveIncludePerPeriod ?? {}),
+              [devPeriod]: include,
+            },
+          }),
+          "curve_include_set",
+          { devPeriod, include },
           source,
         ),
       setUploadSettings: (s) =>

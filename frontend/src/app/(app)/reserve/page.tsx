@@ -23,6 +23,13 @@ import {
   cumulativeFactors,
   developmentRatios,
 } from "@/lib/ldf";
+import {
+  fitExponential,
+  fitInversePower,
+  fitPower,
+  fitWeibull,
+  type TailFit,
+} from "@/lib/tail-fit";
 import { evalFormula, type FormulaContext } from "@/lib/formula";
 
 type Tab = "data" | "file" | "ldf" | "curve" | "ilr" | "bf" | "ultimate" | "summary";
@@ -53,6 +60,8 @@ export default function Home() {
   const cdfInitial = activeBranch?.cdfInitial ?? {};
   const cdfChoicePerPeriod =
     (activeBranch?.cdfChoicePerPeriod ?? {}) as Record<string, "initial" | "user">;
+  const cdfModelPerPeriod = (activeBranch?.cdfModelPerPeriod ?? {}) as Record<string, 1 | 2 | 3 | 4 | 5 | 6>;
+  const curveIncludePerPeriod = activeBranch?.curveIncludePerPeriod ?? {};
   const correctionPerOrigin = activeBranch?.correctionPerOrigin ?? {};
 
   // Sadece gerçek LDF verisi olan hücreleri sayan filtreli set.
@@ -93,6 +102,24 @@ export default function Home() {
     return aggregateLDFs(triangle, ratios, window, method);
   }, [triangle, ratios, window, method]);
 
+  // Tail curve fit — include flags'e göre hesaplanır, cascade'e ve CurveTab'a geçer.
+  const tailFits = useMemo(() => {
+    if (!triangle || !selectedLDFs.length)
+      return { exp: { ok: false, cdfs: [], params: {}, r2: undefined } as TailFit,
+               invPower: { ok: false, cdfs: [], params: {}, r2: undefined } as TailFit,
+               power: { ok: false, cdfs: [], params: {}, r2: undefined } as TailFit,
+               weibull: { ok: false, cdfs: [], params: {}, r2: undefined } as TailFit };
+    const include = triangle.development_periods.map((d, i) =>
+      (i >= selectedLDFs.length || selectedLDFs[i] > 1) && curveIncludePerPeriod[String(d)] !== false
+    );
+    return {
+      exp: fitExponential(selectedLDFs, include),
+      invPower: fitInversePower(selectedLDFs, include),
+      power: fitPower(selectedLDFs, include),
+      weibull: fitWeibull(selectedLDFs, include),
+    };
+  }, [triangle, selectedLDFs, curveIncludePerPeriod]);
+
   // Curve seçimleri cascade mantığıyla uygulanır.
   // initialCDFs: her period için "initial" seçilmesi halinde gelecek CDF,
   // downstream kullanıcı override'ları anchor olarak dikkate alınır.
@@ -105,8 +132,17 @@ export default function Home() {
       selectedLDFs,
       cdfChoicePerPeriod,
       cdfInitial,
+      {
+        model: cdfModelPerPeriod,
+        fitCDFs: {
+          exp: tailFits.exp.cdfs,
+          invPower: tailFits.invPower.cdfs,
+          power: tailFits.power.cdfs,
+          weibull: tailFits.weibull.cdfs,
+        },
+      },
     );
-  }, [triangle, selectedLDFs, cdfChoicePerPeriod, cdfInitial]);
+  }, [triangle, selectedLDFs, cdfChoicePerPeriod, cdfInitial, cdfModelPerPeriod, tailFits]);
 
   const effectiveLDFs = cascade.effLDFs.length ? cascade.effLDFs : selectedLDFs;
   const initialCDFs = cascade.initial;
@@ -708,6 +744,7 @@ export default function Home() {
                     effectiveCDFs: bs.effective_cdfs,
                     initialCDFs,
                     cdfChoicePerPeriod,
+                    cdfModelPerPeriod,
                     cdfInitial,
                     premiums,
                     lrInputPerOrigin,
@@ -749,11 +786,13 @@ export default function Home() {
             initialCDFs={initialCDFs}
             selectedLDFs={selectedLDFs}
             cdfInitial={cdfInitial}
-            cdfChoicePerPeriod={cdfChoicePerPeriod}
-            onSetInitial={setters.setCdfInitial}
-            onResetInitial={setters.resetCdfInitial}
-            onSetChoice={setters.setCdfChoice}
-            onSetChoiceBulk={setters.setCdfChoiceBulk}
+            cdfModelPerPeriod={cdfModelPerPeriod}
+            curveIncludePerPeriod={curveIncludePerPeriod}
+            tailFits={tailFits}
+            onSetUserValue={setters.setCdfInitial}
+            onSetModel={setters.setCdfModel}
+            onToggleInclude={setters.setCurveInclude}
+            onReset={setters.resetCdfInitial}
           />
         )}
         {tab === "bf" && (
@@ -817,6 +856,7 @@ export default function Home() {
             triangle={triangle}
             premiums={premiums}
             correctionPerOrigin={correctionPerOrigin}
+            selectedLDFs={effectiveLDFs}
           />
         )}
         {tab === "file" && (

@@ -11,7 +11,7 @@ interface ModuleItem {
 }
 
 const MODULES: ModuleItem[] = [
-  { href: "/", label: "Anasayfa", icon: <HomeIcon /> },
+  { href: "/home", label: "Anasayfa", icon: <HomeIcon /> },
   { href: "/reserve", label: "Rezerv", icon: <StackIcon /> },
 ];
 
@@ -77,10 +77,7 @@ export function AppSidebar() {
         )}
         <ul className="space-y-0.5">
           {MODULES.map((m) => {
-            const active =
-              m.href === "/"
-                ? pathname === "/"
-                : pathname === m.href || pathname.startsWith(m.href + "/");
+            const active = pathname === m.href || pathname.startsWith(m.href + "/");
             return (
               <li key={m.href}>
                 <Link

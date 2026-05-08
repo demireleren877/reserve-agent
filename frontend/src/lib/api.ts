@@ -21,7 +21,7 @@ export async function uploadExcel(
   form.append("origin_granularity", opts.origin_granularity);
   form.append("development_granularity", opts.development_granularity);
   form.append("cumulative", String(opts.cumulative));
-  const res = await fetch(`${API_BASE}/api/upload`, {
+  const res = await fetch(`${API_BASE}/v1/upload`, {
     method: "POST",
     body: form,
   });
@@ -50,7 +50,7 @@ export async function compute(
     excluded_origins: opts.excluded_origins ?? [],
     ldf_override: opts.ldf_override ?? null,
   };
-  const res = await fetch(`${API_BASE}/api/compute`, {
+  const res = await fetch(`${API_BASE}/v1/compute`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -123,7 +123,7 @@ export async function chatWithAgent(
     body.full_history = fullHistory;
   }
 
-  const res = await fetch(`${API_BASE}/api/agent/chat`, {
+  const res = await fetch(`${API_BASE}/v1/agent/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -142,7 +142,7 @@ export async function uploadPremiums(
   const form = new FormData();
   form.append("file", file);
   form.append("origin_granularity", originGranularity);
-  const res = await fetch(`${API_BASE}/api/upload/premiums`, {
+  const res = await fetch(`${API_BASE}/v1/upload/premiums`, {
     method: "POST",
     body: form,
   });
@@ -155,7 +155,7 @@ export async function uploadPremiums(
 }
 
 export async function listModels(): Promise<ModelsResponse> {
-  const res = await fetch(`${API_BASE}/api/models`);
+  const res = await fetch(`${API_BASE}/v1/models`);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }

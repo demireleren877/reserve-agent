@@ -29,7 +29,7 @@ from app.schemas import (
     UploadResponse,
 )
 
-router = APIRouter(prefix="/api", tags=["api"])
+router = APIRouter(prefix="/v1", tags=["api"])
 
 
 MODEL_CATALOG: list[ModelOption] = [

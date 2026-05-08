@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: actuarial-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: OPENROUTER_MODEL
+        value: anthropic/claude-sonnet-4-6
+      - key: ALLOWED_ORIGINS
+        sync: false

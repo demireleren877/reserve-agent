@@ -13,5 +13,5 @@ RUN uv sync --no-dev
 
 COPY backend/app ./app
 
-EXPOSE 7860
-CMD ["uv", "run", "--no-dev", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "7860"]
+EXPOSE 8000
+CMD ["uv", "run", "--no-dev", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

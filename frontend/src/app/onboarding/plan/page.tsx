@@ -23,9 +23,10 @@ export default function PlanOnboarding() {
   const [selected, setSelected] = useState<Plan>("free");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [currentPlan, setCurrentPlan] = useState<Plan | null>(null);
+  const [isManageMode, setIsManageMode] = useState(false);
   const paddleReady = useRef(false);
 
-  // Not signed in → bounce to /login. Already chose plan → /reserve.
   useEffect(() => {
     if (auth.loading) return;
     if (!auth.user) {
@@ -37,7 +38,12 @@ export default function PlanOnboarding() {
       try {
         const me = await fetchMe();
         if (cancelled) return;
-        if (me.hasPlan) router.replace("/reserve");
+        if (me.hasPlan) {
+          // Already has a plan — management mode (don't redirect)
+          setCurrentPlan(me.plan);
+          setSelected(me.plan);
+          setIsManageMode(true);
+        }
       } catch {
         /* stay here; user can still pick */
       }
@@ -73,6 +79,12 @@ export default function PlanOnboarding() {
         setError(e instanceof Error ? e.message : "Plan kaydedilemedi.");
         setBusy(false);
       }
+      return;
+    }
+
+    // If already pro and selecting pro again — shouldn't happen (button hidden) but guard anyway
+    if (isManageMode && selected === currentPlan) {
+      setBusy(false);
       return;
     }
 
@@ -145,14 +157,28 @@ export default function PlanOnboarding() {
     >
       <div className="w-full max-w-[860px]">
         <div className="text-center mb-10">
+          {isManageMode && (
+            <button
+              onClick={() => router.back()}
+              className="inline-flex items-center gap-1.5 text-[13px] mb-6 hover:underline"
+              style={{ color: "#45445a" }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 19l-7-7 7-7" /></svg>
+              Geri dön
+            </button>
+          )}
           <h1
             className="text-[32px] md:text-[38px] font-bold mb-3"
             style={{ letterSpacing: "-0.03em" }}
           >
-            Planını seç
+            {isManageMode ? "Üyeliğini yönet" : "Planını seç"}
           </h1>
           <p className="text-[14.5px]" style={{ color: "#45445a" }}>
-            Free plan ücretsizdir. Pro plan için aylık ödeme alınır.
+            {isManageMode
+              ? currentPlan === "pro"
+                ? "Şu an Pro planındasın."
+                : "Şu an Free planındasın. Pro'ya geçerek tüm özelliklere eriş."
+              : "Free plan ücretsizdir. Pro plan için aylık ödeme alınır."}
           </p>
         </div>
 
@@ -202,31 +228,43 @@ export default function PlanOnboarding() {
         )}
 
         <div className="mt-8 flex flex-col items-center gap-3">
-          <button
-            onClick={confirm}
-            disabled={busy}
-            className="px-7 py-3 rounded-lg text-[14px] font-semibold transition disabled:opacity-50"
-            style={{
-              background: "linear-gradient(180deg, #2563eb, #1e40af)",
-              color: "#fff",
-              boxShadow: "0 4px 12px rgba(37,83,228,0.25)",
-            }}
-          >
-            {busy
-              ? selected === "pro"
-                ? "Ödeme bekleniyor..."
-                : "Kaydediliyor..."
-              : selected === "free"
-              ? "Free ile devam et"
-              : "Pro'ya geç — ₺890/ay"}
-          </button>
-          <button
-            onClick={() => auth.logout()}
-            className="text-[12px] hover:underline"
-            style={{ color: "#8a8898" }}
-          >
-            Çıkış yap
-          </button>
+          {/* Hide confirm button if user already has this plan */}
+          {!(isManageMode && selected === currentPlan) && (
+            <button
+              onClick={confirm}
+              disabled={busy}
+              className="px-7 py-3 rounded-lg text-[14px] font-semibold transition disabled:opacity-50"
+              style={{
+                background: "linear-gradient(180deg, #2563eb, #1e40af)",
+                color: "#fff",
+                boxShadow: "0 4px 12px rgba(37,83,228,0.25)",
+              }}
+            >
+              {busy
+                ? selected === "pro"
+                  ? "Ödeme bekleniyor..."
+                  : "Kaydediliyor..."
+                : selected === "free"
+                ? isManageMode
+                  ? "Free'ye geç"
+                  : "Free ile devam et"
+                : "Pro'ya geç — ₺890/ay"}
+            </button>
+          )}
+          {isManageMode && selected === currentPlan && (
+            <p className="text-[13px]" style={{ color: "#8a8898" }}>
+              Zaten bu planındasın.
+            </p>
+          )}
+          {!isManageMode && (
+            <button
+              onClick={() => auth.logout()}
+              className="text-[12px] hover:underline"
+              style={{ color: "#8a8898" }}
+            >
+              Çıkış yap
+            </button>
+          )}
         </div>
       </div>
     </div>

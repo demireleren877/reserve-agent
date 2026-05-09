@@ -177,6 +177,7 @@ def agent_chat(req: ChatRequest) -> ChatResponse:
             messages=[m.model_dump() for m in req.messages],
             modules_payload=modules_payload,
             full_history=req.full_history,
+            max_iterations=20,
         )
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Agent hatası: {e}") from e

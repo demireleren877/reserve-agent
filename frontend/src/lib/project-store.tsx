@@ -24,9 +24,21 @@ import {
   makePeriod,
   newId,
 } from "@/types/project";
+import {
+  fetchState,
+  putState,
+  WorkerError,
+} from "@/lib/sync/worker-client";
+import {
+  CHAT_CHANGED_EVENT,
+  replaceAllSessions,
+  type ChatSession,
+} from "@/lib/chat-storage";
 
-const STORAGE_KEY = "reserve-agent-project-v2";
+const STORAGE_KEY_PREFIX = "reserve-agent-project-v2";
+const CHAT_STORAGE_KEY_PREFIX = "reserve-agent-chat-v1";
 const MAX_HISTORY = 500;
+const SYNC_DEBOUNCE_MS = 1500;
 
 const EMPTY: Project = {
   periods: [],
@@ -85,11 +97,27 @@ const ProjectCtx = createContext<Ctx | null>(null);
 
 const MAX_UNDO = 20;
 
-export function ProjectProvider({ children }: { children: ReactNode }) {
+interface ProjectProviderProps {
+  children: ReactNode;
+  /** Required — scopes localStorage cache and Worker sync to a single user. */
+  userId: string;
+}
+
+export function ProjectProvider({ children, userId }: ProjectProviderProps) {
   const [project, setProject] = useState<Project>(EMPTY);
   const [hydrated, setHydrated] = useState(false);
   const undoStackRef = useRef<Project[]>([]);
   const [undoDepth, setUndoDepth] = useState(0);
+
+  const projectKey = `${STORAGE_KEY_PREFIX}:${userId}`;
+  const chatKey = `${CHAT_STORAGE_KEY_PREFIX}:${userId}`;
+
+  // Refs for the debounced worker sync. We don't want stale closures.
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastSerializedRef = useRef<{ project: string; chat: string }>({
+    project: "",
+    chat: "",
+  });
 
   // Wrap setProject to push undo snapshots for destructive ops
   function setProjectWithUndo(updater: (prev: Project) => Project) {
@@ -100,28 +128,147 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     });
   }
 
+  // Initial load: try Worker first, fall back to localStorage cache.
   useEffect(() => {
-    try {
-      const raw =
-        typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEY) : null;
-      if (raw) {
-        const parsed = JSON.parse(raw) as Project;
-        if (parsed && Array.isArray(parsed.periods)) setProject(parsed);
-      }
-    } catch {
-      /* ignore */
-    }
-    setHydrated(true);
-  }, []);
+    if (!userId) return;
+    let cancelled = false;
+    setHydrated(false);
 
+    (async () => {
+      let serverProject: Project | null = null;
+      let serverChat: ChatSession[] | null = null;
+      let workerOk = false;
+
+      try {
+        const remote = await fetchState<Project, ChatSession[]>();
+        if (cancelled) return;
+        if (remote.project && Array.isArray((remote.project as Project).periods)) {
+          serverProject = remote.project as Project;
+        }
+        if (Array.isArray(remote.chat)) {
+          serverChat = remote.chat;
+        }
+        workerOk = true;
+      } catch (e) {
+        if (!(e instanceof WorkerError)) console.error("worker fetch failed", e);
+      }
+
+      if (cancelled) return;
+
+      // Project: server wins if present, else fall back to localStorage cache.
+      if (serverProject) {
+        setProject(serverProject);
+      } else {
+        try {
+          const raw = localStorage.getItem(projectKey);
+          if (raw) {
+            const parsed = JSON.parse(raw) as Project;
+            if (parsed && Array.isArray(parsed.periods)) setProject(parsed);
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+
+      // Chat: only overwrite local cache if the server actually returned chat
+      // (or returned empty array — meaning user explicitly has no sessions).
+      if (workerOk && serverChat !== null) {
+        replaceAllSessions(userId, serverChat);
+        // ChatPanel listens for this to refresh its in-memory list.
+        window.dispatchEvent(new CustomEvent("reserve-chat-loaded"));
+      }
+
+      // Seed lastSerialized so we don't immediately PUT what we just GOT.
+      try {
+        const projStr = localStorage.getItem(projectKey) ?? "";
+        const chatStr = localStorage.getItem(chatKey) ?? "";
+        lastSerializedRef.current = { project: projStr, chat: chatStr };
+      } catch {
+        /* ignore */
+      }
+
+      setHydrated(true);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, projectKey, chatKey]);
+
+  // Persist project to localStorage cache + schedule worker sync on change.
   useEffect(() => {
-    if (!hydrated) return;
+    if (!hydrated || !userId) return;
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(project));
+      localStorage.setItem(projectKey, JSON.stringify(project));
     } catch {
       /* quota — silent */
     }
-  }, [project, hydrated]);
+    schedulePush();
+    // schedulePush is stable via refs; we intentionally exclude it from deps.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project, hydrated, userId, projectKey]);
+
+  // Listen for chat-storage writes and schedule a worker sync too.
+  useEffect(() => {
+    if (!hydrated || !userId) return;
+    function onChatChanged() {
+      schedulePush();
+    }
+    window.addEventListener(CHAT_CHANGED_EVENT, onChatChanged);
+    return () => window.removeEventListener(CHAT_CHANGED_EVENT, onChatChanged);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated, userId]);
+
+  function schedulePush() {
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    debounceTimerRef.current = setTimeout(pushNow, SYNC_DEBOUNCE_MS);
+  }
+
+  async function pushNow() {
+    if (!userId) return;
+    let projectStr = "";
+    let chatStr = "";
+    try {
+      projectStr = localStorage.getItem(projectKey) ?? "";
+      chatStr = localStorage.getItem(chatKey) ?? "";
+    } catch {
+      return;
+    }
+    if (
+      projectStr === lastSerializedRef.current.project &&
+      chatStr === lastSerializedRef.current.chat
+    ) {
+      return; // nothing actually changed
+    }
+    try {
+      const projectVal = projectStr ? JSON.parse(projectStr) : null;
+      const chatVal = chatStr ? JSON.parse(chatStr) : null;
+      await putState({ project: projectVal, chat: chatVal });
+      lastSerializedRef.current = { project: projectStr, chat: chatStr };
+    } catch (e) {
+      // Best-effort. The next change will retry. Don't surface an error toast
+      // for transient failures — log and move on.
+      console.error("worker push failed", e);
+    }
+  }
+
+  // Flush on tab close so we don't lose the last edit.
+  useEffect(() => {
+    if (!hydrated) return;
+    function onBeforeUnload() {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = null;
+        // sendBeacon would be ideal, but we can't easily attach Bearer tokens
+        // to it, so we fall back to a fire-and-forget fetch. The browser may
+        // cancel it, but in most cases the request goes through.
+        void pushNow();
+      }
+    }
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated]);
 
   // Cmd/Ctrl+Z → undo
   useEffect(() => {

@@ -24,6 +24,7 @@ import {
   type ChatSession,
   type StoredMessage,
 } from "@/lib/chat-storage";
+import { useAuth } from "@/lib/auth/auth-context";
 
 interface ActiveContext {
   periodLabel: string;
@@ -45,6 +46,8 @@ export function ChatPanel({
   onClose,
   activeContext,
 }: Props) {
+  const { user } = useAuth();
+  const uid = user?.uid ?? "";
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -61,8 +64,15 @@ export function ChatPanel({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    setSessions(loadSessions());
-  }, []);
+    if (!uid) return;
+    setSessions(loadSessions(uid));
+    // Refresh when the sync layer pulls fresh data from the server.
+    function onSync() {
+      setSessions(loadSessions(uid));
+    }
+    window.addEventListener("reserve-chat-loaded", onSync);
+    return () => window.removeEventListener("reserve-chat-loaded", onSync);
+  }, [uid]);
 
   useEffect(() => {
     listModels()
@@ -101,8 +111,8 @@ export function ChatPanel({
   }
 
   function startNewChat() {
-    if (messages.length > 0) saveSession(buildSession(messages, fullHistory));
-    setSessions(loadSessions());
+    if (messages.length > 0 && uid) saveSession(uid, buildSession(messages, fullHistory));
+    if (uid) setSessions(loadSessions(uid));
     setMessages([]);
     setFullHistory([]);
     setSessionId(newSessionId());
@@ -112,7 +122,7 @@ export function ChatPanel({
   }
 
   function restoreSession(s: ChatSession) {
-    if (messages.length > 0) saveSession(buildSession(messages, fullHistory));
+    if (messages.length > 0 && uid) saveSession(uid, buildSession(messages, fullHistory));
     setMessages(s.messages as ChatMessage[]);
     setFullHistory(s.fullHistory ?? []);
     setSessionId(s.id);
@@ -120,8 +130,9 @@ export function ChatPanel({
   }
 
   function removeSession(id: string) {
-    deleteSession(id);
-    setSessions(loadSessions());
+    if (!uid) return;
+    deleteSession(uid, id);
+    setSessions(loadSessions(uid));
   }
 
   async function dispatchSend(prompt: string) {
@@ -162,7 +173,7 @@ export function ChatPanel({
         ];
         setFullHistory(nextHist);
       }
-      saveSession(buildSession(finalMessages, nextHist));
+      if (uid) saveSession(uid, buildSession(finalMessages, nextHist));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Agent hatası");
     } finally {
@@ -231,7 +242,7 @@ export function ChatPanel({
             title="Sohbet geçmişi"
             active={showHistory}
             onClick={() => {
-              setSessions(loadSessions());
+              if (uid) setSessions(loadSessions(uid));
               setShowHistory((v) => !v);
             }}
           >

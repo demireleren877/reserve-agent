@@ -2,6 +2,7 @@
 
 import { ChatPanel } from "@/components/ChatPanel";
 import { useAgentRegistry } from "@/lib/agent-registry";
+import { usePathname } from "next/navigation";
 
 export function GlobalAgentLauncher() {
   const { panelOpen, togglePanel } = useAgentRegistry();
@@ -20,15 +21,17 @@ export function GlobalAgentLauncher() {
 export function GlobalAgentPanel() {
   const { panelOpen, setPanelOpen, modulesPayload, dispatchActions } =
     useAgentRegistry();
+  const pathname = usePathname();
 
-  // Extract active branch context from snapshot
+  // Only show active branch context when the user is actually on the reserve page
+  const onReservePage = pathname?.startsWith("/reserve");
   const ss = (modulesPayload?.reserve as Record<string, unknown> | undefined)
     ?.session_state as Record<string, unknown> | null | undefined;
   const activeInfo = ss?.active as
     | { period_label?: string; branch_name?: string; frequency?: string }
     | null
     | undefined;
-  const activeContext = activeInfo?.branch_name
+  const activeContext = onReservePage && activeInfo?.branch_name
     ? {
         periodLabel: activeInfo.period_label ?? "",
         branchName: activeInfo.branch_name,

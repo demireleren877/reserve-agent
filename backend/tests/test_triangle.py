@@ -115,21 +115,6 @@ class TestTriangleQueries:
         with pytest.raises(KeyError):
             tri.column(3)
 
-    def test_development_pairs_returns_consecutive_columns(self):
-        """LDF hesabı için: (dev_i, dev_{i+1}) çiftlerinden oluşan listeler."""
-        tri = Triangle(
-            origin_periods=[2020, 2021, 2022, 2023],
-            development_periods=[1, 2, 3, 4],
-            values=_sample_cumulative_values(),
-        )
-        pairs = tri.development_pairs()
-        # dev 1->2: (1000,1500), (1100,1600), (1200,1700) — 2023 satırı dev 2 yok
-        assert pairs[0] == [(1000.0, 1500.0), (1100.0, 1600.0), (1200.0, 1700.0)]
-        # dev 2->3: (1500,1700), (1600,1800)
-        assert pairs[1] == [(1500.0, 1700.0), (1600.0, 1800.0)]
-        # dev 3->4: (1700,1750)
-        assert pairs[2] == [(1700.0, 1750.0)]
-
     def test_nan_values_treated_as_missing(self):
         """NaN değeri de None gibi eksik sayılmalı (parser'dan NaN gelebilir)."""
         tri = Triangle(

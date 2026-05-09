@@ -4,6 +4,7 @@ API stateless: frontend triangle state'i tutar, her compute'ta gönderir.
 Bu sayede reproducibility ve kolay test sağlanır.
 """
 
+import base64
 from io import BytesIO
 
 import pytest
@@ -19,7 +20,7 @@ def client() -> TestClient:
 
 
 @pytest.fixture
-def sample_xlsx_bytes() -> bytes:
+def sample_xlsx_b64() -> str:
     wb = Workbook()
     ws = wb.active
     ws.append(["Origin", 1, 2, 3, 4])
@@ -29,13 +30,13 @@ def sample_xlsx_bytes() -> bytes:
     ws.append([2023, 1300, None, None, None])
     buf = BytesIO()
     wb.save(buf)
-    return buf.getvalue()
+    return base64.b64encode(buf.getvalue()).decode()
 
 
 @pytest.fixture
 def sample_triangle_payload() -> dict:
     return {
-        "origin_periods": [2020, 2021, 2022, 2023],
+        "origin_periods": ["2020", "2021", "2022", "2023"],
         "development_periods": [1, 2, 3, 4],
         "values": [
             [1000.0, 1500.0, 1700.0, 1750.0],
@@ -48,36 +49,38 @@ def sample_triangle_payload() -> dict:
 
 
 class TestUploadEndpoint:
-    def test_upload_valid_xlsx_returns_triangle_json(self, client, sample_xlsx_bytes):
+    def test_upload_valid_xlsx_returns_triangle_json(self, client, sample_xlsx_b64):
         response = client.post(
-            "/api/upload",
-            files={"file": ("test.xlsx", sample_xlsx_bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
-            data={"triangle_type": "paid"},
+            "/v1/upload",
+            json={"file_b64": sample_xlsx_b64, "triangle_type": "paid"},
         )
         assert response.status_code == 200
         data = response.json()
-        assert data["triangle"]["origin_periods"] == [2020, 2021, 2022, 2023]
-        assert data["triangle"]["development_periods"] == [1, 2, 3, 4]
+        assert data["triangle"]["origin_periods"] == ["2020", "2021", "2022", "2023"]
+        # Parser uses 0-based dev period indices.
+        assert data["triangle"]["development_periods"] == [0, 1, 2, 3]
         assert data["triangle"]["values"][0][0] == 1000.0
         assert data["triangle"]["values"][3][1] is None
 
-    def test_upload_without_file_returns_422(self, client):
-        response = client.post("/api/upload")
+    def test_upload_without_body_returns_422(self, client):
+        # No JSON body at all → Pydantic validation fails.
+        response = client.post("/v1/upload")
         assert response.status_code == 422
 
     def test_upload_invalid_xlsx_returns_400(self, client):
+        # Valid base64 but not a valid xlsx → parser raises ParseError → 400.
+        bogus_b64 = base64.b64encode(b"not a valid xlsx").decode()
         response = client.post(
-            "/api/upload",
-            files={"file": ("bad.xlsx", b"not a valid xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+            "/v1/upload",
+            json={"file_b64": bogus_b64},
         )
         assert response.status_code == 400
         assert "detail" in response.json()
 
-    def test_upload_accepts_incurred_type(self, client, sample_xlsx_bytes):
+    def test_upload_accepts_incurred_type(self, client, sample_xlsx_b64):
         response = client.post(
-            "/api/upload",
-            files={"file": ("t.xlsx", sample_xlsx_bytes, "application/octet-stream")},
-            data={"triangle_type": "incurred"},
+            "/v1/upload",
+            json={"file_b64": sample_xlsx_b64, "triangle_type": "incurred"},
         )
         assert response.status_code == 200
         assert response.json()["triangle"]["triangle_type"] == "incurred"
@@ -86,7 +89,7 @@ class TestUploadEndpoint:
 class TestComputeEndpoint:
     def test_compute_volume_weighted_basic(self, client, sample_triangle_payload):
         response = client.post(
-            "/api/compute",
+            "/v1/compute",
             json={
                 "triangle": sample_triangle_payload,
                 "method": "volume_weighted",
@@ -100,11 +103,11 @@ class TestComputeEndpoint:
 
     def test_compute_with_exclusion(self, client, sample_triangle_payload):
         response = client.post(
-            "/api/compute",
+            "/v1/compute",
             json={
                 "triangle": sample_triangle_payload,
                 "method": "volume_weighted",
-                "excluded_origins": [2021],
+                "excluded_origins": ["2021"],
             },
         )
         assert response.status_code == 200
@@ -114,7 +117,7 @@ class TestComputeEndpoint:
 
     def test_compute_with_ldf_override(self, client, sample_triangle_payload):
         response = client.post(
-            "/api/compute",
+            "/v1/compute",
             json={
                 "triangle": sample_triangle_payload,
                 "ldf_override": [1.5, 1.1, 1.02],
@@ -126,17 +129,17 @@ class TestComputeEndpoint:
 
     def test_compute_invalid_triangle_returns_400(self, client):
         bad = {
-            "origin_periods": [2020, 2020],  # duplicate
+            "origin_periods": ["2020", "2020"],  # duplicate
             "development_periods": [1, 2],
             "values": [[100.0, 150.0], [110.0, None]],
             "triangle_type": "paid",
         }
-        response = client.post("/api/compute", json={"triangle": bad})
+        response = client.post("/v1/compute", json={"triangle": bad})
         assert response.status_code == 400
 
     def test_compute_with_n_years(self, client, sample_triangle_payload):
         response = client.post(
-            "/api/compute",
+            "/v1/compute",
             json={
                 "triangle": sample_triangle_payload,
                 "method": "volume_weighted",
@@ -150,7 +153,7 @@ class TestComputeEndpoint:
 
     def test_compute_simple_average_method(self, client, sample_triangle_payload):
         response = client.post(
-            "/api/compute",
+            "/v1/compute",
             json={
                 "triangle": sample_triangle_payload,
                 "method": "simple_average",
@@ -163,17 +166,14 @@ class TestComputeEndpoint:
 
 
 class TestEndToEndFlow:
-    def test_upload_then_compute(self, client, sample_xlsx_bytes):
+    def test_upload_then_compute(self, client, sample_xlsx_b64):
         """Frontend davranışı: önce upload, gelen triangle'ı compute'a yolla."""
-        up = client.post(
-            "/api/upload",
-            files={"file": ("t.xlsx", sample_xlsx_bytes, "application/octet-stream")},
-        )
+        up = client.post("/v1/upload", json={"file_b64": sample_xlsx_b64})
         assert up.status_code == 200
         triangle = up.json()["triangle"]
 
         comp = client.post(
-            "/api/compute",
+            "/v1/compute",
             json={"triangle": triangle, "method": "volume_weighted"},
         )
         assert comp.status_code == 200

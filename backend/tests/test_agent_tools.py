@@ -65,7 +65,7 @@ class TestDescribeTriangle:
         assert out["n_origins"] == 4
         assert out["n_developments"] == 4
         assert out["triangle_type"] == "paid"
-        assert out["origin_periods"] == [2020, 2021, 2022, 2023]
+        assert out["origin_periods"] == ["2020", "2021", "2022", "2023"]
         # latest diagonal summarize amount
         assert out["latest_diagonal"] == [1750.0, 1800.0, 1700.0, 1300.0]
         assert out["total_latest"] == pytest.approx(6550.0, rel=1e-9)

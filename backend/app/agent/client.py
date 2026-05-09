@@ -21,7 +21,7 @@ class ToolCall:
     arguments: dict[str, Any]
 
 
-DEFAULT_MODEL = "anthropic/claude-sonnet-4.6"
+DEFAULT_MODEL = "deepseek/deepseek-v4-flash"
 DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
 
 

@@ -48,14 +48,14 @@ class TestExclusionAffectsUltimate:
         with_exclusion = run_chain_ladder(
             paid_triangle,
             method=LDFMethod.VOLUME_WEIGHTED,
-            excluded_origins={2021},
+            excluded_origins={"2021"},
         )
         assert base.total_reserve != pytest.approx(with_exclusion.total_reserve, rel=1e-6)
 
     def test_exclusion_does_not_remove_origin_from_output(self, paid_triangle):
         """Hariç tutulan origin LDF hesabına girmez ama çıktıda (ultimate'ı hesaplanmış şekilde) kalır."""
-        result = run_chain_ladder(paid_triangle, excluded_origins={2021})
-        assert 2021 in result.origin_periods
+        result = run_chain_ladder(paid_triangle, excluded_origins={"2021"})
+        assert "2021" in result.origin_periods
         # 2021'in latest değeri hâlâ 1800 (dev 3) — ultimate yeni LDF'lerle hesaplanır
         assert result.latest_per_origin[1] == 1800.0
 
@@ -76,7 +76,7 @@ class TestCombinedExclusionAndNYears:
             paid_triangle,
             method=LDFMethod.VOLUME_WEIGHTED,
             n_years=3,
-            excluded_origins={2020},
+            excluded_origins={"2020"},
         )
         # 2020 hariç, son 3 origin = 2021,2022,2023
         # dev 1->2: (1100,1600),(1200,1700) → 3300/2300 (2023'ün dev 2'si yok)

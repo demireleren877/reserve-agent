@@ -36,20 +36,15 @@ router = APIRouter(prefix="/v1", tags=["api"])
 
 
 MODEL_CATALOG: list[ModelOption] = [
-    ModelOption(id="anthropic/claude-sonnet-4.6", label="Claude Sonnet 4.6"),
-    ModelOption(id="anthropic/claude-opus-4-7", label="Claude Opus 4.7"),
-    ModelOption(id="anthropic/claude-haiku-4.5", label="Claude Haiku 4.5"),
-    ModelOption(id="openai/gpt-5", label="GPT-5"),
-    ModelOption(id="openai/gpt-4o-mini", label="GPT-4o mini"),
-    ModelOption(id="google/gemini-2.0-flash-001", label="Gemini 2.0 Flash"),
-    ModelOption(id="google/gemini-2.5-pro", label="Gemini 2.5 Pro"),
-    ModelOption(id="meta-llama/llama-3.3-70b-instruct", label="Llama 3.3 70B"),
+    ModelOption(id="deepseek/deepseek-v4-flash", label="DeepSeek V4 Flash"),
+    ModelOption(id="qwen/qwen3.6-flash", label="Qwen 3.6 Flash"),
+    ModelOption(id="google/gemini-3.1-flash-lite-preview", label="Gemini 3.1 Flash Lite (Preview)"),
 ]
 
 
 @router.get("/models", response_model=ModelsResponse)
 def list_models() -> ModelsResponse:
-    default = os.getenv("OPENROUTER_MODEL", "anthropic/claude-sonnet-4.6")
+    default = os.getenv("OPENROUTER_MODEL", "deepseek/deepseek-v4-flash")
     return ModelsResponse(models=MODEL_CATALOG, default=default)
 
 

@@ -18,7 +18,8 @@ describe("UploadForm", () => {
   it("renders triangle type selector and file input", () => {
     render(<UploadForm onLoaded={() => {}} />);
     expect(screen.getByLabelText(/excel dosyası/i)).toBeInTheDocument();
-    expect(screen.getByRole("combobox")).toBeInTheDocument();
+    // 4 selects: triangle type, cumulative/incremental, origin granularity, dev granularity
+    expect(screen.getAllByRole("combobox")).toHaveLength(4);
   });
 
   it("calls onLoaded with triangle on successful upload", async () => {

@@ -149,7 +149,7 @@ class TestAgentChatEndpoint:
 
         client = TestClient(app)
         response = client.post(
-            "/api/agent/chat",
+            "/v1/agent/chat",
             json={
                 "messages": [{"role": "user", "content": "merhaba"}],
                 "triangle": sample_triangle_payload,
@@ -160,7 +160,9 @@ class TestAgentChatEndpoint:
         assert data["assistant_message"] == "Tamam."
         assert data["tool_invocations"] == []
 
-    def test_chat_endpoint_requires_triangle(self, monkeypatch):
+    def test_chat_endpoint_works_without_triangle(self, monkeypatch):
+        """Triangle (ve modules) opsiyonel — agent'a sade bir mesaj göndermek
+        bile başarılı yanıt dönmeli."""
         monkeypatch.setattr(AgentClient, "__init__", lambda self, **kw: None)
         monkeypatch.setattr(
             AgentClient,
@@ -169,7 +171,8 @@ class TestAgentChatEndpoint:
         )
         client = TestClient(app)
         response = client.post(
-            "/api/agent/chat",
+            "/v1/agent/chat",
             json={"messages": [{"role": "user", "content": "hi"}]},
         )
-        assert response.status_code == 422
+        assert response.status_code == 200
+        assert response.json()["assistant_message"] == "ok"

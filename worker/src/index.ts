@@ -260,6 +260,7 @@ async function handleDeleteAll(env: Env, t: VerifiedToken, origin: string) {
   return json({ ok: true }, { status: 200 }, origin);
 }
 
+
 // ---------------------------------------------------------------------------
 // Paddle webhook — no auth header; signature verification via HMAC-SHA256
 // ---------------------------------------------------------------------------

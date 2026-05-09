@@ -16,6 +16,9 @@ const PADDLE_CLIENT_TOKEN =
   process.env.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN ?? "";
 const PADDLE_PRICE_ID =
   process.env.NEXT_PUBLIC_PADDLE_PRICE_ID ?? "";
+const PADDLE_ENV =
+  (process.env.NEXT_PUBLIC_PADDLE_ENV as "sandbox" | "production" | undefined) ??
+  "production";
 
 export default function PlanOnboarding() {
   const router = useRouter();
@@ -26,6 +29,7 @@ export default function PlanOnboarding() {
   const [currentPlan, setCurrentPlan] = useState<Plan | null>(null);
   const [isManageMode, setIsManageMode] = useState(false);
   const paddleReady = useRef(false);
+  const onSuccessRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     if (auth.loading) return;
@@ -53,17 +57,39 @@ export default function PlanOnboarding() {
     };
   }, [auth.user, auth.loading, router]);
 
-  // Load Paddle.js once
+  // Load Paddle.js once — must specify environment for sandbox tokens
   useEffect(() => {
     if (!PADDLE_CLIENT_TOKEN || paddleReady.current) return;
+
+    function initPaddle() {
+      if (!window.Paddle) return;
+      window.Paddle.Initialize({
+        token: PADDLE_CLIENT_TOKEN,
+        ...(PADDLE_ENV === "sandbox" ? { environment: "sandbox" } : {}),
+        eventCallback(ev: { name: string }) {
+          if (ev.name === "checkout.completed") {
+            onSuccessRef.current?.();
+          }
+          if (
+            ev.name === "checkout.closed" ||
+            ev.name === "checkout.error"
+          ) {
+            setBusy(false);
+          }
+        },
+      });
+      paddleReady.current = true;
+    }
+
+    if (window.Paddle) {
+      initPaddle();
+      return;
+    }
+
     const script = document.createElement("script");
     script.src = "https://cdn.paddle.com/paddle/v2/paddle.js";
     script.async = true;
-    script.onload = () => {
-      if (!window.Paddle) return;
-      window.Paddle.Initialize({ token: PADDLE_CLIENT_TOKEN });
-      paddleReady.current = true;
-    };
+    script.onload = initPaddle;
     document.head.appendChild(script);
   }, []);
 
@@ -107,6 +133,37 @@ export default function PlanOnboarding() {
       return;
     }
 
+    // Register success handler — eventCallback in Initialize picks this up
+    onSuccessRef.current = async () => {
+      // Poll until D1 is updated by the webhook
+      let attempts = 0;
+      const poll = async () => {
+        attempts++;
+        try {
+          const me = await fetchMe();
+          if (me.plan === "pro" && me.hasPlan) {
+            router.replace("/reserve");
+            return;
+          }
+        } catch {
+          /* keep polling */
+        }
+        if (attempts < 20) {
+          setTimeout(poll, 1500);
+        } else {
+          // Webhook may be slow — set plan manually as fallback
+          try {
+            await setPlan("pro");
+            router.replace("/reserve");
+          } catch (e) {
+            setError(e instanceof Error ? e.message : "Plan güncellenemedi.");
+            setBusy(false);
+          }
+        }
+      };
+      poll();
+    };
+
     window.Paddle.Checkout.open({
       items: [{ priceId: PADDLE_PRICE_ID, quantity: 1 }],
       customData: { uid },
@@ -114,38 +171,6 @@ export default function PlanOnboarding() {
         displayMode: "overlay",
         theme: "light",
         locale: "tr",
-      },
-      successCallback: async () => {
-        // Poll until D1 is updated by the webhook
-        let attempts = 0;
-        const poll = async () => {
-          attempts++;
-          try {
-            const me = await fetchMe();
-            if (me.plan === "pro" && me.hasPlan) {
-              router.replace("/reserve");
-              return;
-            }
-          } catch {
-            /* keep polling */
-          }
-          if (attempts < 20) {
-            setTimeout(poll, 1500);
-          } else {
-            // Webhook may be slow — set plan manually as fallback
-            try {
-              await setPlan("pro");
-              router.replace("/reserve");
-            } catch (e) {
-              setError(e instanceof Error ? e.message : "Plan güncellenemedi.");
-              setBusy(false);
-            }
-          }
-        };
-        poll();
-      },
-      closeCallback: () => {
-        setBusy(false);
       },
     });
   }

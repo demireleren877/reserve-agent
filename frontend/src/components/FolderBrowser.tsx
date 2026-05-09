@@ -1,10 +1,15 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useProject } from "@/lib/project-store";
 import type { CopyAssumptionsOptions } from "@/lib/project-store";
 import type { Branch, Frequency, Period } from "@/types/project";
 import { CopyAssumptionsModal } from "@/components/CopyAssumptionsModal";
+import { useUserPlan } from "@/lib/auth/user-plan-context";
+
+const FREE_PERIOD_LIMIT = 1;
+const FREE_BRANCH_LIMIT = 1;
 
 // ——————————————————————— Copy / Move Modal ———————————————————————
 
@@ -159,8 +164,10 @@ export function FolderBrowser() {
 
 function RootView() {
   const { project, actions } = useProject();
+  const plan = useUserPlan();
   const [adding, setAdding] = useState(false);
   const [label, setLabel] = useState("");
+  const atLimit = plan === "free" && project.periods.length >= FREE_PERIOD_LIMIT;
 
   return (
     <div className="max-w-6xl mx-auto">
@@ -198,6 +205,8 @@ function RootView() {
             value={label}
             onChange={setLabel}
           />
+        ) : atLimit ? (
+          <UpgradeTile message="Free planda 1 dönem oluşturabilirsin." />
         ) : (
           <AddTile label="+ Yeni Dönem" onClick={() => setAdding(true)} />
         )}
@@ -267,8 +276,14 @@ function PeriodView() {
 function FrequencyView() {
   const { activePeriod, project, branchesForActiveFrequency, actions } =
     useProject();
+  const plan = useUserPlan();
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
+  const totalBranches = project.periods.reduce(
+    (sum, p) => sum + p.branches.length,
+    0,
+  );
+  const atBranchLimit = plan === "free" && totalBranches >= FREE_BRANCH_LIMIT;
   const [modal, setModal] = useState<{
     branch: Branch;
     mode: "copy" | "move";
@@ -322,6 +337,8 @@ function FrequencyView() {
               }
             }}
           />
+        ) : atBranchLimit ? (
+          <UpgradeTile message="Free planda 1 model oluşturabilirsin." />
         ) : (
           <AddTile label="+ Yeni Branş" onClick={() => setAdding(true)} />
         )}
@@ -575,6 +592,26 @@ function BranchTile({
       <div className="text-[11px] text-[color:var(--muted)] tabular">
         {branch.history.length} kayıt · {timeAgo(branch.updatedAt)}
       </div>
+    </div>
+  );
+}
+
+function UpgradeTile({ message }: { message: string }) {
+  return (
+    <div className="card p-5 border-dashed flex flex-col items-center justify-center min-h-[140px] gap-3 text-center">
+      <div className="text-[12px] text-[color:var(--muted)] leading-relaxed max-w-[180px]">
+        {message}
+      </div>
+      <Link
+        href="/onboarding/plan"
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11.5px] font-semibold"
+        style={{
+          background: "linear-gradient(135deg,#7c3aed,#4f46e5)",
+          color: "#fff",
+        }}
+      >
+        ✦ Pro&apos;ya geç
+      </Link>
     </div>
   );
 }

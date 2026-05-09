@@ -79,8 +79,7 @@ export function ChatPanel({
   useEffect(() => {
     listModels()
       .then((r) => {
-        const available =
-          plan === "free" ? r.models.slice(0, 1) : r.models;
+        const available = plan === "free" ? r.models.slice(0, 1) : r.models;
         setModels(available);
         setModel(available[0]?.id ?? r.default);
       })

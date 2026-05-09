@@ -709,7 +709,7 @@ const PLANS = [
     desc: "Ekip kullanımı, entegrasyon, SLA.",
     highlight: false,
     cta: "Bize Ulaşın",
-    href: "mailto:info@reserveagent.io",
+    href: "mailto:demireleren877@gmail.com",
     features: [
       "Pro'nun tüm özellikleri",
       "Çoklu kullanıcı & roller",
@@ -877,8 +877,8 @@ function Footer() {
           <div>
             <div className="text-[11px] font-bold uppercase tracking-widest mb-3" style={{ color: "#0a0a14" }}>İletişim</div>
             <div className="space-y-2 text-[13px]" style={{ color: "#5a5a6a" }}>
-              <a href="mailto:info@reserveagent.io" className="block hover:underline">info@reserveagent.io</a>
-              <a href="mailto:enterprise@reserveagent.io" className="block hover:underline">Enterprise satış</a>
+              <a href="mailto:demireleren877@gmail.com" className="block hover:underline">demireleren877@gmail.com</a>
+              <a href="mailto:demireleren877@gmail.com" className="block hover:underline">Enterprise satış</a>
             </div>
           </div>
         </div>

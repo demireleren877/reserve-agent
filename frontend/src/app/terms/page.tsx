@@ -6,7 +6,7 @@ export default function TermsPage() {
       <header className="px-6 md:px-8 h-16 flex items-center border-b" style={{ borderColor: "#e8e5dd", background: "#fff" }}>
         <Link href="/" className="flex items-center gap-2 text-[14px] font-bold tracking-tight">
           <div className="h-7 w-7 rounded-md bg-[#2553e4] grid place-items-center text-white text-[11px] font-bold">A</div>
-          Reserve Agent
+          TSB Analytics
         </Link>
       </header>
 
@@ -15,11 +15,11 @@ export default function TermsPage() {
         <p className="text-[13px] mb-10" style={{ color: "#8a8898" }}>Son güncelleme: Mayıs 2026</p>
 
         <Section title="1. Kabul">
-          Reserve Agent&apos;i kullanarak bu şartları kabul etmiş sayılırsınız. Kabul etmiyorsanız hizmeti kullanmayınız.
+          TSB Analytics hizmetlerini kullanarak bu şartları kabul etmiş sayılırsınız. Kabul etmiyorsanız hizmeti kullanmayınız.
         </Section>
 
         <Section title="2. Hizmet Tanımı">
-          Reserve Agent, aktüeryal IBNR rezerv analizi için bulut tabanlı bir platformdur. Hizmet; Chain-Ladder, Bornhuetter-Ferguson ve tail fitting yöntemlerini içerir.
+          TSB Analytics, aktüeryal IBNR rezerv analizi için bulut tabanlı bir platformdur. Hizmet; Chain-Ladder, Bornhuetter-Ferguson ve tail fitting yöntemlerini içerir.
         </Section>
 
         <Section title="3. Hesap ve Güvenlik">
@@ -36,11 +36,11 @@ export default function TermsPage() {
         </Section>
 
         <Section title="6. Fikri Mülkiyet">
-          Platform ve içeriklerin tüm hakları Reserve Agent&apos;e aittir. Kullanıcı verilerinizin mülkiyeti size aittir.
+          Platform ve içeriklerin tüm hakları TSB Analytics&apos;e aittir. Kullanıcı verilerinizin mülkiyeti size aittir.
         </Section>
 
         <Section title="7. Sorumluluk Sınırı">
-          Reserve Agent, aktüeryal hesaplamalardan doğacak iş kararlarından sorumlu tutulamaz. Platform bir karar destek aracıdır; nihai kararlar kullanıcıya aittir.
+          TSB Analytics, aktüeryal hesaplamalardan doğacak iş kararlarından sorumlu tutulamaz. Platform bir karar destek aracıdır; nihai kararlar kullanıcıya aittir.
         </Section>
 
         <Section title="8. Değişiklikler">
@@ -48,7 +48,7 @@ export default function TermsPage() {
         </Section>
 
         <Section title="9. İletişim">
-          Sorularınız için: <a href="mailto:info@reserveagent.io" className="underline">info@reserveagent.io</a>
+          Sorularınız için: <a href="mailto:demireleren877@gmail.com" className="underline">demireleren877@gmail.com</a>
         </Section>
       </main>
 
@@ -73,9 +73,9 @@ function Footer() {
         <Link href="/terms" className="hover:underline">Kullanım Şartları</Link>
         <Link href="/privacy" className="hover:underline">Gizlilik Politikası</Link>
         <Link href="/refund" className="hover:underline">İade Politikası</Link>
-        <a href="mailto:info@reserveagent.io" className="hover:underline">İletişim</a>
+        <a href="mailto:demireleren877@gmail.com" className="hover:underline">İletişim</a>
       </div>
-      <p className="mt-3">© 2026 Reserve Agent</p>
+      <p className="mt-3">© 2026 TSB Analytics</p>
     </footer>
   );
 }

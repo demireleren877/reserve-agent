@@ -6,7 +6,7 @@ export default function RefundPage() {
       <header className="px-6 md:px-8 h-16 flex items-center border-b" style={{ borderColor: "#e8e5dd", background: "#fff" }}>
         <Link href="/" className="flex items-center gap-2 text-[14px] font-bold tracking-tight">
           <div className="h-7 w-7 rounded-md bg-[#2553e4] grid place-items-center text-white text-[11px] font-bold">A</div>
-          Reserve Agent
+          TSB Analytics
         </Link>
       </header>
 
@@ -31,7 +31,7 @@ export default function RefundPage() {
         </Section>
 
         <Section title="5. İade Nasıl Talep Edilir">
-          İade talebinizi <a href="mailto:info@reserveagent.io" className="underline">info@reserveagent.io</a> adresine e-posta göndererek iletebilirsiniz. Lütfen hesabınıza kayıtlı e-posta adresini ve satın alma tarihini belirtin. Talepler 3–5 iş günü içinde sonuçlandırılır.
+          İade talebinizi <a href="mailto:demireleren877@gmail.com" className="underline">demireleren877@gmail.com</a> adresine e-posta göndererek iletebilirsiniz. Lütfen hesabınıza kayıtlı e-posta adresini ve satın alma tarihini belirtin. Talepler 3–5 iş günü içinde sonuçlandırılır.
         </Section>
 
         <Section title="6. Ödeme Yöntemi">
@@ -43,7 +43,7 @@ export default function RefundPage() {
         </Section>
 
         <Section title="8. İletişim">
-          Sorularınız için: <a href="mailto:info@reserveagent.io" className="underline">info@reserveagent.io</a>
+          Sorularınız için: <a href="mailto:demireleren877@gmail.com" className="underline">demireleren877@gmail.com</a>
         </Section>
       </main>
 
@@ -68,9 +68,9 @@ function Footer() {
         <Link href="/terms" className="hover:underline">Kullanım Şartları</Link>
         <Link href="/privacy" className="hover:underline">Gizlilik Politikası</Link>
         <Link href="/refund" className="hover:underline">İade Politikası</Link>
-        <a href="mailto:info@reserveagent.io" className="hover:underline">İletişim</a>
+        <a href="mailto:demireleren877@gmail.com" className="hover:underline">İletişim</a>
       </div>
-      <p className="mt-3">© 2026 Reserve Agent</p>
+      <p className="mt-3">© 2026 TSB Analytics</p>
     </footer>
   );
 }

@@ -6,11 +6,13 @@ import { GlobalAgentLauncher, GlobalAgentPanel } from "@/components/GlobalAgent"
 import { ProjectProvider } from "@/lib/project-store";
 import { ReserveAgentBridge } from "@/components/ReserveAgentBridge";
 import { AuthGate } from "@/lib/auth/auth-gate";
+import { UserPlanProvider } from "@/lib/auth/user-plan-context";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <AuthGate>
       {(me) => (
+        <UserPlanProvider plan={me.plan}>
         <ProjectProvider userId={me.uid}>
           <AgentRegistryProvider>
             <ReserveAgentBridge />
@@ -25,6 +27,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <GlobalAgentPanel />
           </AgentRegistryProvider>
         </ProjectProvider>
+        </UserPlanProvider>
       )}
     </AuthGate>
   );

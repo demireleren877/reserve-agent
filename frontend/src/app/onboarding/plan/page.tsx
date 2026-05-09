@@ -1,9 +1,21 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth/auth-context";
 import { setPlan, fetchMe, type Plan } from "@/lib/sync/worker-client";
+
+declare global {
+  interface Window {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    Paddle?: any;
+  }
+}
+
+const PADDLE_CLIENT_TOKEN =
+  process.env.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN ?? "";
+const PADDLE_PRICE_ID =
+  process.env.NEXT_PUBLIC_PADDLE_PRICE_ID ?? "";
 
 export default function PlanOnboarding() {
   const router = useRouter();
@@ -11,6 +23,7 @@ export default function PlanOnboarding() {
   const [selected, setSelected] = useState<Plan>("free");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const paddleReady = useRef(false);
 
   // Not signed in → bounce to /login. Already chose plan → /reserve.
   useEffect(() => {
@@ -34,17 +47,95 @@ export default function PlanOnboarding() {
     };
   }, [auth.user, auth.loading, router]);
 
+  // Load Paddle.js once
+  useEffect(() => {
+    if (!PADDLE_CLIENT_TOKEN || paddleReady.current) return;
+    const script = document.createElement("script");
+    script.src = "https://cdn.paddle.com/paddle/v2/paddle.js";
+    script.async = true;
+    script.onload = () => {
+      if (!window.Paddle) return;
+      window.Paddle.Initialize({ token: PADDLE_CLIENT_TOKEN });
+      paddleReady.current = true;
+    };
+    document.head.appendChild(script);
+  }, []);
+
   async function confirm() {
     setBusy(true);
     setError(null);
-    try {
-      await setPlan(selected);
-      router.replace("/reserve");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Plan kaydedilemedi.");
-    } finally {
-      setBusy(false);
+
+    if (selected === "free") {
+      try {
+        await setPlan("free");
+        router.replace("/reserve");
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Plan kaydedilemedi.");
+        setBusy(false);
+      }
+      return;
     }
+
+    // Pro → open Paddle checkout
+    if (!PADDLE_PRICE_ID) {
+      setError("Paddle yapılandırması eksik (NEXT_PUBLIC_PADDLE_PRICE_ID).");
+      setBusy(false);
+      return;
+    }
+    if (!window.Paddle) {
+      setError("Ödeme sistemi yüklenemedi. Sayfayı yenileyip tekrar dene.");
+      setBusy(false);
+      return;
+    }
+
+    const uid = auth.user?.uid;
+    if (!uid) {
+      setError("Oturum bulunamadı.");
+      setBusy(false);
+      return;
+    }
+
+    window.Paddle.Checkout.open({
+      items: [{ priceId: PADDLE_PRICE_ID, quantity: 1 }],
+      customData: { uid },
+      settings: {
+        displayMode: "overlay",
+        theme: "light",
+        locale: "tr",
+      },
+      successCallback: async () => {
+        // Poll until D1 is updated by the webhook
+        let attempts = 0;
+        const poll = async () => {
+          attempts++;
+          try {
+            const me = await fetchMe();
+            if (me.plan === "pro" && me.hasPlan) {
+              router.replace("/reserve");
+              return;
+            }
+          } catch {
+            /* keep polling */
+          }
+          if (attempts < 20) {
+            setTimeout(poll, 1500);
+          } else {
+            // Webhook may be slow — set plan manually as fallback
+            try {
+              await setPlan("pro");
+              router.replace("/reserve");
+            } catch (e) {
+              setError(e instanceof Error ? e.message : "Plan güncellenemedi.");
+              setBusy(false);
+            }
+          }
+        };
+        poll();
+      },
+      closeCallback: () => {
+        setBusy(false);
+      },
+    });
   }
 
   return (
@@ -61,7 +152,7 @@ export default function PlanOnboarding() {
             Planını seç
           </h1>
           <p className="text-[14.5px]" style={{ color: "#45445a" }}>
-            İstediğin zaman değiştirebilirsin. Ödeme şu an alınmıyor.
+            Free plan ücretsizdir. Pro plan için aylık ödeme alınır.
           </p>
         </div>
 
@@ -76,6 +167,7 @@ export default function PlanOnboarding() {
               "Chain-Ladder & BF",
               "LDF & CDF override",
               "Excel export (temel)",
+              "1 AI modeli",
               "Veri tarayıcıda + bulut yedekli",
             ]}
             selected={selected === "free"}
@@ -91,7 +183,7 @@ export default function PlanOnboarding() {
             features={[
               "Sınırsız proje & dönem",
               "Parametrik tail fitting",
-              "AI Aktüer Agent — sınırsız",
+              "AI Aktüer Agent — tüm modeller",
               "Senaryo karşılaştırması",
               "Öncelikli destek",
             ]}
@@ -121,10 +213,12 @@ export default function PlanOnboarding() {
             }}
           >
             {busy
-              ? "Kaydediliyor..."
+              ? selected === "pro"
+                ? "Ödeme bekleniyor..."
+                : "Kaydediliyor..."
               : selected === "free"
               ? "Free ile devam et"
-              : "Pro ile devam et"}
+              : "Pro'ya geç — ₺890/ay"}
           </button>
           <button
             onClick={() => auth.logout()}

@@ -4,6 +4,7 @@ interface Env {
   DB: D1Database;
   ALLOWED_ORIGIN: string;
   FIREBASE_PROJECT_ID: string;
+  PADDLE_WEBHOOK_SECRET: string;
 }
 
 type Plan = "free" | "pro";
@@ -259,6 +260,87 @@ async function handleDeleteAll(env: Env, t: VerifiedToken, origin: string) {
   return json({ ok: true }, { status: 200 }, origin);
 }
 
+// ---------------------------------------------------------------------------
+// Paddle webhook — no auth header; signature verification via HMAC-SHA256
+// ---------------------------------------------------------------------------
+
+async function verifyPaddleSignature(
+  req: Request,
+  secret: string,
+): Promise<{ ok: boolean; body: string }> {
+  const body = await req.text();
+  const sigHeader = req.headers.get("Paddle-Signature") ?? "";
+
+  // Format: ts=<timestamp>;h1=<hmac>
+  const parts = Object.fromEntries(
+    sigHeader.split(";").map((p) => p.split("=")),
+  );
+  const ts = parts["ts"];
+  const h1 = parts["h1"];
+  if (!ts || !h1) return { ok: false, body };
+
+  const signed = `${ts}:${body}`;
+  const keyData = new TextEncoder().encode(secret);
+  const msgData = new TextEncoder().encode(signed);
+  const key = await crypto.subtle.importKey(
+    "raw",
+    keyData,
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const sig = await crypto.subtle.sign("HMAC", key, msgData);
+  const computed = Array.from(new Uint8Array(sig))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+
+  // Constant-time compare is not critical for webhook secrets (no timing oracle
+  // on this path), but we do a simple string equality.
+  return { ok: computed === h1, body };
+}
+
+async function handlePaddleWebhook(req: Request, env: Env): Promise<Response> {
+  if (!env.PADDLE_WEBHOOK_SECRET) {
+    return new Response("webhook not configured", { status: 501 });
+  }
+
+  const { ok, body } = await verifyPaddleSignature(req, env.PADDLE_WEBHOOK_SECRET);
+  if (!ok) {
+    return new Response("invalid signature", { status: 401 });
+  }
+
+  let event: {
+    event_type?: string;
+    data?: {
+      custom_data?: { uid?: string };
+      status?: string;
+    };
+  };
+  try {
+    event = JSON.parse(body);
+  } catch {
+    return new Response("invalid json", { status: 400 });
+  }
+
+  const uid = event.data?.custom_data?.uid;
+  const activatingEvents = new Set([
+    "subscription.activated",
+    "subscription.updated",
+    "transaction.completed",
+  ]);
+
+  if (uid && activatingEvents.has(event.event_type ?? "")) {
+    const now = Date.now();
+    await env.DB.prepare(
+      "UPDATE users SET plan = 'pro', plan_selected_at = ?, updated_at = ? WHERE uid = ?",
+    )
+      .bind(now, now, uid)
+      .run();
+  }
+
+  return new Response("ok", { status: 200 });
+}
+
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
     const origin = env.ALLOWED_ORIGIN || "*";
@@ -270,6 +352,11 @@ export default {
 
     if (url.pathname === "/health") {
       return json({ ok: true }, { status: 200 }, origin);
+    }
+
+    // Paddle webhook — no bearer token, signature-verified
+    if (url.pathname === "/v1/paddle/webhook" && req.method === "POST") {
+      return handlePaddleWebhook(req, env);
     }
 
     if (!url.pathname.startsWith("/v1/")) {

@@ -9,6 +9,9 @@ ALLOWED_ORIGIN = "http://localhost:3000"
 # Firebase project ID — must be set so we can verify ID tokens.
 # Set this real value with: wrangler secret put FIREBASE_PROJECT_ID  (or here for non-secret).
 FIREBASE_PROJECT_ID = "reserveagent"
+# Paddle webhook secret — set via secret, NOT committed here:
+#   wrangler secret put PADDLE_WEBHOOK_SECRET
+#   wrangler secret put PADDLE_WEBHOOK_SECRET --env production
 
 # D1 binding. Run:
 #   wrangler d1 create reserve_agent

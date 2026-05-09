@@ -882,9 +882,13 @@ function Footer() {
             </div>
           </div>
         </div>
-        <div className="pt-6 flex items-center justify-between text-[12px]" style={{ borderTop: "1px solid #e8e5dd", color: "#8a8898" }}>
+        <div className="pt-6 flex flex-col md:flex-row items-center justify-between gap-3 text-[12px]" style={{ borderTop: "1px solid #e8e5dd", color: "#8a8898" }}>
           <span>© 2026 Reserve Agent</span>
-          <span>Aktüeryal rezerv analiz platformu</span>
+          <div className="flex items-center gap-5 flex-wrap justify-center">
+            <Link href="/terms" className="hover:underline">Kullanım Şartları</Link>
+            <Link href="/privacy" className="hover:underline">Gizlilik Politikası</Link>
+            <Link href="/refund" className="hover:underline">İade Politikası</Link>
+          </div>
         </div>
       </div>
     </footer>

@@ -1,0 +1,20 @@
+{
+  "name": "reserve-agent-worker",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev --remote",
+    "dev:local": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:migrate:local": "wrangler d1 migrations apply reserve_agent --local",
+    "db:migrate:remote": "wrangler d1 migrations apply reserve_agent --remote",
+    "db:console:local": "wrangler d1 execute reserve_agent --local --command",
+    "db:console:remote": "wrangler d1 execute reserve_agent --remote --command",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20251201.0",
+    "typescript": "^5.7.0",
+    "wrangler": "^4.0.0"
+  }
+}

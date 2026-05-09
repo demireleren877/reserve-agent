@@ -1,0 +1,32 @@
+name = "reserve-agent-worker"
+main = "src/index.ts"
+compatibility_date = "2025-09-01"
+compatibility_flags = ["nodejs_compat"]
+
+# CORS-allowed origin (frontend). Override per-env via vars below.
+[vars]
+ALLOWED_ORIGIN = "http://localhost:3000"
+# Firebase project ID — must be set so we can verify ID tokens.
+# Set this real value with: wrangler secret put FIREBASE_PROJECT_ID  (or here for non-secret).
+FIREBASE_PROJECT_ID = "reserveagent"
+
+# D1 binding. Run:
+#   wrangler d1 create reserve_agent
+# then paste the printed database_id below.
+[[d1_databases]]
+binding = "DB"
+database_name = "reserve_agent"
+database_id = "f3adf4ec-2b48-4566-ada0-f366928021c7"
+migrations_dir = "migrations"
+
+# Production environment overrides
+[env.production]
+[env.production.vars]
+ALLOWED_ORIGIN = "https://reserve-agent.pages.dev"
+FIREBASE_PROJECT_ID = "reserveagent"
+
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "reserve_agent"
+database_id = "f3adf4ec-2b48-4566-ada0-f366928021c7"
+migrations_dir = "migrations"

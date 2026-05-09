@@ -79,9 +79,8 @@ export function ChatPanel({
   useEffect(() => {
     listModels()
       .then((r) => {
-        const available = plan === "free" ? r.models.slice(0, 1) : r.models;
-        setModels(available);
-        setModel(available[0]?.id ?? r.default);
+        setModels(r.models);
+        setModel(r.models[0]?.id ?? r.default);
       })
       .catch((e) => {
         setModelsError(
@@ -211,33 +210,18 @@ export function ChatPanel({
         <div className="flex items-center gap-1 shrink-0">
           {/* Model selector */}
           {!modelsError && (
-            <div className="flex items-center gap-1.5">
-              <select
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-                disabled={modelsLoading || models.length === 0}
-                className="h-6 max-w-[130px] rounded-md border border-[color:var(--border)] bg-[color:var(--surface-alt)] text-[11px] text-[color:var(--muted-strong)] px-1.5 outline-none focus:border-[color:var(--primary)] transition cursor-pointer disabled:opacity-50"
-                title="Model seç"
-              >
-                {modelsLoading && <option value="">…</option>}
-                {models.map((m) => (
-                  <option key={m.id} value={m.id}>{m.label}</option>
-                ))}
-              </select>
-              {plan === "free" && (
-                <a
-                  href="/onboarding/plan"
-                  className="h-6 px-2 rounded-md text-[10px] font-semibold flex items-center gap-0.5 shrink-0"
-                  style={{
-                    background: "linear-gradient(135deg,#7c3aed,#4f46e5)",
-                    color: "#fff",
-                  }}
-                  title="Tüm modellere erişmek için Pro'ya geç"
-                >
-                  Pro
-                </a>
-              )}
-            </div>
+            <select
+              value={model}
+              onChange={(e) => setModel(e.target.value)}
+              disabled={modelsLoading || models.length === 0}
+              className="h-6 max-w-[130px] rounded-md border border-[color:var(--border)] bg-[color:var(--surface-alt)] text-[11px] text-[color:var(--muted-strong)] px-1.5 outline-none focus:border-[color:var(--primary)] transition cursor-pointer disabled:opacity-50"
+              title="Model seç"
+            >
+              {modelsLoading && <option value="">…</option>}
+              {models.map((m) => (
+                <option key={m.id} value={m.id}>{m.label}</option>
+              ))}
+            </select>
           )}
           {modelsError && (
             <button
@@ -248,9 +232,8 @@ export function ChatPanel({
                 setModelsLoading(true);
                 listModels()
                   .then((r) => {
-                    const available = plan === "free" ? r.models.slice(0, 1) : r.models;
-                    setModels(available);
-                    setModel(available[0]?.id ?? r.default);
+                    setModels(r.models);
+                    setModel(r.models[0]?.id ?? r.default);
                   })
                   .catch((e) => setModelsError(e instanceof Error ? e.message : "Hata"))
                   .finally(() => setModelsLoading(false));

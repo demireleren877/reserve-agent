@@ -378,12 +378,20 @@ function applyReserveAction(
   } else if (a.type === "set_cdf_user_value") {
     const dev = a.payload?.dev_period as string | undefined;
     const v = Number(a.payload?.value);
-    if (dev && Number.isFinite(v)) s.setCdfInitial(dev, v);
+    if (dev && Number.isFinite(v)) {
+      s.setCdfInitial(dev, v);
+      s.setCdfModel(dev, 6);
+    }
   } else if (a.type === "set_cdf_choice") {
     const dev = a.payload?.dev_period as string | undefined;
     const choice = a.payload?.choice as "initial" | "user" | undefined;
-    if (dev && (choice === "initial" || choice === "user"))
+    if (dev && choice === "user") {
       s.setCdfChoice(dev, choice);
+      s.setCdfModel(dev, 6);
+    } else if (dev && choice === "initial") {
+      s.setCdfChoice(dev, choice);
+      s.setCdfModel(dev, 1);
+    }
   } else if (a.type === "set_cdf_choices") {
     const items =
       (a.payload?.items as {
@@ -393,6 +401,9 @@ function applyReserveAction(
     s.setCdfChoiceBulk(
       items.map((it) => ({ devPeriod: it.dev_period, choice: it.choice })),
     );
+    for (const it of items) {
+      s.setCdfModel(it.dev_period, it.choice === "user" ? 6 : 1);
+    }
   } else if (a.type === "reset_curve") {
     s.resetCdfInitial();
   }

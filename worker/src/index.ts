@@ -5,6 +5,8 @@ interface Env {
   ALLOWED_ORIGIN: string;
   FIREBASE_PROJECT_ID: string;
   PADDLE_WEBHOOK_SECRET: string;
+  PADDLE_API_KEY: string;
+  PADDLE_ENV: string; // "sandbox" | "production"
 }
 
 type Plan = "free" | "pro";
@@ -14,6 +16,7 @@ interface UserRow {
   email: string;
   plan: Plan;
   plan_selected_at: number | null;
+  paddle_subscription_id: string | null;
   created_at: number;
   updated_at: number;
 }
@@ -68,7 +71,7 @@ async function authenticate(
 async function ensureUser(env: Env, t: VerifiedToken): Promise<UserRow> {
   const now = Date.now();
   const existing = await env.DB.prepare(
-    "SELECT uid, email, plan, plan_selected_at, created_at, updated_at FROM users WHERE uid = ?",
+    "SELECT uid, email, plan, plan_selected_at, paddle_subscription_id, created_at, updated_at FROM users WHERE uid = ?",
   )
     .bind(t.uid)
     .first<UserRow>();
@@ -90,11 +93,12 @@ async function ensureUser(env: Env, t: VerifiedToken): Promise<UserRow> {
     email: t.email,
     plan: "free",
     plan_selected_at: null,
+    paddle_subscription_id: null,
     created_at: now,
     updated_at: now,
   };
   await env.DB.prepare(
-    "INSERT INTO users (uid, email, plan, plan_selected_at, created_at, updated_at) VALUES (?, ?, ?, NULL, ?, ?)",
+    "INSERT INTO users (uid, email, plan, plan_selected_at, paddle_subscription_id, created_at, updated_at) VALUES (?, ?, ?, NULL, NULL, ?, ?)",
   )
     .bind(row.uid, row.email, row.plan, row.created_at, row.updated_at)
     .run();
@@ -115,6 +119,25 @@ async function handleMe(env: Env, t: VerifiedToken, origin: string) {
   );
 }
 
+async function cancelPaddleSubscription(
+  subscriptionId: string,
+  env: Env,
+): Promise<void> {
+  if (!env.PADDLE_API_KEY) return;
+  const base =
+    env.PADDLE_ENV === "sandbox"
+      ? "https://sandbox-api.paddle.com"
+      : "https://api.paddle.com";
+  await fetch(`${base}/subscriptions/${subscriptionId}/cancel`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${env.PADDLE_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ effective_from: "next_billing_period" }),
+  });
+}
+
 async function handleSetPlan(
   req: Request,
   env: Env,
@@ -131,8 +154,14 @@ async function handleSetPlan(
   if (plan !== "free" && plan !== "pro") {
     return err(400, "invalid_plan", origin);
   }
-  await ensureUser(env, t);
+  const user = await ensureUser(env, t);
   const now = Date.now();
+
+  // Downgrading to free → cancel active Paddle subscription
+  if (plan === "free" && user.paddle_subscription_id) {
+    await cancelPaddleSubscription(user.paddle_subscription_id, env);
+  }
+
   await env.DB.prepare(
     "UPDATE users SET plan = ?, plan_selected_at = ?, updated_at = ? WHERE uid = ?",
   )
@@ -313,6 +342,7 @@ async function handlePaddleWebhook(req: Request, env: Env): Promise<Response> {
   let event: {
     event_type?: string;
     data?: {
+      id?: string; // subscription_id for subscription events
       custom_data?: { uid?: string };
       status?: string;
     };
@@ -324,6 +354,7 @@ async function handlePaddleWebhook(req: Request, env: Env): Promise<Response> {
   }
 
   const uid = event.data?.custom_data?.uid;
+  const subscriptionId = event.data?.id ?? null;
   const activatingEvents = new Set([
     "subscription.activated",
     "subscription.updated",
@@ -333,9 +364,9 @@ async function handlePaddleWebhook(req: Request, env: Env): Promise<Response> {
   if (uid && activatingEvents.has(event.event_type ?? "")) {
     const now = Date.now();
     await env.DB.prepare(
-      "UPDATE users SET plan = 'pro', plan_selected_at = ?, updated_at = ? WHERE uid = ?",
+      "UPDATE users SET plan = 'pro', plan_selected_at = ?, paddle_subscription_id = ?, updated_at = ? WHERE uid = ?",
     )
-      .bind(now, now, uid)
+      .bind(now, subscriptionId, now, uid)
       .run();
   }
 

@@ -166,6 +166,9 @@ export default function PlanOnboarding() {
 
     window.Paddle.Checkout.open({
       items: [{ priceId: PADDLE_PRICE_ID, quantity: 1 }],
+      customer: {
+        email: auth.user?.email ?? undefined,
+      },
       customData: { uid },
       settings: {
         displayMode: "overlay",

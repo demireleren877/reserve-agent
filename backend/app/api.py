@@ -4,11 +4,17 @@ from __future__ import annotations
 
 import os
 import base64
+from typing import Any
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
 from app.firebase_auth import verify_firebase_token
+from app.cashflow.compute import (
+    CashflowRecord,
+    compute_cashflow,
+    parse_records_from_bytes,
+)
 
 # Excel (xlsx) magic bytes: PK\x03\x04 (ZIP archive)
 _XLSX_MAGIC = b"PK\x03\x04"
@@ -209,3 +215,108 @@ def agent_chat(req: ChatRequest, _auth: dict = Depends(verify_firebase_token)) -
         stopped_reason=result.stopped_reason,
         raw_additions=result.raw_additions,
     )
+
+
+# ─── Cashflow endpoints ───────────────────────────────────────────────────────
+
+_CSV_MAX_BYTES = 50 * 1024 * 1024  # 50 MB (CSV'ler büyük olabilir)
+
+
+class CashflowUploadRequest(BaseModel):
+    file_b64: str
+    filename: str = "data.csv"
+
+
+class CashflowComputeRequest(BaseModel):
+    records: list[dict[str, Any]]  # [{origin_year, dev_date, paid}]
+
+
+@router.post("/cashflow/upload")
+async def cashflow_upload(
+    body: CashflowUploadRequest,
+    _auth: dict = Depends(verify_firebase_token),
+) -> dict[str, Any]:
+    try:
+        content = base64.b64decode(body.file_b64)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Geçersiz base64: {e}") from e
+
+    if len(content) > _CSV_MAX_BYTES:
+        raise HTTPException(status_code=413, detail="Dosya 50 MB sınırını aşıyor")
+
+    try:
+        records = parse_records_from_bytes(content, body.filename)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Dosya okunamadı: {e}") from e
+
+    if not records:
+        raise HTTPException(status_code=400, detail="Geçerli kayıt bulunamadı")
+
+    return {
+        "record_count": len(records),
+        "origin_years": sorted({r.origin_year for r in records}),
+        "report_date": max(r.dev_date for r in records).isoformat(),
+        "records": [
+            {"origin_year": r.origin_year, "dev_date": r.dev_date.isoformat(), "paid": r.paid}
+            for r in records
+        ],
+    }
+
+
+@router.post("/cashflow/compute")
+async def cashflow_compute(
+    body: CashflowComputeRequest,
+    _auth: dict = Depends(verify_firebase_token),
+) -> dict[str, Any]:
+    from datetime import date as date_cls
+
+    if not body.records:
+        raise HTTPException(status_code=400, detail="Kayıt listesi boş")
+
+    try:
+        records = [
+            CashflowRecord(
+                origin_year=int(r["origin_year"]),
+                dev_date=date_cls.fromisoformat(str(r["dev_date"])),
+                paid=float(r.get("paid", 0)),
+            )
+            for r in body.records
+        ]
+        result = compute_cashflow(records)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Hesaplama hatası: {e}") from e
+
+    return {
+        "origin_years": result.origin_years,
+        "report_date": result.report_date.isoformat(),
+        "triangle": {
+            str(y): {str(p): v for p, v in periods.items()}
+            for y, periods in result.triangle.items()
+        },
+        "incremental": {
+            str(y): {str(p): v for p, v in periods.items()}
+            for y, periods in result.incremental.items()
+        },
+        "dev_factors": [
+            {
+                "period": r.period,
+                "df": r.df,
+                "cdf": r.cdf,
+                "inv_cdf_100": r.inv_cdf_100,
+                "inv_cdf_100_inc": r.inv_cdf_100_inc,
+                "global_weight": r.global_weight,
+            }
+            for r in result.dev_factors
+        ],
+        "quarterly_pattern": {
+            str(y): rows for y, rows in result.quarterly_pattern.items()
+        },
+        "monthly_pattern": {
+            str(y): rows for y, rows in result.monthly_pattern.items()
+        },
+        "max_period": result.max_period,
+    }

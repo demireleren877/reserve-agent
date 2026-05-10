@@ -15,6 +15,7 @@ interface ModuleItem {
 const MODULES: ModuleItem[] = [
   { href: "/home", label: "Anasayfa", icon: <HomeIcon /> },
   { href: "/reserve", label: "Rezerv", icon: <StackIcon /> },
+  { href: "/cashflow", label: "Nakit Akışı", icon: <CashflowIcon /> },
 ];
 
 const STORAGE_KEY = "app-sidebar-collapsed";
@@ -325,6 +326,15 @@ function StackIcon() {
       <path d="M12 3 2 8l10 5 10-5z" />
       <path d="M2 13l10 5 10-5" />
       <path d="M2 18l10 5 10-5" />
+    </svg>
+  );
+}
+
+function CashflowIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2 7h20M2 12h20M2 17h20" />
+      <path d="M6 3v18M18 3v18" />
     </svg>
   );
 }

@@ -177,6 +177,72 @@ export async function uploadPremiums(
   return data.premiums as Record<string, number>;
 }
 
+// ─── Cashflow API ────────────────────────────────────────────────────────────
+
+export interface CashflowRecord {
+  origin_year: number;
+  dev_date: string; // ISO date
+  paid: number;
+}
+
+export interface DevFactorRow {
+  period: number;
+  df: number;
+  cdf: number;
+  inv_cdf_100: number;
+  inv_cdf_100_inc: number;
+  global_weight: number;
+}
+
+export interface CashflowComputeResult {
+  origin_years: number[];
+  report_date: string;
+  triangle: Record<string, Record<string, number>>;
+  incremental: Record<string, Record<string, number>>;
+  dev_factors: DevFactorRow[];
+  quarterly_pattern: Record<string, { period: number; weight: number }[]>;
+  monthly_pattern: Record<string, { month: number; weight: number }[]>;
+  max_period: number;
+}
+
+export async function uploadCashflowFile(file: File): Promise<{
+  record_count: number;
+  origin_years: number[];
+  report_date: string;
+  records: CashflowRecord[];
+}> {
+  if (file.size > 50 * 1024 * 1024) throw new Error("Dosya 50 MB sınırını aşıyor");
+  const buffer = await file.arrayBuffer();
+  const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer)));
+  const authHeaders = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/v1/cashflow/upload`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders },
+    body: JSON.stringify({ file_b64: base64, filename: file.name }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ detail: "Yükleme hatası" }));
+    throw new Error(body.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function computeCashflow(
+  records: CashflowRecord[],
+): Promise<CashflowComputeResult> {
+  const authHeaders = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/v1/cashflow/compute`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders },
+    body: JSON.stringify({ records }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ detail: "Hesaplama hatası" }));
+    throw new Error(body.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
 export async function listModels(): Promise<ModelsResponse> {
   const res = await fetch(`${API_BASE}/v1/models`);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);

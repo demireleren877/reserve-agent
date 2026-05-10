@@ -113,7 +113,7 @@ function Hero() {
 
           <p className="fade-in-up text-[17px] md:text-[19px] leading-[1.6] mx-auto mb-9 max-w-2xl"
             style={{ color: "#45445a", animationDelay: "0.2s" }}>
-            Rezerv analizi, IFRS 17, ortalama muallak ve daha fazlası — tek platformda.
+            Rezerv analizi, IFRS 17, nakit akışı, iskonto ve daha fazlası — tek platformda.
             Her modülde AI Aktüer Agent ile senaryoları konuşarak yönetin.
           </p>
 
@@ -129,7 +129,7 @@ function Hero() {
           </div>
 
           <div className="fade-in-up flex items-center justify-center gap-4 text-[12px] flex-wrap" style={{ color: "#8a8898", animationDelay: "0.4s" }}>
-            {["Hesap gerektirmez", "Ücretsiz başla", "Türkiye'nin ilk aktüeryal AI platformu"].map((t, i) => (
+            {["Ücretsiz plan mevcut", "Ham veri LLM'e iletilmez", "Türkiye'nin ilk aktüeryal AI platformu"].map((t, i) => (
               <span key={i} className="flex items-center gap-1.5">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M12 2 4 6v6c0 5 3.5 9 8 10 4.5-1 8-5 8-10V6l-8-4Z" stroke="currentColor" strokeWidth="1.5"/><path d="m9 12 2 2 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
                 {t}
@@ -177,8 +177,8 @@ function PlatformPreview() {
             {[
               { label: "Rezerv Analizi", active: true, dot: "#2553e4" },
               { label: "IFRS 17", active: false, dot: "#d1d5db", soon: true },
-              { label: "Ortalama Muallak", active: false, dot: "#d1d5db", soon: true },
-              { label: "Fiyatlandırma", active: false, dot: "#d1d5db", soon: true },
+              { label: "Nakit Akışı", active: false, dot: "#d1d5db", soon: true },
+              { label: "İskonto", active: false, dot: "#d1d5db", soon: true },
             ].map(m => (
               <div key={m.label} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-medium"
                 style={{
@@ -285,9 +285,9 @@ const MODULE_LIST = [
     tagColor: "#8a8898",
     tagBg: "#f3f1ec",
     icon: <AvgClaimIcon />,
-    name: "Ortalama Muallak",
-    desc: "Dosya bazlı ortalama muallak analizi, gelişim örüntüsü ve segmentasyon. Büyük hasarların ayrıştırılması.",
-    features: ["Dosya gelişim analizi", "Büyük hasar ayrıştırma", "Segment karşılaştırması", "Trend hesabı"],
+    name: "Nakit Akışı",
+    desc: "Sigorta yükümlülüklerinin dönemsel nakit akışı projeksiyonu. Ödeme örüntüsü ve aktüeryal beklenti analizi.",
+    features: ["Ödeme örüntüsü analizi", "Dönemsel projeksiyon", "Senaryo karşılaştırması", "Portföy bazlı görünüm"],
     active: false,
   },
   {
@@ -295,9 +295,9 @@ const MODULE_LIST = [
     tagColor: "#8a8898",
     tagBg: "#f3f1ec",
     icon: <PricingIcon />,
-    name: "Fiyatlandırma",
-    desc: "Risk priminin bileşenlerine ayrıştırılması, tarifeler bazlı yeterlilik analizi ve fiyat döngüsü takibi.",
-    features: ["Risk primi ayrıştırma", "Tarife yeterliliği", "Fiyat döngüsü analizi", "GLM entegrasyonu"],
+    name: "İskonto",
+    desc: "Nakit akışlarının risk-free eğri veya şirket iskonto eğrisiyle bugünkü değere indirgenmesi.",
+    features: ["Risk-free eğri entegrasyonu", "Yield curve uygulaması", "IFRS 17 uyumlu iskonto", "Duyarlılık analizi"],
     active: false,
   },
 ];
@@ -539,7 +539,7 @@ function AgentSection() {
             Her modülde <br />kıdemli aktüer desteği
           </h2>
           <p className="text-[15.5px] leading-[1.7] mb-8" style={{ color: "#45445a", maxWidth: 480 }}>
-            Rezerv, IFRS 17 veya ortalama muallak — hangi modülde olursanız olun AI Agent
+            Rezerv, IFRS 17, nakit akışı veya iskonto — hangi modülde olursanız olun AI Agent
             sorularınızı yanıtlar, senaryoları hesaplar ve değişiklikleri doğrudan uygular.
             Ham veri LLM'e iletilmez.
           </p>
@@ -661,7 +661,7 @@ function Pricing() {
         <SectionHead
           tag="Fiyatlandırma"
           title="Ücretsiz başla, ihtiyaca göre büyüt"
-          desc="Tüm planlarda kredi kartı gerekmez. İstediğin zaman değiştir veya iptal et."
+          desc="Ücretsiz plan ile başla, ihtiyacın büyüdükçe Pro'ya geç. İstediğin zaman değiştir veya iptal et."
         />
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-12 items-stretch">
           {PLANS.map(p => <PlanCard key={p.name} {...p} />)}
@@ -728,8 +728,8 @@ function PlanCard({ name, price, period, desc, highlight, cta, href, features, m
 // ─── FAQ ──────────────────────────────────────────────────────────────────────
 
 const FAQ_ITEMS = [
-  { q: "Actuarius nedir?", a: "Actuarius, aktüeryal iş akışlarını tek platformda birleştiren bir SaaS ürünüdür. Rezerv analizi, IFRS 17 muhasebeleştirmesi ve ortalama muallak analizi gibi aktüeryal disiplinler modüler yapıda sunulmakta; her modülde AI Aktüer Agent ile doğal dilde analiz yapılabilmektedir." },
-  { q: "Şu an hangi modüller aktif?", a: "Rezerv Analizi modülü tam aktiftir: Chain-Ladder, Bornhuetter–Ferguson, parametrik tail fitting (Exponential, Inverse Power, Power, Weibull), ILR üçgeni ve AI Agent entegrasyonu içermektedir. IFRS 17, Ortalama Muallak ve Fiyatlandırma modülleri yakında eklenecektir. Pro kullanıcılar tüm yeni modüllere erken erişim kazanır." },
+  { q: "Actuarius nedir?", a: "Actuarius, aktüeryal iş akışlarını tek platformda birleştiren bir SaaS ürünüdür. Rezerv analizi, IFRS 17, nakit akışı projeksiyonu ve iskonto hesabı gibi aktüeryal disiplinler modüler yapıda sunulmakta; her modülde AI Aktüer Agent ile doğal dilde analiz yapılabilmektedir." },
+  { q: "Şu an hangi modüller aktif?", a: "Rezerv Analizi modülü tam aktiftir: Chain-Ladder, Bornhuetter–Ferguson, parametrik tail fitting (Exponential, Inverse Power, Power, Weibull), ILR üçgeni ve AI Agent entegrasyonu içermektedir. IFRS 17, Nakit Akışı ve İskonto modülleri yakında eklenecektir. Pro kullanıcılar tüm yeni modüllere erken erişim kazanır." },
   { q: "Verilerim güvende mi?", a: "Evet. Aktüer Agent ham üçgen verisine değil, yalnızca LDF, CDF ve IBNR gibi agrega sonuçlara erişir; ham veri hiçbir zaman LLM'e iletilmez. Tüm veriler Cloudflare D1 (Avrupa bölgesi, şifreli) üzerinde saklanır. Hesabınızı sildiğinizde verileriniz 30 gün içinde kalıcı olarak silinir." },
   { q: "Free planın kapsamı ne?", a: "Free planda rezerv modülünde 1 dönem ve 1 branş oluşturabilirsiniz. Chain-Ladder, BF ve AI Agent (tüm modeller) ücretsiz kullanılabilir. Parametrik tail fitting ve sınırsız dönem/branş yalnızca Pro'da bulunur." },
   { q: "Enterprise planda neler sunuluyor?", a: "Çoklu kullanıcı yönetimi, SSO/SAML entegrasyonu, Docker tabanlı on-premise kurulum, özel cloud (AWS/Azure/GCP) ve SLA garantisi. Detay için demireleren877@gmail.com adresine ulaşın." },
@@ -813,7 +813,7 @@ function Footer() {
               <span className="text-[15px] font-bold tracking-tight">Actuarius</span>
             </Link>
             <p className="text-[13px] leading-relaxed max-w-xs" style={{ color: "#5a5a6a" }}>
-              Türkiye'nin aktüeryal çalışma platformu. Rezerv, IFRS 17, ortalama muallak ve AI Agent tek yerde.
+              Türkiye'nin aktüeryal çalışma platformu. Rezerv, IFRS 17, nakit akışı, iskonto ve AI Agent tek yerde.
             </p>
           </div>
           <div>

@@ -324,9 +324,12 @@ async function verifyPaddleSignature(
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
 
-  // Constant-time compare is not critical for webhook secrets (no timing oracle
-  // on this path), but we do a simple string equality.
-  return { ok: computed === h1, body };
+  // Timing-safe comparison to prevent timing attacks on webhook signature.
+  const computedBytes = new TextEncoder().encode(computed);
+  const h1Bytes = new TextEncoder().encode(h1);
+  if (computedBytes.length !== h1Bytes.length) return { ok: false, body };
+  const equal = computedBytes.every((b, i) => b === h1Bytes[i]);
+  return { ok: equal, body };
 }
 
 async function handlePaddleWebhook(req: Request, env: Env): Promise<Response> {

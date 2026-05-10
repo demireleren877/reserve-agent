@@ -13,6 +13,8 @@ dependencies = [
     "chainladder>=0.8.23",
     "pydantic>=2.9",
     "openai>=1.54",
+    "PyJWT[crypto]>=2.8",
+    "httpx>=0.27",
 ]
 
 [dependency-groups]

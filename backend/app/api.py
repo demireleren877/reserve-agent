@@ -3,11 +3,17 @@
 from __future__ import annotations
 
 import os
-
 import base64
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
+
+from app.firebase_auth import verify_firebase_token
+
+# Excel (xlsx) magic bytes: PK\x03\x04 (ZIP archive)
+_XLSX_MAGIC = b"PK\x03\x04"
+# Max upload size: 10 MB (decoded)
+_MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 
 from app.agent.client import AgentClient
 from app.agent.loop import run_agent_turn
@@ -57,11 +63,18 @@ class UploadJsonRequest(BaseModel):
 
 
 @router.post("/upload", response_model=UploadResponse)
-async def upload_excel(body: UploadJsonRequest) -> UploadResponse:
+async def upload_excel(
+    body: UploadJsonRequest,
+    _auth: dict = Depends(verify_firebase_token),
+) -> UploadResponse:
     try:
         content = base64.b64decode(body.file_b64)
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Geçersiz base64: {e}") from e
+    if len(content) > _MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="Dosya 10 MB sınırını aşıyor")
+    if not content.startswith(_XLSX_MAGIC):
+        raise HTTPException(status_code=400, detail="Geçersiz dosya formatı (xlsx bekleniyor)")
     triangle_type = body.triangle_type
     origin_granularity = body.origin_granularity
     development_granularity = body.development_granularity
@@ -97,11 +110,18 @@ class UploadPremiumsRequest(BaseModel):
 
 
 @router.post("/upload/premiums")
-async def upload_premiums(body: UploadPremiumsRequest) -> dict:
+async def upload_premiums(
+    body: UploadPremiumsRequest,
+    _auth: dict = Depends(verify_firebase_token),
+) -> dict:
     try:
         content = base64.b64decode(body.file_b64)
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Geçersiz base64: {e}") from e
+    if len(content) > _MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="Dosya 10 MB sınırını aşıyor")
+    if not content.startswith(_XLSX_MAGIC):
+        raise HTTPException(status_code=400, detail="Geçersiz dosya formatı (xlsx bekleniyor)")
     try:
         og = Granularity(body.origin_granularity)
     except ValueError as e:
@@ -114,7 +134,7 @@ async def upload_premiums(body: UploadPremiumsRequest) -> dict:
 
 
 @router.post("/compute", response_model=ComputeResponse)
-def compute(req: ComputeRequest) -> ComputeResponse:
+def compute(req: ComputeRequest, _auth: dict = Depends(verify_firebase_token)) -> ComputeResponse:
     try:
         triangle = req.triangle.to_domain()
     except ValueError as e:
@@ -147,7 +167,7 @@ def compute(req: ComputeRequest) -> ComputeResponse:
 
 
 @router.post("/agent/chat", response_model=ChatResponse)
-def agent_chat(req: ChatRequest) -> ChatResponse:
+def agent_chat(req: ChatRequest, _auth: dict = Depends(verify_firebase_token)) -> ChatResponse:
     # Modül payload'ını derle: yeni şema (req.modules) öncelikli; yoksa
     # legacy üst seviye triangle/session_state'i rezerv olarak sar.
     modules_payload: dict[str, dict] = {}

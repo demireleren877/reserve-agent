@@ -7,19 +7,35 @@ import type {
   Triangle,
   UploadOptions,
 } from "@/types/triangle";
+import { getFirebaseAuth } from "@/lib/auth/firebase";
 
 export const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000";
+
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 MB
+
+async function getAuthHeaders(): Promise<Record<string, string>> {
+  const user = getFirebaseAuth().currentUser;
+  if (!user) return {};
+  try {
+    const token = await user.getIdToken();
+    return { Authorization: `Bearer ${token}` };
+  } catch {
+    return {};
+  }
+}
 
 export async function uploadExcel(
   file: File,
   opts: UploadOptions,
 ): Promise<{ triangle: Triangle; warnings: string[]; file_data?: Record<string, Record<string, Record<string, number>>> | null }> {
+  if (file.size > MAX_UPLOAD_BYTES) throw new Error("Dosya 10 MB sınırını aşıyor");
   const buffer = await file.arrayBuffer();
   const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer)));
+  const authHeaders = await getAuthHeaders();
   const res = await fetch(`${API_BASE}/v1/upload`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeaders },
     body: JSON.stringify({
       file_b64: base64,
       triangle_type: opts.triangle_type,
@@ -53,9 +69,10 @@ export async function compute(
     excluded_origins: opts.excluded_origins ?? [],
     ldf_override: opts.ldf_override ?? null,
   };
+  const authHeaders = await getAuthHeaders();
   const res = await fetch(`${API_BASE}/v1/compute`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeaders },
     body: JSON.stringify(body),
   });
   if (!res.ok) {
@@ -126,9 +143,10 @@ export async function chatWithAgent(
     body.full_history = fullHistory;
   }
 
+  const authHeaders = await getAuthHeaders();
   const res = await fetch(`${API_BASE}/v1/agent/chat`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeaders },
     body: JSON.stringify(body),
   });
   if (!res.ok) {
@@ -142,11 +160,13 @@ export async function uploadPremiums(
   file: File,
   originGranularity: "yearly" | "quarterly" = "yearly",
 ): Promise<Record<string, number>> {
+  if (file.size > MAX_UPLOAD_BYTES) throw new Error("Dosya 10 MB sınırını aşıyor");
   const buffer = await file.arrayBuffer();
   const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer)));
+  const authHeaders = await getAuthHeaders();
   const res = await fetch(`${API_BASE}/v1/upload/premiums`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeaders },
     body: JSON.stringify({ file_b64: base64, origin_granularity: originGranularity }),
   });
   if (!res.ok) {

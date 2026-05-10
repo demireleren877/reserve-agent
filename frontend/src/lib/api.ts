@@ -205,15 +205,25 @@ export interface CashflowComputeResult {
   max_period: number;
 }
 
+function bufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  const chunk = 8192;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
 export async function uploadCashflowFile(file: File): Promise<{
   record_count: number;
   origin_years: number[];
   report_date: string;
   records: CashflowRecord[];
 }> {
-  if (file.size > 50 * 1024 * 1024) throw new Error("Dosya 50 MB sınırını aşıyor");
+  if (file.size > 300 * 1024 * 1024) throw new Error("Dosya 300 MB sınırını aşıyor");
   const buffer = await file.arrayBuffer();
-  const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer)));
+  const base64 = bufferToBase64(buffer);
   const authHeaders = await getAuthHeaders();
   const res = await fetch(`${API_BASE}/v1/cashflow/upload`, {
     method: "POST",

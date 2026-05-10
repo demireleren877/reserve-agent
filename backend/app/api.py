@@ -219,7 +219,7 @@ def agent_chat(req: ChatRequest, _auth: dict = Depends(verify_firebase_token)) -
 
 # ─── Cashflow endpoints ───────────────────────────────────────────────────────
 
-_CSV_MAX_BYTES = 50 * 1024 * 1024  # 50 MB (CSV'ler büyük olabilir)
+_CSV_MAX_BYTES = 300 * 1024 * 1024  # 300 MB
 
 
 class CashflowUploadRequest(BaseModel):
@@ -242,7 +242,7 @@ async def cashflow_upload(
         raise HTTPException(status_code=400, detail=f"Geçersiz base64: {e}") from e
 
     if len(content) > _CSV_MAX_BYTES:
-        raise HTTPException(status_code=413, detail="Dosya 50 MB sınırını aşıyor")
+        raise HTTPException(status_code=413, detail="Dosya 300 MB sınırını aşıyor")
 
     try:
         records = parse_records_from_bytes(content, body.filename)
@@ -280,7 +280,7 @@ async def cashflow_compute(
             CashflowRecord(
                 origin_year=int(r["origin_year"]),
                 dev_date=date_cls.fromisoformat(str(r["dev_date"])),
-                paid=float(r.get("paid", 0)),
+                paid=float(r.get("paid") or 0),
             )
             for r in body.records
         ]

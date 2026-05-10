@@ -250,26 +250,38 @@ def build_patterns(
 
     for year in origin_years:
         excl = excluded_periods(year, report_date)
-        # Bu yıl için dahil edilecek period'lar
         included = [p for p in all_periods if p >= excl]
         weight_sum = sum(gw[p] for p in included)
 
         q_rows: list[dict] = []
         m_rows: list[dict] = []
 
-        for p in all_periods:
-            if p not in included or weight_sum == 0:
-                norm_w = 0.0
-            else:
-                norm_w = gw[p] / weight_sum
-
-            q_rows.append({"period": p + 1, "weight": norm_w})  # 1-tabanlı
-
-            # Monthly: quarter'ı 3 aya böl
-            monthly_w = norm_w / 3.0
-            base_month = p * 3  # 0-tabanlı ay
-            for offset in range(3):
-                m_rows.append({"month": base_month + offset + 1, "weight": monthly_w})
+        if weight_sum == 0:
+            # Tüm period'lar geçmişte → Q1 = %100, 60 period
+            q_rows = [{"period": s, "weight": 1.0 if s == 1 else 0.0}
+                      for s in range(1, MAX_PERIODS + 1)]
+            m_rows = [{"month": m, "weight": (1 / 3) if m <= 3 else 0.0}
+                      for m in range(1, MAX_PERIODS * 3 + 1)]
+        else:
+            # Excluded period'ları atla, 1'den başla, 60'a pad'le
+            seq = 1
+            for p in range(MAX_PERIODS):
+                if p < excl:
+                    continue
+                norm_w = (gw[p] / weight_sum) if p in gw else 0.0
+                q_rows.append({"period": seq, "weight": norm_w})
+                monthly_w = norm_w / 3.0
+                base_month = (seq - 1) * 3
+                for offset in range(3):
+                    m_rows.append({"month": base_month + offset + 1, "weight": monthly_w})
+                seq += 1
+            # 60 period'a tamamla
+            while seq <= MAX_PERIODS:
+                q_rows.append({"period": seq, "weight": 0.0})
+                base_month = (seq - 1) * 3
+                for offset in range(3):
+                    m_rows.append({"month": base_month + offset + 1, "weight": 0.0})
+                seq += 1
 
         quarterly[year] = q_rows
         monthly[year] = m_rows
@@ -292,7 +304,9 @@ def compute_cashflow(records: list[CashflowRecord]) -> CashflowResult:
         raise ValueError("Development factor hesaplanamadı — yetersiz veri")
 
     cdf = _build_full_cdf(factors)
-    weight_rows = calc_weights(cdf, factors)
+    # En son kaza yılının rapor tarihindeki dışlanan period sayısı = global ağırlık başlangıcı
+    min_base = excluded_periods(max(origin_years), rdate)
+    weight_rows = calc_weights(cdf, factors, min_period_for_base=min_base)
     quarterly, monthly = build_patterns(weight_rows, origin_years, rdate)
 
     return CashflowResult(
@@ -323,12 +337,17 @@ def parse_records_from_bytes(content: bytes, filename: str) -> list[CashflowReco
         return c.strip().lower().replace(" ", "_")
 
     def _parse_num(v) -> float:
+        import math
         if v is None:
             return 0.0
+        if isinstance(v, float) and math.isnan(v):
+            return 0.0
         s = str(v).strip().replace(",", ".")
+        if s in ("", "nan", "NaN", "None", "none", "-"):
+            return 0.0
         try:
             return float(s)
-        except ValueError:
+        except (ValueError, TypeError):
             return 0.0
 
     def _parse_date(v) -> Optional[date]:

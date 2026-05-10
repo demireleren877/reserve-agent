@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
+import Link from "next/link";
+import { useUserPlan } from "@/lib/auth/user-plan-context";
 import {
   type CashflowComputeResult,
   type CashflowRecord,
@@ -200,7 +202,7 @@ function TriangleTable({ result }: { result: CashflowComputeResult }) {
                   minWidth: 80,
                 }}
               >
-                Q{p}
+                Q{Number(p) + 1}
               </th>
             ))}
           </tr>
@@ -268,7 +270,7 @@ function DevFactorsTable({ rows }: { rows: DevFactorRow[] }) {
           {rows.map((r) => (
             <tr key={r.period} className="hover:bg-[color:var(--surface-alt)]">
               <td className="px-3 py-2 font-medium" style={{ borderBottom: "1px solid var(--border)", color: "var(--foreground)" }}>
-                Q{r.period}
+                Q{r.period + 1}
               </td>
               <td className="px-3 py-2 text-right tabular-nums" style={{ borderBottom: "1px solid var(--border)" }}>
                 {fmt4(r.df)}
@@ -294,83 +296,59 @@ function DevFactorsTable({ rows }: { rows: DevFactorRow[] }) {
 }
 
 // ─── Pattern tablosu ───────────────────────────────────────────────────────────
+// Long-format: Kaza Yılı | Period | Normalize Ağırlık
 
 function PatternTable({
   result,
-  selectedYear,
-  onYearChange,
   mode,
 }: {
   result: CashflowComputeResult;
-  selectedYear: number;
-  onYearChange: (y: number) => void;
   mode: "quarterly" | "monthly";
 }) {
-  const data = mode === "quarterly"
-    ? result.quarterly_pattern[String(selectedYear)] ?? []
-    : result.monthly_pattern[String(selectedYear)] ?? [];
-
-  const maxW = Math.max(...data.map((d) => d.weight), 0.0001);
+  const years = result.origin_years;
+  const source = mode === "quarterly" ? result.quarterly_pattern : result.monthly_pattern;
+  const periodLabel = mode === "quarterly" ? "Period (Çeyrek)" : "Ay";
 
   return (
-    <div>
-      <div className="flex items-center gap-3 mb-4 flex-wrap">
-        <span className="text-[12px] font-medium" style={{ color: "var(--muted-strong)" }}>
-          Kaza Yılı:
-        </span>
-        <div className="flex gap-1.5 flex-wrap">
-          {result.origin_years.map((y) => (
-            <button
-              key={y}
-              onClick={() => onYearChange(y)}
-              className="px-2.5 py-1 rounded-lg text-[12px] font-medium transition"
-              style={{
-                background: selectedYear === y ? "var(--primary)" : "var(--surface-alt)",
-                color: selectedYear === y ? "#fff" : "var(--muted-strong)",
-              }}
-            >
-              {y}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="overflow-auto max-h-[500px]">
-        <table className="text-[11.5px] border-collapse w-full">
-          <thead className="sticky top-0" style={{ background: "var(--surface)" }}>
-            <tr>
-              <th className="px-3 py-2 text-left font-semibold" style={{ borderBottom: "2px solid var(--border)", color: "var(--muted-strong)" }}>
-                {mode === "quarterly" ? "Period (Çeyrek)" : "Ay"}
+    <div className="overflow-auto">
+      <table className="text-[12px] border-collapse w-full">
+        <thead className="sticky top-0" style={{ background: "var(--surface)", zIndex: 1 }}>
+          <tr>
+            {["Kaza Yılı", periodLabel, "Normalize Ağırlık"].map((h) => (
+              <th
+                key={h}
+                className="px-4 py-2 text-left font-semibold whitespace-nowrap"
+                style={{ borderBottom: "2px solid var(--border)", color: "var(--muted-strong)" }}
+              >
+                {h}
               </th>
-              <th className="px-3 py-2 text-right font-semibold" style={{ borderBottom: "2px solid var(--border)", color: "var(--muted-strong)" }}>
-                Normalize Ağırlık
-              </th>
-              <th className="px-3 py-2" style={{ borderBottom: "2px solid var(--border)" }} />
-            </tr>
-          </thead>
-          <tbody>
-            {data.filter((d) => d.weight > 0).map((d) => {
-              const barW = maxW > 0 ? (d.weight / maxW) * 100 : 0;
-              const label = mode === "quarterly"
-                ? `Q${(d as { period: number }).period}`
-                : `Ay ${(d as { month: number }).month}`;
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {years.flatMap((year) =>
+            (source[String(year)] ?? []).map((entry) => {
+              const w = entry.weight;
+              const period = (entry as { period?: number; month?: number }).period
+                ?? (entry as { period?: number; month?: number }).month
+                ?? 0;
               return (
-                <tr key={label} className="hover:bg-[color:var(--surface-alt)]">
-                  <td className="px-3 py-1.5 font-medium" style={{ borderBottom: "1px solid var(--border)", color: "var(--foreground)" }}>
-                    {label}
+                <tr key={`${year}-${period}`} className="hover:bg-[color:var(--surface-alt)]">
+                  <td className="px-4 py-1 tabular-nums" style={{ borderBottom: "1px solid var(--border)", color: "var(--foreground)" }}>
+                    {year}
                   </td>
-                  <td className="px-3 py-1.5 text-right tabular-nums" style={{ borderBottom: "1px solid var(--border)" }}>
-                    {fmt6(d.weight)}
+                  <td className="px-4 py-1 tabular-nums" style={{ borderBottom: "1px solid var(--border)", color: "var(--foreground)" }}>
+                    {period}
                   </td>
-                  <td className="px-3 py-1.5" style={{ borderBottom: "1px solid var(--border)", minWidth: 160 }}>
-                    <div className="h-2 rounded-full" style={{ width: `${barW}%`, minWidth: barW > 0 ? 2 : 0, background: "var(--primary)", opacity: 0.7 }} />
+                  <td className="px-4 py-1 tabular-nums" style={{ borderBottom: "1px solid var(--border)", color: w === 0 ? "var(--muted)" : "var(--foreground)" }}>
+                    {w === 0 ? 0 : fmt6(w)}
                   </td>
                 </tr>
               );
-            })}
-          </tbody>
-        </table>
-      </div>
+            })
+          )}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -378,12 +356,42 @@ function PatternTable({
 // ─── Ana sayfa ─────────────────────────────────────────────────────────────────
 
 export default function CashflowPage() {
+  const plan = useUserPlan();
+
+  if (plan !== "pro") {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-56px)] px-6">
+        <div className="w-full max-w-md text-center">
+          <div className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-6"
+            style={{ background: "linear-gradient(135deg,#7c3aed22,#4f46e522)", border: "1px solid #ddd6fe" }}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#6d28d9" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
+          </div>
+          <h1 className="text-[20px] font-bold mb-2" style={{ color: "var(--foreground)" }}>
+            Pro üyelik gerekli
+          </h1>
+          <p className="text-[13.5px] leading-relaxed mb-8" style={{ color: "var(--muted-strong)" }}>
+            Nakit Akışı modülü Pro plana dahildir.
+          </p>
+          <Link
+            href="/onboarding/plan"
+            className="inline-flex items-center gap-2 px-6 py-3 rounded-xl text-[14px] font-semibold text-white"
+            style={{ background: "linear-gradient(135deg,#6d28d9,#4f46e5)" }}
+          >
+            Pro'ya yükselt
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [records, setRecords] = useState<CashflowRecord[] | null>(null);
   const [result, setResult] = useState<CashflowComputeResult | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("triangle");
-  const [selectedYear, setSelectedYear] = useState<number>(0);
   const [uploadMeta, setUploadMeta] = useState<{ record_count: number; report_date: string } | null>(null);
 
   async function handleFile(file: File) {
@@ -397,7 +405,6 @@ export default function CashflowPage() {
       // Hemen hesapla
       const computed = await computeCashflow(uploaded.records);
       setResult(computed);
-      setSelectedYear(computed.origin_years[computed.origin_years.length - 1] ?? 0);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Bilinmeyen hata");
     } finally {
@@ -486,22 +493,8 @@ export default function CashflowPage() {
           <div className="p-5">
             {activeTab === "triangle" && <TriangleTable result={result} />}
             {activeTab === "devfactors" && <DevFactorsTable rows={result.dev_factors} />}
-            {activeTab === "pattern" && (
-              <PatternTable
-                result={result}
-                selectedYear={selectedYear}
-                onYearChange={setSelectedYear}
-                mode="quarterly"
-              />
-            )}
-            {activeTab === "monthly" && (
-              <PatternTable
-                result={result}
-                selectedYear={selectedYear}
-                onYearChange={setSelectedYear}
-                mode="monthly"
-              />
-            )}
+            {activeTab === "pattern" && <PatternTable result={result} mode="quarterly" />}
+            {activeTab === "monthly" && <PatternTable result={result} mode="monthly" />}
           </div>
         </div>
       </div>

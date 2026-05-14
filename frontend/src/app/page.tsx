@@ -79,13 +79,7 @@ function Nav() {
 }
 
 function Logo() {
-  return (
-    <div className="h-7 w-7 rounded-lg flex items-center justify-center text-white text-[12px] font-bold relative overflow-hidden"
-      style={{ background: "linear-gradient(135deg, #2563eb, #6d28d9)" }}>
-      <span className="relative z-10">A</span>
-      <div className="absolute inset-0 shimmer-bg opacity-50" />
-    </div>
-  );
+  return <img src="/favicon.png" alt="Actuarius" className="h-7 w-7" />;
 }
 
 // ─── Hero ─────────────────────────────────────────────────────────────────────

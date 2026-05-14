@@ -73,12 +73,7 @@ export default function LoginPage() {
           href="/"
           className="flex items-center gap-2.5 mb-8 justify-center"
         >
-          <div
-            className="h-8 w-8 rounded-lg flex items-center justify-center text-white text-[13px] font-bold"
-            style={{ background: "linear-gradient(135deg, #2563eb, #6d28d9)" }}
-          >
-            A
-          </div>
+          <img src="/favicon.png" alt="Actuarius" className="h-8 w-8" />
           <span className="text-[15px] font-semibold tracking-tight">
             Actuarius
           </span>

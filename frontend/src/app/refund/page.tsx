@@ -5,7 +5,7 @@ export default function RefundPage() {
     <div className="min-h-screen" style={{ background: "#faf9f6", color: "#0a0a14" }}>
       <header className="px-6 md:px-8 h-16 flex items-center border-b" style={{ borderColor: "#e8e5dd", background: "#fff" }}>
         <Link href="/" className="flex items-center gap-2 text-[14px] font-bold tracking-tight">
-          <div className="h-7 w-7 rounded-md bg-[#2553e4] grid place-items-center text-white text-[11px] font-bold">A</div>
+          <img src="/favicon.png" alt="Actuarius" className="h-7 w-7" />
           Actuarius
         </Link>
       </header>

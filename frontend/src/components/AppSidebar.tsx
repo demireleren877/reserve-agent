@@ -88,9 +88,7 @@ export function AppSidebar() {
           (collapsed ? "justify-center" : "px-4")
         }
       >
-        <div className="h-7 w-7 rounded-md bg-[color:var(--primary)] grid place-items-center text-white text-[12px] font-bold shrink-0">
-          A
-        </div>
+        <img src="/favicon.png" alt="Actuarius" className="h-7 w-7 shrink-0" />
         {!collapsed && (
           <div className="leading-tight overflow-hidden">
             <div className="text-[13px] font-semibold whitespace-nowrap">

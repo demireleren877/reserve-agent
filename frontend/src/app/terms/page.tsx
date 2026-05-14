@@ -6,7 +6,7 @@ export default function TermsPage() {
       <header className="px-6 md:px-8 h-16 flex items-center border-b" style={{ borderColor: "#e8e5dd", background: "#fff" }}>
         <Link href="/" className="flex items-center gap-2 text-[14px] font-bold tracking-tight">
           <div className="h-7 w-7 rounded-md bg-[#2553e4] grid place-items-center text-white text-[11px] font-bold">A</div>
-          TSB Analytics
+          Actuarius
         </Link>
       </header>
 
@@ -15,11 +15,11 @@ export default function TermsPage() {
         <p className="text-[13px] mb-10" style={{ color: "#8a8898" }}>Son güncelleme: Mayıs 2026</p>
 
         <Section title="1. Kabul">
-          TSB Analytics hizmetlerini kullanarak bu şartları kabul etmiş sayılırsınız. Kabul etmiyorsanız hizmeti kullanmayınız.
+          Actuarius hizmetlerini kullanarak bu şartları kabul etmiş sayılırsınız. Kabul etmiyorsanız hizmeti kullanmayınız.
         </Section>
 
         <Section title="2. Hizmet Tanımı">
-          TSB Analytics, aktüeryal IBNR rezerv analizi için bulut tabanlı bir platformdur. Hizmet; Chain-Ladder, Bornhuetter-Ferguson ve tail fitting yöntemlerini içerir.
+          Actuarius, aktüeryal IBNR rezerv analizi için bulut tabanlı bir platformdur. Hizmet; Chain-Ladder, Bornhuetter-Ferguson ve tail fitting yöntemlerini içerir.
         </Section>
 
         <Section title="3. Hesap ve Güvenlik">
@@ -36,11 +36,11 @@ export default function TermsPage() {
         </Section>
 
         <Section title="6. Fikri Mülkiyet">
-          Platform ve içeriklerin tüm hakları TSB Analytics&apos;e aittir. Kullanıcı verilerinizin mülkiyeti size aittir.
+          Platform ve içeriklerin tüm hakları Actuarius&apos;e aittir. Kullanıcı verilerinizin mülkiyeti size aittir.
         </Section>
 
         <Section title="7. Sorumluluk Sınırı">
-          TSB Analytics, aktüeryal hesaplamalardan doğacak iş kararlarından sorumlu tutulamaz. Platform bir karar destek aracıdır; nihai kararlar kullanıcıya aittir.
+          Actuarius, aktüeryal hesaplamalardan doğacak iş kararlarından sorumlu tutulamaz. Platform bir karar destek aracıdır; nihai kararlar kullanıcıya aittir.
         </Section>
 
         <Section title="8. Değişiklikler">
@@ -75,7 +75,7 @@ function Footer() {
         <Link href="/refund" className="hover:underline">İade Politikası</Link>
         <a href="mailto:demireleren877@gmail.com" className="hover:underline">İletişim</a>
       </div>
-      <p className="mt-3">© 2026 TSB Analytics</p>
+      <p className="mt-3">© 2026 Actuarius</p>
     </footer>
   );
 }

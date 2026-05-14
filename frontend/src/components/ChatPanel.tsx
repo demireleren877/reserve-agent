@@ -205,7 +205,7 @@ export function ChatPanel({
           <div className="h-7 w-7 rounded-lg bg-[color:var(--primary)] text-white grid place-items-center shrink-0">
             <AgentIcon />
           </div>
-          <span className="text-sm font-semibold tracking-tight">Actuarial Agent</span>
+          <span className="text-sm font-semibold tracking-tight">Actuarius</span>
         </div>
         <div className="flex items-center gap-1 shrink-0">
           {/* Model selector */}

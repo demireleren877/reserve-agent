@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Actuarial Workbench",
-  description: "Aktüeryal modüller — rezerv, IFRS 17, ortalama muallak",
+  title: "Actuarius",
+  description: "Aktüeryal modüller — rezerv, nakit akışı, iskonto",
 };
 
 export default function RootLayout({

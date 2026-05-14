@@ -94,10 +94,7 @@ export function AppSidebar() {
         {!collapsed && (
           <div className="leading-tight overflow-hidden">
             <div className="text-[13px] font-semibold whitespace-nowrap">
-              Actuarial
-            </div>
-            <div className="text-[10px] text-[color:var(--muted)] -mt-0.5 whitespace-nowrap">
-              Workbench
+              Actuarius
             </div>
           </div>
         )}

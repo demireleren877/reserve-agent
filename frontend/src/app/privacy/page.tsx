@@ -6,7 +6,7 @@ export default function PrivacyPage() {
       <header className="px-6 md:px-8 h-16 flex items-center border-b" style={{ borderColor: "#e8e5dd", background: "#fff" }}>
         <Link href="/" className="flex items-center gap-2 text-[14px] font-bold tracking-tight">
           <div className="h-7 w-7 rounded-md bg-[#2553e4] grid place-items-center text-white text-[11px] font-bold">A</div>
-          TSB Analytics
+          Actuarius
         </Link>
       </header>
 
@@ -82,7 +82,7 @@ function Footer() {
         <Link href="/refund" className="hover:underline">İade Politikası</Link>
         <a href="mailto:demireleren877@gmail.com" className="hover:underline">İletişim</a>
       </div>
-      <p className="mt-3">© 2026 TSB Analytics</p>
+      <p className="mt-3">© 2026 Actuarius</p>
     </footer>
   );
 }

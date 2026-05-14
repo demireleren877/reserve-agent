@@ -77,10 +77,10 @@ export default function LoginPage() {
             className="h-8 w-8 rounded-lg flex items-center justify-center text-white text-[13px] font-bold"
             style={{ background: "linear-gradient(135deg, #2563eb, #6d28d9)" }}
           >
-            R
+            A
           </div>
           <span className="text-[15px] font-semibold tracking-tight">
-            Reserve Agent
+            Actuarius
           </span>
         </Link>
 

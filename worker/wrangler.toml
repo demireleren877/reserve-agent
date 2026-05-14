@@ -25,7 +25,7 @@ migrations_dir = "migrations"
 # Production environment overrides
 [env.production]
 [env.production.vars]
-ALLOWED_ORIGIN = "https://actuaryagent.online"
+ALLOWED_ORIGIN = "https://actuarius.com.tr"
 FIREBASE_PROJECT_ID = "reserveagent"
 
 [[env.production.d1_databases]]

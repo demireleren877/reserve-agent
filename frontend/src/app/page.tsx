@@ -162,7 +162,7 @@ function PlatformPreview() {
           </div>
           <div className="flex-1 max-w-sm mx-auto px-3 py-1 rounded-md text-[11px] font-medium text-center"
             style={{ background: "#fff", border: "1px solid #e8e5dd", color: "#8a8898" }}>
-            actuaryagent.online
+            actuarius.com.tr
           </div>
           <div className="flex items-center gap-2 text-[10.5px]" style={{ color: "#8a8898" }}>
             <span className="w-1.5 h-1.5 rounded-full bg-green-500 pulse-dot" />

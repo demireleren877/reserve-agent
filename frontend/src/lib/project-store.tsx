@@ -691,6 +691,7 @@ export function useProject(): Ctx {
 
 export interface BranchSetters {
   setTriangle: (t: Branch["triangle"], fileName?: string | null, fileData?: FileData) => void;
+  setBothTriangles: (paid: Branch["triangle"], incurred: Branch["triangle"], fileName?: string) => void;
   setMethod: (m: LDFMethod) => void;
   setWindow: (w: Window) => void;
   setExcludedCells: (next: Set<string>) => void;
@@ -743,6 +744,25 @@ export function useBranchSetters(source: ChangeSource = "user"): BranchSetters {
             incurredTriangle: t?.triangle_type === "incurred"
               ? t
               : (activeBranch?.incurredTriangle ?? null),
+          }),
+          "triangle_loaded",
+          fileName ? { fileName } : {},
+          source,
+        ),
+      setBothTriangles: (paid, incurred, fileName) =>
+        actions.updateActiveBranch(
+          () => ({
+            triangle: incurred,
+            triangleFileName: fileName ?? null,
+            fileData: undefined,
+            excludedCells: [],
+            premiums: {},
+            lrInputPerOrigin: {},
+            basisPerOrigin: {},
+            cdfInitial: {},
+            cdfChoicePerPeriod: {},
+            paidTriangle: paid,
+            incurredTriangle: incurred,
           }),
           "triangle_loaded",
           fileName ? { fileName } : {},

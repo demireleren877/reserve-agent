@@ -11,7 +11,6 @@ interface Props {
 }
 
 type Granularity = "yearly" | "quarterly";
-type TriangleType = "paid" | "incurred";
 
 export function LoadFromDataStore({ onClose, onLoaded }: Props) {
   const store = useDataStore();
@@ -19,7 +18,6 @@ export function LoadFromDataStore({ onClose, onLoaded }: Props) {
 
   const [periodId, setPeriodId] = useState<string>(store.activePeriodId ?? "");
   const [brans, setBrans] = useState<string>("");
-  const [triangleType, setTriangleType] = useState<TriangleType>("paid");
   const [originGran, setOriginGran] = useState<Granularity>("yearly");
   const [devGran, setDevGran] = useState<Granularity>("yearly");
   const [loading, setLoading] = useState(false);
@@ -27,7 +25,7 @@ export function LoadFromDataStore({ onClose, onLoaded }: Props) {
   const [loadingRecords, setLoadingRecords] = useState(false);
   const [bransList, setBransList] = useState<string[]>([]);
 
-  // Seçili dönem için hasar veri seti meta'sından branş listesini al
+  // Seçili dönem değişince branş listesini güncelle
   useEffect(() => {
     if (!periodId) return;
     const period = store.periods.find((p) => p.id === periodId);
@@ -36,7 +34,6 @@ export function LoadFromDataStore({ onClose, onLoaded }: Props) {
       setBransList(meta.brans_list ?? []);
       setBrans((b) => (meta.brans_list?.includes(b) ? b : meta.brans_list?.[0] ?? ""));
     } else if (period) {
-      // Meta yoksa lazy-load
       setLoadingRecords(true);
       store.loadDatasetRecords(periodId, "hasar")
         .then((ds) => {
@@ -57,21 +54,21 @@ export function LoadFromDataStore({ onClose, onLoaded }: Props) {
     setError(null);
     setLoading(true);
     try {
-      // Records lazy-load
       let ds = hasarDs;
       if (!ds?.records?.length) {
         ds = await store.loadDatasetRecords(periodId, "hasar");
       }
       if (!ds?.records?.length) throw new Error("Kayıt bulunamadı");
 
-      const triangle = await buildTriangleFromRecords(
+      const { paidTriangle, incurredTriangle } = await buildTriangleFromRecords(
         ds.records,
         brans,
-        triangleType,
         originGran,
         devGran,
       );
-      setters.setTriangle(triangle, `${selectedPeriod?.label ?? ""} – ${brans}`);
+
+      const fileName = `${selectedPeriod?.label ?? ""} – ${brans}`;
+      setters.setBothTriangles(paidTriangle, incurredTriangle, fileName);
       onLoaded();
       onClose();
     } catch (e) {
@@ -141,30 +138,6 @@ export function LoadFromDataStore({ onClose, onLoaded }: Props) {
             )}
           </div>
 
-          {/* Değer türü */}
-          <div>
-            <label className="block text-xs font-medium text-[color:var(--muted-strong)] mb-1">
-              Değer Türü
-            </label>
-            <div className="flex gap-3">
-              {(["paid", "incurred"] as TriangleType[]).map((t) => (
-                <label key={t} className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="triType"
-                    value={t}
-                    checked={triangleType === t}
-                    onChange={() => setTriangleType(t)}
-                    className="accent-[color:var(--primary)]"
-                  />
-                  <span className="text-sm">
-                    {t === "paid" ? "Ödeme (Paid)" : "Gerçekleşen (Incurred)"}
-                  </span>
-                </label>
-              ))}
-            </div>
-          </div>
-
           {/* Granülarite */}
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -195,6 +168,10 @@ export function LoadFromDataStore({ onClose, onLoaded }: Props) {
             </div>
           </div>
 
+          <p className="text-xs text-[color:var(--muted)] leading-relaxed">
+            Paid üçgeni (kümülatif ödeme) ve Incurred üçgeni (kümülatif ödeme + dönem sonu muallak) otomatik oluşturulur.
+          </p>
+
           {error && (
             <p className="text-xs text-[color:var(--danger)] bg-[color:var(--danger-soft)] border border-[color:var(--danger-border,#dc262655)] rounded-md px-3 py-2">
               {error}
@@ -214,7 +191,7 @@ export function LoadFromDataStore({ onClose, onLoaded }: Props) {
             disabled={loading || !periodId || !brans || bransList.length === 0}
             className="px-4 py-2 text-sm rounded-md bg-[color:var(--primary)] text-white font-medium hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading ? "Oluşturuluyor…" : "Üçgen Oluştur"}
+            {loading ? "Oluşturuluyor…" : "Üçgenleri Yükle"}
           </button>
         </div>
       </div>

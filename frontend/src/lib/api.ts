@@ -338,10 +338,9 @@ export interface ClaimRecord {
 export async function buildTriangleFromRecords(
   records: ClaimRecord[],
   brans: string,
-  triangleType: "paid" | "incurred",
   originGranularity: "yearly" | "quarterly",
   developmentGranularity: "yearly" | "quarterly",
-): Promise<Triangle> {
+): Promise<{ paidTriangle: Triangle; incurredTriangle: Triangle }> {
   const authHeaders = await getAuthHeaders();
   const res = await fetch(`${API_BASE}/v1/data/build-triangle`, {
     method: "POST",
@@ -349,7 +348,6 @@ export async function buildTriangleFromRecords(
     body: JSON.stringify({
       records,
       brans,
-      triangle_type: triangleType,
       origin_granularity: originGranularity,
       development_granularity: developmentGranularity,
     }),
@@ -359,7 +357,10 @@ export async function buildTriangleFromRecords(
     throw new Error(body.detail || `HTTP ${res.status}`);
   }
   const data = await res.json();
-  return data.triangle as Triangle;
+  return {
+    paidTriangle: data.paid_triangle as Triangle,
+    incurredTriangle: data.incurred_triangle as Triangle,
+  };
 }
 
 export async function listModels(): Promise<ModelsResponse> {

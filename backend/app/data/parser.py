@@ -102,6 +102,9 @@ def _parse_date(s: str) -> date:
     qqdate = _try_parse_yyyyqq(s)
     if qqdate is not None:
         return qqdate
+    # Sadece yıl: "2000", "1999" vb. → 1 Ocak
+    if re.fullmatch(r"\d{4}", s):
+        return date(int(s), 1, 1)
     # Excel serial number (5-6 haneli tam sayı, çeyrek aralığının dışında)
     if s.isdigit():
         n = int(s)

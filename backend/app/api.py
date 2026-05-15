@@ -16,7 +16,7 @@ from app.cashflow.compute import (
     parse_records_from_bytes,
 )
 from app.data.parser import inspect_file, parse_with_mapping
-from app.data.triangle_builder import build_triangle
+from app.data.triangle_builder import build_triangles
 
 # Excel (xlsx) magic bytes: PK\x03\x04 (ZIP archive)
 _XLSX_MAGIC = b"PK\x03\x04"
@@ -428,24 +428,30 @@ async def data_import(
 class BuildTriangleRequest(BaseModel):
     records: list[dict]
     brans: str
-    triangle_type: str = "paid"
     origin_granularity: str = "yearly"
     development_granularity: str = "yearly"
 
 
-@router.post("/data/build-triangle", response_model=UploadResponse)
+class BuildTriangleResponse(BaseModel):
+    paid_triangle: TriangleSchema
+    incurred_triangle: TriangleSchema
+
+
+@router.post("/data/build-triangle", response_model=BuildTriangleResponse)
 def data_build_triangle(
     body: BuildTriangleRequest,
     _auth: dict = Depends(verify_firebase_token),
-) -> UploadResponse:
+) -> BuildTriangleResponse:
     try:
-        tri = build_triangle(
+        paid, incurred = build_triangles(
             records=body.records,
             brans=body.brans,
-            triangle_type=body.triangle_type,  # type: ignore[arg-type]
             origin_granularity=body.origin_granularity,  # type: ignore[arg-type]
             development_granularity=body.development_granularity,  # type: ignore[arg-type]
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
-    return UploadResponse(triangle=TriangleSchema.from_domain(tri))
+    return BuildTriangleResponse(
+        paid_triangle=TriangleSchema.from_domain(paid),
+        incurred_triangle=TriangleSchema.from_domain(incurred),
+    )

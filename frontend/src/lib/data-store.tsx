@@ -139,7 +139,12 @@ export function DataStoreProvider({
           id: r.id,
           label: r.label,
           createdAt: r.createdAt,
-          datasets: {}, // records lazy-load
+          datasets: Object.fromEntries(
+            Object.entries(r.datasetMetas).map(([typeId, meta]) => [
+              typeId,
+              { typeId, meta: meta as DatasetMeta, records: [] },
+            ])
+          ),
         }));
         setPeriods(loaded);
         if (loaded.length > 0) setActivePeriodIdState(loaded[0].id);

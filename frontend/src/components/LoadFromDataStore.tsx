@@ -61,7 +61,7 @@ export function LoadFromDataStore({ onClose, onLoaded }: Props) {
       if (!ds?.records?.length) throw new Error("Kayıt bulunamadı");
 
       const { paidTriangle, incurredTriangle } = await buildTriangleFromRecords(
-        ds.records,
+        ds.records as import("@/lib/api").ClaimRecord[],
         brans,
         originGran,
         devGran,

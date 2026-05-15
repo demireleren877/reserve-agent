@@ -54,23 +54,33 @@ export interface ClaimRecord {
   muallak: number;
 }
 
+export interface PrimRecord {
+  brans: string;
+  donem: string;
+  ep: number;
+}
+
 export interface DatasetMeta {
   filename: string;
   uploadedAt: string;
   record_count: number;
   brans_list: string[];
-  hasar_tarihi_min: string;
-  hasar_tarihi_max: string;
-  gelisim_tarihi_min: string;
-  gelisim_tarihi_max: string;
-  total_odeme: number;
-  total_muallak: number;
+  // hasar alanları
+  hasar_tarihi_min?: string;
+  hasar_tarihi_max?: string;
+  gelisim_tarihi_min?: string;
+  gelisim_tarihi_max?: string;
+  total_odeme?: number;
+  total_muallak?: number;
+  // prim alanları
+  donem_list?: string[];
+  total_ep?: number;
 }
 
 export interface Dataset {
   typeId: string;
   meta: DatasetMeta;
-  records: ClaimRecord[];
+  records: ClaimRecord[] | PrimRecord[];
 }
 
 export interface DataPeriod {

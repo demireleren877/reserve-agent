@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { Triangle } from "@/types/triangle";
 import { formatNumber, uploadPremiums } from "@/lib/api";
 import { cumulativeFactors } from "@/lib/ldf";
+import { LoadPrimsFromDataStore } from "@/components/LoadPrimsFromDataStore";
 
 const DEFAULT_LR = 0.7;
 
@@ -39,6 +40,7 @@ export function BFTab(props: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploadErr, setUploadErr] = useState<string | null>(null);
   const [uploadMsg, setUploadMsg] = useState<string | null>(null);
+  const [showLoadPrims, setShowLoadPrims] = useState(false);
 
   async function handlePremiumFile(file: File) {
     setUploadErr(null);
@@ -147,6 +149,7 @@ export function BFTab(props: Props) {
   }
 
   return (
+    <>
     <div className="space-y-4">
       <div className="grid grid-cols-3 gap-3">
         <Stat label="Toplam Exposure" value={formatNumber(totals.premium)} />
@@ -175,6 +178,15 @@ export function BFTab(props: Props) {
                 {uploadErr}
               </span>
             )}
+            <button
+              type="button"
+              onClick={() => setShowLoadPrims(true)}
+              className="btn text-xs"
+              disabled={!triangle}
+              title="Veri modülünden prim verisi yükle"
+            >
+              Veri Modülünden Yükle
+            </button>
             <button
               type="button"
               onClick={() => fileRef.current?.click()}
@@ -328,6 +340,19 @@ export function BFTab(props: Props) {
         </ul>
       </div>
     </div>
+
+    {showLoadPrims && triangle && (
+      <LoadPrimsFromDataStore
+        originPeriods={triangle.origin_periods}
+        onLoad={(premiums) => {
+          onPremiumsBulk(premiums);
+          setUploadMsg(`${Object.keys(premiums).length} origin için exposure yüklendi.`);
+          setTimeout(() => setUploadMsg(null), 4000);
+        }}
+        onClose={() => setShowLoadPrims(false)}
+      />
+    )}
+    </>
   );
 }
 

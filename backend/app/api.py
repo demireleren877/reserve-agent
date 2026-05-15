@@ -16,6 +16,7 @@ from app.cashflow.compute import (
     parse_records_from_bytes,
 )
 from app.data.parser import inspect_file, parse_with_mapping
+from app.data.prim_parser import inspect_prim_file, parse_prim_with_mapping
 from app.data.triangle_builder import build_triangles
 
 # Excel (xlsx) magic bytes: PK\x03\x04 (ZIP archive)
@@ -455,3 +456,66 @@ def data_build_triangle(
         paid_triangle=TriangleSchema.from_domain(paid),
         incurred_triangle=TriangleSchema.from_domain(incurred),
     )
+
+
+# ─── Prim verisi inspect + import ────────────────────────────────────────────
+
+class PrimInspectRequest(BaseModel):
+    file_b64: str
+    filename: str = "prim.csv"
+
+
+@router.post("/data/inspect-prim")
+async def data_inspect_prim(
+    body: PrimInspectRequest,
+    _auth: dict = Depends(verify_firebase_token),
+) -> dict[str, Any]:
+    content = _decode_file(body.file_b64, _DATA_MAX_BYTES)
+    try:
+        result = inspect_prim_file(content, body.filename)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Dosya okunamadı: {e}") from e
+    return result
+
+
+class PrimImportRequest(BaseModel):
+    file_b64: str
+    filename: str = "prim.csv"
+    sheet_name: str | None = None
+    column_mapping: dict[str, str]
+
+
+@router.post("/data/import-prim")
+async def data_import_prim(
+    body: PrimImportRequest,
+    _auth: dict = Depends(verify_firebase_token),
+) -> dict[str, Any]:
+    content = _decode_file(body.file_b64, _DATA_MAX_BYTES)
+    try:
+        records = parse_prim_with_mapping(content, body.filename, body.column_mapping, body.sheet_name)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Parse hatası: {e}") from e
+
+    if not records:
+        raise HTTPException(status_code=400, detail="Geçerli kayıt bulunamadı")
+
+    brans_set: set[str] = set()
+    donem_set: set[str] = set()
+    total_ep = 0.0
+    serialized: list[dict[str, Any]] = []
+
+    for r in records:
+        brans_set.add(r.brans)
+        donem_set.add(r.donem)
+        total_ep += r.ep
+        serialized.append({"brans": r.brans, "donem": r.donem, "ep": r.ep})
+
+    return {
+        "record_count": len(records),
+        "brans_list": sorted(brans_set),
+        "donem_list": sorted(donem_set),
+        "total_ep": total_ep,
+        "records": serialized,
+    }

@@ -9,6 +9,9 @@ import {
   type Dataset,
 } from "@/lib/data-store";
 import { DataImportWizard, type ImportWizardResult } from "@/components/DataImportWizard";
+import { PrimImportWizard, type PrimWizardResult } from "@/components/PrimImportWizard";
+import { importPrimFile } from "@/lib/api";
+import type { PrimRecord } from "@/lib/data-store";
 
 // ─── Yardımcı ─────────────────────────────────────────────────────────────────
 
@@ -300,31 +303,48 @@ function DatasetViewer({
 
       <div className="flex-1 overflow-auto">
         <table className="w-full text-[12.5px] border-collapse">
-          <thead>
-            <tr style={{ background: "var(--surface-alt)" }}>
-              {["Dosya No", "Branş", "Hasar Tarihi", "Gelişim Tarihi", "Ödeme", "Muallak"].map((h) => (
-                <th
-                  key={h}
-                  className="px-4 py-2.5 text-left font-semibold border-b whitespace-nowrap"
-                  style={{ borderColor: "var(--border)", color: "var(--muted-strong)" }}
-                >
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {slice.map((r, i) => (
-              <tr key={i} style={{ borderBottom: "1px solid var(--border)" }} className="hover:bg-[color:var(--surface-alt)]">
-                <td className="px-4 py-2 font-mono">{r.dosya_no}</td>
-                <td className="px-4 py-2">{r.brans}</td>
-                <td className="px-4 py-2 font-mono">{r.hasar_tarihi}</td>
-                <td className="px-4 py-2 font-mono">{r.gelisim_tarihi}</td>
-                <td className="px-4 py-2 text-right font-mono">{fmt(r.odeme)}</td>
-                <td className="px-4 py-2 text-right font-mono">{fmt(r.muallak)}</td>
-              </tr>
-            ))}
-          </tbody>
+          {dataset.typeId === "prim" ? (
+            <>
+              <thead>
+                <tr style={{ background: "var(--surface-alt)" }}>
+                  {["Branş", "Dönem", "EP"].map((h) => (
+                    <th key={h} className="px-4 py-2.5 text-left font-semibold border-b whitespace-nowrap" style={{ borderColor: "var(--border)", color: "var(--muted-strong)" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {(slice as PrimRecord[]).map((r, i) => (
+                  <tr key={i} style={{ borderBottom: "1px solid var(--border)" }} className="hover:bg-[color:var(--surface-alt)]">
+                    <td className="px-4 py-2">{r.brans}</td>
+                    <td className="px-4 py-2 font-mono">{r.donem}</td>
+                    <td className="px-4 py-2 text-right font-mono">{fmt(r.ep)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </>
+          ) : (
+            <>
+              <thead>
+                <tr style={{ background: "var(--surface-alt)" }}>
+                  {["Dosya No", "Branş", "Hasar Tarihi", "Gelişim Tarihi", "Ödeme", "Muallak"].map((h) => (
+                    <th key={h} className="px-4 py-2.5 text-left font-semibold border-b whitespace-nowrap" style={{ borderColor: "var(--border)", color: "var(--muted-strong)" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {(slice as import("@/lib/data-store").ClaimRecord[]).map((r, i) => (
+                  <tr key={i} style={{ borderBottom: "1px solid var(--border)" }} className="hover:bg-[color:var(--surface-alt)]">
+                    <td className="px-4 py-2 font-mono">{r.dosya_no}</td>
+                    <td className="px-4 py-2">{r.brans}</td>
+                    <td className="px-4 py-2 font-mono">{r.hasar_tarihi}</td>
+                    <td className="px-4 py-2 font-mono">{r.gelisim_tarihi}</td>
+                    <td className="px-4 py-2 text-right font-mono">{fmt(r.odeme)}</td>
+                    <td className="px-4 py-2 text-right font-mono">{fmt(r.muallak)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </>
+          )}
         </table>
       </div>
 
@@ -355,10 +375,11 @@ type RightView =
 function PeriodDetail({ period }: { period: DataPeriod }) {
   const { setDataset, removeDataset, loadDatasetRecords } = useDataStore();
   const [view, setView] = useState<RightView>({ kind: "overview" });
+  const [showPrimWizard, setShowPrimWizard] = useState(false);
   const [viewerDataset, setViewerDataset] = useState<Dataset | null>(null);
   const [viewerLoading, setViewerLoading] = useState(false);
 
-  // Wizard tamamlandığında
+  // Hasar wizard tamamlandığında
   async function handleImportDone(typeId: string, result: ImportWizardResult) {
     const ds: Dataset = {
       typeId,
@@ -375,6 +396,25 @@ function PeriodDetail({ period }: { period: DataPeriod }) {
         total_muallak: result.result.total_muallak,
       },
       records: result.result.records,
+    };
+    await setDataset(period.id, ds);
+    setView({ kind: "overview" });
+  }
+
+  // Prim wizard tamamlandığında
+  async function handlePrimImportDone(result: PrimWizardResult) {
+    const r = result.importResult;
+    const ds: Dataset = {
+      typeId: "prim",
+      meta: {
+        filename: result.filename,
+        uploadedAt: new Date().toISOString(),
+        record_count: r.record_count,
+        brans_list: r.brans_list,
+        donem_list: r.donem_list,
+        total_ep: r.total_ep,
+      },
+      records: r.records,
     };
     await setDataset(period.id, ds);
     setView({ kind: "overview" });
@@ -452,13 +492,24 @@ function PeriodDetail({ period }: { period: DataPeriod }) {
               key={def.id}
               def={def}
               dataset={dataset}
-              onImport={() => setView({ kind: "wizard", typeId: def.id })}
+              onImport={() =>
+                def.id === "prim"
+                  ? setShowPrimWizard(true)
+                  : setView({ kind: "wizard", typeId: def.id })
+              }
               onView={() => openViewer(def.id)}
               onRemove={() => removeDataset(period.id, def.id)}
             />
           );
         })}
       </div>
+
+      {showPrimWizard && (
+        <PrimImportWizard
+          onDone={async (r) => { setShowPrimWizard(false); await handlePrimImportDone(r); }}
+          onCancel={() => setShowPrimWizard(false)}
+        />
+      )}
     </div>
   );
 }

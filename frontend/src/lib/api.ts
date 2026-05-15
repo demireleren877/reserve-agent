@@ -335,6 +335,62 @@ export interface ClaimRecord {
   muallak: number;
 }
 
+export interface PrimInspectResult {
+  sheets: (string | null)[];
+  headers: Record<string, string[]>;
+  preview: Record<string, string[][]>;
+  suggested_mapping: Record<string, Record<string, string>>;
+}
+
+export interface PrimImportResult {
+  record_count: number;
+  brans_list: string[];
+  donem_list: string[];
+  total_ep: number;
+  records: { brans: string; donem: string; ep: number }[];
+}
+
+export async function inspectPrimFile(file: File): Promise<PrimInspectResult> {
+  if (file.size > 50 * 1024 * 1024) throw new Error("Dosya 50 MB sınırını aşıyor");
+  const base64 = bufferToBase64(await file.arrayBuffer());
+  const authHeaders = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/v1/data/inspect-prim`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders },
+    body: JSON.stringify({ file_b64: base64, filename: file.name }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ detail: "İnceleme hatası" }));
+    throw new Error(body.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function importPrimFile(
+  file: File,
+  sheetName: string | null,
+  columnMapping: Record<string, string>,
+): Promise<PrimImportResult> {
+  if (file.size > 50 * 1024 * 1024) throw new Error("Dosya 50 MB sınırını aşıyor");
+  const base64 = bufferToBase64(await file.arrayBuffer());
+  const authHeaders = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/v1/data/import-prim`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders },
+    body: JSON.stringify({
+      file_b64: base64,
+      filename: file.name,
+      sheet_name: sheetName,
+      column_mapping: columnMapping,
+    }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ detail: "İçeri aktarma hatası" }));
+    throw new Error(body.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
 export async function buildTriangleFromRecords(
   records: ClaimRecord[],
   brans: string,

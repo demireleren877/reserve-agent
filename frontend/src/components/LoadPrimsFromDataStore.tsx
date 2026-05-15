@@ -43,19 +43,35 @@ export function LoadPrimsFromDataStore({ originPeriods, onLoad, onClose }: Props
     }
   }, [periodId, store]);
 
-  // Branş değişince eşleştirme önizlemesi
+  // Branş değişince eşleştirme önizlemesi (records yoksa önce yükle)
   useEffect(() => {
     if (!brans || !periodId) { setPreview([]); return; }
-    const period = store.periods.find((p) => p.id === periodId);
-    const records = (period?.datasets["prim"]?.records ?? []) as PrimRecord[];
-    const filtered = records.filter((r) => r.brans === brans);
+    let cancelled = false;
 
-    const rows = filtered.map((r) => {
-      // origin period ile eşleştir: "2020" → "2020", "2020Q1" → "2020Q1"
-      const matched = originPeriods.find((op) => op === r.donem) ?? null;
-      return { donem: r.donem, ep: r.ep, matched };
-    });
-    setPreview(rows.sort((a, b) => a.donem.localeCompare(b.donem)));
+    async function buildPreview() {
+      const period = store.periods.find((p) => p.id === periodId);
+      let records = (period?.datasets["prim"]?.records ?? []) as PrimRecord[];
+
+      if (!records.length) {
+        try {
+          const ds = await store.loadDatasetRecords(periodId, "prim");
+          records = (ds?.records ?? []) as PrimRecord[];
+        } catch {
+          records = [];
+        }
+      }
+
+      if (cancelled) return;
+      const filtered = records.filter((r) => r.brans === brans);
+      const rows = filtered.map((r) => {
+        const matched = originPeriods.find((op) => op === r.donem) ?? null;
+        return { donem: r.donem, ep: r.ep, matched };
+      });
+      setPreview(rows.sort((a, b) => a.donem.localeCompare(b.donem)));
+    }
+
+    buildPreview();
+    return () => { cancelled = true; };
   }, [brans, periodId, store, originPeriods]);
 
   async function handleLoad() {

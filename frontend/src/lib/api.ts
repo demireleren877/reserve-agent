@@ -253,6 +253,79 @@ export async function computeCashflow(
   return res.json();
 }
 
+// ─── Data (ham hasar) API ────────────────────────────────────────────────────
+
+export interface DataInspectResult {
+  /** Excel: sheet adları; CSV: [null] */
+  sheets: (string | null)[];
+  /** sheet_name → header listesi */
+  headers: Record<string, string[]>;
+  /** sheet_name → ilk 5 veri satırı */
+  preview: Record<string, string[][]>;
+  /** sheet_name → { field: column_name } otomatik tahmin */
+  suggested_mapping: Record<string, Record<string, string>>;
+}
+
+export interface DataImportResult {
+  record_count: number;
+  brans_list: string[];
+  hasar_tarihi_min: string;
+  hasar_tarihi_max: string;
+  gelisim_tarihi_min: string;
+  gelisim_tarihi_max: string;
+  total_odeme: number;
+  total_muallak: number;
+  records: {
+    dosya_no: string;
+    brans: string;
+    hasar_tarihi: string;
+    gelisim_tarihi: string;
+    odeme: number;
+    muallak: number;
+  }[];
+}
+
+export async function inspectDataFile(file: File): Promise<DataInspectResult> {
+  if (file.size > 50 * 1024 * 1024) throw new Error("Dosya 50 MB sınırını aşıyor");
+  const base64 = bufferToBase64(await file.arrayBuffer());
+  const authHeaders = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/v1/data/inspect`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders },
+    body: JSON.stringify({ file_b64: base64, filename: file.name }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ detail: "İnceleme hatası" }));
+    throw new Error(body.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function importDataFile(
+  file: File,
+  sheetName: string | null,
+  columnMapping: Record<string, string>,
+): Promise<DataImportResult> {
+  if (file.size > 50 * 1024 * 1024) throw new Error("Dosya 50 MB sınırını aşıyor");
+  const base64 = bufferToBase64(await file.arrayBuffer());
+  const authHeaders = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/v1/data/import`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders },
+    body: JSON.stringify({
+      file_b64: base64,
+      filename: file.name,
+      sheet_name: sheetName,
+      column_mapping: columnMapping,
+    }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ detail: "İçeri aktarma hatası" }));
+    throw new Error(body.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
 export async function listModels(): Promise<ModelsResponse> {
   const res = await fetch(`${API_BASE}/v1/models`);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);

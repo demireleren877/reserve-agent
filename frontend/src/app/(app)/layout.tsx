@@ -4,6 +4,7 @@ import { AppSidebar } from "@/components/AppSidebar";
 import { AgentRegistryProvider } from "@/lib/agent-registry";
 import { GlobalAgentLauncher, GlobalAgentPanel } from "@/components/GlobalAgent";
 import { ProjectProvider } from "@/lib/project-store";
+import { DataStoreProvider } from "@/lib/data-store";
 import { ReserveAgentBridge } from "@/components/ReserveAgentBridge";
 import { AuthGate } from "@/lib/auth/auth-gate";
 import { UserPlanProvider } from "@/lib/auth/user-plan-context";
@@ -14,6 +15,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       {(me) => (
         <UserPlanProvider plan={me.plan}>
         <ProjectProvider userId={me.uid}>
+        <DataStoreProvider userId={me.uid}>
           <AgentRegistryProvider>
             <ReserveAgentBridge />
             <div
@@ -26,6 +28,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <GlobalAgentLauncher />
             <GlobalAgentPanel />
           </AgentRegistryProvider>
+        </DataStoreProvider>
         </ProjectProvider>
         </UserPlanProvider>
       )}

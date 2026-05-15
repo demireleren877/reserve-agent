@@ -15,6 +15,7 @@ from app.cashflow.compute import (
     compute_cashflow,
     parse_records_from_bytes,
 )
+from app.data.parser import inspect_file, parse_with_mapping
 
 # Excel (xlsx) magic bytes: PK\x03\x04 (ZIP archive)
 _XLSX_MAGIC = b"PK\x03\x04"
@@ -319,4 +320,105 @@ async def cashflow_compute(
             str(y): rows for y, rows in result.monthly_pattern.items()
         },
         "max_period": result.max_period,
+    }
+
+
+# ─── Data (ham hasar) endpoints ───────────────────────────────────────────────
+
+_DATA_MAX_BYTES = 50 * 1024 * 1024  # 50 MB
+
+
+def _decode_file(file_b64: str, max_bytes: int) -> bytes:
+    try:
+        content = base64.b64decode(file_b64)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Geçersiz base64: {e}") from e
+    if len(content) > max_bytes:
+        raise HTTPException(status_code=413, detail="Dosya 50 MB sınırını aşıyor")
+    return content
+
+
+class DataInspectRequest(BaseModel):
+    file_b64: str
+    filename: str = "data.csv"
+
+
+@router.post("/data/inspect")
+async def data_inspect(
+    body: DataInspectRequest,
+    _auth: dict = Depends(verify_firebase_token),
+) -> dict[str, Any]:
+    content = _decode_file(body.file_b64, _DATA_MAX_BYTES)
+    try:
+        result = inspect_file(content, body.filename)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Dosya okunamadı: {e}") from e
+    return result
+
+
+class DataImportRequest(BaseModel):
+    file_b64: str
+    filename: str = "data.csv"
+    sheet_name: str | None = None
+    column_mapping: dict[str, str]  # field → column header adı
+
+
+@router.post("/data/import")
+async def data_import(
+    body: DataImportRequest,
+    _auth: dict = Depends(verify_firebase_token),
+) -> dict[str, Any]:
+    content = _decode_file(body.file_b64, _DATA_MAX_BYTES)
+    try:
+        records = parse_with_mapping(content, body.filename, body.column_mapping, body.sheet_name)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Parse hatası: {e}") from e
+
+    if not records:
+        raise HTTPException(status_code=400, detail="Geçerli kayıt bulunamadı")
+
+    brans_set: set[str] = set()
+    hasar_min: str | None = None
+    hasar_max: str | None = None
+    gelisim_min: str | None = None
+    gelisim_max: str | None = None
+    total_odeme = 0.0
+    total_muallak = 0.0
+    serialized: list[dict[str, Any]] = []
+
+    for r in records:
+        h = r.hasar_tarihi.isoformat()
+        g = r.gelisim_tarihi.isoformat()
+        brans_set.add(r.brans)
+        if hasar_min is None or h < hasar_min:
+            hasar_min = h
+        if hasar_max is None or h > hasar_max:
+            hasar_max = h
+        if gelisim_min is None or g < gelisim_min:
+            gelisim_min = g
+        if gelisim_max is None or g > gelisim_max:
+            gelisim_max = g
+        total_odeme += r.odeme
+        total_muallak += r.muallak
+        serialized.append({
+            "dosya_no": r.dosya_no,
+            "brans": r.brans,
+            "hasar_tarihi": h,
+            "gelisim_tarihi": g,
+            "odeme": r.odeme,
+            "muallak": r.muallak,
+        })
+
+    return {
+        "record_count": len(records),
+        "brans_list": sorted(brans_set),
+        "hasar_tarihi_min": hasar_min,
+        "hasar_tarihi_max": hasar_max,
+        "gelisim_tarihi_min": gelisim_min,
+        "gelisim_tarihi_max": gelisim_max,
+        "total_odeme": total_odeme,
+        "total_muallak": total_muallak,
+        "records": serialized,
     }

@@ -31,7 +31,7 @@ interface StateRow {
 function corsHeaders(origin: string): HeadersInit {
   return {
     "Access-Control-Allow-Origin": origin,
-    "Access-Control-Allow-Methods": "GET, POST, PUT, OPTIONS",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
     "Access-Control-Allow-Headers": "Authorization, Content-Type",
     "Access-Control-Max-Age": "86400",
     "Vary": "Origin",
@@ -289,6 +289,148 @@ async function handleDeleteAll(env: Env, t: VerifiedToken, origin: string) {
   return json({ ok: true }, { status: 200 }, origin);
 }
 
+// ─── Data: periods ────────────────────────────────────────────────────────────
+
+interface PeriodRow {
+  period_id: string;
+  label: string;
+  created_at: number;
+  updated_at: number;
+}
+
+interface DatasetMetaRow {
+  period_id: string;
+  type_id: string;
+  meta_json: string;
+  updated_at: number;
+}
+
+async function handleListPeriods(env: Env, t: VerifiedToken, origin: string) {
+  await ensureUser(env, t);
+
+  const periods = await env.DB.prepare(
+    "SELECT period_id, label, created_at, updated_at FROM user_periods WHERE uid = ? ORDER BY created_at ASC",
+  ).bind(t.uid).all<PeriodRow>();
+
+  // Her dönem için dataset meta'ları çek (records hariç — büyük olabilir)
+  const metas = await env.DB.prepare(
+    "SELECT period_id, type_id, meta_json, updated_at FROM user_datasets WHERE uid = ? ORDER BY updated_at ASC",
+  ).bind(t.uid).all<DatasetMetaRow>();
+
+  // period_id → {type_id: meta}
+  const datasetsByPeriod: Record<string, Record<string, unknown>> = {};
+  for (const row of metas.results) {
+    if (!datasetsByPeriod[row.period_id]) datasetsByPeriod[row.period_id] = {};
+    datasetsByPeriod[row.period_id][row.type_id] = JSON.parse(row.meta_json);
+  }
+
+  const result = periods.results.map((p) => ({
+    id: p.period_id,
+    label: p.label,
+    createdAt: new Date(p.created_at).toISOString(),
+    datasetMetas: datasetsByPeriod[p.period_id] ?? {},
+  }));
+
+  return json(result, { status: 200 }, origin);
+}
+
+async function handleUpsertPeriod(req: Request, env: Env, t: VerifiedToken, origin: string) {
+  await ensureUser(env, t);
+  let body: { period_id?: string; label?: string; created_at?: string };
+  try { body = await req.json(); } catch { return err(400, "invalid_json", origin); }
+
+  const { period_id, label, created_at } = body;
+  if (!period_id || !label) return err(400, "missing_fields", origin);
+
+  const now = Date.now();
+  const createdAt = created_at ? new Date(created_at).getTime() : now;
+
+  const existing = await env.DB.prepare(
+    "SELECT period_id FROM user_periods WHERE uid = ? AND period_id = ?",
+  ).bind(t.uid, period_id).first();
+
+  if (existing) {
+    await env.DB.prepare(
+      "UPDATE user_periods SET label = ?, updated_at = ? WHERE uid = ? AND period_id = ?",
+    ).bind(label, now, t.uid, period_id).run();
+  } else {
+    await env.DB.prepare(
+      "INSERT INTO user_periods (uid, period_id, label, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+    ).bind(t.uid, period_id, label, createdAt, now).run();
+  }
+
+  return json({ ok: true }, { status: 200 }, origin);
+}
+
+async function handleDeletePeriod(env: Env, t: VerifiedToken, periodId: string, origin: string) {
+  await ensureUser(env, t);
+  await env.DB.prepare("DELETE FROM user_datasets WHERE uid = ? AND period_id = ?").bind(t.uid, periodId).run();
+  await env.DB.prepare("DELETE FROM user_periods WHERE uid = ? AND period_id = ?").bind(t.uid, periodId).run();
+  return json({ ok: true }, { status: 200 }, origin);
+}
+
+// ─── Data: datasets ───────────────────────────────────────────────────────────
+
+const MAX_DATASET_BYTES = 4 * 1024 * 1024; // 4 MB per dataset
+
+async function handleGetDataset(
+  env: Env, t: VerifiedToken, periodId: string, typeId: string, origin: string,
+) {
+  await ensureUser(env, t);
+  const row = await env.DB.prepare(
+    "SELECT meta_json, records_json FROM user_datasets WHERE uid = ? AND period_id = ? AND type_id = ?",
+  ).bind(t.uid, periodId, typeId).first<{ meta_json: string; records_json: string }>();
+
+  if (!row) return err(404, "not_found", origin);
+  return json(
+    { meta: JSON.parse(row.meta_json), records: JSON.parse(row.records_json) },
+    { status: 200 },
+    origin,
+  );
+}
+
+async function handlePutDataset(
+  req: Request, env: Env, t: VerifiedToken, periodId: string, typeId: string, origin: string,
+) {
+  await ensureUser(env, t);
+  let body: { meta?: unknown; records?: unknown };
+  try { body = await req.json(); } catch { return err(400, "invalid_json", origin); }
+
+  const metaStr = JSON.stringify(body.meta ?? {});
+  const recordsStr = JSON.stringify(body.records ?? []);
+  const totalBytes = new TextEncoder().encode(metaStr + recordsStr).length;
+  if (totalBytes > MAX_DATASET_BYTES) {
+    return err(413, "dataset_too_large", origin, `${(totalBytes / 1024 / 1024).toFixed(1)} MB > 4 MB limit`);
+  }
+
+  const now = Date.now();
+  const existing = await env.DB.prepare(
+    "SELECT type_id FROM user_datasets WHERE uid = ? AND period_id = ? AND type_id = ?",
+  ).bind(t.uid, periodId, typeId).first();
+
+  if (existing) {
+    await env.DB.prepare(
+      "UPDATE user_datasets SET meta_json = ?, records_json = ?, updated_at = ? WHERE uid = ? AND period_id = ? AND type_id = ?",
+    ).bind(metaStr, recordsStr, now, t.uid, periodId, typeId).run();
+  } else {
+    await env.DB.prepare(
+      "INSERT INTO user_datasets (uid, period_id, type_id, meta_json, records_json, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+    ).bind(t.uid, periodId, typeId, metaStr, recordsStr, now).run();
+  }
+
+  return json({ ok: true }, { status: 200 }, origin);
+}
+
+async function handleDeleteDataset(
+  env: Env, t: VerifiedToken, periodId: string, typeId: string, origin: string,
+) {
+  await ensureUser(env, t);
+  await env.DB.prepare(
+    "DELETE FROM user_datasets WHERE uid = ? AND period_id = ? AND type_id = ?",
+  ).bind(t.uid, periodId, typeId).run();
+  return json({ ok: true }, { status: 200 }, origin);
+}
+
 
 // ---------------------------------------------------------------------------
 // Paddle webhook — no auth header; signature verification via HMAC-SHA256
@@ -422,6 +564,28 @@ export default {
       if (url.pathname === "/v1/state" && req.method === "DELETE") {
         return await handleDeleteAll(env, token, origin);
       }
+
+      // ─── Data endpoints ───────────────────────────────────────────────────
+      if (url.pathname === "/v1/data/periods" && req.method === "GET") {
+        return await handleListPeriods(env, token, origin);
+      }
+      if (url.pathname === "/v1/data/periods" && req.method === "POST") {
+        return await handleUpsertPeriod(req, env, token, origin);
+      }
+      // /v1/data/periods/:periodId
+      const periodMatch = url.pathname.match(/^\/v1\/data\/periods\/([^/]+)$/);
+      if (periodMatch && req.method === "DELETE") {
+        return await handleDeletePeriod(env, token, periodMatch[1], origin);
+      }
+      // /v1/data/periods/:periodId/datasets/:typeId
+      const datasetMatch = url.pathname.match(/^\/v1\/data\/periods\/([^/]+)\/datasets\/([^/]+)$/);
+      if (datasetMatch) {
+        const [, pId, tId] = datasetMatch;
+        if (req.method === "GET")    return await handleGetDataset(env, token, pId, tId, origin);
+        if (req.method === "PUT")    return await handlePutDataset(req, env, token, pId, tId, origin);
+        if (req.method === "DELETE") return await handleDeleteDataset(env, token, pId, tId, origin);
+      }
+
       return err(404, "not_found", origin);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "internal_error";

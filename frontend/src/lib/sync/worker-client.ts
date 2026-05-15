@@ -120,3 +120,64 @@ export async function putState<P = unknown, C = unknown>(
 export async function deleteState(): Promise<void> {
   await call<{ ok: boolean }>("/v1/state", { method: "DELETE" });
 }
+
+// ─── Data API ─────────────────────────────────────────────────────────────────
+
+export interface RemotePeriod {
+  id: string;
+  label: string;
+  createdAt: string;
+  datasetMetas: Record<string, unknown>; // typeId → meta (records hariç)
+}
+
+export async function fetchPeriods(): Promise<RemotePeriod[]> {
+  return call<RemotePeriod[]>("/v1/data/periods", { method: "GET" });
+}
+
+export async function upsertPeriod(period: {
+  period_id: string;
+  label: string;
+  created_at: string;
+}): Promise<void> {
+  await call<{ ok: boolean }>("/v1/data/periods", {
+    method: "POST",
+    body: JSON.stringify(period),
+  });
+}
+
+export async function deletePeriod(periodId: string): Promise<void> {
+  await call<{ ok: boolean }>(`/v1/data/periods/${encodeURIComponent(periodId)}`, {
+    method: "DELETE",
+  });
+}
+
+export async function getDataset(
+  periodId: string,
+  typeId: string,
+): Promise<{ meta: unknown; records: unknown }> {
+  return call(`/v1/data/periods/${encodeURIComponent(periodId)}/datasets/${encodeURIComponent(typeId)}`, {
+    method: "GET",
+  });
+}
+
+export async function putDataset(
+  periodId: string,
+  typeId: string,
+  meta: unknown,
+  records: unknown,
+): Promise<void> {
+  await call<{ ok: boolean }>(
+    `/v1/data/periods/${encodeURIComponent(periodId)}/datasets/${encodeURIComponent(typeId)}`,
+    { method: "PUT", body: JSON.stringify({ meta, records }) },
+  );
+}
+
+export async function deleteDataset(
+  periodId: string,
+  typeId: string,
+): Promise<void> {
+  await call<{ ok: boolean }>(
+    `/v1/data/periods/${encodeURIComponent(periodId)}/datasets/${encodeURIComponent(typeId)}`,
+    { method: "DELETE" },
+  );
+}

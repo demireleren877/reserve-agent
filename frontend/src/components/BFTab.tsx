@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Triangle } from "@/types/triangle";
-import { formatNumber, uploadPremiums } from "@/lib/api";
+import { formatNumber } from "@/lib/api";
 import { cumulativeFactors } from "@/lib/ldf";
 import { LoadPrimsFromDataStore } from "@/components/LoadPrimsFromDataStore";
 
@@ -37,25 +37,8 @@ export function BFTab(props: Props) {
     onCorrectionChange,
   } = props;
 
-  const fileRef = useRef<HTMLInputElement>(null);
-  const [uploadErr, setUploadErr] = useState<string | null>(null);
-  const [uploadMsg, setUploadMsg] = useState<string | null>(null);
+  const [loadMsg, setLoadMsg] = useState<string | null>(null);
   const [showLoadPrims, setShowLoadPrims] = useState(false);
-
-  async function handlePremiumFile(file: File) {
-    setUploadErr(null);
-    setUploadMsg(null);
-    try {
-      const granularity =
-        triangle?.origin_granularity === "quarterly" ? "quarterly" : "yearly";
-      const data = await uploadPremiums(file, granularity);
-      onPremiumsBulk(data);
-      setUploadMsg(`${Object.keys(data).length} origin için exposure yüklendi.`);
-      setTimeout(() => setUploadMsg(null), 4000);
-    } catch (e) {
-      setUploadErr(e instanceof Error ? e.message : "Yükleme hatası");
-    }
-  }
 
   const rows = useMemo(() => {
     if (!triangle) return [];
@@ -168,15 +151,8 @@ export function BFTab(props: Props) {
             </span>
           </div>
           <div className="flex items-center gap-2">
-            {uploadMsg && (
-              <span className="text-xs text-[color:var(--success)]">
-                {uploadMsg}
-              </span>
-            )}
-            {uploadErr && (
-              <span className="text-xs text-[color:var(--danger)]">
-                {uploadErr}
-              </span>
+            {loadMsg && (
+              <span className="text-xs text-[color:var(--success)]">{loadMsg}</span>
             )}
             <button
               type="button"
@@ -187,25 +163,6 @@ export function BFTab(props: Props) {
             >
               Veri Modülünden Yükle
             </button>
-            <button
-              type="button"
-              onClick={() => fileRef.current?.click()}
-              className="btn text-xs"
-              title="ACCIDENT_YEAR + PREMIUM kolonlu Excel yükle"
-            >
-              Exposure Yükle (Excel)
-            </button>
-            <input
-              ref={fileRef}
-              type="file"
-              accept=".xlsx,.xls"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) handlePremiumFile(f);
-                e.target.value = "";
-              }}
-            />
           </div>
         </div>
         <div className="overflow-x-auto">
@@ -346,8 +303,8 @@ export function BFTab(props: Props) {
         originPeriods={triangle.origin_periods}
         onLoad={(premiums) => {
           onPremiumsBulk(premiums);
-          setUploadMsg(`${Object.keys(premiums).length} origin için exposure yüklendi.`);
-          setTimeout(() => setUploadMsg(null), 4000);
+          setLoadMsg(`${Object.keys(premiums).length} origin için exposure yüklendi.`);
+          setTimeout(() => setLoadMsg(null), 4000);
         }}
         onClose={() => setShowLoadPrims(false)}
       />

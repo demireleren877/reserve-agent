@@ -1,16 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useProject, useBranchSetters } from "@/lib/project-store";
-import { uploadExcel } from "@/lib/api";
-import type { Frequency, UploadSettings } from "@/types/project";
-import type { Granularity, TriangleType } from "@/types/triangle";
+import { useProject } from "@/lib/project-store";
+import type { Frequency } from "@/types/project";
 
 interface BreadcrumbProps {
   onUploaded?: () => void;
 }
 
-export function Breadcrumb({ onUploaded }: BreadcrumbProps) {
+export function Breadcrumb({ onUploaded: _onUploaded }: BreadcrumbProps) {
   const { project, navLevel, activePeriod, activeBranch, actions } =
     useProject();
 
@@ -78,7 +76,7 @@ export function Breadcrumb({ onUploaded }: BreadcrumbProps) {
 
       <div className="ml-auto flex items-center gap-2">
         {navLevel === "branch" && activeBranch && (
-          <BranchUploadButton onUploaded={onUploaded} />
+          <BranchLogsButton />
         )}
         {navLevel !== "root" && (
           <button
@@ -94,14 +92,7 @@ export function Breadcrumb({ onUploaded }: BreadcrumbProps) {
   );
 }
 
-// —————————————————————— Upload button + settings ——————————————————————
-
-const DEFAULT_SETTINGS: UploadSettings = {
-  triangleType: "paid",
-  originGranularity: "yearly",
-  devGranularity: "quarterly",
-  cumulative: true,
-};
+// —————————————————————— Logs button ——————————————————————
 
 const ACTION_LABELS: Record<string, string> = {
   branch_created: "Branş oluşturuldu",
@@ -125,57 +116,16 @@ const ACTION_LABELS: Record<string, string> = {
   curve_reset: "Curve sıfırlandı",
 };
 
-function BranchUploadButton({ onUploaded }: { onUploaded?: () => void }) {
+function BranchLogsButton() {
   const { activeBranch, activePeriod } = useProject();
-  const setters = useBranchSetters("user");
-  const fileRef = useRef<HTMLInputElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
-  const [view, setView] = useState<"settings" | "logs">("settings");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  const settings: UploadSettings =
-    activeBranch?.uploadSettings ?? DEFAULT_SETTINGS;
-
-  function updateSetting<K extends keyof UploadSettings>(
-    key: K,
-    value: UploadSettings[K],
-  ) {
-    setters.setUploadSettings({ ...settings, [key]: value });
-  }
-
-  async function handleFile(file: File) {
-    setError(null);
-    setLoading(true);
-    try {
-      const { triangle, file_data } = await uploadExcel(file, {
-        triangle_type: settings.triangleType,
-        origin_granularity: settings.originGranularity,
-        development_granularity: settings.devGranularity,
-        cumulative: settings.cumulative,
-      });
-      setters.setTriangle(triangle, file.name, file_data ?? undefined);
-      onUploaded?.();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Yükleme hatası");
-    } finally {
-      setLoading(false);
-      if (fileRef.current) fileRef.current.value = "";
-    }
-  }
-
-  // Close popover on outside click
   useEffect(() => {
     if (!open) return;
     function onDown(e: MouseEvent) {
-      if (
-        popoverRef.current &&
-        !popoverRef.current.contains(e.target as Node)
-      ) {
+      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
         setOpen(false);
-        setView("settings");
-        setError(null);
       }
     }
     document.addEventListener("mousedown", onDown);
@@ -184,227 +134,69 @@ function BranchUploadButton({ onUploaded }: { onUploaded?: () => void }) {
 
   return (
     <div className="relative" ref={popoverRef}>
-      <div className="flex items-center gap-1">
-        {/* Settings gear */}
-        <button
-          onClick={() => { setOpen((v) => !v); setView("settings"); }}
-          title="Yükleme ayarları / Loglar"
-          className={
-            "p-1 rounded transition text-[color:var(--muted)] hover:text-[color:var(--foreground)] hover:bg-[color:var(--surface-alt)] " +
-            (open ? "text-[color:var(--primary)]" : "")
-          }
-        >
-          <GearIcon />
-        </button>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        title="Loglar"
+        className={
+          "p-1 rounded transition text-[color:var(--muted)] hover:text-[color:var(--foreground)] hover:bg-[color:var(--surface-alt)] " +
+          (open ? "text-[color:var(--primary)]" : "")
+        }
+      >
+        <GearIcon />
+      </button>
 
-        {/* Upload trigger */}
-        <button
-          onClick={() => fileRef.current?.click()}
-          disabled={loading}
-          className="text-xs text-[color:var(--muted-strong)] hover:text-[color:var(--foreground)] border border-[color:var(--border)] rounded-md px-2 py-0.5 transition hover:bg-[color:var(--surface-alt)] disabled:opacity-50"
-          title="Excel yükle"
-        >
-          {loading ? "Yükleniyor…" : "↑ Excel yükle"}
-        </button>
-      </div>
-
-      <input
-        ref={fileRef}
-        type="file"
-        accept=".xlsx,.xls"
-        aria-label="Excel dosyası seç"
-        onChange={(e) => {
-          const f = e.target.files?.[0];
-          if (f) handleFile(f);
-        }}
-        className="hidden"
-      />
-
-      {/* Settings popover */}
       {open && (
-        <div className={
-          "absolute right-0 top-full mt-1.5 card shadow-xl border z-[40] " +
-          (view === "logs" ? "w-[520px]" : "w-64")
-        }>
-          {view === "settings" ? (
-            <div className="p-4 space-y-3">
-              <div className="text-xs font-semibold text-[color:var(--muted-strong)] uppercase tracking-wide">
-                Yükleme Ayarları
+        <div className="absolute right-0 top-full mt-1.5 card shadow-xl border z-[40] w-[520px] flex flex-col max-h-[420px]">
+          <div className="flex items-center gap-2 px-3 py-2.5 border-b bg-[color:var(--surface-alt)]">
+            <span className="text-xs font-semibold flex-1">Loglar</span>
+            {activeBranch && (
+              <span className="text-[10px] text-[color:var(--muted)]">
+                {activePeriod?.label} / {activeBranch.name}
+              </span>
+            )}
+          </div>
+          {!activeBranch ? (
+            <div className="p-6 text-center text-sm text-[color:var(--muted)]">Aktif branş yok.</div>
+          ) : (() => {
+            const entries = [...activeBranch.history].reverse();
+            return entries.length === 0 ? (
+              <div className="p-6 text-center text-sm text-[color:var(--muted)]">Henüz kayıt yok.</div>
+            ) : (
+              <div className="overflow-y-auto overflow-x-auto flex-1">
+                <table className="text-[11px] w-full tabular">
+                  <thead className="sticky top-0 bg-[color:var(--surface-alt)] z-10">
+                    <tr className="border-b text-[10px] uppercase tracking-wide text-[color:var(--muted-strong)]">
+                      <th className="text-left px-3 py-1.5 font-semibold">Zaman</th>
+                      <th className="text-left px-3 py-1.5 font-semibold">Op.</th>
+                      <th className="text-left px-3 py-1.5 font-semibold">İşlem</th>
+                      <th className="text-left px-3 py-1.5 font-semibold">Detay</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {entries.map(e => (
+                      <tr key={e.id} className="border-t hover:bg-[color:var(--surface-alt)]/40">
+                        <td className="px-3 py-1 text-[color:var(--muted-strong)] whitespace-nowrap">
+                          {new Date(e.timestamp).toLocaleString("tr-TR")}
+                        </td>
+                        <td className="px-3 py-1 whitespace-nowrap">
+                          {e.source === "agent"
+                            ? <span className="px-1 py-0.5 rounded text-[9px] font-semibold bg-[color:var(--primary-soft)] text-[color:var(--primary)]">Agent</span>
+                            : <span className="text-[color:var(--muted)] text-[10px]">Sen</span>}
+                        </td>
+                        <td className="px-3 py-1 font-medium whitespace-nowrap">{ACTION_LABELS[e.action] ?? e.action}</td>
+                        <td className="px-3 py-1 text-[color:var(--muted-strong)] font-mono truncate max-w-[160px]">
+                          {e.details ? Object.entries(e.details).map(([k, v]) => `${k}=${JSON.stringify(v)}`).join(" · ") : "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <SettingField label="Tip">
-                  <select
-                    value={settings.triangleType}
-                    onChange={(e) =>
-                      updateSetting("triangleType", e.target.value as TriangleType)
-                    }
-                    className="input-base text-xs py-1"
-                  >
-                    <option value="paid">Paid</option>
-                    <option value="incurred">Incurred</option>
-                  </select>
-                </SettingField>
-
-                <SettingField label="Değer">
-                  <select
-                    value={settings.cumulative ? "cum" : "inc"}
-                    onChange={(e) =>
-                      updateSetting("cumulative", e.target.value === "cum")
-                    }
-                    className="input-base text-xs py-1"
-                  >
-                    <option value="cum">Kümülatif</option>
-                    <option value="inc">Artımsal</option>
-                  </select>
-                </SettingField>
-
-                <SettingField label="Kaza">
-                  <select
-                    value={settings.originGranularity}
-                    onChange={(e) =>
-                      updateSetting(
-                        "originGranularity",
-                        e.target.value as Granularity,
-                      )
-                    }
-                    className="input-base text-xs py-1"
-                  >
-                    <option value="yearly">Yıllık</option>
-                    <option value="quarterly">Çeyreklik</option>
-                  </select>
-                </SettingField>
-
-                <SettingField label="Gelişim">
-                  <select
-                    value={settings.devGranularity}
-                    onChange={(e) =>
-                      updateSetting(
-                        "devGranularity",
-                        e.target.value as Granularity,
-                      )
-                    }
-                    className="input-base text-xs py-1"
-                  >
-                    <option value="yearly">Yıllık</option>
-                    <option value="quarterly">Çeyreklik</option>
-                  </select>
-                </SettingField>
-              </div>
-
-              <button
-                onClick={() => {
-                  setOpen(false);
-                  fileRef.current?.click();
-                }}
-                disabled={loading}
-                className="w-full btn btn-primary text-xs py-1.5 disabled:opacity-50"
-              >
-                {loading ? "Yükleniyor…" : "Excel seç (.xlsx)"}
-              </button>
-
-              {error && (
-                <p className="text-xs text-[color:var(--danger)]" role="alert">
-                  {error}
-                </p>
-              )}
-
-              <p className="text-[10px] text-[color:var(--muted)] leading-relaxed">
-                Beklenen: <strong>ACCIDENT_YEAR</strong> /{" "}
-                <strong>DEVELOPMENT_DATE</strong> / <strong>PAID</strong>
-              </p>
-
-              <div className="border-t pt-2">
-                <button
-                  onClick={() => setView("logs")}
-                  className="w-full text-xs text-left text-[color:var(--muted-strong)] hover:text-[color:var(--foreground)] hover:bg-[color:var(--surface-alt)] px-2 py-1.5 rounded transition flex items-center justify-between"
-                >
-                  <span>Loglar</span>
-                  <span className="text-[color:var(--muted)]">
-                    {activeBranch ? activeBranch.history.length : 0} kayıt →
-                  </span>
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="flex flex-col max-h-[420px]">
-              {/* Logs header */}
-              <div className="flex items-center gap-2 px-3 py-2.5 border-b bg-[color:var(--surface-alt)]">
-                <button
-                  onClick={() => setView("settings")}
-                  className="text-[color:var(--muted)] hover:text-[color:var(--foreground)] text-xs px-1.5 py-0.5 rounded hover:bg-[color:var(--border)] transition"
-                >
-                  ← Geri
-                </button>
-                <span className="text-xs font-semibold flex-1">Loglar</span>
-                {activeBranch && (
-                  <span className="text-[10px] text-[color:var(--muted)]">
-                    {activePeriod?.label} / {activeBranch.name}
-                  </span>
-                )}
-              </div>
-              {/* Logs table */}
-              {!activeBranch ? (
-                <div className="p-6 text-center text-sm text-[color:var(--muted)]">Aktif branş yok.</div>
-              ) : (() => {
-                const entries = [...activeBranch.history].reverse();
-                return entries.length === 0 ? (
-                  <div className="p-6 text-center text-sm text-[color:var(--muted)]">Henüz kayıt yok.</div>
-                ) : (
-                  <div className="overflow-y-auto overflow-x-auto flex-1">
-                    <table className="text-[11px] w-full tabular">
-                      <thead className="sticky top-0 bg-[color:var(--surface-alt)] z-10">
-                        <tr className="border-b text-[10px] uppercase tracking-wide text-[color:var(--muted-strong)]">
-                          <th className="text-left px-3 py-1.5 font-semibold">Zaman</th>
-                          <th className="text-left px-3 py-1.5 font-semibold">Op.</th>
-                          <th className="text-left px-3 py-1.5 font-semibold">İşlem</th>
-                          <th className="text-left px-3 py-1.5 font-semibold">Detay</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {entries.map(e => (
-                          <tr key={e.id} className="border-t hover:bg-[color:var(--surface-alt)]/40">
-                            <td className="px-3 py-1 text-[color:var(--muted-strong)] whitespace-nowrap">
-                              {new Date(e.timestamp).toLocaleString("tr-TR")}
-                            </td>
-                            <td className="px-3 py-1 whitespace-nowrap">
-                              {e.source === "agent"
-                                ? <span className="px-1 py-0.5 rounded text-[9px] font-semibold bg-[color:var(--primary-soft)] text-[color:var(--primary)]">Agent</span>
-                                : <span className="text-[color:var(--muted)] text-[10px]">Sen</span>}
-                            </td>
-                            <td className="px-3 py-1 font-medium whitespace-nowrap">{ACTION_LABELS[e.action] ?? e.action}</td>
-                            <td className="px-3 py-1 text-[color:var(--muted-strong)] font-mono truncate max-w-[160px]">
-                              {e.details ? Object.entries(e.details).map(([k, v]) => `${k}=${JSON.stringify(v)}`).join(" · ") : "—"}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                );
-              })()}
-            </div>
-          )}
+            );
+          })()}
         </div>
       )}
     </div>
-  );
-}
-
-function SettingField({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <label className="flex flex-col gap-1">
-      <span className="text-[10px] uppercase tracking-wide font-semibold text-[color:var(--muted-strong)]">
-        {label}
-      </span>
-      {children}
-    </label>
   );
 }
 

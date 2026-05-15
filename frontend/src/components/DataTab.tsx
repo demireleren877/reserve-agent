@@ -75,9 +75,6 @@ export function DataTab({ paidTriangle, incurredTriangle }: Props) {
               >
                 Veri Modülünden Yükle
               </button>
-              <span className="text-xs text-[color:var(--muted)]">
-                veya üst bardaki <strong>↑ Excel yükle</strong> butonunu kullanın
-              </span>
             </div>
           </div>
         </div>
@@ -94,10 +91,10 @@ export function DataTab({ paidTriangle, incurredTriangle }: Props) {
   const primaryTri = paidTriangle ?? incurredTriangle!;
 
   const tabContent: Record<TriTab, { tri: Triangle | null; missing: string }> = {
-    paid_cum: { tri: paidTriangle, missing: "Ödeme üçgeni yüklenmedi. Paid tipi Excel yükleyin." },
+    paid_cum: { tri: paidTriangle, missing: "Ödeme üçgeni yüklenmedi." },
     paid_inc: { tri: incrementalPaid, missing: "Ödeme üçgeni yüklenmedi." },
     muallak: { tri: muallakTriangle, missing: "Muallak için hem Paid hem Incurred üçgeni yüklenmeli." },
-    incurred: { tri: incurredTriangle, missing: "Gerçekleşen üçgeni yüklenmedi. Incurred tipi Excel yükleyin." },
+    incurred: { tri: incurredTriangle, missing: "Gerçekleşen üçgeni yüklenmedi." },
   };
 
   const current = tabContent[tab];

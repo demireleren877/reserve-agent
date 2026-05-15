@@ -10,7 +10,7 @@ import type {
 import { getFirebaseAuth } from "@/lib/auth/firebase";
 
 export const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000";
+  process.env.NEXT_PUBLIC_API_BASE || "https://actuarial-api.onrender.com";
 
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 MB
 

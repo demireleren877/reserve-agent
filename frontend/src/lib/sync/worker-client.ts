@@ -1,7 +1,7 @@
 import { getFirebaseAuth } from "@/lib/auth/firebase";
 
 export const WORKER_BASE =
-  process.env.NEXT_PUBLIC_WORKER_BASE || "http://localhost:8787";
+  process.env.NEXT_PUBLIC_WORKER_BASE || "https://reserve-agent-worker-production.l5819033.workers.dev";
 
 export type Plan = "free" | "pro";
 

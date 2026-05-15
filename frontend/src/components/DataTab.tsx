@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import type { Triangle } from "@/types/triangle";
 import { TriangleGrid } from "@/components/TriangleGrid";
 import { formatNumber } from "@/lib/api";
+import { LoadFromDataStore } from "@/components/LoadFromDataStore";
 
 type TriTab = "paid_cum" | "paid_inc" | "muallak" | "incurred";
 
@@ -47,6 +48,7 @@ function toMuallak(paid: Triangle, incurred: Triangle): Triangle | null {
 
 export function DataTab({ paidTriangle, incurredTriangle }: Props) {
   const [tab, setTab] = useState<TriTab>("paid_cum");
+  const [showLoadDialog, setShowLoadDialog] = useState(false);
 
   const incrementalPaid = useMemo(
     () => (paidTriangle ? toIncremental(paidTriangle) : null),
@@ -62,27 +64,30 @@ export function DataTab({ paidTriangle, incurredTriangle }: Props) {
 
   if (!anyLoaded) {
     return (
-      <div className="card p-16 text-center">
-        <div className="text-sm text-[color:var(--muted)] max-w-md mx-auto">
-          <p className="mb-2">
-            Üst bardaki <strong>↑ Excel yükle</strong> butonunu kullanarak veri yükleyin.
-          </p>
-          <p className="text-xs">
-            Uzun format:{" "}
-            <code className="px-1.5 py-0.5 rounded bg-[color:var(--surface-alt)] font-mono text-[11px]">
-              ACCIDENT_YEAR
-            </code>{" "}
-            /{" "}
-            <code className="px-1.5 py-0.5 rounded bg-[color:var(--surface-alt)] font-mono text-[11px]">
-              DEVELOPMENT_DATE
-            </code>{" "}
-            /{" "}
-            <code className="px-1.5 py-0.5 rounded bg-[color:var(--surface-alt)] font-mono text-[11px]">
-              PAID
-            </code>
-          </p>
+      <>
+        <div className="card p-12 text-center">
+          <div className="text-sm text-[color:var(--muted)] max-w-sm mx-auto space-y-4">
+            <p>Üçgen verisi henüz yüklenmedi.</p>
+            <div className="flex flex-col gap-2 items-center">
+              <button
+                onClick={() => setShowLoadDialog(true)}
+                className="px-5 py-2.5 text-sm font-medium rounded-md bg-[color:var(--primary)] text-white hover:opacity-90 transition"
+              >
+                Veri Modülünden Yükle
+              </button>
+              <span className="text-xs text-[color:var(--muted)]">
+                veya üst bardaki <strong>↑ Excel yükle</strong> butonunu kullanın
+              </span>
+            </div>
+          </div>
         </div>
-      </div>
+        {showLoadDialog && (
+          <LoadFromDataStore
+            onClose={() => setShowLoadDialog(false)}
+            onLoaded={() => setShowLoadDialog(false)}
+          />
+        )}
+      </>
     );
   }
 

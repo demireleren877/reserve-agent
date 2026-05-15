@@ -326,6 +326,42 @@ export async function importDataFile(
   return res.json();
 }
 
+export interface ClaimRecord {
+  dosya_no: string;
+  brans: string;
+  hasar_tarihi: string;
+  gelisim_tarihi: string;
+  odeme: number;
+  muallak: number;
+}
+
+export async function buildTriangleFromRecords(
+  records: ClaimRecord[],
+  brans: string,
+  triangleType: "paid" | "incurred",
+  originGranularity: "yearly" | "quarterly",
+  developmentGranularity: "yearly" | "quarterly",
+): Promise<Triangle> {
+  const authHeaders = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/v1/data/build-triangle`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders },
+    body: JSON.stringify({
+      records,
+      brans,
+      triangle_type: triangleType,
+      origin_granularity: originGranularity,
+      development_granularity: developmentGranularity,
+    }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ detail: "Üçgen oluşturma hatası" }));
+    throw new Error(body.detail || `HTTP ${res.status}`);
+  }
+  const data = await res.json();
+  return data.triangle as Triangle;
+}
+
 export async function listModels(): Promise<ModelsResponse> {
   const res = await fetch(`${API_BASE}/v1/models`);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);

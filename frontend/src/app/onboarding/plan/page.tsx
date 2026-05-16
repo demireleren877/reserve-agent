@@ -230,7 +230,7 @@ export default function PlanOnboarding() {
           <PlanCard
             id="pro"
             name="Pro"
-            price="₺890"
+            price="₺100"
             period="/ ay"
             desc="Profesyonel aktüerler için tam set."
             highlight
@@ -276,7 +276,7 @@ export default function PlanOnboarding() {
                 ? isManageMode
                   ? "Free'ye geç"
                   : "Free ile devam et"
-                : "Pro'ya geç — ₺890/ay"}
+                : "Pro'ya geç — ₺100/ay"}
             </button>
           )}
           {isManageMode && selected === currentPlan && (

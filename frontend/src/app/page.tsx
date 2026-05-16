@@ -626,7 +626,7 @@ const PLANS = [
   },
   {
     name: "Pro",
-    price: "₺890",
+    price: "₺100",
     period: "/ ay",
     desc: "Profesyonel aktüerler için tam set.",
     highlight: true,

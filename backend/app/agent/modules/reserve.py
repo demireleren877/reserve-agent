@@ -55,37 +55,45 @@ KISA CEVAP KURALLARI:
 * "Tüm kaza yılları için" → per_origin'den origin listesini al, simulate_bf
   veya simulate_bf_formula'ya origins=[...] geçir, toplam delta_ibnr ver.
 
+VERİ AKIŞI
+Hasar ve prim verileri Veri modülünde merkezi olarak saklanır (Cloudflare D1).
+Rezerv modülü verileri buradan çeker:
+* Üçgen: Veri → hasar kayıtları → branş filtreleme → kaza yılı × gelişim tarihi
+  bazlı kümülatif ödeme üçgeni. Rezerv/Veri sekmesinde "Veri Modülünden Yükle"
+  butonu ile çekilir; veya doğrudan branşa Excel/CSV yüklenebilir.
+* Prim (Exposure): Veri → prim kayıtları → BF sekmesinde "Veri modülünden yükle"
+  ile aktarılır. Manuel de girilebilir.
+
 9 SEKME
-1. Veri — Long-format Excel: ACCIDENT_YEAR | DEVELOPMENT_DATE | PAID. Yıllık |
-   çeyreklik, kümülatif | artımsal. Üçgen rectangular olabilir.
-2. LDF — Gelişim oranları üçgeni + opsiyonel heatmap. Tek metod: hacim
-   ağırlıklı (volume-weighted, ΣC_{j+1} / ΣC_j). **Volume** (= eski adıyla
-   "window") seçenekleri: 4 | 5 | 7 | all (default = all) — son N origin
-   bazlı agregasyon. UI ve cevaplarda her zaman "volume" terimini kullan.
+1. Veri — Paid ve/veya Incurred üçgeni önizlemesi. Kümülatif / artımsal toggle.
+   Üçgen Veri modülündeki hasar verisinden veya doğrudan Excel/CSV'den gelir.
+2. Dosya — DOSYA_NO kolonu içeren veri yüklenmiş branşlarda aktif olur. 4 alt sekme:
+   - İstatistikler: son diagonal dosya bazlı toplam, sayı, ortalama, yoğunlaşma.
+   - Büyük Hasar: en büyük N dosya, kaza yılı kırılımı, konsantrasyon analizi.
+   - Dosya Gelişimi: kaza yılı bazlı dönemden döneme gelişim (proje dönemlerini kullanır).
+   - Runoff: aynı frekans/isimde önceki dönemlerle karşılaştırma.
+3. LDF — Gelişim oranları üçgeni + opsiyonel heatmap. Tek metod: hacim
+   ağırlıklı (volume-weighted, ΣC_{j+1} / ΣC_j). **Volume** seçenekleri:
+   4 | 5 | 7 | all (default = all) — son N origin bazlı agregasyon.
+   UI ve cevaplarda her zaman "volume" terimini kullan.
    Hücre eleme: kaza × gelişim adımı bazlı manuel hariç tutma. CDF satırı
    Curve cascade'ını yansıtır.
-3. Curve — Initial Selection (cascade'lı, downstream user override'larını
-   anchor alır) + User Value. Cascade kuralı: period "user" ise effCDF =
-   user_value; "initial" ise effCDF[i] = selected_LDF[i→i+1] × effCDF[i+1].
-   Tail'i 1'e çekmek (truncation) tüm önceki yaşları indirger.
-4. BF — Latest, Exposure, Correction (k), % Developed, Pattern Ratio,
-   Selected Loss Ratio, New Ultimate.
+4. Curve — Initial Selection (cascade'lı) + User Value. Cascade kuralı:
+   period "user" ise effCDF = user_value; "initial" ise effCDF[i] = LDF[i] × effCDF[i+1].
+   Tail truncation: belirli yaştan sonrası 1'e çekmek tüm önceki yaşları indirger.
+5. ILR — Incurred Loss Ratio üçgeni. Her (kaza yılı, gelişim adımı) için
+   hasar / (prim × correction_k) × 100%. Prim girilmemiş originler null döner.
+   >100% kırmızı, >80% sarı. BF sekmesinden prim girilmesi gerekir.
+6. BF — Latest, Exposure (prim), Correction (k), % Developed, Pattern Ratio,
+   BF Loss Ratio, New Ultimate. Prim Veri modülünden veya manuel girilebilir.
    Correction k: çeyreklik modelde tamamlanmamış kaza yılı için annualization
    (Q1 → 4; Q1+Q2 → 2; Q1-Q3 → 4/3 ≈ 1.333). k=1 veya boş = düzeltme yok.
-   Formüller: exposure_annual = premium × k; pattern_ratio = cl_ult /
-   exposure_annual; bf_ult_annual = latest + selected_lr × exposure_annual ×
-   (1 − %dev); bf_ultimate (kısmi) = bf_ult_annual / k; bf_ibnr = bf_ult − latest.
+   exposure_annual = premium × k; pattern_ratio = cl_ult / exposure_annual;
+   bf_ult_annual = latest + selected_lr × exposure_annual × (1 − %dev);
+   bf_ultimate = bf_ult_annual / k; bf_ibnr = bf_ult − latest.
    CL hesabı correction'dan etkilenmez.
-5. Ultimate / IBNR — Origin × (CL Ult | BF Ult) drag-select.
-6. Özet — Final rapor + eleme etkisi.
-7. ILR — Incurred Loss Ratio üçgeni. Her (kaza yılı, gelişim adımı) için
-   hasar / (prim × correction_k) × 100%. Prim girilmemiş originler null döner.
-   >100% kırmızı, >80% sarı renklendirme. BF sekmesinden prim girilmesi gerekir.
-8. Dosya — DOSYA_NO kolonu içeren Excel yüklenmiş branşlarda aktif olur. 4 alt sekme:
-   - İstatistikler: son diagonal dosya bazlı toplam, sayı, ortalama, yoğunlaşma özeti.
-   - Büyük Hasar: en büyük N dosya, kaza yılı kırılımı, konsantrasyon analizi.
-   - Dosya Gelişimi: kaza yılı bazlı dönemden döneme hasar gelişimi (proje dönemlerini kullanır).
-   - Runoff: aktif branşın aynı frekans ve isme sahip önceki dönemlerle karşılaştırması.
+7. Ultimate / IBNR — Origin × (CL Ult | BF Ult) basis seçimi.
+8. Özet — Final rapor + eleme etkisi özeti.
 9. Geçmiş — history (timestamp + action + source: user|agent + detail).
 
 SELECTED LOSS RATIO FORMÜL SÖZ DİZİMİ

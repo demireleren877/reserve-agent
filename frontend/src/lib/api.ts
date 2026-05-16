@@ -194,6 +194,14 @@ export interface DevFactorRow {
   global_weight: number;
 }
 
+export interface PerOriginRow {
+  origin_year: number;
+  latest: number;
+  cdf: number;
+  ultimate: number;
+  ibnr: number;
+}
+
 export interface CashflowComputeResult {
   origin_years: number[];
   report_date: string;
@@ -202,6 +210,7 @@ export interface CashflowComputeResult {
   dev_factors: DevFactorRow[];
   quarterly_pattern: Record<string, { period: number; weight: number }[]>;
   monthly_pattern: Record<string, { month: number; weight: number }[]>;
+  per_origin?: PerOriginRow[];
   max_period: number;
 }
 
@@ -233,6 +242,33 @@ export async function uploadCashflowFile(file: File): Promise<{
   if (!res.ok) {
     const body = await res.json().catch(() => ({ detail: "Yükleme hatası" }));
     throw new Error(body.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function computeCashflowFromTriangle(
+  triangle: import("@/types/triangle").Triangle,
+  nYears = 5,
+): Promise<CashflowComputeResult> {
+  const authHeaders = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/v1/cashflow/from-triangle`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders },
+    body: JSON.stringify({
+      origin_periods: triangle.origin_periods,
+      development_periods: triangle.development_periods.map(String),
+      values: triangle.values,
+      origin_granularity: triangle.origin_granularity,
+      development_granularity: triangle.development_granularity,
+      n_years: nYears,
+    }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ detail: "Hesaplama hatası" }));
+    const detail = Array.isArray(body.detail)
+      ? body.detail.map((e: { msg?: string }) => e.msg ?? JSON.stringify(e)).join("; ")
+      : body.detail;
+    throw new Error(detail || `HTTP ${res.status}`);
   }
   return res.json();
 }

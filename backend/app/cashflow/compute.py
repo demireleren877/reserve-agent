@@ -42,6 +42,16 @@ class DevFactorRow:
 
 
 @dataclass
+class PerOriginRow:
+    origin_year: int
+    latest: float
+    latest_period: int
+    cdf: float
+    ultimate: float
+    ibnr: float
+
+
+@dataclass
 class CashflowResult:
     origin_years: list[int]
     report_date: date
@@ -54,6 +64,7 @@ class CashflowResult:
     quarterly_pattern: dict[int, list[dict]]
     # origin_year -> list[{month, weight}]   (180 entry, future only)
     monthly_pattern: dict[int, list[dict]]
+    per_origin: list[PerOriginRow] = field(default_factory=list)
     max_period: int = MAX_PERIODS
 
 
@@ -289,9 +300,66 @@ def build_patterns(
     return quarterly, monthly
 
 
+# ─── Triangle → CashflowRecord dönüşümü ──────────────────────────────────────
+
+_Q_END = [(3, 31), (6, 30), (9, 30), (12, 31)]
+
+
+def _quarter_end(abs_quarter: int) -> date:
+    """0-tabanlı mutlak çeyrek → dönem sonu tarihi. abs_quarter = year*4 + q."""
+    year = abs_quarter // 4
+    m, d = _Q_END[abs_quarter % 4]
+    return date(year, m, d)
+
+
+def _parse_origin(s: str) -> tuple[int, int]:
+    """Origin label → (origin_year, origin_abs_quarter)"""
+    s = s.strip().upper()
+    if "Q" in s:
+        yr_str, q_str = s.split("Q", 1)
+        yr = int(yr_str)
+        return yr, yr * 4 + int(q_str) - 1
+    yr = int(s[:4])
+    return yr, yr * 4
+
+
+def triangle_to_cashflow_records(
+    origin_periods: list[str],
+    development_periods: list[str],
+    values: list[list[float | None]],
+    origin_granularity: str,
+    development_granularity: str,
+) -> list[CashflowRecord]:
+    """Kümülatif paid triangle → incremental CashflowRecord listesi."""
+    records: list[CashflowRecord] = []
+    for i, origin in enumerate(origin_periods):
+        origin_year, origin_abs_q = _parse_origin(origin)
+        row = values[i] if i < len(values) else []
+        prev_cum = 0.0
+        for j in range(len(development_periods)):
+            if j >= len(row):
+                break
+            val = row[j]
+            if val is None:
+                break
+            incremental = val - prev_cum
+            prev_cum = val
+            if development_granularity == "yearly":
+                dev_date_val = date(origin_year + j, 12, 31)
+            else:
+                dev_date_val = _quarter_end(origin_abs_q + j)
+            if incremental != 0:
+                records.append(CashflowRecord(
+                    origin_year=origin_year,
+                    dev_date=dev_date_val,
+                    paid=incremental,
+                ))
+    return records
+
+
 # ─── Ana fonksiyon ────────────────────────────────────────────────────────────
 
-def compute_cashflow(records: list[CashflowRecord]) -> CashflowResult:
+def compute_cashflow(records: list[CashflowRecord], n_years: int = N_YEARS_DF) -> CashflowResult:
     if not records:
         raise ValueError("Kayıt bulunamadı")
 
@@ -299,15 +367,33 @@ def compute_cashflow(records: list[CashflowRecord]) -> CashflowResult:
     cum, inc = build_triangle(records)
     origin_years = sorted(cum.keys())
 
-    factors = calc_dev_factors(cum, n_years=N_YEARS_DF)
+    factors = calc_dev_factors(cum, n_years=n_years)
     if not factors:
         raise ValueError("Development factor hesaplanamadı — yetersiz veri")
 
     cdf = _build_full_cdf(factors)
-    # En son kaza yılının rapor tarihindeki dışlanan period sayısı = global ağırlık başlangıcı
     min_base = excluded_periods(max(origin_years), rdate)
     weight_rows = calc_weights(cdf, factors, min_period_for_base=min_base)
     quarterly, monthly = build_patterns(weight_rows, origin_years, rdate)
+
+    # Per-origin paid ultimates
+    per_origin: list[PerOriginRow] = []
+    for year in origin_years:
+        row = cum.get(year, {})
+        if not row:
+            continue
+        latest_period = max(row.keys())
+        latest_val = row[latest_period]
+        cdf_val = cdf.get(latest_period, 1.0)
+        ultimate = latest_val * cdf_val
+        per_origin.append(PerOriginRow(
+            origin_year=year,
+            latest=latest_val,
+            latest_period=latest_period,
+            cdf=cdf_val,
+            ultimate=ultimate,
+            ibnr=ultimate - latest_val,
+        ))
 
     return CashflowResult(
         origin_years=origin_years,
@@ -317,6 +403,7 @@ def compute_cashflow(records: list[CashflowRecord]) -> CashflowResult:
         dev_factors=weight_rows,
         quarterly_pattern=quarterly,
         monthly_pattern=monthly,
+        per_origin=per_origin,
     )
 
 

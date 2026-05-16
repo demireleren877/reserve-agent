@@ -14,6 +14,7 @@ from app.cashflow.compute import (
     CashflowRecord,
     compute_cashflow,
     parse_records_from_bytes,
+    triangle_to_cashflow_records,
 )
 from app.data.parser import inspect_file, parse_with_mapping
 from app.data.prim_parser import inspect_prim_file, parse_prim_with_mapping
@@ -321,6 +322,88 @@ async def cashflow_compute(
         "monthly_pattern": {
             str(y): rows for y, rows in result.monthly_pattern.items()
         },
+        "per_origin": [
+            {
+                "origin_year": r.origin_year,
+                "latest": r.latest,
+                "cdf": r.cdf,
+                "ultimate": r.ultimate,
+                "ibnr": r.ibnr,
+            }
+            for r in result.per_origin
+        ],
+        "max_period": result.max_period,
+    }
+
+
+class CashflowFromTriangleRequest(BaseModel):
+    origin_periods: list[str]
+    development_periods: list[str]
+    values: list[list[float | None]]
+    origin_granularity: str = "yearly"
+    development_granularity: str = "yearly"
+    n_years: int = 5
+
+
+@router.post("/cashflow/from-triangle")
+async def cashflow_from_triangle(
+    body: CashflowFromTriangleRequest,
+    _auth: dict = Depends(verify_firebase_token),
+) -> dict[str, Any]:
+    try:
+        records = triangle_to_cashflow_records(
+            body.origin_periods,
+            body.development_periods,
+            body.values,
+            body.origin_granularity,
+            body.development_granularity,
+        )
+        if not records:
+            raise ValueError("Üçgenden kayıt üretilemedi — değerler boş olabilir")
+        result = compute_cashflow(records, n_years=body.n_years)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Hesaplama hatası: {e}") from e
+
+    return {
+        "origin_years": result.origin_years,
+        "report_date": result.report_date.isoformat(),
+        "triangle": {
+            str(y): {str(p): v for p, v in periods.items()}
+            for y, periods in result.triangle.items()
+        },
+        "incremental": {
+            str(y): {str(p): v for p, v in periods.items()}
+            for y, periods in result.incremental.items()
+        },
+        "dev_factors": [
+            {
+                "period": r.period,
+                "df": r.df,
+                "cdf": r.cdf,
+                "inv_cdf_100": r.inv_cdf_100,
+                "inv_cdf_100_inc": r.inv_cdf_100_inc,
+                "global_weight": r.global_weight,
+            }
+            for r in result.dev_factors
+        ],
+        "quarterly_pattern": {
+            str(y): rows for y, rows in result.quarterly_pattern.items()
+        },
+        "monthly_pattern": {
+            str(y): rows for y, rows in result.monthly_pattern.items()
+        },
+        "per_origin": [
+            {
+                "origin_year": r.origin_year,
+                "latest": r.latest,
+                "cdf": r.cdf,
+                "ultimate": r.ultimate,
+                "ibnr": r.ibnr,
+            }
+            for r in result.per_origin
+        ],
         "max_period": result.max_period,
     }
 

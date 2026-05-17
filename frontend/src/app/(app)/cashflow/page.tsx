@@ -1,17 +1,24 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import * as XLSX from "xlsx";
 import Link from "next/link";
 import { useUserPlan } from "@/lib/auth/user-plan-context";
 import { useProject } from "@/lib/project-store";
 import type { Branch, Period } from "@/types/project";
 import type { Triangle } from "@/types/triangle";
 import { LDFTab } from "@/components/LDFTab";
-import { type Window } from "@/lib/ldf";
+import {
+  type Window,
+  developmentRatios,
+  aggregateLDFs,
+  cumulativeFactors,
+} from "@/lib/ldf";
 import {
   type CashflowComputeResult,
   computeCashflow,
   computeCashflowFromTriangle,
+  computePatternFromCdf,
   formatNumber,
   uploadCashflowFile,
 } from "@/lib/api";
@@ -52,10 +59,126 @@ function Sep() {
   return <span className="text-[color:var(--muted)] px-0.5">/</span>;
 }
 
+/** "2026Q1" → "2026-03-31", "2026Q3" → "2026-09-30", "2026" → "2026-12-31" */
+function periodLabelToReportDate(label: string): string | undefined {
+  const upper = label.trim().toUpperCase();
+  const qMatch = upper.match(/^(\d{4})Q([1-4])$/);
+  if (qMatch) {
+    const year = parseInt(qMatch[1]);
+    const q = parseInt(qMatch[2]);
+    const qEnd: [number, number][] = [[3, 31], [6, 30], [9, 30], [12, 31]];
+    const [month, day] = qEnd[q - 1];
+    return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  }
+  const yMatch = upper.match(/^(\d{4})$/);
+  if (yMatch) return `${yMatch[1]}-12-31`;
+  return undefined;
+}
+
 function Spinner() {
   return (
     <div className="w-6 h-6 rounded-full border-2 animate-spin"
       style={{ borderColor: "var(--border)", borderTopColor: "var(--primary)" }} />
+  );
+}
+
+// ─── Excel export helpers ──────────────────────────────────────────────────────
+
+function _xlsxDownload(wb: XLSX.WorkBook, filename: string) {
+  const buf = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+  const blob = new Blob([buf], { type: "application/octet-stream" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function exportTriangleXlsx(triangle: Triangle, branchLabel: string) {
+  const devLabels = triangle.development_periods.map(String);
+  const header = ["Kaza Dönemi", ...devLabels];
+
+  const cumRows = triangle.origin_periods.map((o, i) => [o, ...triangle.values[i].map(v => v ?? "")]);
+
+  const incValues = triangle.values.map(row =>
+    row.map((v, j) => {
+      if (v == null) return null;
+      const prev = j > 0 ? row[j - 1] : null;
+      return prev != null ? v - prev : v;
+    })
+  );
+  const incRows = triangle.origin_periods.map((o, i) => [o, ...incValues[i].map(v => v ?? "")]);
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([header, ...cumRows]), "Kümülatif");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([header, ...incRows]), "Artımsal");
+  _xlsxDownload(wb, `${branchLabel}_triangle.xlsx`);
+}
+
+function exportLDFXlsx(
+  triangle: Triangle,
+  excludedCells: Set<string>,
+  window: Window,
+  cdfs: number[],
+  branchLabel: string,
+) {
+  const ratios = developmentRatios(triangle, excludedCells);
+  const n = triangle.development_periods.length - 1;
+  const stepLabels = Array.from({ length: n }, (_, i) => `${triangle.development_periods[i]}→${triangle.development_periods[i + 1]}`);
+  const header = ["Kaza Dönemi", ...stepLabels];
+
+  const ratioRows = triangle.origin_periods.map((o, i) => [
+    o,
+    ...Array.from({ length: n }, (_, j) => {
+      const cell = ratios[i]?.[j];
+      return cell != null ? (cell.excluded ? "(hariç)" : (cell.value ?? "")) : "";
+    }),
+  ]);
+
+  const selectedLDFs = aggregateLDFs(triangle, ratios, window, "volume_weighted");
+  const ldfRow = ["Selected LDF", ...selectedLDFs.map(v => v)];
+  const cdfRow = ["CDF (to ult)", ...cdfs.map(v => v)];
+
+  const ws = XLSX.utils.aoa_to_sheet([header, ...ratioRows, [], ldfRow, cdfRow]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "LDF");
+  _xlsxDownload(wb, `${branchLabel}_ldf.xlsx`);
+}
+
+function exportPatternXlsx(result: CashflowComputeResult, mode: "quarterly" | "monthly", branchLabel: string) {
+  const source = mode === "quarterly" ? result.quarterly_pattern : result.monthly_pattern;
+  const periodLabel = mode === "quarterly" ? "Period (Çeyrek)" : "Ay";
+  const header = ["Kaza Yılı", periodLabel, "Normalize Ağırlık"];
+  const rows: (string | number)[][] = [];
+  for (const year of result.origin_years) {
+    for (const entry of source[String(year)] ?? []) {
+      const period = (entry as { period?: number; month?: number }).period
+        ?? (entry as { period?: number; month?: number }).month ?? 0;
+      rows.push([year, period, entry.weight]);
+    }
+  }
+  const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, mode === "quarterly" ? "CF Pattern" : "Aylık Pattern");
+  _xlsxDownload(wb, `${branchLabel}_${mode}_pattern.xlsx`);
+}
+
+function DownloadXlsxButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      title="Excel indir"
+      className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium border transition hover:bg-[color:var(--surface-alt)]"
+      style={{ borderColor: "var(--border)", color: "var(--muted-strong)" }}
+    >
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="7 10 12 15 17 10"/>
+        <line x1="12" y1="15" x2="12" y2="3"/>
+      </svg>
+      Excel
+    </button>
   );
 }
 
@@ -344,9 +467,65 @@ export default function CashflowPage() {
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("data");
 
-  // LDF tab state (managed locally, same as reserve module)
-  const [ldfWindow, setLdfWindow] = useState<Window>("all");
+  // LDF tab state — localStorage'a branş bazlı persist edilir
+  const [ldfWindow, setLdfWindowRaw] = useState<Window>("all");
   const [excludedCells, setExcludedCells] = useState<Set<string>>(new Set());
+
+  function ldfStorageKey(branchId: string) {
+    return `cf_ldf_${branchId}`;
+  }
+
+  function saveLdfState(branchId: string | null, window: Window, cells: Set<string>) {
+    if (!branchId) return;
+    try {
+      localStorage.setItem(ldfStorageKey(branchId), JSON.stringify({
+        window,
+        excluded: Array.from(cells),
+      }));
+    } catch { /* quota veya SSR — sessizce geç */ }
+  }
+
+  function loadLdfState(branchId: string): { window: Window; excluded: Set<string> } {
+    try {
+      const raw = localStorage.getItem(ldfStorageKey(branchId));
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        return {
+          window: parsed.window ?? "all",
+          excluded: new Set<string>(parsed.excluded ?? []),
+        };
+      }
+    } catch { /* bozuk JSON */ }
+    return { window: "all", excluded: new Set() };
+  }
+
+  function setLdfWindow(w: Window) {
+    setLdfWindowRaw(w);
+    saveLdfState(activeBranchId, w, excludedCells);
+  }
+
+  function toggleCell(origin: string, step: number) {
+    setExcludedCells((prev) => {
+      const next = new Set(prev);
+      const key = `${origin}|${step}`;
+      if (next.has(key)) next.delete(key); else next.add(key);
+      saveLdfState(activeBranchId, ldfWindow, next);
+      return next;
+    });
+  }
+
+  function clearCells() {
+    setExcludedCells(new Set());
+    saveLdfState(activeBranchId, ldfWindow, new Set());
+  }
+
+  // Branş değişince kayıtlı state'i yükle
+  useEffect(() => {
+    if (!activeBranchId) return;
+    const saved = loadLdfState(activeBranchId);
+    setLdfWindowRaw(saved.window);
+    setExcludedCells(saved.excluded);
+  }, [activeBranchId]);
 
   const periodsWithPaid = useMemo(() =>
     (project.periods as Period[])
@@ -357,6 +536,31 @@ export default function CashflowPage() {
 
   const activePeriod = periodsWithPaid.find((p) => p.id === activePeriodId) ?? null;
   const activeBranch = activePeriod?.paidBranches.find((b) => b.id === activeBranchId) ?? null;
+
+  // Pre-compute LDF CDFs for export (mirrors LDFTab internals)
+  const ldfExportCdfs = useMemo(() => {
+    const tri = activeBranch?.paidTriangle ?? null;
+    if (!tri) return [];
+    const ratios = developmentRatios(tri, excludedCells);
+    const ldfs = aggregateLDFs(tri, ratios, ldfWindow, "volume_weighted");
+    return cumulativeFactors(ldfs);
+  }, [activeBranch, excludedCells, ldfWindow]);
+
+  // LDF seçimleri değişince pattern'i kullanıcının CDF'iyle yeniden hesapla
+  useEffect(() => {
+    if (!result || ldfExportCdfs.length === 0) return;
+    const reportDate = result.report_date;
+    const originYears = result.origin_years;
+    computePatternFromCdf(originYears, reportDate, ldfExportCdfs)
+      .then((p) => {
+        setResult((prev) => prev ? {
+          ...prev,
+          quarterly_pattern: p.quarterly_pattern,
+          monthly_pattern: p.monthly_pattern,
+        } : prev);
+      })
+      .catch(() => {/* sessizce geç */});
+  }, [ldfExportCdfs]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function goRoot() {
     setNavLevel("root");
@@ -385,11 +589,10 @@ export default function CashflowPage() {
     setLoading(true);
     setError(null);
     setResult(null);
-    // Reset LDF state per branch
-    setLdfWindow("all");
-    setExcludedCells(new Set());
+    // LDF state useEffect ile localStorage'dan yükleniyor
     try {
-      const r = await computeCashflowFromTriangle(branch.paidTriangle, 5);
+      const reportDate = period?.label ? periodLabelToReportDate(period.label) : undefined;
+      const r = await computeCashflowFromTriangle(branch.paidTriangle, 5, reportDate);
       setResult(r);
       setActiveTab("data");
     } catch (e) {
@@ -575,32 +778,46 @@ export default function CashflowPage() {
               {/* Tab content */}
               <main className="p-5 max-w-[1600px] w-full mx-auto">
                 {activeTab === "data" && activeBranch?.paidTriangle && (
-                  <CashflowDataTab triangle={activeBranch.paidTriangle} />
+                  <div className="space-y-3">
+                    <div className="flex justify-end">
+                      <DownloadXlsxButton onClick={() =>
+                        exportTriangleXlsx(activeBranch.paidTriangle!, activeBranch.name)
+                      } />
+                    </div>
+                    <CashflowDataTab triangle={activeBranch.paidTriangle} />
+                  </div>
                 )}
 
                 {activeTab === "ldf" && (
-                  <LDFTab
-                    triangle={activeBranch?.paidTriangle ?? null}
-                    window={ldfWindow}
-                    excludedCells={excludedCells}
-                    onWindowChange={setLdfWindow}
-                    onToggleCell={(origin, step) => {
-                      setExcludedCells((prev) => {
-                        const next = new Set(prev);
-                        const key = `${origin}|${step}`;
-                        if (next.has(key)) next.delete(key); else next.add(key);
-                        return next;
-                      });
-                    }}
-                    onClearCells={() => setExcludedCells(new Set())}
-                  />
+                  <div className="space-y-3">
+                    {activeBranch?.paidTriangle && (
+                      <div className="flex justify-end">
+                        <DownloadXlsxButton onClick={() =>
+                          exportLDFXlsx(activeBranch.paidTriangle!, excludedCells, ldfWindow, ldfExportCdfs, activeBranch.name)
+                        } />
+                      </div>
+                    )}
+                    <LDFTab
+                      triangle={activeBranch?.paidTriangle ?? null}
+                      window={ldfWindow}
+                      excludedCells={excludedCells}
+                      onWindowChange={setLdfWindow}
+                      onToggleCell={toggleCell}
+                      onClearCells={clearCells}
+                    />
+                  </div>
                 )}
 
                 {activeTab === "pattern" && (
                   <div className="rounded-2xl overflow-hidden" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
-                    <div className="px-5 py-3 border-b text-[11px] font-semibold uppercase tracking-wider"
-                      style={{ borderColor: "var(--border)", color: "var(--muted)" }}>
-                      Çeyreklik Nakit Akışı Pattern
+                    <div className="px-5 py-3 border-b flex items-center justify-between"
+                      style={{ borderColor: "var(--border)" }}>
+                      <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: "var(--muted)" }}>
+                        Çeyreklik Nakit Akışı Pattern
+                      </span>
+                      <DownloadXlsxButton onClick={() =>
+                        exportPatternXlsx(result!, "quarterly", activeBranch?.name ?? "cashflow")
+                      } />
                     </div>
                     <div className="p-5">
                       <PatternTable result={result} mode="quarterly" />
@@ -610,9 +827,14 @@ export default function CashflowPage() {
 
                 {activeTab === "monthly" && (
                   <div className="rounded-2xl overflow-hidden" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
-                    <div className="px-5 py-3 border-b text-[11px] font-semibold uppercase tracking-wider"
-                      style={{ borderColor: "var(--border)", color: "var(--muted)" }}>
-                      Aylık Nakit Akışı Pattern (180 ay)
+                    <div className="px-5 py-3 border-b flex items-center justify-between"
+                      style={{ borderColor: "var(--border)" }}>
+                      <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: "var(--muted)" }}>
+                        Aylık Nakit Akışı Pattern (180 ay)
+                      </span>
+                      <DownloadXlsxButton onClick={() =>
+                        exportPatternXlsx(result!, "monthly", activeBranch?.name ?? "cashflow")
+                      } />
                     </div>
                     <div className="p-5">
                       <PatternTable result={result} mode="monthly" />

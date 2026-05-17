@@ -41,6 +41,12 @@ export const DATA_TYPES: DataTypeDef[] = [
     description: "Dönemsel prim kazanım verileri",
     columns: ["Branş", "Dönem", "Prim"],
   },
+  {
+    id: "ucgen",
+    label: "Üçgen Verisi",
+    description: "Hazır paid veya incurred gelişim üçgeni",
+    columns: ["Branş", "Üçgen Türü", "Kaza Dönemi", "Gelişim Dönemi"],
+  },
 ];
 
 // ─── Tipler ───────────────────────────────────────────────────────────────────
@@ -58,6 +64,16 @@ export interface PrimRecord {
   brans: string;
   donem: string;
   ep: number;
+}
+
+export interface TriangleRecord {
+  brans: string;
+  triangle_type: "paid" | "incurred";
+  origin_granularity: "yearly" | "quarterly";
+  development_granularity: "yearly" | "quarterly";
+  origin_periods: string[];
+  development_periods: number[];
+  values: (number | null)[][];
 }
 
 export interface DatasetMeta {
@@ -80,7 +96,7 @@ export interface DatasetMeta {
 export interface Dataset {
   typeId: string;
   meta: DatasetMeta;
-  records: ClaimRecord[] | PrimRecord[];
+  records: ClaimRecord[] | PrimRecord[] | TriangleRecord[];
 }
 
 export interface DataPeriod {

@@ -10,8 +10,10 @@ import {
 } from "@/lib/data-store";
 import { DataImportWizard, type ImportWizardResult } from "@/components/DataImportWizard";
 import { PrimImportWizard, type PrimWizardResult } from "@/components/PrimImportWizard";
+import { TriangleImportWizard, type TriangleWizardResult } from "@/components/TriangleImportWizard";
+import { TriangleGrid } from "@/components/TriangleGrid";
 import { importPrimFile } from "@/lib/api";
-import type { PrimRecord } from "@/lib/data-store";
+import type { PrimRecord, TriangleRecord } from "@/lib/data-store";
 
 // ─── Yardımcı ─────────────────────────────────────────────────────────────────
 
@@ -302,6 +304,36 @@ function DatasetViewer({
       </div>
 
       <div className="flex-1 overflow-auto">
+        {dataset.typeId === "ucgen" && (dataset.records as TriangleRecord[]).length > 0 && (
+          <div className="p-4">
+            {(dataset.records as TriangleRecord[]).map((rec, i) => (
+              <div key={i} className="mb-6">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-[12px] font-semibold" style={{ color: "var(--foreground)" }}>
+                    {rec.brans}
+                  </span>
+                  <span className="text-[10.5px] px-1.5 py-0.5 rounded-full font-semibold" style={{ background: "var(--primary-soft)", color: "var(--primary)" }}>
+                    {rec.triangle_type === "paid" ? "Paid" : "Incurred"}
+                  </span>
+                  <span className="text-[10.5px]" style={{ color: "var(--muted)" }}>
+                    {rec.origin_granularity === "yearly" ? "Yıllık" : "Çeyreklik"} kaza · {rec.development_granularity === "yearly" ? "Yıllık" : "Çeyreklik"} gelişim
+                  </span>
+                </div>
+                <div className="rounded-lg border overflow-auto" style={{ borderColor: "var(--border)" }}>
+                  <TriangleGrid triangle={{
+                    origin_periods: rec.origin_periods,
+                    development_periods: rec.development_periods,
+                    values: rec.values,
+                    triangle_type: rec.triangle_type,
+                    origin_granularity: rec.origin_granularity,
+                    development_granularity: rec.development_granularity,
+                  }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        {dataset.typeId !== "ucgen" && (
         <table className="w-full text-[12.5px] border-collapse">
           {dataset.typeId === "prim" ? (
             <>
@@ -346,9 +378,10 @@ function DatasetViewer({
             </>
           )}
         </table>
+        )}
       </div>
 
-      {totalPages > 1 && (
+      {totalPages > 1 && dataset.typeId !== "ucgen" && (
         <div className="flex items-center gap-3 px-4 py-3 border-t flex-shrink-0" style={{ borderColor: "var(--border)" }}>
           <button disabled={page === 0} onClick={() => setPage((p) => p - 1)}
             className="px-3 py-1 rounded-lg text-[12px] border disabled:opacity-40" style={{ borderColor: "var(--border)" }}>
@@ -376,6 +409,7 @@ function PeriodDetail({ period }: { period: DataPeriod }) {
   const { setDataset, removeDataset, loadDatasetRecords } = useDataStore();
   const [view, setView] = useState<RightView>({ kind: "overview" });
   const [showPrimWizard, setShowPrimWizard] = useState(false);
+  const [showTriangleWizard, setShowTriangleWizard] = useState(false);
   const [viewerDataset, setViewerDataset] = useState<Dataset | null>(null);
   const [viewerLoading, setViewerLoading] = useState(false);
 
@@ -418,6 +452,23 @@ function PeriodDetail({ period }: { period: DataPeriod }) {
     };
     await setDataset(period.id, ds);
     setView({ kind: "overview" });
+  }
+
+  // Üçgen wizard tamamlandığında
+  async function handleTriangleImportDone(result: TriangleWizardResult) {
+    const rec = result.record;
+    const ds: Dataset = {
+      typeId: "ucgen",
+      meta: {
+        filename: result.filename,
+        uploadedAt: new Date().toISOString(),
+        record_count: rec.origin_periods.length,
+        brans_list: [rec.brans],
+      },
+      records: [rec],
+    };
+    await setDataset(period.id, ds);
+    setShowTriangleWizard(false);
   }
 
   // Viewer açılışında records lazy-load
@@ -495,6 +546,8 @@ function PeriodDetail({ period }: { period: DataPeriod }) {
               onImport={() =>
                 def.id === "prim"
                   ? setShowPrimWizard(true)
+                  : def.id === "ucgen"
+                  ? setShowTriangleWizard(true)
                   : setView({ kind: "wizard", typeId: def.id })
               }
               onView={() => openViewer(def.id)}
@@ -508,6 +561,13 @@ function PeriodDetail({ period }: { period: DataPeriod }) {
         <PrimImportWizard
           onDone={async (r) => { setShowPrimWizard(false); await handlePrimImportDone(r); }}
           onCancel={() => setShowPrimWizard(false)}
+        />
+      )}
+
+      {showTriangleWizard && (
+        <TriangleImportWizard
+          onDone={handleTriangleImportDone}
+          onCancel={() => setShowTriangleWizard(false)}
         />
       )}
     </div>

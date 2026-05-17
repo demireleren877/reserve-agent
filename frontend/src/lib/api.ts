@@ -249,6 +249,7 @@ export async function uploadCashflowFile(file: File): Promise<{
 export async function computeCashflowFromTriangle(
   triangle: import("@/types/triangle").Triangle,
   nYears = 5,
+  reportDate?: string,  // ISO format: "2026-03-31"
 ): Promise<CashflowComputeResult> {
   const authHeaders = await getAuthHeaders();
   const res = await fetch(`${API_BASE}/v1/cashflow/from-triangle`, {
@@ -261,6 +262,7 @@ export async function computeCashflowFromTriangle(
       origin_granularity: triangle.origin_granularity,
       development_granularity: triangle.development_granularity,
       n_years: nYears,
+      ...(reportDate ? { report_date: reportDate } : {}),
     }),
   });
   if (!res.ok) {
@@ -269,6 +271,24 @@ export async function computeCashflowFromTriangle(
       ? body.detail.map((e: { msg?: string }) => e.msg ?? JSON.stringify(e)).join("; ")
       : body.detail;
     throw new Error(detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function computePatternFromCdf(
+  originYears: number[],
+  reportDate: string,
+  selectedCdfs: number[],
+): Promise<Pick<CashflowComputeResult, "quarterly_pattern" | "monthly_pattern" | "report_date">> {
+  const authHeaders = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/v1/cashflow/pattern-from-cdf`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders },
+    body: JSON.stringify({ origin_years: originYears, report_date: reportDate, selected_cdfs: selectedCdfs }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ detail: "Hata" }));
+    throw new Error(body.detail || `HTTP ${res.status}`);
   }
   return res.json();
 }

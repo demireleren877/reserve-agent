@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useDataStore } from "@/lib/data-store";
+import { useDataStore, type TriangleRecord } from "@/lib/data-store";
 import { buildTriangleFromRecords } from "@/lib/api";
 import { useBranchSetters } from "@/lib/project-store";
 
@@ -11,11 +11,13 @@ interface Props {
 }
 
 type Granularity = "yearly" | "quarterly";
+type Source = "hasar" | "ucgen";
 
 export function LoadFromDataStore({ onClose, onLoaded }: Props) {
   const store = useDataStore();
   const setters = useBranchSetters("user");
 
+  const [source, setSource] = useState<Source>("hasar");
   const [periodId, setPeriodId] = useState<string>(store.activePeriodId ?? "");
   const [brans, setBrans] = useState<string>("");
   const [originGran, setOriginGran] = useState<Granularity>("yearly");
@@ -25,10 +27,22 @@ export function LoadFromDataStore({ onClose, onLoaded }: Props) {
   const [loadingRecords, setLoadingRecords] = useState(false);
   const [bransList, setBransList] = useState<string[]>([]);
 
-  // Seçili dönem değişince branş listesini güncelle
+  const selectedPeriod = store.periods.find((p) => p.id === periodId);
+
+  // Seçili dönem + kaynak değişince branş listesini güncelle
   useEffect(() => {
     if (!periodId) return;
     const period = store.periods.find((p) => p.id === periodId);
+
+    if (source === "ucgen") {
+      const meta = period?.datasets["ucgen"]?.meta;
+      const list = meta?.brans_list ?? [];
+      setBransList(list);
+      setBrans((b) => (list.includes(b) ? b : list[0] ?? ""));
+      return;
+    }
+
+    // hasar
     const meta = period?.datasets["hasar"]?.meta;
     if (meta) {
       setBransList(meta.brans_list ?? []);
@@ -44,12 +58,12 @@ export function LoadFromDataStore({ onClose, onLoaded }: Props) {
         .catch(() => setBransList([]))
         .finally(() => setLoadingRecords(false));
     }
-  }, [periodId, store]);
+  }, [periodId, source, store]);
 
-  const selectedPeriod = store.periods.find((p) => p.id === periodId);
   const hasarDs = selectedPeriod?.datasets["hasar"] ?? null;
+  const ucgenDs = selectedPeriod?.datasets["ucgen"] ?? null;
 
-  async function handleBuild() {
+  async function handleBuildFromHasar() {
     if (!periodId || !brans) return;
     setError(null);
     setLoading(true);
@@ -78,6 +92,44 @@ export function LoadFromDataStore({ onClose, onLoaded }: Props) {
     }
   }
 
+  async function handleLoadFromUcgen() {
+    if (!periodId) return;
+    setError(null);
+    setLoading(true);
+    try {
+      let ds = ucgenDs;
+      if (!ds?.records?.length) {
+        ds = await store.loadDatasetRecords(periodId, "ucgen");
+      }
+      if (!ds?.records?.length) throw new Error("Üçgen verisi bulunamadı");
+
+      const rec = (ds.records as TriangleRecord[])[0];
+      const triangle = {
+        origin_periods: rec.origin_periods,
+        development_periods: rec.development_periods,
+        values: rec.values,
+        triangle_type: rec.triangle_type,
+        origin_granularity: rec.origin_granularity,
+        development_granularity: rec.development_granularity,
+      };
+      const fileName = `${selectedPeriod?.label ?? ""} – ${rec.brans}`;
+      const paid = rec.triangle_type === "paid" ? triangle : null;
+      const incurred = rec.triangle_type === "incurred" ? triangle : null;
+      setters.setBothTriangles(paid, incurred, fileName);
+      onLoaded();
+      onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Bilinmeyen hata");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handleBuild() {
+    if (source === "ucgen") return handleLoadFromUcgen();
+    return handleBuildFromHasar();
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
       <div className="card w-full max-w-md shadow-xl border border-[color:var(--border)]">
@@ -92,6 +144,23 @@ export function LoadFromDataStore({ onClose, onLoaded }: Props) {
         </div>
 
         <div className="p-5 space-y-4">
+          {/* Kaynak seçimi */}
+          <div className="flex rounded-lg overflow-hidden border border-[color:var(--border)]">
+            {(["hasar", "ucgen"] as Source[]).map((s) => (
+              <button
+                key={s}
+                onClick={() => setSource(s)}
+                className="flex-1 py-2 text-xs font-medium transition"
+                style={{
+                  background: source === s ? "var(--primary)" : "var(--surface)",
+                  color: source === s ? "#fff" : "var(--muted-strong)",
+                }}
+              >
+                {s === "hasar" ? "Hasar verisinden" : "Hazır üçgenden"}
+              </button>
+            ))}
+          </div>
+
           {/* Dönem */}
           <div>
             <label className="block text-xs font-medium text-[color:var(--muted-strong)] mb-1">
@@ -114,63 +183,89 @@ export function LoadFromDataStore({ onClose, onLoaded }: Props) {
             )}
           </div>
 
-          {/* Branş */}
-          <div>
-            <label className="block text-xs font-medium text-[color:var(--muted-strong)] mb-1">
-              Branş
-            </label>
-            {loadingRecords ? (
-              <p className="text-xs text-[color:var(--muted)]">Yükleniyor…</p>
-            ) : bransList.length === 0 ? (
-              <p className="text-xs text-[color:var(--muted)]">
-                Bu döneme hasar verisi yüklenmemiş.
+          {/* Hasar kaynağı: branş + granülarite */}
+          {source === "hasar" && (
+            <>
+              <div>
+                <label className="block text-xs font-medium text-[color:var(--muted-strong)] mb-1">
+                  Branş
+                </label>
+                {loadingRecords ? (
+                  <p className="text-xs text-[color:var(--muted)]">Yükleniyor…</p>
+                ) : bransList.length === 0 ? (
+                  <p className="text-xs text-[color:var(--muted)]">
+                    Bu döneme hasar verisi yüklenmemiş.
+                  </p>
+                ) : (
+                  <select
+                    value={brans}
+                    onChange={(e) => setBrans(e.target.value)}
+                    className="w-full text-sm border border-[color:var(--border)] rounded-md px-3 py-2 bg-[color:var(--surface)] text-[color:var(--foreground)]"
+                  >
+                    {bransList.map((b) => (
+                      <option key={b} value={b}>{b}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-[color:var(--muted-strong)] mb-1">
+                    Kaza Dönemi
+                  </label>
+                  <select
+                    value={originGran}
+                    onChange={(e) => setOriginGran(e.target.value as Granularity)}
+                    className="w-full text-sm border border-[color:var(--border)] rounded-md px-3 py-2 bg-[color:var(--surface)] text-[color:var(--foreground)]"
+                  >
+                    <option value="yearly">Yıllık</option>
+                    <option value="quarterly">Çeyreklik</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-[color:var(--muted-strong)] mb-1">
+                    Gelişim Dönemi
+                  </label>
+                  <select
+                    value={devGran}
+                    onChange={(e) => setDevGran(e.target.value as Granularity)}
+                    className="w-full text-sm border border-[color:var(--border)] rounded-md px-3 py-2 bg-[color:var(--surface)] text-[color:var(--foreground)]"
+                  >
+                    <option value="yearly">Yıllık</option>
+                    <option value="quarterly">Çeyreklik</option>
+                  </select>
+                </div>
+              </div>
+
+              <p className="text-xs text-[color:var(--muted)] leading-relaxed">
+                Paid üçgeni (kümülatif ödeme) ve Incurred üçgeni (kümülatif ödeme + dönem sonu muallak) otomatik oluşturulur.
               </p>
-            ) : (
-              <select
-                value={brans}
-                onChange={(e) => setBrans(e.target.value)}
-                className="w-full text-sm border border-[color:var(--border)] rounded-md px-3 py-2 bg-[color:var(--surface)] text-[color:var(--foreground)]"
-              >
-                {bransList.map((b) => (
-                  <option key={b} value={b}>{b}</option>
-                ))}
-              </select>
-            )}
-          </div>
+            </>
+          )}
 
-          {/* Granülarite */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-[color:var(--muted-strong)] mb-1">
-                Kaza Dönemi
-              </label>
-              <select
-                value={originGran}
-                onChange={(e) => setOriginGran(e.target.value as Granularity)}
-                className="w-full text-sm border border-[color:var(--border)] rounded-md px-3 py-2 bg-[color:var(--surface)] text-[color:var(--foreground)]"
-              >
-                <option value="yearly">Yıllık</option>
-                <option value="quarterly">Çeyreklik</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-[color:var(--muted-strong)] mb-1">
-                Gelişim Dönemi
-              </label>
-              <select
-                value={devGran}
-                onChange={(e) => setDevGran(e.target.value as Granularity)}
-                className="w-full text-sm border border-[color:var(--border)] rounded-md px-3 py-2 bg-[color:var(--surface)] text-[color:var(--foreground)]"
-              >
-                <option value="yearly">Yıllık</option>
-                <option value="quarterly">Çeyreklik</option>
-              </select>
-            </div>
-          </div>
-
-          <p className="text-xs text-[color:var(--muted)] leading-relaxed">
-            Paid üçgeni (kümülatif ödeme) ve Incurred üçgeni (kümülatif ödeme + dönem sonu muallak) otomatik oluşturulur.
-          </p>
+          {/* Üçgen kaynağı: ucgen dataset bilgisi */}
+          {source === "ucgen" && (
+            <>
+              {!ucgenDs ? (
+                <p className="text-xs text-[color:var(--muted)]">
+                  Bu döneme henüz üçgen verisi yüklenmemiş. Veri modülünde "Üçgen Verisi" kartından yükleyin.
+                </p>
+              ) : (
+                <div className="rounded-lg px-3 py-2.5 text-xs space-y-1" style={{ background: "var(--surface-alt)", border: "1px solid var(--border)" }}>
+                  <div className="font-semibold" style={{ color: "var(--foreground)" }}>
+                    {ucgenDs.meta.brans_list?.[0] ?? "—"}
+                  </div>
+                  <div style={{ color: "var(--muted-strong)" }}>
+                    {ucgenDs.meta.filename} · {ucgenDs.meta.record_count} kaza dönemi
+                  </div>
+                  <div style={{ color: "var(--muted)" }}>
+                    Yüklenme: {new Date(ucgenDs.meta.uploadedAt).toLocaleDateString("tr-TR")}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
 
           {error && (
             <p className="text-xs text-[color:var(--danger)] bg-[color:var(--danger-soft)] border border-[color:var(--danger-border,#dc262655)] rounded-md px-3 py-2">
@@ -188,10 +283,17 @@ export function LoadFromDataStore({ onClose, onLoaded }: Props) {
           </button>
           <button
             onClick={handleBuild}
-            disabled={loading || !periodId || !brans || bransList.length === 0}
+            disabled={
+              loading ||
+              !periodId ||
+              (source === "hasar" && (!brans || bransList.length === 0)) ||
+              (source === "ucgen" && !ucgenDs)
+            }
             className="px-4 py-2 text-sm rounded-md bg-[color:var(--primary)] text-white font-medium hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading ? "Oluşturuluyor…" : "Üçgenleri Yükle"}
+            {loading
+              ? source === "ucgen" ? "Yükleniyor…" : "Oluşturuluyor…"
+              : source === "ucgen" ? "Üçgeni Yükle" : "Üçgenleri Yükle"}
           </button>
         </div>
       </div>

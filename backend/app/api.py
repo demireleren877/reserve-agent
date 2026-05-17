@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 import base64
-from typing import Any
+from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
@@ -343,6 +343,7 @@ class CashflowFromTriangleRequest(BaseModel):
     origin_granularity: str = "yearly"
     development_granularity: str = "yearly"
     n_years: int = 5
+    report_date: Optional[str] = None  # ISO format (YYYY-MM-DD), yoksa triangleden algılanır
 
 
 @router.post("/cashflow/from-triangle")
@@ -360,7 +361,11 @@ async def cashflow_from_triangle(
         )
         if not records:
             raise ValueError("Üçgenden kayıt üretilemedi — değerler boş olabilir")
-        result = compute_cashflow(records, n_years=body.n_years)
+        override_date = None
+        if body.report_date:
+            from datetime import date as _date
+            override_date = _date.fromisoformat(body.report_date)
+        result = compute_cashflow(records, n_years=body.n_years, report_date=override_date)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
@@ -406,6 +411,39 @@ async def cashflow_from_triangle(
         ],
         "max_period": result.max_period,
     }
+
+
+@router.post("/cashflow/pattern-from-cdf")
+async def cashflow_pattern_from_cdf(
+    body: dict,
+    _auth: dict = Depends(verify_firebase_token),
+) -> dict[str, Any]:
+    """Kullanıcının seçtiği CDF dizisinden CF pattern hesaplar.
+
+    Body: { origin_years, report_date, selected_cdfs }
+    selected_cdfs: 0-indexed CDF değerleri (frontend ldfExportCdfs ile birebir)
+    """
+    from datetime import date as _date
+    from app.cashflow.compute import calc_cdf_pattern, build_patterns
+
+    try:
+        origin_years: list[int] = body["origin_years"]
+        report_date_str: str = body["report_date"]
+        selected_cdfs: list[float] = body["selected_cdfs"]
+
+        rdate = _date.fromisoformat(report_date_str)
+        cdf = {i: v for i, v in enumerate(selected_cdfs) if v > 0}
+
+        global_pattern = calc_cdf_pattern(cdf, rdate)
+        quarterly, monthly = build_patterns(origin_years, rdate, global_pattern)
+
+        return {
+            "quarterly_pattern": {str(y): rows for y, rows in quarterly.items()},
+            "monthly_pattern": {str(y): rows for y, rows in monthly.items()},
+            "report_date": rdate.isoformat(),
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 # ─── Data (ham hasar) endpoints ───────────────────────────────────────────────

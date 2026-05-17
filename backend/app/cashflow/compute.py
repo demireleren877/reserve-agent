@@ -157,24 +157,6 @@ def calc_dev_factors(
     return factors
 
 
-def calc_cdf(factors: list[tuple[int, float]]) -> dict[int, float]:
-    """Geriye doğru çarpım → CDF sözlüğü."""
-    if not factors:
-        return {}
-    cdf: dict[int, float] = {}
-    periods = [p for p, _ in factors]
-    # Son period sonrası CDF = 1.0
-    last_p = periods[-1]
-    # factors listesinde (p, df) var; p → p+1 adımını temsil ediyor
-    # En son period sonrası CDF=1
-    # Son faktörün sağ period'ı = bir sonraki period
-    right_periods = [p for p, _ in factors[1:]] + [factors[-1][0] + 1]
-    cdf[right_periods[-1]] = 1.0
-    for (p, df), rp in zip(reversed(factors), reversed(right_periods[:-1] + [right_periods[-1]])):
-        cdf[p] = df * cdf.get(rp, 1.0)
-
-    return cdf
-
 
 def _build_full_cdf(factors: list[tuple[int, float]]) -> dict[int, float]:
     """Tüm period'lar için CDF (geriye doğru çarpım)."""
@@ -246,46 +228,81 @@ def calc_weights(
     return rows
 
 
+def calc_cdf_pattern(
+    cdf: dict[int, float],
+    report_date: date,
+) -> dict[int, float]:
+    """CDF'den incremental yüzdeler hesaplayarak rapor çeyreğine göre CF pattern döndür.
+
+    cdf dict 0-indexed (period 0, 1, 2, ...) — _build_full_cdf çıktısıyla uyumlu.
+    1-indexed dilde: Q1→period 2+, Q2→3+, Q3→4+, Q4→5+
+    0-indexed karşılığı: start_p = report_quarter + 1  (Q1→1, Q2→2, Q3→3, Q4→4)
+    Yalnızca [start_p, MAX_PERIODS) aralığı normalize edilir (60 çeyrek sınırı).
+    Pattern[k] (k=1,2,...) → k. gelecek çeyrek ağırlığı (tüm origin yılları için aynı şekil).
+    """
+    def inv100(p: int) -> float:
+        c = cdf.get(p, 1.0)
+        return 100.0 / c if c > 0 else 100.0
+
+    inc_pct: dict[int, float] = {}
+    for p in range(MAX_PERIODS):
+        inc_pct[p] = inv100(p) - (inv100(p - 1) if p > 0 else 0.0)
+
+    # 0-indexed: Q1→1, Q2→2, Q3→3, Q4→4
+    report_quarter = (report_date.month - 1) // 3  # 0-indexed
+    start_p = report_quarter + 1
+
+    future_plist = list(range(start_p, MAX_PERIODS))
+    sigma = sum(inc_pct[p] for p in future_plist)
+
+    if sigma <= 0:
+        n = len(future_plist)
+        return {k: 1.0 / n for k in range(1, n + 1)}
+
+    return {k: inc_pct[future_plist[k - 1]] / sigma for k in range(1, len(future_plist) + 1)}
+
+
 def build_patterns(
-    weight_rows: list[DevFactorRow],
     origin_years: list[int],
     report_date: date,
+    global_pattern: dict[int, float],
 ) -> tuple[dict[int, list[dict]], dict[int, list[dict]]]:
-    """Her origin yılı için quarterly ve monthly pattern."""
-    # global_weight lookup
-    gw: dict[int, float] = {r.period: r.global_weight for r in weight_rows}
-    all_periods = sorted(gw.keys())
+    """Her origin yılı için quarterly ve monthly pattern.
 
+    k. gelecek çeyrek (k=1,2,...) için CF ağırlığı = global_pattern[k] (her yıl için 1'e normalize).
+    Tüm origin yılları aynı global Pattern şeklini kullanır; yalnızca kalan dönem sayısı değişir.
+    """
     quarterly: dict[int, list[dict]] = {}
     monthly: dict[int, list[dict]] = {}
 
     for year in origin_years:
         excl = excluded_periods(year, report_date)
-        included = [p for p in all_periods if p >= excl]
-        weight_sum = sum(gw[p] for p in included)
+        num_future = MAX_PERIODS - excl
 
         q_rows: list[dict] = []
         m_rows: list[dict] = []
 
-        if weight_sum == 0:
-            # Tüm period'lar geçmişte → Q1 = %100, 60 period
+        if num_future <= 0:
+            # Tüm period'lar geçmişte → Q1 = %100
             q_rows = [{"period": s, "weight": 1.0 if s == 1 else 0.0}
                       for s in range(1, MAX_PERIODS + 1)]
             m_rows = [{"month": m, "weight": (1 / 3) if m <= 3 else 0.0}
                       for m in range(1, MAX_PERIODS * 3 + 1)]
         else:
-            # Excluded period'ları atla, 1'den başla, 60'a pad'le
+            # k. gelecek period (k=1..num_future) → Pattern[k]
+            raw_weights = [global_pattern.get(k, 0.0) for k in range(1, num_future + 1)]
+            sum_w = sum(raw_weights)
+
             seq = 1
-            for p in range(MAX_PERIODS):
-                if p < excl:
-                    continue
-                norm_w = (gw[p] / weight_sum) if p in gw else 0.0
+            for raw_w in raw_weights:
+                norm_w = (raw_w / sum_w) if sum_w > 0 else (1.0 / num_future)
                 q_rows.append({"period": seq, "weight": norm_w})
                 monthly_w = norm_w / 3.0
                 base_month = (seq - 1) * 3
                 for offset in range(3):
                     m_rows.append({"month": base_month + offset + 1, "weight": monthly_w})
                 seq += 1
+
             # 60 period'a tamamla
             while seq <= MAX_PERIODS:
                 q_rows.append({"period": seq, "weight": 0.0})
@@ -359,11 +376,15 @@ def triangle_to_cashflow_records(
 
 # ─── Ana fonksiyon ────────────────────────────────────────────────────────────
 
-def compute_cashflow(records: list[CashflowRecord], n_years: int = N_YEARS_DF) -> CashflowResult:
+def compute_cashflow(
+    records: list[CashflowRecord],
+    n_years: int = N_YEARS_DF,
+    report_date: Optional[date] = None,
+) -> CashflowResult:
     if not records:
         raise ValueError("Kayıt bulunamadı")
 
-    rdate = report_date_from_records(records)
+    rdate = report_date if report_date is not None else report_date_from_records(records)
     cum, inc = build_triangle(records)
     origin_years = sorted(cum.keys())
 
@@ -374,7 +395,8 @@ def compute_cashflow(records: list[CashflowRecord], n_years: int = N_YEARS_DF) -
     cdf = _build_full_cdf(factors)
     min_base = excluded_periods(max(origin_years), rdate)
     weight_rows = calc_weights(cdf, factors, min_period_for_base=min_base)
-    quarterly, monthly = build_patterns(weight_rows, origin_years, rdate)
+    global_pattern = calc_cdf_pattern(cdf, rdate)
+    quarterly, monthly = build_patterns(origin_years, rdate, global_pattern)
 
     # Per-origin paid ultimates
     per_origin: list[PerOriginRow] = []

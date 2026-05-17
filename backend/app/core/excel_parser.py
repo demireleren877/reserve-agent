@@ -373,6 +373,16 @@ def _parse_pivot_format(
     if not origin_periods:
         raise ParseError("Pivot tabloda veri satırı yok")
 
+    if not opts.cumulative:
+        # Incremental → running sum row by row.
+        for row_vals in values:
+            running = 0.0
+            for j, cell in enumerate(row_vals):
+                if cell is None:
+                    continue
+                running += cell
+                row_vals[j] = running
+
     try:
         return Triangle(
             origin_periods=origin_periods,

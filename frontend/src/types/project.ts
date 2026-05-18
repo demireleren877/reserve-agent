@@ -69,6 +69,11 @@ export interface Branch {
   /** Cashflow modülüne ait LDF seçimleri — rezerv LDF'inden bağımsız */
   cashflowLdfWindow?: Window;
   cashflowLdfExcludedCells?: string[];
+
+  /** Cashflow Curve tab seçimleri — rezerv curve'den bağımsız */
+  cashflowCdfModelPerPeriod?: Record<string, 1 | 2 | 3 | 4 | 5 | 6>;
+  cashflowCurveIncludePerPeriod?: Record<string, boolean>;
+  cashflowCdfInitial?: Record<string, number>;
 }
 
 export interface Period {

@@ -8,12 +8,21 @@ import { useProject } from "@/lib/project-store";
 import type { Branch, Period } from "@/types/project";
 import type { Triangle } from "@/types/triangle";
 import { LDFTab } from "@/components/LDFTab";
+import { CurveTab } from "@/components/CurveTab";
 import {
   type Window,
   developmentRatios,
   aggregateLDFs,
   cumulativeFactors,
+  cascadeCDFs,
 } from "@/lib/ldf";
+import {
+  fitExponential,
+  fitInversePower,
+  fitPower,
+  fitWeibull,
+  type TailFit,
+} from "@/lib/tail-fit";
 import {
   type CashflowComputeResult,
   computeCashflow,
@@ -26,7 +35,7 @@ import { TriangleGrid } from "@/components/TriangleGrid";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type Tab = "data" | "ldf" | "pattern" | "monthly";
+type Tab = "data" | "ldf" | "curve" | "pattern" | "monthly";
 type NavLevel = "root" | "period" | "branch";
 
 type PeriodWithPaid = Period & { paidBranches: Branch[] };
@@ -34,9 +43,12 @@ type PeriodWithPaid = Period & { paidBranches: Branch[] };
 const TABS: { key: Tab; label: string; sub: string }[] = [
   { key: "data",    label: "Veri",          sub: "Ödeme üçgeni" },
   { key: "ldf",     label: "LDF",           sub: "Gelişim faktörleri" },
+  { key: "curve",   label: "Curve",         sub: "CDF eğrisi" },
   { key: "pattern", label: "CF Pattern",    sub: "Çeyreklik" },
   { key: "monthly", label: "Aylık Pattern", sub: "180 ay" },
 ];
+
+const EMPTY_FIT: TailFit = { ok: false, cdfs: [], params: {}, r2: undefined };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -528,21 +540,107 @@ export default function CashflowPage() {
   const activePeriod = periodsWithPaid.find((p) => p.id === activePeriodId) ?? null;
   const activeBranch = activePeriod?.paidBranches.find((b) => b.id === activeBranchId) ?? null;
 
-  // Pre-compute LDF CDFs for export (mirrors LDFTab internals)
-  const ldfExportCdfs = useMemo(() => {
+  // Cashflow Curve tab state — project store'dan okunur
+  const cfCdfModel = (activeBranch?.cashflowCdfModelPerPeriod ?? {}) as Record<string, 1 | 2 | 3 | 4 | 5 | 6>;
+  const cfCurveInclude = activeBranch?.cashflowCurveIncludePerPeriod ?? {};
+  const cfCdfInitial = activeBranch?.cashflowCdfInitial ?? {};
+
+  // selectedLDFs (LDF tabından, curve ve pattern hesabı için)
+  const selectedLDFs = useMemo(() => {
     const tri = activeBranch?.paidTriangle ?? null;
     if (!tri) return [];
     const ratios = developmentRatios(tri, excludedCells);
-    const ldfs = aggregateLDFs(tri, ratios, ldfWindow, "volume_weighted");
-    return cumulativeFactors(ldfs);
+    return aggregateLDFs(tri, ratios, ldfWindow, "volume_weighted");
   }, [activeBranch, excludedCells, ldfWindow]);
 
-  // LDF seçimleri değişince pattern'i kullanıcının CDF'iyle yeniden hesapla
+  // Ham CDFs (LDF tabı export için)
+  const ldfExportCdfs = useMemo(() => cumulativeFactors(selectedLDFs), [selectedLDFs]);
+
+  // Tail curve fits
+  const tailFits = useMemo(() => {
+    const tri = activeBranch?.paidTriangle ?? null;
+    if (!tri || !selectedLDFs.length)
+      return { exp: EMPTY_FIT, invPower: EMPTY_FIT, power: EMPTY_FIT, weibull: EMPTY_FIT };
+    const include = tri.development_periods.map((d, i) =>
+      (i >= selectedLDFs.length || selectedLDFs[i] > 1) && cfCurveInclude[String(d)] !== false,
+    );
+    return {
+      exp: fitExponential(selectedLDFs, include),
+      invPower: fitInversePower(selectedLDFs, include),
+      power: fitPower(selectedLDFs, include),
+      weibull: fitWeibull(selectedLDFs, include),
+    };
+  }, [activeBranch?.paidTriangle, selectedLDFs, cfCurveInclude]);
+
+  // Cascade: model seçimlerini CDF'e uygular
+  const cascade = useMemo(() => {
+    const tri = activeBranch?.paidTriangle ?? null;
+    if (!tri)
+      return { effective: [] as number[], initial: [] as number[], effLDFs: [] as number[] };
+    return cascadeCDFs(
+      tri.development_periods,
+      selectedLDFs,
+      {},
+      cfCdfInitial,
+      {
+        model: cfCdfModel,
+        fitCDFs: {
+          exp: tailFits.exp.cdfs,
+          invPower: tailFits.invPower.cdfs,
+          power: tailFits.power.cdfs,
+          weibull: tailFits.weibull.cdfs,
+        },
+      },
+    );
+  }, [activeBranch?.paidTriangle, selectedLDFs, cfCdfInitial, cfCdfModel, tailFits]);
+
+  // Curve seçimleri uygulanmış CDFs — pattern hesabında kullanılır
+  const effectiveCdfs = cascade.effective.length ? cascade.effective : ldfExportCdfs;
+  const initialCDFs = cascade.initial.length ? cascade.initial : ldfExportCdfs;
+
+  // Curve setters — project store üzerinden D1'e persist edilir
+  function setCfCdfModel(devPeriod: string, model: 1 | 2 | 3 | 4 | 5 | 6) {
+    if (!activeBranchId) return;
+    actions.updateBranch(
+      activeBranchId,
+      (b) => ({ cashflowCdfModelPerPeriod: { ...(b.cashflowCdfModelPerPeriod ?? {}), [devPeriod]: model } }),
+      "cashflow_curve_model_set", { devPeriod, model }, "user",
+    );
+  }
+
+  function setCfCurveInclude(devPeriod: string, include: boolean) {
+    if (!activeBranchId) return;
+    actions.updateBranch(
+      activeBranchId,
+      (b) => ({ cashflowCurveIncludePerPeriod: { ...(b.cashflowCurveIncludePerPeriod ?? {}), [devPeriod]: include } }),
+      "cashflow_curve_include_set", { devPeriod, include }, "user",
+    );
+  }
+
+  function setCfCdfInitial(devPeriod: string, value: number) {
+    if (!activeBranchId) return;
+    actions.updateBranch(
+      activeBranchId,
+      (b) => ({ cashflowCdfInitial: { ...(b.cashflowCdfInitial ?? {}), [devPeriod]: value } }),
+      "cashflow_curve_user_value_set", { devPeriod, value }, "user",
+    );
+  }
+
+  function resetCfCurve() {
+    if (!activeBranchId) return;
+    actions.updateBranch(
+      activeBranchId,
+      () => ({ cashflowCdfModelPerPeriod: {}, cashflowCurveIncludePerPeriod: {}, cashflowCdfInitial: {} }),
+      "cashflow_curve_reset", undefined, "user",
+    );
+  }
+
+  // Curve/LDF seçimleri değişince pattern'i etkili CDF'lerle yeniden hesapla
   useEffect(() => {
-    if (!result || ldfExportCdfs.length === 0) return;
+    if (!result || effectiveCdfs.length === 0) return;
     const reportDate = result.report_date;
     const originYears = result.origin_years;
-    computePatternFromCdf(originYears, reportDate, ldfExportCdfs)
+    computePatternFromCdf(originYears, reportDate, effectiveCdfs)
       .then((p) => {
         setResult((prev) => prev ? {
           ...prev,
@@ -551,7 +649,7 @@ export default function CashflowPage() {
         } : prev);
       })
       .catch(() => {/* sessizce geç */});
-  }, [ldfExportCdfs]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [effectiveCdfs]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function goRoot() {
     setNavLevel("root");
@@ -797,6 +895,22 @@ export default function CashflowPage() {
                       onClearCells={clearCells}
                     />
                   </div>
+                )}
+
+                {activeTab === "curve" && (
+                  <CurveTab
+                    triangle={activeBranch?.paidTriangle ?? null}
+                    initialCDFs={initialCDFs}
+                    selectedLDFs={selectedLDFs}
+                    cdfInitial={cfCdfInitial}
+                    cdfModelPerPeriod={cfCdfModel}
+                    curveIncludePerPeriod={cfCurveInclude}
+                    tailFits={tailFits}
+                    onSetUserValue={setCfCdfInitial}
+                    onSetModel={setCfCdfModel}
+                    onToggleInclude={setCfCurveInclude}
+                    onReset={resetCfCurve}
+                  />
                 )}
 
                 {activeTab === "pattern" && (

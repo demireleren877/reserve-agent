@@ -73,8 +73,8 @@ export default function LoginPage() {
           href="/"
           className="flex items-center gap-2.5 mb-8 justify-center"
         >
-          <img src="/favicon.png" alt="Actuarius" className="h-8 w-8" />
-          <span className="text-[15px] font-semibold tracking-tight">
+          <img src="/favicon.png" alt="Actuarius" className="h-11 w-11" />
+          <span className="text-[22px] font-semibold tracking-tight">
             Actuarius
           </span>
         </Link>

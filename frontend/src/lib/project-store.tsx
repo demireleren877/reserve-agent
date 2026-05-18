@@ -77,6 +77,13 @@ interface ProjectActions {
     details?: Record<string, unknown>,
     source?: ChangeSource,
   ): void;
+  updateBranch(
+    branchId: string,
+    updater: (prev: Branch) => Partial<Branch>,
+    action: string,
+    details?: Record<string, unknown>,
+    source?: ChangeSource,
+  ): void;
   copyAssumptions(sourceBranchId: string, targetBranchId: string, opts: CopyAssumptionsOptions): void;
   clearAll(): void;
   undo(): void;
@@ -553,6 +560,27 @@ export function ProjectProvider({ children, userId }: ProjectProviderProps) {
             }),
           };
         });
+      },
+      updateBranch(branchId, updater, action, details, source) {
+        setProject((prev) => ({
+          ...prev,
+          periods: prev.periods.map((p) => ({
+            ...p,
+            branches: p.branches.map((b) => {
+              if (b.id !== branchId) return b;
+              const patch = updater(b);
+              const entry: HistoryEntry = {
+                id: newId(),
+                timestamp: new Date().toISOString(),
+                action,
+                source: source ?? "user",
+                details,
+              };
+              const history = [...b.history, entry].slice(-MAX_HISTORY);
+              return { ...b, ...patch, history, updatedAt: entry.timestamp };
+            }),
+          })),
+        }));
       },
       copyAssumptions(sourceBranchId, targetBranchId, opts) {
         setProjectWithUndo((prev) => {

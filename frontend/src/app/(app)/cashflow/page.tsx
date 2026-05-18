@@ -454,7 +454,7 @@ function PatternTable({ result, mode }: { result: CashflowComputeResult; mode: "
 
 export default function CashflowPage() {
   const plan = useUserPlan();
-  const { project } = useProject();
+  const { project, actions } = useProject();
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [navLevel, setNavLevel] = useState<NavLevel>("root");
@@ -467,41 +467,28 @@ export default function CashflowPage() {
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("data");
 
-  // LDF tab state — localStorage'a branş bazlı persist edilir
+  // LDF tab state — project store aracılığıyla D1'e persist edilir
   const [ldfWindow, setLdfWindowRaw] = useState<Window>("all");
   const [excludedCells, setExcludedCells] = useState<Set<string>>(new Set());
 
-  function ldfStorageKey(branchId: string) {
-    return `cf_ldf_${branchId}`;
-  }
-
-  function saveLdfState(branchId: string | null, window: Window, cells: Set<string>) {
-    if (!branchId) return;
-    try {
-      localStorage.setItem(ldfStorageKey(branchId), JSON.stringify({
-        window,
-        excluded: Array.from(cells),
-      }));
-    } catch { /* quota veya SSR — sessizce geç */ }
-  }
-
-  function loadLdfState(branchId: string): { window: Window; excluded: Set<string> } {
-    try {
-      const raw = localStorage.getItem(ldfStorageKey(branchId));
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        return {
-          window: parsed.window ?? "all",
-          excluded: new Set<string>(parsed.excluded ?? []),
-        };
-      }
-    } catch { /* bozuk JSON */ }
-    return { window: "all", excluded: new Set() };
+  function saveLdfToStore(branchId: string, window: Window, cells: Set<string>) {
+    actions.updateBranch(
+      branchId,
+      () => ({
+        cashflowLdfWindow: window,
+        cashflowLdfExcludedCells: Array.from(cells),
+      }),
+      "cashflow_ldf_updated",
+      { window, excludedCount: cells.size },
+      "user",
+    );
+    // Eski localStorage key'lerini temizle
+    try { localStorage.removeItem(`cf_ldf_${branchId}`); } catch { /* ignore */ }
   }
 
   function setLdfWindow(w: Window) {
     setLdfWindowRaw(w);
-    saveLdfState(activeBranchId, w, excludedCells);
+    if (activeBranchId) saveLdfToStore(activeBranchId, w, excludedCells);
   }
 
   function toggleCell(origin: string, step: number) {
@@ -509,23 +496,27 @@ export default function CashflowPage() {
       const next = new Set(prev);
       const key = `${origin}|${step}`;
       if (next.has(key)) next.delete(key); else next.add(key);
-      saveLdfState(activeBranchId, ldfWindow, next);
+      if (activeBranchId) saveLdfToStore(activeBranchId, ldfWindow, next);
       return next;
     });
   }
 
   function clearCells() {
-    setExcludedCells(new Set());
-    saveLdfState(activeBranchId, ldfWindow, new Set());
+    const empty = new Set<string>();
+    setExcludedCells(empty);
+    if (activeBranchId) saveLdfToStore(activeBranchId, ldfWindow, empty);
   }
 
-  // Branş değişince kayıtlı state'i yükle
+  // Branş değişince project store'dan yükle
   useEffect(() => {
     if (!activeBranchId) return;
-    const saved = loadLdfState(activeBranchId);
-    setLdfWindowRaw(saved.window);
-    setExcludedCells(saved.excluded);
-  }, [activeBranchId]);
+    // activeBranch henüz hesaplanmamış olabilir, project üzerinden bul
+    const branch = project.periods
+      .flatMap((p) => p.branches)
+      .find((b) => b.id === activeBranchId);
+    setLdfWindowRaw(branch?.cashflowLdfWindow ?? "all");
+    setExcludedCells(new Set(branch?.cashflowLdfExcludedCells ?? []));
+  }, [activeBranchId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const periodsWithPaid = useMemo(() =>
     (project.periods as Period[])

@@ -65,6 +65,10 @@ export interface Branch {
   history: HistoryEntry[];
 
   uploadSettings: UploadSettings;
+
+  /** Cashflow modülüne ait LDF seçimleri — rezerv LDF'inden bağımsız */
+  cashflowLdfWindow?: Window;
+  cashflowLdfExcludedCells?: string[];
 }
 
 export interface Period {

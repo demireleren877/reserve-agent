@@ -66,9 +66,14 @@ interface Props {
   /** Curve cascade uygulanmış CDF zinciri. Verilirse CDF satırında
    *  bu değerler gösterilir. */
   cdfsOverride?: number[];
+  /** Karma volume: her dev step için ayrı window. Key = step index string. */
+  karmaWindowPerStep?: Record<string, Window>;
   onWindowChange: (w: Window) => void;
   onToggleCell: (origin: string, step: number) => void;
   onClearCells: () => void;
+  onSetKarmaWindow?: (step: string, w: Window) => void;
+  onInitKarma?: (stepCount: number, globalWindow: Window) => void;
+  onClearKarma?: () => void;
 }
 
 const FIXED_METHOD: LDFMethod = "volume_weighted";
@@ -79,9 +84,13 @@ export function LDFTab(props: Props) {
     window,
     excludedCells,
     cdfsOverride,
+    karmaWindowPerStep,
     onWindowChange,
     onToggleCell,
     onClearCells,
+    onSetKarmaWindow,
+    onInitKarma,
+    onClearKarma,
   } = props;
 
   const [heatmap, setHeatmap] = useState(true);
@@ -105,7 +114,14 @@ export function LDFTab(props: Props) {
     return map;
   }, [triangle, ratios]);
 
-  const selectedLDFs = windowLDFs[String(window)] ?? [];
+  const isKarmaActive = !!karmaWindowPerStep && Object.keys(karmaWindowPerStep).length > 0;
+
+  const selectedLDFs = useMemo(() => {
+    if (!triangle) return [] as number[];
+    // karmaWindowPerStep varsa per-step override uygula; yoksa global window ile aynı
+    return aggregateLDFs(triangle, ratios, window, FIXED_METHOD,
+      karmaWindowPerStep && Object.keys(karmaWindowPerStep).length > 0 ? karmaWindowPerStep : undefined);
+  }, [triangle, ratios, window, karmaWindowPerStep]);
   const localCDFs = useMemo(() => cumulativeFactors(selectedLDFs), [selectedLDFs]);
   // cdfsOverride[n_dev] içinde son age 1 olur; LDF tablosunda steps = n_dev-1
   // olduğu için baş tarafı (n_dev-1 eleman) alınır.
@@ -278,31 +294,34 @@ export function LDFTab(props: Props) {
               </tr>
               {WINDOWS.map((w) => {
                 const ldfs = windowLDFs[String(w.id)] ?? [];
-                const active = w.id === window;
+                const rowActive = !isKarmaActive && w.id === window;
                 return (
                   <tr
                     key={String(w.id)}
-                    onClick={() => onWindowChange(w.id)}
                     className={
-                      "border-t cursor-pointer transition " +
-                      (active
+                      "border-t transition " +
+                      (rowActive
                         ? "bg-[color:var(--primary-soft)] font-semibold"
-                        : "hover:bg-[color:var(--surface-alt)]")
+                        : "hover:bg-[color:var(--surface-alt)]/60")
                     }
                   >
                     <td
                       className={
-                        "px-2 py-0.5 sticky left-0 z-[1] leading-tight " +
-                        (active
+                        "px-2 py-0.5 sticky left-0 z-[1] leading-tight cursor-pointer " +
+                        (rowActive
                           ? "bg-[color:var(--primary-soft)]"
                           : "bg-[color:var(--surface)]")
                       }
+                      onClick={() => {
+                        onClearKarma?.();
+                        onWindowChange(w.id);
+                      }}
                     >
                       <span className="inline-flex items-center gap-1.5">
                         <span
                           className={
                             "inline-block h-2 w-2 rounded-full border " +
-                            (active
+                            (rowActive
                               ? "bg-[color:var(--primary)] border-[color:var(--primary)]"
                               : "border-[color:var(--border-strong)]")
                           }
@@ -310,11 +329,32 @@ export function LDFTab(props: Props) {
                         {w.label}
                       </span>
                     </td>
-                    {ldfs.map((v, j) => (
-                      <td key={j} className="text-right px-1.5 py-0.5">
-                        {formatFactor(v)}
-                      </td>
-                    ))}
+                    {/* Individual cells — click selects this window for just this step */}
+                    {ldfs.map((v, j) => {
+                      const stepWin = karmaWindowPerStep?.[String(j)] ?? window;
+                      const cellActive = stepWin === w.id;
+                      return (
+                        <td
+                          key={j}
+                          className="px-0.5 py-0 cursor-pointer"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onSetKarmaWindow?.(String(j), w.id);
+                          }}
+                        >
+                          <span
+                            className={
+                              "flex justify-end px-1.5 py-0.5 rounded transition " +
+                              (cellActive
+                                ? "bg-[color:var(--primary-soft)] text-[color:var(--primary)] font-semibold ring-1 ring-[color:var(--primary-border)]"
+                                : "hover:bg-[color:var(--surface-alt)]")
+                            }
+                          >
+                            {formatFactor(v)}
+                          </span>
+                        </td>
+                      );
+                    })}
                   </tr>
                 );
               })}

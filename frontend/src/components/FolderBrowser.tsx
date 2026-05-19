@@ -190,14 +190,16 @@ function RootView() {
         ))}
         {adding ? (
           <InlineAdd
-            placeholder="örn. 2026 Q1"
+            placeholder="2025Q1"
+            validate={(v) => /^\d{4}Q[1-4]$/.test(v) ? null : "Format: 2025Q1 (yıl + Q + çeyrek)"}
             onCancel={() => {
               setAdding(false);
               setLabel("");
             }}
             onCommit={() => {
-              if (label.trim()) {
-                actions.createPeriod(label.trim());
+              const v = label.trim();
+              if (v && /^\d{4}Q[1-4]$/.test(v)) {
+                actions.createPeriod(v);
                 setLabel("");
                 setAdding(false);
               }
@@ -633,28 +635,42 @@ function InlineAdd({
   onChange,
   onCommit,
   onCancel,
+  validate,
 }: {
   placeholder: string;
   value: string;
   onChange: (v: string) => void;
   onCommit: () => void;
   onCancel: () => void;
+  validate?: (v: string) => string | null;
 }) {
+  const [touched, setTouched] = useState(false);
+  const error = validate && touched && value.trim() ? validate(value.trim()) : null;
+  const isInvalid = validate ? validate(value.trim()) !== null : false;
+
   return (
     <div className="card p-5 flex flex-col gap-3 border-dashed border-[color:var(--primary)] bg-[color:var(--primary-soft)]/30">
-      <input
-        autoFocus
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") onCommit();
-          else if (e.key === "Escape") onCancel();
-        }}
-        className="input-base"
-      />
+      <div className="space-y-1">
+        <input
+          autoFocus
+          value={value}
+          onChange={(e) => { onChange(e.target.value); setTouched(true); }}
+          placeholder={placeholder}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !isInvalid) onCommit();
+            else if (e.key === "Escape") onCancel();
+          }}
+          className="input-base w-full"
+          style={error ? { borderColor: "var(--danger)" } : undefined}
+        />
+        {error && (
+          <div className="text-[10.5px]" style={{ color: "var(--danger)" }}>
+            {error}
+          </div>
+        )}
+      </div>
       <div className="flex gap-2">
-        <button onClick={onCommit} className="btn btn-primary text-xs flex-1">
+        <button onClick={onCommit} disabled={isInvalid} className="btn btn-primary text-xs flex-1 disabled:opacity-40">
           Oluştur
         </button>
         <button onClick={onCancel} className="btn text-xs">

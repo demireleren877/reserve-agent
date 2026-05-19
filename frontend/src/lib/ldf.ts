@@ -2,10 +2,15 @@ import type { LDFMethod, Triangle } from "@/types/triangle";
 
 export type Window = number | "all";
 
+export const MODEL_LABELS: Record<number, string> = {
+  1: "Initial", 2: "Exp Decay", 3: "Inv Power", 4: "Power", 5: "Weibull", 6: "User Value",
+};
+
 export const WINDOWS: { id: Window; label: string }[] = [
-  { id: 4, label: "Son 4" },
-  { id: 5, label: "Son 5" },
-  { id: 7, label: "Son 7" },
+  { id: 4,     label: "Son 4" },
+  { id: 5,     label: "Son 5" },
+  { id: 6,     label: "Son 6" },
+  { id: 7,     label: "Son 7" },
   { id: "all", label: "Tüm" },
 ];
 
@@ -43,10 +48,13 @@ export function aggregateLDFs(
   ratios: RatioCell[][],
   window: Window,
   method: LDFMethod,
+  /** Per-step window override for Karma mode. Key = step index (string). */
+  perStepWindow?: Record<string, Window>,
 ): number[] {
   const steps = triangle.development_periods.length - 1;
   const result: number[] = [];
   for (let j = 0; j < steps; j++) {
+    const stepWindow = perStepWindow?.[String(j)] ?? window;
     const pairs: { a: number; b: number }[] = [];
     // Walk bottom-up; "last N" picks N newest origins that qualify at this step.
     for (let i = triangle.values.length - 1; i >= 0; i--) {
@@ -55,7 +63,7 @@ export function aggregateLDFs(
       const a = triangle.values[i][j] as number;
       const b = triangle.values[i][j + 1] as number;
       pairs.push({ a, b });
-      if (typeof window === "number" && pairs.length >= window) break;
+      if (typeof stepWindow === "number" && pairs.length >= stepWindow) break;
     }
     result.push(aggregate(pairs, method));
   }
@@ -84,6 +92,12 @@ function aggregate(
       return Math.exp(logSum / ratios.length);
     }
   }
+}
+
+export function ldfAt(cdfs: number[], i: number): number | null {
+  if (i >= cdfs.length) return null;
+  const next = i + 1 < cdfs.length ? cdfs[i + 1] : 1;
+  return next > 0 ? cdfs[i] / next : null;
 }
 
 /** cdfs[j] = product of ldfs[j..end]. So cdfs[0] is age-0 → ultimate. */
@@ -138,16 +152,22 @@ export function cascadeCDFs(
     const model: 1 | 2 | 3 | 4 | 5 | 6 =
       modelMap[key] ??
       (cdfChoicePerPeriod[key] === "user" ? 6 : 1);
+    // nextEff: already-computed effective CDF of the next period (right-to-left)
+    const nextEff = i + 1 < n ? effective[i + 1] : 1;
     if (model === 6) {
       effective[i] = cdfInitial[key] ?? 1;
     } else if (model === 2 && fit?.exp[i] != null) {
-      effective[i] = fit.exp[i];
+      const nxt = fit.exp[i + 1];
+      effective[i] = (nxt != null && nxt !== 0 ? fit.exp[i] / nxt : fit.exp[i]) * nextEff;
     } else if (model === 3 && fit?.invPower[i] != null) {
-      effective[i] = fit.invPower[i];
+      const nxt = fit.invPower[i + 1];
+      effective[i] = (nxt != null && nxt !== 0 ? fit.invPower[i] / nxt : fit.invPower[i]) * nextEff;
     } else if (model === 4 && fit?.power[i] != null) {
-      effective[i] = fit.power[i];
+      const nxt = fit.power[i + 1];
+      effective[i] = (nxt != null && nxt !== 0 ? fit.power[i] / nxt : fit.power[i]) * nextEff;
     } else if (model === 5 && fit?.weibull[i] != null) {
-      effective[i] = fit.weibull[i];
+      const nxt = fit.weibull[i + 1];
+      effective[i] = (nxt != null && nxt !== 0 ? fit.weibull[i] / nxt : fit.weibull[i]) * nextEff;
     } else {
       effective[i] = initial[i];
     }

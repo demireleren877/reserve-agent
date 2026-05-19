@@ -725,6 +725,9 @@ export interface BranchSetters {
   setExcludedCells: (next: Set<string>) => void;
   toggleCell: (origin: string, step: number) => void;
   clearExclusions: () => void;
+  setKarmaWindow: (step: string, w: Window) => void;
+  initKarma: (stepCount: number, globalWindow: Window) => void;
+  clearKarma: () => void;
   setPremiums: (
     fn: (prev: Record<string, number>) => Record<string, number>,
     actionLabel?: string,
@@ -838,6 +841,32 @@ export function useBranchSetters(source: ChangeSource = "user"): BranchSetters {
         actions.updateActiveBranch(
           () => ({ excludedCells: [] }),
           "exclusions_cleared",
+          undefined,
+          source,
+        ),
+      setKarmaWindow: (step, w) =>
+        actions.updateActiveBranch(
+          (prev) => ({
+            karmaWindowPerStep: { ...(prev.karmaWindowPerStep ?? {}), [step]: w },
+          }),
+          "karma_window_set",
+          { step, window: w },
+          source,
+        ),
+      initKarma: (stepCount, globalWindow) => {
+        const initial: Record<string, Window> = {};
+        for (let j = 0; j < stepCount; j++) initial[String(j)] = globalWindow;
+        actions.updateActiveBranch(
+          () => ({ karmaWindowPerStep: initial }),
+          "karma_initialized",
+          { stepCount, globalWindow },
+          source,
+        );
+      },
+      clearKarma: () =>
+        actions.updateActiveBranch(
+          () => ({ karmaWindowPerStep: {} }),
+          "karma_cleared",
           undefined,
           source,
         ),

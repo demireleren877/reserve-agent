@@ -289,13 +289,18 @@ def build_patterns(
             m_rows = [{"month": m, "weight": (1 / 3) if m <= 3 else 0.0}
                       for m in range(1, MAX_PERIODS * 3 + 1)]
         else:
-            # k. gelecek period (k=1..num_future) → Pattern[k]
-            raw_weights = [global_pattern.get(k, 0.0) for k in range(1, num_future + 1)]
+            # Her kaza yılı için global_pattern'in doğru dilimini kullan:
+            # Q1 raporu + 2026 kaza → period 2'den başla (offset=0, global_pattern[1..])
+            # Q1 raporu + 2025 kaza → period 6'dan başla (offset=4, global_pattern[5..])
+            # Genel formül: offset = (rapor_yılı - kaza_yılı) * 4
+            dev_offset = (report_date.year - year) * 4
+            raw_weights = [global_pattern.get(k + dev_offset, 0.0) for k in range(1, num_future + 1)]
             sum_w = sum(raw_weights)
 
             seq = 1
-            for raw_w in raw_weights:
-                norm_w = (raw_w / sum_w) if sum_w > 0 else (1.0 / num_future)
+            for i, raw_w in enumerate(raw_weights):
+                # sum_w=0 → kalan dev periodlar CDF=1; tüm IBNR'ı Q+1'e at
+                norm_w = (raw_w / sum_w) if sum_w > 0 else (1.0 if i == 0 else 0.0)
                 q_rows.append({"period": seq, "weight": norm_w})
                 monthly_w = norm_w / 3.0
                 base_month = (seq - 1) * 3

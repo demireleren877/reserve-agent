@@ -24,40 +24,64 @@ function fmt0(n: number) { return TR0.format(n); }
 
 // ─── Dönem ekleme formu ───────────────────────────────────────────────────────
 
+const PERIOD_RE = /^\d{4}Q[1-4]$/;
+
 function AddPeriodForm({ onAdd }: { onAdd: (label: string) => void }) {
   const [value, setValue] = useState("");
+  const [touched, setTouched] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const isValid = PERIOD_RE.test(value.trim());
+  const showError = touched && value.trim().length > 0 && !isValid;
+
   function submit() {
-    const v = value.trim();
-    if (!v) return;
-    onAdd(v);
+    setTouched(true);
+    if (!isValid) return;
+    onAdd(value.trim());
     setValue("");
+    setTouched(false);
   }
 
   return (
-    <div className="flex gap-1.5 px-3 pb-3">
-      <input
-        ref={inputRef}
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        onKeyDown={(e) => e.key === "Enter" && submit()}
-        placeholder="Dönem ekle…"
-        className="flex-1 text-[12.5px] px-2.5 py-1.5 rounded-lg border outline-none"
+    <div className="px-3 pb-3 space-y-1.5">
+      <div className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: "var(--muted)" }}>
+        Dönem Ekle
+      </div>
+      <div
+        className="flex items-center gap-0 rounded-lg border overflow-hidden transition"
         style={{
+          borderColor: showError ? "var(--danger)" : isValid && touched ? "var(--primary)" : "var(--border)",
           background: "var(--surface)",
-          borderColor: "var(--border)",
-          color: "var(--foreground)",
         }}
-      />
-      <button
-        onClick={submit}
-        disabled={!value.trim()}
-        className="px-2.5 py-1.5 rounded-lg text-[12px] font-semibold transition disabled:opacity-40"
-        style={{ background: "var(--primary)", color: "#fff" }}
       >
-        +
-      </button>
+        <input
+          ref={inputRef}
+          value={value}
+          onChange={(e) => { setValue(e.target.value); setTouched(true); }}
+          onKeyDown={(e) => e.key === "Enter" && submit()}
+          placeholder="2025Q1"
+          maxLength={7}
+          className="flex-1 text-[12.5px] px-2.5 py-2 outline-none bg-transparent"
+          style={{ color: "var(--foreground)" }}
+        />
+        <button
+          onClick={submit}
+          disabled={!isValid}
+          className="px-3 py-2 text-[12px] font-semibold transition disabled:opacity-30 border-l"
+          style={{
+            background: isValid ? "var(--primary)" : "var(--surface-alt)",
+            color: isValid ? "#fff" : "var(--muted)",
+            borderColor: "var(--border)",
+          }}
+        >
+          Ekle
+        </button>
+      </div>
+      {showError && (
+        <div className="text-[10.5px]" style={{ color: "var(--danger)" }}>
+          Format: 2025Q1 (yıl + Q + çeyrek)
+        </div>
+      )}
     </div>
   );
 }

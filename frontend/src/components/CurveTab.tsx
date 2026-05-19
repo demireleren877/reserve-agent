@@ -4,11 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import type { Triangle } from "@/types/triangle";
 import { formatFactor } from "@/lib/api";
 import type { TailFit } from "@/lib/tail-fit";
+import { ldfAt } from "@/lib/ldf";
 import { CurveFitModal } from "@/components/CurveFitModal";
 
 interface Props {
   triangle: Triangle | null;
   initialCDFs: number[];
+  effectiveCdfs?: number[];
   selectedLDFs: number[];
   cdfInitial: Record<string, number>;
   cdfModelPerPeriod: Record<string, 1 | 2 | 3 | 4 | 5 | 6>;
@@ -28,6 +30,7 @@ interface Props {
 export function CurveTab({
   triangle,
   initialCDFs,
+  effectiveCdfs,
   selectedLDFs,
   cdfInitial,
   cdfModelPerPeriod,
@@ -39,12 +42,17 @@ export function CurveTab({
   onReset,
 }: Props) {
   const [dragModel, setDragModel] = useState<1 | 2 | 3 | 4 | 5 | 6 | null>(null);
+  const dragModelRef = useRef<1 | 2 | 3 | 4 | 5 | 6 | null>(null);
   const draggedKeys = useRef<Set<string>>(new Set());
   const [showChart, setShowChart] = useState(false);
 
   useEffect(() => {
     if (dragModel === null) return;
-    const stop = () => { setDragModel(null); draggedKeys.current.clear(); };
+    const stop = () => {
+      dragModelRef.current = null;
+      setDragModel(null);
+      draggedKeys.current.clear();
+    };
     window.addEventListener("mouseup", stop);
     return () => window.removeEventListener("mouseup", stop);
   }, [dragModel]);
@@ -57,22 +65,17 @@ export function CurveTab({
     );
   }
 
-  function ldfAt(cdfs: number[], i: number): number | null {
-    if (i >= cdfs.length) return null;
-    const next = i + 1 < cdfs.length ? cdfs[i + 1] : 1;
-    return next > 0 ? cdfs[i] / next : null;
-  }
-
   function startDrag(key: string, model: 1 | 2 | 3 | 4 | 5 | 6) {
+    dragModelRef.current = model;
     draggedKeys.current = new Set([key]);
     setDragModel(model);
     onSetModel(key, model);
   }
 
   function enterDrag(key: string) {
-    if (dragModel === null || draggedKeys.current.has(key)) return;
+    if (dragModelRef.current === null || draggedKeys.current.has(key)) return;
     draggedKeys.current.add(key);
-    onSetModel(key, dragModel);
+    onSetModel(key, dragModelRef.current);
   }
 
   const rows = triangle.development_periods.map((dev, i) => {
@@ -112,7 +115,11 @@ export function CurveTab({
     return { i, key, dev, model, included, autoExcluded, initLDF, expLDF, ipLDF, pwLDF, wbLDF, userCDF, modelCDF, selectedLdf };
   });
 
-  const cumulPct = rows.map(r => (r.modelCDF > 0 ? 100 / r.modelCDF : 0));
+  // effectiveCdfs varsa (cascade sonucu) kullan; yoksa modelCDF fallback
+  const displayCdfs = rows.map((r, i) =>
+    effectiveCdfs && i < effectiveCdfs.length ? effectiveCdfs[i] : r.modelCDF
+  );
+  const cumulPct = displayCdfs.map(c => (c > 0 ? 100 / c : 0));
   const incrPct  = cumulPct.map((p, i) => i === 0 ? p : p - cumulPct[i - 1]);
 
   const hasOverrides = rows.some(r => r.model !== 1);
@@ -264,7 +271,7 @@ export function CurveTab({
 
                   {/* Cumul CDF */}
                   <td className="text-right px-2 py-0.5 text-[12px]">
-                    {formatFactor(r.modelCDF)}
+                    {formatFactor(displayCdfs[rowIdx])}
                   </td>
 
                   {/* Cumul% */}

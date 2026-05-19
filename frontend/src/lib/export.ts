@@ -165,20 +165,26 @@ export function exportToExcel(data: ExportData): void {
       prevCumul = cumulPct;
       return [
         i + 1,
-        initCDF.toFixed(5),
-        expCDF != null ? expCDF.toFixed(5) : "",
-        ipCDF != null ? ipCDF.toFixed(5) : "",
-        pwCDF != null ? pwCDF.toFixed(5) : "",
-        wbCDF != null ? wbCDF.toFixed(5) : "",
-        userCDF != null ? userCDF.toFixed(5) : "",
+        initCDF,
+        expCDF ?? "",
+        ipCDF ?? "",
+        pwCDF ?? "",
+        wbCDF ?? "",
+        userCDF ?? "",
         modelNames[model] ?? String(model),
-        selCDF.toFixed(5),
-        cumulPct.toFixed(2) + "%",
-        incrPct.toFixed(2) + "%",
+        selCDF,
+        cumulPct / 100,
+        incrPct / 100,
       ];
     });
     const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
     ws["!cols"] = header.map(() => ({ wch: 14 }));
+    for (let r = 1; r <= rows.length; r++) {
+      const cumAddr = XLSX.utils.encode_cell({ r, c: 9 });
+      const incrAddr = XLSX.utils.encode_cell({ r, c: 10 });
+      if (ws[cumAddr]) ws[cumAddr].z = "0.00%";
+      if (ws[incrAddr]) ws[incrAddr].z = "0.00%";
+    }
     XLSX.utils.book_append_sheet(wb, ws, "Curve");
   }
 

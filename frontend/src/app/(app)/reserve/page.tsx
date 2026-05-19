@@ -775,15 +775,20 @@ export default function Home() {
             window={window}
             excludedCells={excludedCells}
             cdfsOverride={initialCDFs}
+            karmaWindowPerStep={activeBranch?.karmaWindowPerStep ?? {}}
             onWindowChange={setters.setWindow}
             onToggleCell={toggleCellHandler}
             onClearCells={() => setExcludedCellsHandler(new Set())}
+            onSetKarmaWindow={setters.setKarmaWindow}
+            onInitKarma={setters.initKarma}
+            onClearKarma={setters.clearKarma}
           />
         )}
         {tab === "curve" && (
           <CurveTab
             triangle={triangle}
             initialCDFs={initialCDFs}
+            effectiveCdfs={cascade.effective}
             selectedLDFs={selectedLDFs}
             cdfInitial={cdfInitial}
             cdfModelPerPeriod={cdfModelPerPeriod}

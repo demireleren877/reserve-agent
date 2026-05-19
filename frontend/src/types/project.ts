@@ -66,9 +66,15 @@ export interface Branch {
 
   uploadSettings: UploadSettings;
 
+  /** Karma Volume: her dev step için ayrı window. Key = step index (string).
+   *  Boş ise karma devre dışı, global `window` kullanılır. */
+  karmaWindowPerStep?: Record<string, Window>;
+
   /** Cashflow modülüne ait LDF seçimleri — rezerv LDF'inden bağımsız */
   cashflowLdfWindow?: Window;
   cashflowLdfExcludedCells?: string[];
+  /** Cashflow Karma Volume */
+  cashflowKarmaWindowPerStep?: Record<string, Window>;
 
   /** Cashflow Curve tab seçimleri — rezerv curve'den bağımsız */
   cashflowCdfModelPerPeriod?: Record<string, 1 | 2 | 3 | 4 | 5 | 6>;

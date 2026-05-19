@@ -24,21 +24,28 @@ const TOOLTIP_STYLE = {
   color: "var(--foreground)",
 };
 
+// Python convention: quarterly seq = y*4+q where q ∈ {1..4}
+// To recover YYYYQq from seq: q_raw = seq%4; quarter = q_raw===0 ? 4 : q_raw; year = floor(seq/4) - (q_raw===0 ? 1 : 0)
+function seqToQLabel(seq: number): string {
+  const q_raw = seq % 4;
+  const quarter = q_raw === 0 ? 4 : q_raw;
+  const year = q_raw === 0 ? Math.floor(seq / 4) - 1 : Math.floor(seq / 4);
+  return `${year}Q${quarter}`;
+}
+
 function devDate(origin: string, step: number, tri: Triangle): string {
   const age = tri.development_periods[step];
   if (tri.origin_granularity === "yearly") {
     const oy = parseInt(origin, 10);
     if (tri.development_granularity === "quarterly") {
-      const q = oy * 4 + age;
-      return `${Math.floor(q / 4)}Q${(q % 4) + 1}`;
+      return seqToQLabel(oy * 4 + age);
     }
     return String(oy + age);
   }
   const [yr, qt] = origin.split("Q");
   const oq = parseInt(yr, 10) * 4 + parseInt(qt || "1", 10) - 1;
   if (tri.development_granularity === "quarterly") {
-    const q = oq + age;
-    return `${Math.floor(q / 4)}Q${(q % 4) + 1}`;
+    return seqToQLabel(oq + age);
   }
   return String(parseInt(yr, 10) + age);
 }

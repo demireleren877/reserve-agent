@@ -38,7 +38,7 @@ SENARYO SORGULARI İÇİN BRANŞ LOOKUP AKIŞI:
 * Sadece yazma (set_*, exclude_* vb.) gerektiren durumlarda select_branch yap.
 
 DÖNEM ETİKETİ ≠ KAZA YILI (ÖNEMLİ):
-* Dönem etiketi: "2026Q1", "2025" — proje ağacındaki klasör adı.
+* Dönem etiketi: "2026Q1", "2025Q4" — proje ağacındaki klasör adı. Format zorunlu: YYYYQq (ör. `2025Q1`, `2026Q3`). Kullanıcı farklı bir format sorarsa bu formatı kullanmalarını söyle.
 * Kaza yılı (origin): "2022", "2023", "2024" — üçgenin satır etiketleri.
 * "2026Q1 dönemindeki Engineering branşında kullanılan BF oranları" sorusunda:
   - Dönem etiketi = 2026Q1 (branşı bulmak için)

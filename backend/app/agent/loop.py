@@ -221,7 +221,7 @@ sorduğunda bu bölümden yanıt ver. Aktüeryal hesap sorusu DEĞİLSE tool ça
 4. **Nakit Akışı** — Paid üçgeninden nakit akışı pattern hesabı (Pro plan). Rezerv modülündeki branşların paid üçgenleri otomatik listelenir. 4 sekme:
    - **Veri:** Paid üçgeni (kümülatif / artımsal toggle).
    - **LDF:** Rezerv modülüyle birebir aynı gelişim faktörü ekranı — volume seçimi, hücre eleme, heatmap, CDF satırı.
-   - **CF Pattern:** Kaza yılı bazında normalize edilmiş çeyreklik nakit akışı ağırlıkları.
+   - **CF Pattern:** Kaza yılı bazında normalize edilmiş çeyreklik nakit akışı ağırlıkları. Her kaza yılı için rapor dönemine kadar geçen süre (dev_offset = yıl farkı × 4 çeyrek) hesaplanır; her yıl global pattern'ın kendi gelişim noktasından başlayan kuyruğunu alır. Tam gelişmiş yıllar (CDF=1,0) için tüm ağırlık ilk çeyreğe atanır.
    - **Aylık Pattern:** 180 aya dağıtılmış aylık nakit akışı ağırlıkları.
    - Navigasyon: Dönem kartları → Branş kartları → Analiz sekmeleri (Rezerv modülüyle aynı klasör yapısı).
 
@@ -238,7 +238,7 @@ sorduğunda bu bölümden yanıt ver. Aktüeryal hesap sorusu DEĞİLSE tool ça
 
 **Temel iş akışı:**
 1. Giriş yap (Google veya e-posta/şifre ile Firebase Auth).
-2. **Veri** modülüne git → dönem oluştur → hasar ve prim verilerini yükle.
+2. **Veri** modülüne git → dönem oluştur (format: `2025Q1` — yıl + Q + çeyrek, ör. `2026Q1`) → hasar ve prim verilerini yükle.
 3. **Rezerv** modülüne git → dönem + branş oluştur → üçgeni Veri modülünden çek (veya Excel yükle).
 4. CL otomatik çalışır; LDF/Curve/BF parametrelerini düzenle.
 5. **Nakit Akışı** modülüne git (Pro) → Rezerv'deki paid üçgeni olan branşı seç → LDF ve CF pattern'i incele.
@@ -247,6 +247,7 @@ sorduğunda bu bölümden yanıt ver. Aktüeryal hesap sorusu DEĞİLSE tool ça
 **Veri saklama:** Cloudflare D1 (Avrupa bölgesi, şifreli). Hesap silindiğinde 30 gün içinde kalıcı silme.
 
 **Sık sorulan sorular:**
+- "Dönem nasıl eklenir?" → Veri veya Rezerv modülünde "+ Yeni Dönem" → format: `2025Q1` (4 haneli yıl + Q + çeyrek 1-4, ör. `2026Q1`, `2024Q3`).
 - "Yeni branş nasıl eklenir?" → Rezerv → dönem seçili iken "+ Branş".
 - "Hasar verisi nasıl yüklenir?" → Veri → dönem seç → "Hasar Verisi" kartına tıkla → wizard.
 - "Prim verisi nasıl Rezerv'e aktarılır?" → BF sekmesinde "Veri modülünden yükle" butonu.

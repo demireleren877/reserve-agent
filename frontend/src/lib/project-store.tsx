@@ -719,7 +719,7 @@ export function useProject(): Ctx {
 
 export interface BranchSetters {
   setTriangle: (t: Branch["triangle"], fileName?: string | null, fileData?: FileData) => void;
-  setBothTriangles: (paid: Branch["triangle"], incurred: Branch["triangle"], fileName?: string) => void;
+  setBothTriangles: (paid: Branch["triangle"], incurred: Branch["triangle"], fileName?: string, fileData?: FileData | null) => void;
   setMethod: (m: LDFMethod) => void;
   setWindow: (w: Window) => void;
   setExcludedCells: (next: Set<string>) => void;
@@ -780,12 +780,12 @@ export function useBranchSetters(source: ChangeSource = "user"): BranchSetters {
           fileName ? { fileName } : {},
           source,
         ),
-      setBothTriangles: (paid, incurred, fileName) =>
+      setBothTriangles: (paid, incurred, fileName, fileData) =>
         actions.updateActiveBranch(
           () => ({
             triangle: incurred,
             triangleFileName: fileName ?? null,
-            fileData: undefined,
+            fileData: fileData ?? undefined,
             excludedCells: [],
             premiums: {},
             lrInputPerOrigin: {},

@@ -74,7 +74,7 @@ export function LoadFromDataStore({ onClose, onLoaded }: Props) {
       }
       if (!ds?.records?.length) throw new Error("Kayıt bulunamadı");
 
-      const { paidTriangle, incurredTriangle } = await buildTriangleFromRecords(
+      const { paidTriangle, incurredTriangle, fileData } = await buildTriangleFromRecords(
         ds.records as import("@/lib/api").ClaimRecord[],
         brans,
         originGran,
@@ -82,7 +82,7 @@ export function LoadFromDataStore({ onClose, onLoaded }: Props) {
       );
 
       const fileName = `${selectedPeriod?.label ?? ""} – ${brans}`;
-      setters.setBothTriangles(paidTriangle, incurredTriangle, fileName);
+      setters.setBothTriangles(paidTriangle, incurredTriangle, fileName, fileData);
       onLoaded();
       onClose();
     } catch (e) {

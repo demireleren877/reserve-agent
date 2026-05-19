@@ -202,4 +202,44 @@ def build_triangles(
         origin_granularity=orig_gran,
         development_granularity=dev_gran,
     )
-    return paid_tri, incurred_tri
+
+    # ── Dosya bazlı kümülatif ödeme (file_data) ───────────────────────────────
+    # {origin_label: {dev_label: {dosya_no: cum_paid}}}
+    dosya_inc: dict[tuple[str, str], dict[str, float]] = {}
+    dosya_d_seq: dict[tuple[str, str], int] = {}
+
+    for r in filtered:
+        dosya_no = str(r.get("dosya_no", "")).strip()
+        if not dosya_no:
+            continue
+        try:
+            o_lbl, _ = _parse_period(str(r["hasar_tarihi"]), orig_gran)
+            d_lbl, d_seq = _parse_period(str(r["gelisim_tarihi"]), dev_gran)
+        except ValueError:
+            continue
+        key = (o_lbl, d_lbl)
+        cell = dosya_inc.setdefault(key, {})
+        cell[dosya_no] = cell.get(dosya_no, 0.0) + float(r.get("odeme") or 0)
+        dosya_d_seq[key] = d_seq
+
+    file_data: dict | None = None
+    if dosya_inc:
+        fd: dict[str, dict[str, dict[str, float]]] = {}
+        for o_lbl in origin_periods:
+            cells = sorted(
+                (
+                    (d_lbl, dosya_d_seq.get((o_lbl, d_lbl), 0), vals)
+                    for (o, d_lbl), vals in dosya_inc.items()
+                    if o == o_lbl
+                ),
+                key=lambda x: x[1],
+            )
+            cum: dict[str, float] = {}
+            fd[o_lbl] = {}
+            for d_lbl, _, vals in cells:
+                for dosya_no, inc in vals.items():
+                    cum[dosya_no] = cum.get(dosya_no, 0.0) + inc
+                fd[o_lbl][d_lbl] = dict(cum)
+        file_data = fd
+
+    return paid_tri, incurred_tri, file_data

@@ -557,6 +557,7 @@ class BuildTriangleRequest(BaseModel):
 class BuildTriangleResponse(BaseModel):
     paid_triangle: TriangleSchema
     incurred_triangle: TriangleSchema
+    file_data: dict | None = None
 
 
 @router.post("/data/build-triangle", response_model=BuildTriangleResponse)
@@ -565,7 +566,7 @@ def data_build_triangle(
     _auth: dict = Depends(verify_firebase_token),
 ) -> BuildTriangleResponse:
     try:
-        paid, incurred = build_triangles(
+        paid, incurred, file_data = build_triangles(
             records=body.records,
             brans=body.brans,
             origin_granularity=body.origin_granularity,  # type: ignore[arg-type]
@@ -576,6 +577,7 @@ def data_build_triangle(
     return BuildTriangleResponse(
         paid_triangle=TriangleSchema.from_domain(paid),
         incurred_triangle=TriangleSchema.from_domain(incurred),
+        file_data=file_data,
     )
 
 

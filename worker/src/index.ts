@@ -300,6 +300,7 @@ interface PeriodRow {
 
 interface DatasetMetaRow {
   period_id: string;
+  dataset_id: string;
   type_id: string;
   meta_json: string;
   updated_at: number;
@@ -314,14 +315,15 @@ async function handleListPeriods(env: Env, t: VerifiedToken, origin: string) {
 
   // Her dönem için dataset meta'ları çek (records hariç — büyük olabilir)
   const metas = await env.DB.prepare(
-    "SELECT period_id, type_id, meta_json, updated_at FROM user_datasets WHERE uid = ? ORDER BY updated_at ASC",
+    "SELECT period_id, dataset_id, type_id, meta_json, updated_at FROM user_datasets WHERE uid = ? ORDER BY updated_at ASC",
   ).bind(t.uid).all<DatasetMetaRow>();
 
-  // period_id → {type_id: meta}
+  // period_id → {dataset_id: {typeId, ...meta}}
   const datasetsByPeriod: Record<string, Record<string, unknown>> = {};
   for (const row of metas.results) {
     if (!datasetsByPeriod[row.period_id]) datasetsByPeriod[row.period_id] = {};
-    datasetsByPeriod[row.period_id][row.type_id] = JSON.parse(row.meta_json);
+    const meta = JSON.parse(row.meta_json);
+    datasetsByPeriod[row.period_id][row.dataset_id] = { typeId: row.type_id, ...meta };
   }
 
   const result = periods.results.map((p) => ({
@@ -374,28 +376,29 @@ async function handleDeletePeriod(env: Env, t: VerifiedToken, periodId: string, 
 const MAX_DATASET_BYTES = 4 * 1024 * 1024; // 4 MB per dataset
 
 async function handleGetDataset(
-  env: Env, t: VerifiedToken, periodId: string, typeId: string, origin: string,
+  env: Env, t: VerifiedToken, periodId: string, datasetId: string, origin: string,
 ) {
   await ensureUser(env, t);
   const row = await env.DB.prepare(
-    "SELECT meta_json, records_json FROM user_datasets WHERE uid = ? AND period_id = ? AND type_id = ?",
-  ).bind(t.uid, periodId, typeId).first<{ meta_json: string; records_json: string }>();
+    "SELECT type_id, meta_json, records_json FROM user_datasets WHERE uid = ? AND period_id = ? AND dataset_id = ?",
+  ).bind(t.uid, periodId, datasetId).first<{ type_id: string; meta_json: string; records_json: string }>();
 
   if (!row) return err(404, "not_found", origin);
   return json(
-    { meta: JSON.parse(row.meta_json), records: JSON.parse(row.records_json) },
+    { typeId: row.type_id, meta: JSON.parse(row.meta_json), records: JSON.parse(row.records_json) },
     { status: 200 },
     origin,
   );
 }
 
 async function handlePutDataset(
-  req: Request, env: Env, t: VerifiedToken, periodId: string, typeId: string, origin: string,
+  req: Request, env: Env, t: VerifiedToken, periodId: string, datasetId: string, origin: string,
 ) {
   await ensureUser(env, t);
-  let body: { meta?: unknown; records?: unknown };
+  let body: { typeId?: string; meta?: unknown; records?: unknown };
   try { body = await req.json(); } catch { return err(400, "invalid_json", origin); }
 
+  const typeId = body.typeId ?? datasetId;
   const metaStr = JSON.stringify(body.meta ?? {});
   const recordsStr = JSON.stringify(body.records ?? []);
   const totalBytes = new TextEncoder().encode(metaStr + recordsStr).length;
@@ -405,29 +408,29 @@ async function handlePutDataset(
 
   const now = Date.now();
   const existing = await env.DB.prepare(
-    "SELECT type_id FROM user_datasets WHERE uid = ? AND period_id = ? AND type_id = ?",
-  ).bind(t.uid, periodId, typeId).first();
+    "SELECT dataset_id FROM user_datasets WHERE uid = ? AND period_id = ? AND dataset_id = ?",
+  ).bind(t.uid, periodId, datasetId).first();
 
   if (existing) {
     await env.DB.prepare(
-      "UPDATE user_datasets SET meta_json = ?, records_json = ?, updated_at = ? WHERE uid = ? AND period_id = ? AND type_id = ?",
-    ).bind(metaStr, recordsStr, now, t.uid, periodId, typeId).run();
+      "UPDATE user_datasets SET meta_json = ?, records_json = ?, updated_at = ? WHERE uid = ? AND period_id = ? AND dataset_id = ?",
+    ).bind(metaStr, recordsStr, now, t.uid, periodId, datasetId).run();
   } else {
     await env.DB.prepare(
-      "INSERT INTO user_datasets (uid, period_id, type_id, meta_json, records_json, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
-    ).bind(t.uid, periodId, typeId, metaStr, recordsStr, now).run();
+      "INSERT INTO user_datasets (uid, period_id, dataset_id, type_id, meta_json, records_json, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    ).bind(t.uid, periodId, datasetId, typeId, metaStr, recordsStr, now).run();
   }
 
   return json({ ok: true }, { status: 200 }, origin);
 }
 
 async function handleDeleteDataset(
-  env: Env, t: VerifiedToken, periodId: string, typeId: string, origin: string,
+  env: Env, t: VerifiedToken, periodId: string, datasetId: string, origin: string,
 ) {
   await ensureUser(env, t);
   await env.DB.prepare(
-    "DELETE FROM user_datasets WHERE uid = ? AND period_id = ? AND type_id = ?",
-  ).bind(t.uid, periodId, typeId).run();
+    "DELETE FROM user_datasets WHERE uid = ? AND period_id = ? AND dataset_id = ?",
+  ).bind(t.uid, periodId, datasetId).run();
   return json({ ok: true }, { status: 200 }, origin);
 }
 
@@ -577,13 +580,13 @@ export default {
       if (periodMatch && req.method === "DELETE") {
         return await handleDeletePeriod(env, token, periodMatch[1], origin);
       }
-      // /v1/data/periods/:periodId/datasets/:typeId
+      // /v1/data/periods/:periodId/datasets/:datasetId
       const datasetMatch = url.pathname.match(/^\/v1\/data\/periods\/([^/]+)\/datasets\/([^/]+)$/);
       if (datasetMatch) {
-        const [, pId, tId] = datasetMatch;
-        if (req.method === "GET")    return await handleGetDataset(env, token, pId, tId, origin);
-        if (req.method === "PUT")    return await handlePutDataset(req, env, token, pId, tId, origin);
-        if (req.method === "DELETE") return await handleDeleteDataset(env, token, pId, tId, origin);
+        const [, pId, dsId] = datasetMatch;
+        if (req.method === "GET")    return await handleGetDataset(env, token, pId, dsId, origin);
+        if (req.method === "PUT")    return await handlePutDataset(req, env, token, pId, dsId, origin);
+        if (req.method === "DELETE") return await handleDeleteDataset(env, token, pId, dsId, origin);
       }
 
       return err(404, "not_found", origin);

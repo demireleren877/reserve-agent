@@ -94,6 +94,7 @@ export interface DatasetMeta {
 }
 
 export interface Dataset {
+  datasetId: string;
   typeId: string;
   meta: DatasetMeta;
   records: ClaimRecord[] | PrimRecord[] | TriangleRecord[];
@@ -103,7 +104,7 @@ export interface DataPeriod {
   id: string;
   label: string;
   createdAt: string;
-  datasets: Record<string, Dataset>; // typeId → Dataset (records lazy-loaded)
+  datasets: Record<string, Dataset>; // datasetId → Dataset (records lazy-loaded)
 }
 
 // ─── Store interface ──────────────────────────────────────────────────────────
@@ -118,9 +119,9 @@ interface DataStoreState {
   deletePeriod: (id: string) => Promise<void>;
   setActivePeriod: (id: string | null) => void;
   setDataset: (periodId: string, dataset: Dataset) => Promise<void>;
-  removeDataset: (periodId: string, typeId: string) => Promise<void>;
+  removeDataset: (periodId: string, datasetId: string) => Promise<void>;
   /** Records olmadan sadece meta döner; records için loadDatasetRecords kullan */
-  loadDatasetRecords: (periodId: string, typeId: string) => Promise<Dataset | null>;
+  loadDatasetRecords: (periodId: string, datasetId: string) => Promise<Dataset | null>;
 }
 
 const DataStoreContext = createContext<DataStoreState | null>(null);
@@ -156,10 +157,10 @@ export function DataStoreProvider({
           label: r.label,
           createdAt: r.createdAt,
           datasets: Object.fromEntries(
-            Object.entries(r.datasetMetas).map(([typeId, meta]) => [
-              typeId,
-              { typeId, meta: meta as DatasetMeta, records: [] },
-            ])
+            Object.entries(r.datasetMetas).map(([datasetId, rawMeta]) => {
+              const { typeId, ...meta } = rawMeta;
+              return [datasetId, { datasetId, typeId, meta: meta as unknown as DatasetMeta, records: [] }];
+            })
           ),
         }));
         setPeriods(loaded);
@@ -207,39 +208,40 @@ export function DataStoreProvider({
     setPeriods((prev) =>
       prev.map((p) =>
         p.id === periodId
-          ? { ...p, datasets: { ...p.datasets, [dataset.typeId]: dataset } }
+          ? { ...p, datasets: { ...p.datasets, [dataset.datasetId]: dataset } }
           : p,
       ),
     );
-    await putDataset(periodId, dataset.typeId, dataset.meta, dataset.records);
+    await putDataset(periodId, dataset.datasetId, dataset.typeId, dataset.meta, dataset.records);
   }, []);
 
   // Dataset sil
-  const removeDataset = useCallback(async (periodId: string, typeId: string) => {
+  const removeDataset = useCallback(async (periodId: string, datasetId: string) => {
     setPeriods((prev) =>
       prev.map((p) => {
         if (p.id !== periodId) return p;
-        const { [typeId]: _, ...rest } = p.datasets;
+        const { [datasetId]: _, ...rest } = p.datasets;
         return { ...p, datasets: rest };
       }),
     );
-    await remoteDelDs(periodId, typeId);
+    await remoteDelDs(periodId, datasetId);
   }, []);
 
   // Records lazy-load (D1'den)
   const loadDatasetRecords = useCallback(async (
     periodId: string,
-    typeId: string,
+    datasetId: string,
   ): Promise<Dataset | null> => {
     // Zaten yüklüyse döndür
     const period = periods.find((p) => p.id === periodId);
-    if (period?.datasets[typeId]?.records?.length) {
-      return period.datasets[typeId];
+    if (period?.datasets[datasetId]?.records?.length) {
+      return period.datasets[datasetId];
     }
     try {
-      const data = await getDataset(periodId, typeId);
+      const data = await getDataset(periodId, datasetId);
       const ds: Dataset = {
-        typeId,
+        datasetId,
+        typeId: data.typeId,
         meta: data.meta as DatasetMeta,
         records: data.records as ClaimRecord[],
       };
@@ -247,7 +249,7 @@ export function DataStoreProvider({
       setPeriods((prev) =>
         prev.map((p) =>
           p.id === periodId
-            ? { ...p, datasets: { ...p.datasets, [typeId]: ds } }
+            ? { ...p, datasets: { ...p.datasets, [datasetId]: ds } }
             : p,
         ),
       );
@@ -288,20 +290,22 @@ export function useDataStore(): DataStoreState {
   return ctx;
 }
 
-// Geriye dönük uyumluluk
+// Geriye dönük uyumluluk — ilk "hasar" datasetini döner
 export function useDataset() {
   const store = useDataStore();
   const active = store.activePeriod;
-  const hasarDs = active?.datasets["hasar"] ?? null;
+  const hasarDs = active
+    ? (Object.values(active.datasets).find((d) => d.typeId === "hasar") ?? null)
+    : null;
   return {
     dataset: hasarDs,
     setDataset: async (ds: Dataset | null) => {
       if (!active) return;
       if (ds) await store.setDataset(active.id, ds);
-      else await store.removeDataset(active.id, "hasar");
+      else if (hasarDs) await store.removeDataset(active.id, hasarDs.datasetId);
     },
     clearDataset: async () => {
-      if (active) await store.removeDataset(active.id, "hasar");
+      if (active && hasarDs) await store.removeDataset(active.id, hasarDs.datasetId);
     },
   };
 }

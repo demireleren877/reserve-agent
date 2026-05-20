@@ -21,6 +21,9 @@ const TR2 = new Intl.NumberFormat("tr-TR", { minimumFractionDigits: 2, maximumFr
 const TR0 = new Intl.NumberFormat("tr-TR", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 function fmt(n: number) { return TR2.format(n); }
 function fmt0(n: number) { return TR0.format(n); }
+function newId(): string {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+}
 
 // ─── Dönem ekleme formu ───────────────────────────────────────────────────────
 
@@ -142,7 +145,7 @@ function PeriodList({
                 </div>
                 {datasetCount > 0 && (
                   <div className="text-[10.5px]" style={{ color: "var(--muted)" }}>
-                    {datasetCount} veri türü
+                    {datasetCount} veri seti
                   </div>
                 )}
               </div>
@@ -170,18 +173,17 @@ function PeriodList({
 
 function DataTypeCard({
   def,
-  dataset,
+  datasets,
   onImport,
   onView,
   onRemove,
 }: {
   def: DataTypeDef;
-  dataset: Dataset | null;
+  datasets: Dataset[];
   onImport: () => void;
-  onView: () => void;
-  onRemove: () => void;
+  onView: (datasetId: string) => void;
+  onRemove: (datasetId: string) => void;
 }) {
-  const imported = dataset !== null;
   return (
     <div
       className="rounded-xl border p-4 flex flex-col gap-3"
@@ -190,21 +192,21 @@ function DataTypeCard({
       <div className="flex items-start gap-3">
         <div
           className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5"
-          style={{ background: imported ? "var(--primary-soft)" : "var(--surface-alt)" }}
+          style={{ background: datasets.length > 0 ? "var(--primary-soft)" : "var(--surface-alt)" }}
         >
-          <TableIcon color={imported ? "var(--primary)" : "var(--muted)"} />
+          <TableIcon color={datasets.length > 0 ? "var(--primary)" : "var(--muted)"} />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <span className="text-[13.5px] font-semibold" style={{ color: "var(--foreground)" }}>
               {def.label}
             </span>
-            {imported && (
+            {datasets.length > 0 && (
               <span
                 className="text-[10.5px] font-semibold px-1.5 py-0.5 rounded-full"
                 style={{ background: "#dcfce7", color: "#15803d" }}
               >
-                ✓ Yüklendi
+                {datasets.length} veri seti
               </span>
             )}
           </div>
@@ -225,63 +227,66 @@ function DataTypeCard({
         </div>
       </div>
 
-      {imported && dataset && (
-        <div
-          className="rounded-lg px-3 py-2 text-[12px] grid grid-cols-3 gap-2"
-          style={{ background: "var(--surface-alt)" }}
-        >
-          <div>
-            <div style={{ color: "var(--muted)" }}>Kayıt</div>
-            <div className="font-semibold" style={{ color: "var(--foreground)" }}>
-              {fmt0(dataset.meta.record_count)}
+      {datasets.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          {datasets.map((ds) => (
+            <div
+              key={ds.datasetId}
+              className="rounded-lg px-3 py-2 text-[12px] flex items-center gap-2"
+              style={{ background: "var(--surface-alt)" }}
+            >
+              <div className="flex-1 min-w-0 grid grid-cols-3 gap-2">
+                <div>
+                  <div style={{ color: "var(--muted)" }}>Kayıt</div>
+                  <div className="font-semibold" style={{ color: "var(--foreground)" }}>
+                    {fmt0(ds.meta.record_count)}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ color: "var(--muted)" }}>Dosya</div>
+                  <div className="font-semibold truncate" style={{ color: "var(--foreground)" }}>
+                    {ds.meta.filename}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ color: "var(--muted)" }}>Yüklenme</div>
+                  <div className="font-semibold" style={{ color: "var(--foreground)" }}>
+                    {new Date(ds.meta.uploadedAt).toLocaleDateString("tr-TR")}
+                  </div>
+                </div>
+              </div>
+              <div className="flex gap-1 flex-shrink-0">
+                <button
+                  onClick={() => onView(ds.datasetId)}
+                  className="px-2.5 py-1 rounded-lg text-[11.5px] border transition"
+                  style={{ borderColor: "var(--border)", color: "var(--muted-strong)" }}
+                >
+                  Görüntüle
+                </button>
+                <button
+                  onClick={() => onRemove(ds.datasetId)}
+                  className="px-2.5 py-1 rounded-lg text-[11.5px] border transition hover:bg-red-50"
+                  style={{ borderColor: "var(--border)", color: "#dc2626" }}
+                >
+                  Sil
+                </button>
+              </div>
             </div>
-          </div>
-          <div>
-            <div style={{ color: "var(--muted)" }}>Dosya</div>
-            <div className="font-semibold truncate" style={{ color: "var(--foreground)" }}>
-              {dataset.meta.filename}
-            </div>
-          </div>
-          <div>
-            <div style={{ color: "var(--muted)" }}>Yüklenme</div>
-            <div className="font-semibold" style={{ color: "var(--foreground)" }}>
-              {new Date(dataset.meta.uploadedAt).toLocaleDateString("tr-TR")}
-            </div>
-          </div>
+          ))}
         </div>
       )}
 
-      <div className="flex gap-2">
-        <button
-          onClick={onImport}
-          className="flex-1 py-1.5 rounded-lg text-[12.5px] font-semibold border transition"
-          style={{
-            borderColor: "var(--primary)",
-            background: imported ? "transparent" : "var(--primary)",
-            color: imported ? "var(--primary)" : "#fff",
-          }}
-        >
-          {imported ? "Yeniden yükle" : "Veri yükle"}
-        </button>
-        {imported && (
-          <>
-            <button
-              onClick={onView}
-              className="px-3 py-1.5 rounded-lg text-[12.5px] border transition"
-              style={{ borderColor: "var(--border)", color: "var(--muted-strong)" }}
-            >
-              Görüntüle
-            </button>
-            <button
-              onClick={onRemove}
-              className="px-3 py-1.5 rounded-lg text-[12.5px] border transition hover:bg-red-50"
-              style={{ borderColor: "var(--border)", color: "#dc2626" }}
-            >
-              Sil
-            </button>
-          </>
-        )}
-      </div>
+      <button
+        onClick={onImport}
+        className="py-1.5 rounded-lg text-[12.5px] font-semibold border transition"
+        style={{
+          borderColor: "var(--primary)",
+          background: datasets.length > 0 ? "transparent" : "var(--primary)",
+          color: datasets.length > 0 ? "var(--primary)" : "#fff",
+        }}
+      >
+        {datasets.length > 0 ? "+ Yeni ekle" : "Veri yükle"}
+      </button>
     </div>
   );
 }
@@ -427,7 +432,7 @@ function DatasetViewer({
 type RightView =
   | { kind: "overview" }
   | { kind: "wizard"; typeId: string }
-  | { kind: "viewer"; typeId: string };
+  | { kind: "viewer"; datasetId: string; typeId: string };
 
 function PeriodDetail({ period }: { period: DataPeriod }) {
   const { setDataset, removeDataset, loadDatasetRecords } = useDataStore();
@@ -440,6 +445,7 @@ function PeriodDetail({ period }: { period: DataPeriod }) {
   // Hasar wizard tamamlandığında
   async function handleImportDone(typeId: string, result: ImportWizardResult) {
     const ds: Dataset = {
+      datasetId: newId(),
       typeId,
       meta: {
         filename: result.filename,
@@ -463,6 +469,7 @@ function PeriodDetail({ period }: { period: DataPeriod }) {
   async function handlePrimImportDone(result: PrimWizardResult) {
     const r = result.importResult;
     const ds: Dataset = {
+      datasetId: newId(),
       typeId: "prim",
       meta: {
         filename: result.filename,
@@ -482,6 +489,7 @@ function PeriodDetail({ period }: { period: DataPeriod }) {
   async function handleTriangleImportDone(result: TriangleWizardResult) {
     const rec = result.record;
     const ds: Dataset = {
+      datasetId: newId(),
       typeId: "ucgen",
       meta: {
         filename: result.filename,
@@ -496,10 +504,11 @@ function PeriodDetail({ period }: { period: DataPeriod }) {
   }
 
   // Viewer açılışında records lazy-load
-  async function openViewer(typeId: string) {
+  async function openViewer(datasetId: string) {
+    const typeId = period.datasets[datasetId]?.typeId ?? "";
     setViewerLoading(true);
-    setView({ kind: "viewer", typeId });
-    const ds = await loadDatasetRecords(period.id, typeId);
+    setView({ kind: "viewer", datasetId, typeId });
+    const ds = await loadDatasetRecords(period.id, datasetId);
     setViewerDataset(ds);
     setViewerLoading(false);
   }
@@ -531,7 +540,7 @@ function PeriodDetail({ period }: { period: DataPeriod }) {
   }
 
   if (view.kind === "viewer") {
-    const typeDef = DATA_TYPES.find((d) => d.id === view.typeId)!;
+    const typeDef = DATA_TYPES.find((d) => d.id === view.typeId);
     if (viewerLoading || !viewerDataset) {
       return (
         <div className="flex-1 flex items-center justify-center" style={{ color: "var(--muted)" }}>
@@ -543,7 +552,7 @@ function PeriodDetail({ period }: { period: DataPeriod }) {
       <DatasetViewer
         dataset={viewerDataset}
         periodLabel={period.label}
-        typeLabel={typeDef.label}
+        typeLabel={typeDef?.label ?? view.typeId}
         onClose={() => setView({ kind: "overview" })}
       />
     );
@@ -561,12 +570,12 @@ function PeriodDetail({ period }: { period: DataPeriod }) {
 
       <div className="grid gap-3 md:grid-cols-2">
         {DATA_TYPES.map((def) => {
-          const dataset = period.datasets[def.id] ?? null;
+          const typeDatasets = Object.values(period.datasets).filter((d) => d.typeId === def.id);
           return (
             <DataTypeCard
               key={def.id}
               def={def}
-              dataset={dataset}
+              datasets={typeDatasets}
               onImport={() =>
                 def.id === "prim"
                   ? setShowPrimWizard(true)
@@ -574,8 +583,8 @@ function PeriodDetail({ period }: { period: DataPeriod }) {
                   ? setShowTriangleWizard(true)
                   : setView({ kind: "wizard", typeId: def.id })
               }
-              onView={() => openViewer(def.id)}
-              onRemove={() => removeDataset(period.id, def.id)}
+              onView={(dsId) => openViewer(dsId)}
+              onRemove={(dsId) => removeDataset(period.id, dsId)}
             />
           );
         })}

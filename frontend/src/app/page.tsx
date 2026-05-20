@@ -494,7 +494,7 @@ function ModuleExplorer() {
 
   return (
     <section id="modules" className="py-10 md:py-12" style={{ background: "#f6f7f9", borderTop: "1px solid #e2e5ea", borderBottom: "1px solid #e2e5ea" }}>
-      <div className="w-full px-6 md:px-10 xl:px-16">
+      <div className="max-w-[1100px] mx-auto px-6 md:px-8">
         {/* Tab pills */}
         <div data-rv className="flex justify-center mb-5 flex-wrap gap-2">
           {MODULE_ORDER.map((k) => {
@@ -1124,7 +1124,7 @@ function ChatPanelMock() {
   }, []);
 
   return (
-    <div className="lcard" style={{ overflow: "hidden", boxShadow: "0 20px 50px rgba(15,23,42,.08)", width: "100%", display: "flex", flexDirection: "column", height: 420 }}>
+    <div className="lcard" style={{ overflow: "hidden", boxShadow: "0 20px 50px rgba(15,23,42,.08)", width: "100%", display: "flex", flexDirection: "column", height: 360 }}>
       {/* Header — matches ChatPanel */}
       <div className="flex items-center gap-3 px-4 h-14" style={{ borderBottom: "1px solid #e2e5ea" }}>
         <div className="flex items-center gap-2.5 flex-1">

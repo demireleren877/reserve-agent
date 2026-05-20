@@ -958,9 +958,9 @@ function ComingSoonPreview({ module, eta }: { module: string; eta: string }) {
 
 function AgentExplorerContent() {
   return (
-    <div className="fi flex flex-col lg:flex-row gap-6 lg:h-[480px]">
+    <div className="fi flex flex-col lg:flex-row gap-6 lg:items-start">
       {/* Left: feature list */}
-      <div className="lg:w-72 shrink-0 space-y-3 lg:overflow-y-auto">
+      <div className="lg:w-72 shrink-0 space-y-3">
         <div className="flex items-center gap-3 mb-4">
           <div className="h-8 w-8 rounded-lg grid place-items-center shrink-0" style={{ background: "#1d4ed8" }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
@@ -1124,7 +1124,7 @@ function ChatPanelMock() {
   }, []);
 
   return (
-    <div className="lcard" style={{ overflow: "hidden", boxShadow: "0 20px 50px rgba(15,23,42,.08)", width: "100%", display: "flex", flexDirection: "column", height: "100%" }}>
+    <div className="lcard" style={{ overflow: "hidden", boxShadow: "0 20px 50px rgba(15,23,42,.08)", width: "100%", display: "flex", flexDirection: "column", height: 400 }}>
       {/* Header — matches ChatPanel */}
       <div className="flex items-center gap-3 px-4 h-14" style={{ borderBottom: "1px solid #e2e5ea" }}>
         <div className="flex items-center gap-2.5 flex-1">

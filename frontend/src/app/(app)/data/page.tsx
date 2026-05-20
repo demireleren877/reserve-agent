@@ -461,7 +461,8 @@ function PeriodDetail({ period }: { period: DataPeriod }) {
       },
       records: result.result.records,
     };
-    await setDataset(period.id, ds);
+    // setDataset optimistic update'i hemen uygular; remote hata verse de overview'a dön
+    setDataset(period.id, ds).catch(() => {});
     setView({ kind: "overview" });
   }
 
@@ -481,7 +482,7 @@ function PeriodDetail({ period }: { period: DataPeriod }) {
       },
       records: r.records,
     };
-    await setDataset(period.id, ds);
+    setDataset(period.id, ds).catch(() => {});
     setView({ kind: "overview" });
   }
 
@@ -499,7 +500,7 @@ function PeriodDetail({ period }: { period: DataPeriod }) {
       },
       records: [rec],
     };
-    await setDataset(period.id, ds);
+    setDataset(period.id, ds).catch(() => {});
     setShowTriangleWizard(false);
   }
 
@@ -592,7 +593,7 @@ function PeriodDetail({ period }: { period: DataPeriod }) {
 
       {showPrimWizard && (
         <PrimImportWizard
-          onDone={async (r) => { setShowPrimWizard(false); await handlePrimImportDone(r); }}
+          onDone={(r) => { setShowPrimWizard(false); handlePrimImportDone(r); }}
           onCancel={() => setShowPrimWizard(false)}
         />
       )}

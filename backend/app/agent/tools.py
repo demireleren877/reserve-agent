@@ -565,6 +565,191 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
             "parameters": {"type": "object", "properties": {}, "required": []},
         },
     },
+    # ─── Cashflow tools ───────────────────────────────────────────────────────
+    {
+        "type": "function",
+        "function": {
+            "name": "get_cashflow_state",
+            "description": (
+                "Tüm branşların cashflow ayarlarını ve aylık nakit akışı pattern "
+                "durumunu döner. Hangi branşlarda cashflow hesaplanmış, LDF penceresi "
+                "ne, curve model seçimleri neler sorularında kullan."
+            ),
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "set_cashflow_window",
+            "description": (
+                "Cashflow modülündeki LDF penceresini değiştir (rezerv LDF'inden bağımsız). "
+                "'4' | '5' | '7' | 'all'. branch_id verilmezse aktif branşa uygulanır."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "window": {"type": "string", "enum": ["4", "5", "7", "all"]},
+                    "branch_id": {"type": "string", "description": "Opsiyonel hedef branş."},
+                },
+                "required": ["window"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "set_cashflow_cdf_model",
+            "description": (
+                "Cashflow Curve sekmesinde bir gelişim dönemi için model seç. "
+                "model: 1=Initial, 2=Exp Decay, 3=Inv Power, 4=Power, 5=Weibull, 6=User Value. "
+                "branch_id verilmezse aktif branşa uygulanır."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "dev_period": {"type": "string"},
+                    "model": {"type": "integer", "enum": [1, 2, 3, 4, 5, 6]},
+                    "branch_id": {"type": "string", "description": "Opsiyonel hedef branş."},
+                },
+                "required": ["dev_period", "model"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "set_cashflow_cdf_model_bulk",
+            "description": "set_cashflow_cdf_model toplu versiyonu.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "dev_period": {"type": "string"},
+                                "model": {"type": "integer", "enum": [1, 2, 3, 4, 5, 6]},
+                            },
+                            "required": ["dev_period", "model"],
+                        },
+                    },
+                    "branch_id": {"type": "string", "description": "Opsiyonel hedef branş."},
+                },
+                "required": ["items"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "reset_cashflow_curve",
+            "description": (
+                "Cashflow curve sekmesindeki tüm model/include/user value seçimlerini temizle. "
+                "branch_id verilmezse aktif branşa uygulanır."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "branch_id": {"type": "string", "description": "Opsiyonel hedef branş."},
+                },
+                "required": [],
+            },
+        },
+    },
+    # ─── Discount tools ───────────────────────────────────────────────────────
+    {
+        "type": "function",
+        "function": {
+            "name": "get_discount_state",
+            "description": (
+                "Tüm branşların iskonto özetini döner: Unpaid Liability, "
+                "SEDDK %30 faiz ile İskontolu Unpaid, iskonto tutarı ve duration. "
+                "Cashflow pattern hesaplanmamış branşlarda null döner."
+            ),
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "compute_discount",
+            "description": (
+                "Belirli bir branş için iskonto hesapla. Sabit faiz (flat) veya "
+                "term yapısı (curve) kullanılabilir. Sonuç: kaza yılı bazlı "
+                "Unpaid Liability, İskontolu Unpaid, iskonto tutarı, iskonto%, duration. "
+                "Cashflow pattern eksikse hata döner. "
+                "SEDDK 2025: flat_rate=0.30. IFRS 17: piyasa gözlemlenebilir oran."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "branch_id": {
+                        "type": "string",
+                        "description": "Hedef branş. Verilmezse aktif branş.",
+                    },
+                    "rate_mode": {
+                        "type": "string",
+                        "enum": ["flat", "curve"],
+                        "description": "'flat' = sabit faiz, 'curve' = vade yapısı.",
+                    },
+                    "flat_rate": {
+                        "type": "number",
+                        "description": "Yıllık faiz oranı (0.30 = %30). rate_mode='flat' için.",
+                    },
+                    "curve_nodes": {
+                        "type": "array",
+                        "description": "Eğri noktaları. rate_mode='curve' için.",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "month": {"type": "integer"},
+                                "rate": {"type": "number", "description": "Yıllık spot oran (0.25 = %25)."},
+                            },
+                            "required": ["month", "rate"],
+                        },
+                    },
+                },
+                "required": ["rate_mode"],
+            },
+        },
+    },
+    # ─── Data tools ───────────────────────────────────────────────────────────
+    {
+        "type": "function",
+        "function": {
+            "name": "list_data_periods",
+            "description": (
+                "Veri modülündeki tüm dönemleri ve dataset meta bilgilerini listele. "
+                "Hangi dönemlerde hangi veriler yüklü (hasar/prim/üçgen), kayıt sayıları, "
+                "branş listeleri, tarih aralıkları. Veri modülüyle ilgili her soruda kullan."
+            ),
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    # ─── Navigation tools ─────────────────────────────────────────────────────
+    {
+        "type": "function",
+        "function": {
+            "name": "navigate_to",
+            "description": (
+                "Kullanıcıyı belirli bir modüle yönlendir. Kullanıcı 'iskonto sayfasına git', "
+                "'nakit akışını aç' gibi navigasyon isteğinde bulunursa kullan. "
+                "module: 'reserve' | 'cashflow' | 'discount' | 'data' | 'home'."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "module": {
+                        "type": "string",
+                        "enum": ["reserve", "cashflow", "discount", "data", "home"],
+                    },
+                },
+                "required": ["module"],
+            },
+        },
+    },
 ]
 
 
@@ -796,6 +981,57 @@ def dispatch_tool(
         return _get_ilr_triangle(triangle, session_state)  # type: ignore[arg-type]
     if name == "get_file_summary":
         return _get_file_summary(session_state)
+    # ─── Cashflow ─────────────────────────────────────────────────────────────
+    if name == "get_cashflow_state":
+        return _get_cashflow_state(session_state)
+    if name == "set_cashflow_window":
+        window = str(args.get("window", "all"))
+        if window not in {"4", "5", "7", "all"}:
+            return {"error": f"Geçersiz window: {window}"}
+        branch_id = args.get("branch_id")
+        payload: dict[str, Any] = {"window": window}
+        if branch_id:
+            payload["branch_id"] = str(branch_id)
+        return {"window": window, "_action": {"type": "set_cashflow_window", "payload": payload, "module": "cashflow"}}
+    if name == "set_cashflow_cdf_model":
+        dev = str(args.get("dev_period", ""))
+        model = int(args.get("model", 1))
+        if model not in {1, 2, 3, 4, 5, 6}:
+            return {"error": f"Geçersiz model: {model}"}
+        branch_id = args.get("branch_id")
+        payload = {"dev_period": dev, "model": model}
+        if branch_id:
+            payload["branch_id"] = str(branch_id)
+        return {"dev_period": dev, "model": model, "_action": {"type": "set_cashflow_cdf_model", "payload": payload, "module": "cashflow"}}
+    if name == "set_cashflow_cdf_model_bulk":
+        items = args.get("items", []) or []
+        clean = [{"dev_period": str(i.get("dev_period", "")), "model": int(i.get("model", 1))} for i in items if i.get("dev_period") and int(i.get("model", 0)) in {1, 2, 3, 4, 5, 6}]
+        branch_id = args.get("branch_id")
+        payload = {"items": clean}
+        if branch_id:
+            payload["branch_id"] = str(branch_id)
+        return {"applied": clean, "count": len(clean), "_action": {"type": "set_cashflow_cdf_model_bulk", "payload": payload, "module": "cashflow"}}
+    if name == "reset_cashflow_curve":
+        branch_id = args.get("branch_id")
+        payload = {}
+        if branch_id:
+            payload["branch_id"] = str(branch_id)
+        return {"cleared": True, "_action": {"type": "reset_cashflow_curve", "payload": payload, "module": "cashflow"}}
+    # ─── Discount ─────────────────────────────────────────────────────────────
+    if name == "get_discount_state":
+        return _get_discount_state(session_state)
+    if name == "compute_discount":
+        return _compute_discount(session_state, args)
+    # ─── Data ─────────────────────────────────────────────────────────────────
+    if name == "list_data_periods":
+        return _list_data_periods(session_state)
+    # ─── Navigation ───────────────────────────────────────────────────────────
+    if name == "navigate_to":
+        module = str(args.get("module", ""))
+        valid = {"reserve", "cashflow", "discount", "data", "home"}
+        if module not in valid:
+            return {"error": f"Geçersiz module: {module}. Seçenekler: {valid}"}
+        return {"module": module, "_action": {"type": "navigate_to", "payload": {"module": module}, "module": "navigation"}}
     raise KeyError(f"Tool bulunamadı: {name}")
 
 
@@ -1392,6 +1628,169 @@ def _get_file_summary(session_state: dict[str, Any] | None) -> dict[str, Any]:
             )
         }
     return summary
+
+
+def _get_cashflow_state(session_state: dict[str, Any] | None) -> dict[str, Any]:
+    if not session_state:
+        return {"error": "Session state yok."}
+    cashflow = session_state.get("cashflow")
+    if not cashflow:
+        return {"branches": [], "note": "Cashflow verisi henüz yüklenmemiş."}
+    return cashflow
+
+
+def _get_discount_state(session_state: dict[str, Any] | None) -> dict[str, Any]:
+    if not session_state:
+        return {"error": "Session state yok."}
+    discount = session_state.get("discount")
+    if not discount:
+        return {"branches": [], "note": "İskonto verisi henüz yüklenmemiş."}
+    return discount
+
+
+def _compute_discount(
+    session_state: dict[str, Any] | None, args: dict[str, Any]
+) -> dict[str, Any]:
+    """Discount hesaplama — session_state'ten cashflow pattern + reserve verisi kullanır."""
+    if not session_state:
+        return {"error": "Session state yok."}
+
+    rate_mode = str(args.get("rate_mode", "flat"))
+    if rate_mode not in {"flat", "curve"}:
+        return {"error": f"Geçersiz rate_mode: {rate_mode}. 'flat' veya 'curve' olmalı."}
+
+    # Hedef branşı bul
+    branch_id = args.get("branch_id")
+    target_branch: dict[str, Any] | None = None
+    for p in session_state.get("periods", []):
+        for b in p.get("branches", []):
+            if branch_id:
+                if b.get("id") == str(branch_id):
+                    target_branch = b
+                    break
+            elif b.get("is_active"):
+                target_branch = b
+                break
+        if target_branch:
+            break
+
+    if target_branch is None:
+        if branch_id:
+            return {"error": f"branch_id bulunamadı: {branch_id}"}
+        return {"error": "Aktif branş yok. branch_id belirtin veya önce select_branch kullanın."}
+
+    # Cashflow snapshot'tan bu branşın pattern bilgisini al
+    cashflow_snap = session_state.get("cashflow", {})
+    cf_branches = cashflow_snap.get("branches", []) if isinstance(cashflow_snap, dict) else []
+    cf_branch = next((b for b in cf_branches if b.get("branch_id") == target_branch.get("id")), None)
+
+    if not cf_branch or not cf_branch.get("has_pattern"):
+        return {
+            "error": (
+                f"'{target_branch.get('name')}' branşında cashflow pattern hesaplanmamış. "
+                "Cashflow modülünde bu branşı seçip hesaplamayı çalıştırın."
+            )
+        }
+
+    # Rezerv sonuçlarından per_origin al
+    per_origin = target_branch.get("per_origin", []) or []
+    if not per_origin:
+        return {"error": "Bu branş için rezerv sonuçları yok. Rezerv modülünde üçgen yükleyin."}
+
+    # Faiz fonksiyonu
+    if rate_mode == "flat":
+        flat_rate = float(args.get("flat_rate", 0.30))
+        rate_label = f"%{flat_rate * 100:.1f} sabit"
+    else:
+        curve_nodes = args.get("curve_nodes", []) or []
+        if not curve_nodes:
+            return {"error": "curve_nodes boş. Eğri noktalarını belirtin: [{month: 12, rate: 0.28}, ...]"}
+        rate_label = f"Eğri ({len(curve_nodes)} nokta)"
+
+    # İskonto hesaplama (Python'da)
+    discount_pct_note = (
+        "Not: Detaylı aylık nakit akışı pattern bilgisi frontend'de tutulduğundan "
+        "bu hesaplama per_origin ağırlıklı ortalama ay üzerinden basitleştirilmiştir. "
+        "Tam sonuç için İskonto modülüne gidin."
+    )
+
+    results = []
+    total_unpaid = 0.0
+    total_discounted = 0.0
+    total_weighted_duration = 0.0
+
+    for row in per_origin:
+        origin = str(row.get("origin", ""))
+        latest = float(row.get("latest", 0) or 0)
+        ibnr = float(row.get("ibnr", 0) or 0)
+        unpaid = latest + ibnr
+
+        if unpaid <= 0:
+            continue
+
+        # Pattern bilgisi olmadan duration'ı yaklaşık hesapla (CDF'ten)
+        cdf = float(row.get("cdf", 1) or 1)
+        pct_dev = 1 / cdf if cdf and cdf > 0 else 1
+        # Gelecek ödeme ağırlığı ortalama ay: basit yaklaşım
+        approx_months = 12 * (1 / pct_dev - 1) if pct_dev < 1 else 12
+
+        if rate_mode == "flat":
+            v = 1 / ((1 + flat_rate) ** (approx_months / 12))
+        else:
+            # Eğriden en yakın nokta
+            sorted_nodes = sorted(curve_nodes, key=lambda x: x.get("month", 0))
+            rate = sorted_nodes[-1].get("rate", 0.3) if sorted_nodes else 0.3
+            for node in sorted_nodes:
+                if approx_months >= node.get("month", 0):
+                    rate = node.get("rate", 0.3)
+            v = 1 / ((1 + rate) ** (approx_months / 12))
+
+        discounted = unpaid * v
+        discount_amt = unpaid - discounted
+        discount_pct_val = discount_amt / unpaid if unpaid > 0 else 0
+
+        results.append({
+            "origin": origin,
+            "unpaid_liability": round(unpaid),
+            "approx_duration_months": round(approx_months, 1),
+            "discount_factor": round(v, 4),
+            "discounted_unpaid": round(discounted),
+            "discount_amount": round(discount_amt),
+            "discount_pct": round(discount_pct_val * 100, 2),
+        })
+        total_unpaid += unpaid
+        total_discounted += discounted
+        total_weighted_duration += approx_months * unpaid
+
+    total_discount = total_unpaid - total_discounted
+    avg_duration = total_weighted_duration / total_unpaid if total_unpaid > 0 else 0
+    total_discount_pct = total_discount / total_unpaid * 100 if total_unpaid > 0 else 0
+
+    return {
+        "branch": target_branch.get("name"),
+        "branch_id": target_branch.get("id"),
+        "rate_mode": rate_mode,
+        "rate_label": rate_label,
+        "totals": {
+            "unpaid_liability": round(total_unpaid),
+            "discounted_unpaid": round(total_discounted),
+            "discount_amount": round(total_discount),
+            "discount_pct": round(total_discount_pct, 2),
+            "avg_duration_months": round(avg_duration, 1),
+        },
+        "by_origin": results,
+        "note": discount_pct_note,
+        "tip": "Tam hesaplama için navigate_to(module='discount') ile İskonto modülüne gidin.",
+    }
+
+
+def _list_data_periods(session_state: dict[str, Any] | None) -> dict[str, Any]:
+    if not session_state:
+        return {"error": "Session state yok."}
+    data = session_state.get("data")
+    if not data:
+        return {"periods": [], "note": "Veri modülü verisi henüz yüklenmemiş."}
+    return data
 
 
 def _run_chain_ladder(triangle: Triangle, args: dict[str, Any]) -> dict[str, Any]:

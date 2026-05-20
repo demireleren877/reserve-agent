@@ -800,6 +800,13 @@ export default function CashflowPage() {
           quarterly_pattern: p.quarterly_pattern,
           monthly_pattern: p.monthly_pattern,
         } : prev);
+        if (activeBranchId && p.monthly_pattern) {
+          actions.updateBranch(
+            activeBranchId,
+            () => ({ cashflowMonthlyPattern: p.monthly_pattern }),
+            "cashflow_pattern_computed", undefined, "user",
+          );
+        }
       })
       .catch(() => {/* sessizce geç */});
   }, [effectiveCdfs, resultKey]); // eslint-disable-line react-hooks/exhaustive-deps

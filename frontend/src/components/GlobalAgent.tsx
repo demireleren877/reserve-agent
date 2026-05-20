@@ -1,8 +1,18 @@
 "use client";
 
+import { useEffect, useCallback } from "react";
+import { useRouter, usePathname } from "next/navigation";
 import { ChatPanel } from "@/components/ChatPanel";
 import { useAgentRegistry } from "@/lib/agent-registry";
-import { usePathname } from "next/navigation";
+import type { AgentAction } from "@/types/triangle";
+
+const MODULE_ROUTES: Record<string, string> = {
+  reserve: "/reserve",
+  cashflow: "/cashflow",
+  discount: "/discount",
+  data: "/data",
+  home: "/home",
+};
 
 export function GlobalAgentLauncher() {
   const { panelOpen, togglePanel } = useAgentRegistry();
@@ -19,25 +29,48 @@ export function GlobalAgentLauncher() {
 }
 
 export function GlobalAgentPanel() {
-  const { panelOpen, setPanelOpen, modulesPayload, dispatchActions } =
+  const { panelOpen, setPanelOpen, modulesPayload, dispatchActions, registerActionHandler, unregisterActionHandler } =
     useAgentRegistry();
   const pathname = usePathname();
+  const router = useRouter();
 
-  // Only show active branch context when the user is actually on the reserve page
-  const onReservePage = pathname?.startsWith("/reserve");
+  // navigate_to action handler — global, tüm modüller için çalışır
+  const handleNavigate = useCallback(
+    (received: AgentAction[]) => {
+      for (const a of received) {
+        if (a.type === "navigate_to") {
+          const module = a.payload?.module as string | undefined;
+          if (!module) continue;
+          const route = MODULE_ROUTES[module];
+          if (route) router.push(route);
+        }
+      }
+    },
+    [router],
+  );
+
+  useEffect(() => {
+    registerActionHandler("navigation", handleNavigate);
+    return () => unregisterActionHandler("navigation");
+  }, [registerActionHandler, unregisterActionHandler, handleNavigate]);
+
+  // Aktif modül bağlamı
   const ss = (modulesPayload?.reserve as Record<string, unknown> | undefined)
     ?.session_state as Record<string, unknown> | null | undefined;
   const activeInfo = ss?.active as
     | { period_label?: string; branch_name?: string; frequency?: string }
     | null
     | undefined;
-  const activeContext = onReservePage && activeInfo?.branch_name
-    ? {
-        periodLabel: activeInfo.period_label ?? "",
-        branchName: activeInfo.branch_name,
-        frequency: activeInfo.frequency ?? "",
-      }
-    : null;
+
+  const onReservePage = pathname?.startsWith("/reserve");
+  const activeContext =
+    onReservePage && activeInfo?.branch_name
+      ? {
+          periodLabel: activeInfo.period_label ?? "",
+          branchName: activeInfo.branch_name,
+          frequency: activeInfo.frequency ?? "",
+        }
+      : null;
 
   return (
     <>
@@ -45,7 +78,9 @@ export function GlobalAgentPanel() {
       <div
         className={
           "fixed inset-0 z-[55] bg-black/20 backdrop-blur-[1px] transition-opacity duration-200 " +
-          (panelOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none")
+          (panelOpen
+            ? "opacity-100 pointer-events-auto"
+            : "opacity-0 pointer-events-none")
         }
         onClick={() => setPanelOpen(false)}
       />

@@ -17,6 +17,7 @@ const MODULES: ModuleItem[] = [
   { href: "/data", label: "Veri", icon: <DatabaseIcon /> },
   { href: "/reserve", label: "Rezerv", icon: <StackIcon /> },
   { href: "/cashflow", label: "Nakit Akışı", icon: <CashflowIcon /> },
+  { href: "/discount", label: "İskonto", icon: <DiscountIcon /> },
 ];
 
 const STORAGE_KEY = "app-sidebar-collapsed";
@@ -341,6 +342,16 @@ function CashflowIcon() {
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M2 7h20M2 12h20M2 17h20" />
       <path d="M6 3v18M18 3v18" />
+    </svg>
+  );
+}
+
+function DiscountIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M19 5 5 19" />
+      <circle cx="6.5" cy="6.5" r="2.5" />
+      <circle cx="17.5" cy="17.5" r="2.5" />
     </svg>
   );
 }

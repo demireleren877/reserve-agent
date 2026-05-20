@@ -6,6 +6,9 @@ import { GlobalAgentLauncher, GlobalAgentPanel } from "@/components/GlobalAgent"
 import { ProjectProvider } from "@/lib/project-store";
 import { DataStoreProvider } from "@/lib/data-store";
 import { ReserveAgentBridge } from "@/components/ReserveAgentBridge";
+import { CashflowAgentBridge } from "@/components/CashflowAgentBridge";
+import { DiscountAgentBridge } from "@/components/DiscountAgentBridge";
+import { DataAgentBridge } from "@/components/DataAgentBridge";
 import { AuthGate } from "@/lib/auth/auth-gate";
 import { UserPlanProvider } from "@/lib/auth/user-plan-context";
 
@@ -18,6 +21,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <DataStoreProvider userId={me.uid}>
           <AgentRegistryProvider>
             <ReserveAgentBridge />
+            <CashflowAgentBridge />
+            <DiscountAgentBridge />
+            <DataAgentBridge />
             <div
               className="flex min-h-screen bg-[color:var(--background)] text-[color:var(--foreground)]"
               style={{ colorScheme: "light" }}

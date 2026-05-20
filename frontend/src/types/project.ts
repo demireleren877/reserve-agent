@@ -80,6 +80,10 @@ export interface Branch {
   cashflowCdfModelPerPeriod?: Record<string, 1 | 2 | 3 | 4 | 5 | 6>;
   cashflowCurveIncludePerPeriod?: Record<string, boolean>;
   cashflowCdfInitial?: Record<string, number>;
+
+  /** Cashflow'dan hesaplanan aylık dağılım — iskonto için kullanılır.
+   *  Key: origin period string. Value: { month (1-based offset), weight }[] sums to 1. */
+  cashflowMonthlyPattern?: Record<string, { month: number; weight: number }[]>;
 }
 
 export interface Period {

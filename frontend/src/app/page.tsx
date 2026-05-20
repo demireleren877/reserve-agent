@@ -958,7 +958,7 @@ function ComingSoonPreview({ module, eta }: { module: string; eta: string }) {
 
 function AgentExplorerContent() {
   return (
-    <div className="fi flex flex-col lg:flex-row gap-6 lg:h-[560px]">
+    <div className="fi flex flex-col lg:flex-row gap-6 lg:h-[480px]">
       {/* Left: feature list */}
       <div className="lg:w-72 shrink-0 space-y-3 lg:overflow-y-auto">
         <div className="flex items-center gap-3 mb-4">

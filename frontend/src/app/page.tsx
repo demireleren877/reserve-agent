@@ -494,7 +494,7 @@ function ModuleExplorer() {
 
   return (
     <section id="modules" className="py-10 md:py-12" style={{ background: "#f6f7f9", borderTop: "1px solid #e2e5ea", borderBottom: "1px solid #e2e5ea" }}>
-      <div className="max-w-6xl mx-auto px-6 md:px-8">
+      <div className="w-full px-6 md:px-10 xl:px-16">
         {/* Tab pills */}
         <div data-rv className="flex justify-center mb-5 flex-wrap gap-2">
           {MODULE_ORDER.map((k) => {
@@ -1068,6 +1068,12 @@ function ChatPanelMock() {
   const [typing, setTyping] = useState(false);
   const [partial, setPartial] = useState("");
   const aliveRef = useRef(true);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [shown, typing, partial]);
 
   useEffect(() => {
     aliveRef.current = true;
@@ -1151,7 +1157,7 @@ function ChatPanelMock() {
       </div>
 
       {/* Messages */}
-      <div className="p-4 space-y-5 flex-1 overflow-y-auto overflow-x-hidden">
+      <div ref={scrollRef} className="p-4 space-y-5 flex-1 overflow-y-auto overflow-x-hidden">
         {shown.map((m, i) => (
           <ChatBubble key={i} msg={m} />
         ))}

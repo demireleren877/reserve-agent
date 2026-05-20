@@ -958,7 +958,7 @@ function ComingSoonPreview({ module, eta }: { module: string; eta: string }) {
 
 function AgentExplorerContent() {
   return (
-    <div className="fi flex flex-col lg:flex-row gap-6 items-start">
+    <div className="fi flex flex-col lg:flex-row gap-6 lg:items-stretch">
       {/* Left: feature list */}
       <div className="lg:w-72 shrink-0 space-y-3">
         <div className="flex items-center gap-3 mb-4">
@@ -993,8 +993,8 @@ function AgentExplorerContent() {
           <Arrow />
         </Link>
       </div>
-      {/* Right: chat mock fixed size */}
-      <div className="flex-1 min-w-0">
+      {/* Right: chat mock same height as left */}
+      <div className="flex-1 min-w-0 flex flex-col">
         <ChatPanelMock />
       </div>
     </div>
@@ -1124,7 +1124,7 @@ function ChatPanelMock() {
   }, []);
 
   return (
-    <div className="lcard" style={{ overflow: "hidden", boxShadow: "0 20px 50px rgba(15,23,42,.08)", width: "100%", display: "flex", flexDirection: "column", height: 360 }}>
+    <div className="lcard" style={{ overflow: "hidden", boxShadow: "0 20px 50px rgba(15,23,42,.08)", width: "100%", display: "flex", flexDirection: "column", flex: 1 }}>
       {/* Header — matches ChatPanel */}
       <div className="flex items-center gap-3 px-4 h-14" style={{ borderBottom: "1px solid #e2e5ea" }}>
         <div className="flex items-center gap-2.5 flex-1">

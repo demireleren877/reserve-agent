@@ -61,7 +61,7 @@ def build_triangles(
     brans: str,
     origin_granularity: Literal["yearly", "quarterly"],
     development_granularity: Literal["yearly", "quarterly"],
-) -> tuple[Triangle, Triangle]:
+) -> tuple[Triangle, Triangle, dict | None]:
     """
     Brans'a göre filtreli kayıtlardan (paid, incurred) üçgen çifti döner.
 
@@ -127,19 +127,23 @@ def build_triangles(
 
     origin_seqs = sorted(origin_label.keys())  # eski → yeni
 
-    # Gelişim yaşları: her origin'in yaş aralığı farklı, union al ama
-    # en eski origin'e göre max yaşı belirle (diğerleri daha az yaş görür)
+    # Yaşlar: excel_parser ile aynı konvansiyon — 0-indeksli.
+    # Her iki granülarite de yıllıksa yaşları yıl birimine (//4) indirge.
+    both_yearly = orig_gran == Granularity.YEARLY and dev_gran == Granularity.YEARLY
+
     oldest_seq = origin_seqs[0]
-    max_age = eval_dev_seq - oldest_seq + 1
-    if max_age < 1:
+    max_age = eval_dev_seq - oldest_seq
+    if both_yearly:
+        max_age = max_age // 4
+    if max_age < 0:
         raise ValueError("Geçerli gelişim dönemi bulunamadı")
 
     # Sadece gözlemlenen dev_seq'lerden gelen yaşları kullan
-    # (boş yaşları doldurma; sadece verisi olan gelişim dönemleri sütun olsun)
     observed_ages: set[int] = set()
     for (o_seq, d_seq) in list(inc_odeme.keys()) + list(muallak.keys()):
-        age = d_seq - o_seq + 1
-        if 1 <= age <= max_age:
+        raw_age = d_seq - o_seq
+        age = raw_age // 4 if both_yearly else raw_age
+        if 0 <= age <= max_age:
             observed_ages.add(age)
 
     if not observed_ages:
@@ -149,12 +153,13 @@ def build_triangles(
     min_age = dev_ages[0]
 
     # Hiçbir gelişim dönemi görmemiş (çok yeni) originleri çıkar
-    origin_seqs = [o for o in origin_seqs if eval_dev_seq - o + 1 >= min_age]
+    if both_yearly:
+        origin_seqs = [o for o in origin_seqs if (eval_dev_seq - o) // 4 >= min_age]
+    else:
+        origin_seqs = [o for o in origin_seqs if eval_dev_seq - o >= min_age]
     if not origin_seqs:
         raise ValueError("Geçerli origin bulunamadı")
 
-    # Her origin için max geçerli age = eval_dev_seq - o_seq + 1
-    # Bu değer origin ne kadar eski ise o kadar büyük → monoton azalan → üçgen garantisi
     origin_periods = [origin_label[s] for s in origin_seqs]
     development_periods = dev_ages
 
@@ -162,7 +167,7 @@ def build_triangles(
     incurred_values: list[list[float | None]] = []
 
     for o_seq in origin_seqs:
-        max_age_for_origin = eval_dev_seq - o_seq + 1
+        max_age_for_origin = (eval_dev_seq - o_seq) // 4 if both_yearly else eval_dev_seq - o_seq
         paid_row: list[float | None] = []
         incurred_row: list[float | None] = []
         cum_paid = 0.0
@@ -174,7 +179,7 @@ def build_triangles(
                 incurred_row.append(None)
                 continue
 
-            d_seq = o_seq + age - 1
+            d_seq = o_seq + age * 4 if both_yearly else o_seq + age
             inc = inc_odeme.get((o_seq, d_seq), 0.0)
             mual = muallak.get((o_seq, d_seq), 0.0)
 

@@ -178,7 +178,6 @@ export default function Landing() {
       <Nav />
       <Hero />
       <ModuleExplorer />
-      <AgentSection />
       <Security />
       <Pricing />
       <FAQ />
@@ -192,17 +191,16 @@ export default function Landing() {
 function Nav() {
   return (
     <nav className="sticky top-0 z-50 nav-blur" style={{ borderBottom: "1px solid #e2e5ea" }}>
-      <div className="max-w-6xl mx-auto px-6 md:px-8 flex items-center justify-between" style={{ height: 60 }}>
-        <Link href="/" className="flex items-center gap-2.5">
-          <img src="/favicon.png" alt="Actuarius" className="h-6 w-6" />
-          <span className="text-[16px] font-semibold tracking-tight" style={{ color: "#0f172a" }}>
+      <div className="w-full px-6 md:px-8 flex items-center justify-between" style={{ height: 64 }}>
+        <Link href="/" className="flex items-center gap-3 shrink-0">
+          <img src="/favicon.png" alt="Actuarius" className="h-8 w-8" />
+          <span className="text-[18px] font-bold tracking-tight" style={{ color: "#0f172a" }}>
             Actuarius
           </span>
         </Link>
         <div className="flex items-center gap-1">
           {[
             ["#modules", "Modüller"],
-            ["#agent", "AI Agent"],
             ["#security", "Güvenlik"],
             ["#pricing", "Fiyatlandırma"],
           ].map(([href, label]) => (
@@ -231,48 +229,53 @@ function Nav() {
 
 function Hero() {
   return (
-    <section className="px-6 md:px-8 pt-20 pb-20">
-      <div className="max-w-6xl mx-auto">
-        <div className="text-center max-w-3xl mx-auto mb-14">
-          <div className="fi mb-6">
-            <span className="pill pill-info">
-              <span className="w-1.5 h-1.5 rounded-full" style={{ background: "#1d4ed8" }} />
-              Rezerv ve Nakit Akışı modülleri canlı
-            </span>
-          </div>
-          <h1
-            className="fi text-[44px] sm:text-[56px] md:text-[64px] font-bold tracking-tight leading-[1.05] mb-6"
-            style={{ color: "#0f172a", animationDelay: "0.05s", letterSpacing: "-0.025em" }}
-          >
-            Aktüeryal analiz için
-            <br />
-            <span style={{ color: "#1d4ed8" }}>profesyonel platform</span>
-          </h1>
-          <p className="fi text-[18px] leading-[1.6] mx-auto max-w-2xl" style={{ color: "#475569", animationDelay: "0.15s" }}>
-            Hasar rezervi ve nakit akışı projeksiyonu. Chain-Ladder, Bornhuetter–Ferguson ve
-            parametrik tail fitting&apos;den AI Agent destekli senaryo analizine kadar —
-            Excel&apos;de saatler süren analizler dakikalar içinde.
-          </p>
-          <div className="fi flex flex-wrap gap-3 justify-center mt-9" style={{ animationDelay: "0.22s" }}>
-            <Link href="/reserve" className="btn-primary">
-              Ücretsiz Başla
-              <Arrow />
-            </Link>
-            <a href="#modules" className="btn-secondary">
-              Modülleri İnceleyin
-            </a>
-          </div>
-          <div className="fi mt-6 text-[13px] flex items-center justify-center gap-5 flex-wrap" style={{ color: "#64748b", animationDelay: "0.3s" }}>
-            <span className="flex items-center gap-1.5">
-              <CheckIcon /> Free plan kalıcı ücretsiz
-            </span>
-            <span className="flex items-center gap-1.5">
-              <CheckIcon /> Ham veri LLM&apos;e iletilmez
-            </span>
-            <span className="flex items-center gap-1.5">
-              <CheckIcon /> Türkçe arayüz
-            </span>
-          </div>
+    <section
+      className="px-6 md:px-8 flex flex-col items-center justify-center"
+      style={{
+        minHeight: "calc(100vh - 64px)",
+        background: "radial-gradient(ellipse 90% 55% at 50% -5%, #dbeafe 0%, #fff 62%)",
+      }}
+    >
+      <div className="text-center max-w-3xl mx-auto">
+        <div className="fi mb-7">
+          <span className="pill pill-info">
+            <span className="w-1.5 h-1.5 rounded-full" style={{ background: "#1d4ed8" }} />
+            Rezerv ve Nakit Akışı modülleri canlı
+          </span>
+        </div>
+        <h1
+          className="fi text-[46px] sm:text-[60px] md:text-[72px] font-bold tracking-tight leading-[1.04] mb-7"
+          style={{ color: "#0f172a", animationDelay: "0.05s", letterSpacing: "-0.03em" }}
+        >
+          Aktüeryal analiz için
+          <br />
+          <span style={{ background: "linear-gradient(135deg,#1d4ed8 0%,#3b82f6 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+            profesyonel platform
+          </span>
+        </h1>
+        <p className="fi text-[18px] leading-[1.65] mx-auto max-w-xl" style={{ color: "#475569", animationDelay: "0.15s" }}>
+          Chain-Ladder, Bornhuetter–Ferguson ve parametrik tail fitting&apos;den
+          AI Agent destekli senaryo analizine kadar — eksiksiz rezerv iş akışı.
+        </p>
+        <div className="fi flex flex-wrap gap-3 justify-center mt-10" style={{ animationDelay: "0.22s" }}>
+          <Link href="/reserve" className="btn-primary" style={{ fontSize: 15, padding: "10px 22px" }}>
+            Ücretsiz Başla
+            <Arrow />
+          </Link>
+          <a href="#modules" className="btn-secondary" style={{ fontSize: 15, padding: "10px 22px" }}>
+            Modülleri İnceleyin
+          </a>
+        </div>
+        <div className="fi mt-8 text-[13px] flex items-center justify-center gap-6 flex-wrap" style={{ color: "#64748b", animationDelay: "0.3s" }}>
+          <span className="flex items-center gap-1.5">
+            <CheckIcon /> Free plan kalıcı ücretsiz
+          </span>
+          <span className="flex items-center gap-1.5">
+            <CheckIcon /> Ham veri LLM&apos;e iletilmez
+          </span>
+          <span className="flex items-center gap-1.5">
+            <CheckIcon /> Türkçe arayüz
+          </span>
         </div>
       </div>
     </section>
@@ -452,7 +455,7 @@ function MetricBox({ label, value, accent }: { label: string; value: ReactNode; 
 
 // ─── Module Explorer ──────────────────────────────────────────────────────────
 
-type ModuleKey = "reserve" | "cashflow" | "ifrs17" | "discount";
+type ModuleKey = "reserve" | "cashflow" | "ifrs17" | "discount" | "agent";
 
 const MODULE_DEFS: Record<ModuleKey, { name: string; status: "active" | "dev"; tagline: string; href?: string }> = {
   reserve: {
@@ -477,29 +480,23 @@ const MODULE_DEFS: Record<ModuleKey, { name: string; status: "active" | "dev"; t
     status: "dev",
     tagline: "Yield curve ile bugünkü değere indirgeme",
   },
+  agent: {
+    name: "AI Agent",
+    status: "active",
+    tagline: "Doğal dilde aktüer desteği",
+  },
 };
 
-const MODULE_ORDER: ModuleKey[] = ["reserve", "cashflow", "discount", "ifrs17"];
+const MODULE_ORDER: ModuleKey[] = ["reserve", "cashflow", "discount", "ifrs17", "agent"];
 
 function ModuleExplorer() {
   const [active, setActive] = useState<ModuleKey>("reserve");
 
   return (
-    <section id="modules" className="py-24 md:py-28" style={{ background: "#f6f7f9", borderTop: "1px solid #e2e5ea", borderBottom: "1px solid #e2e5ea" }}>
+    <section id="modules" className="py-10 md:py-12" style={{ background: "#f6f7f9", borderTop: "1px solid #e2e5ea", borderBottom: "1px solid #e2e5ea" }}>
       <div className="max-w-6xl mx-auto px-6 md:px-8">
-        <div className="text-center max-w-2xl mx-auto mb-12" data-rv>
-          <div className="eyebrow">Modüller</div>
-          <h2 className="text-[36px] md:text-[44px] font-bold tracking-tight mb-4" style={{ color: "#0f172a", letterSpacing: "-0.025em" }}>
-            Aktüeryal iş akışının tamamı
-          </h2>
-          <p className="text-[17px] leading-relaxed" style={{ color: "#475569" }}>
-            Dört modül, tek platform. Aynı veri katmanı üzerinde çalışırlar — bir modüldeki seçim
-            diğerini doğrudan etkiler.
-          </p>
-        </div>
-
         {/* Tab pills */}
-        <div data-rv className="flex justify-center mb-8 flex-wrap gap-2">
+        <div data-rv className="flex justify-center mb-5 flex-wrap gap-2">
           {MODULE_ORDER.map((k) => {
             const m = MODULE_DEFS[k];
             return (
@@ -526,6 +523,7 @@ function ModuleExplorer() {
           {active === "cashflow" && <CashflowExplorerContent />}
           {active === "discount" && <ComingSoonContent moduleKey="discount" />}
           {active === "ifrs17" && <ComingSoonContent moduleKey="ifrs17" />}
+          {active === "agent" && <AgentExplorerContent />}
         </div>
       </div>
     </section>
@@ -551,19 +549,16 @@ function ExplorerLayout({
 }) {
   return (
     <div className="fi">
-      {/* Top row: meta + title + description */}
-      <div className="flex flex-col lg:flex-row lg:items-end gap-6 mb-8">
-        <div className="flex-1">
-          <div className="mb-3">{badge}</div>
+      {/* Top row: meta + title + cta */}
+      <div className="flex flex-col lg:flex-row lg:items-center gap-4 mb-5">
+        <div className="flex-1 flex items-center gap-4">
+          <div>{badge}</div>
           <h3
-            className="text-[28px] md:text-[34px] font-bold tracking-tight mb-3"
+            className="text-[22px] md:text-[26px] font-bold tracking-tight"
             style={{ color: "#0f172a", letterSpacing: "-0.02em" }}
           >
             {title}
           </h3>
-          <p className="text-[15px] leading-relaxed max-w-xl" style={{ color: "#475569" }}>
-            {description}
-          </p>
         </div>
         {href && cta && (
           <Link href={href} className="btn-primary shrink-0">
@@ -574,25 +569,20 @@ function ExplorerLayout({
       </div>
 
       {/* Feature chips */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
         {features.map((f) => (
           <div
             key={f.t}
-            className="lcard px-4 py-3"
+            className="lcard px-4 py-2.5 flex items-center gap-2"
           >
-            <div className="flex items-center gap-2 mb-1.5">
-              <div
-                className="w-5 h-5 rounded flex items-center justify-center shrink-0"
-                style={{ background: "#eaf0ff" }}
-              >
-                <CheckIcon color="#1d4ed8" size={11} />
-              </div>
-              <div className="text-[13px] font-semibold" style={{ color: "#0f172a" }}>
-                {f.t}
-              </div>
+            <div
+              className="w-5 h-5 rounded flex items-center justify-center shrink-0"
+              style={{ background: "#eaf0ff" }}
+            >
+              <CheckIcon color="#1d4ed8" size={11} />
             </div>
-            <div className="text-[12px] leading-relaxed" style={{ color: "#64748b" }}>
-              {f.d}
+            <div className="text-[13px] font-semibold" style={{ color: "#0f172a" }}>
+              {f.t}
             </div>
           </div>
         ))}
@@ -964,6 +954,53 @@ function ComingSoonPreview({ module, eta }: { module: string; eta: string }) {
   );
 }
 
+// ─── Agent Explorer (tab in ModuleExplorer) ──────────────────────────────────
+
+function AgentExplorerContent() {
+  return (
+    <div className="fi flex flex-col lg:flex-row gap-6 items-start">
+      {/* Left: feature list */}
+      <div className="lg:w-72 shrink-0 space-y-3">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="h-8 w-8 rounded-lg grid place-items-center shrink-0" style={{ background: "#1d4ed8" }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <path d="M12 2a5 5 0 1 1 0 10A5 5 0 0 1 12 2zm0 13c-5.33 0-8 2.67-8 4v1h16v-1c0-1.33-2.67-4-8-4z" fill="white" />
+            </svg>
+          </div>
+          <div>
+            <div className="text-[15px] font-bold" style={{ color: "#0f172a" }}>AI Aktüer Agent</div>
+            <div className="text-[12px]" style={{ color: "#64748b" }}>Tüm modüllerde çalışır</div>
+          </div>
+        </div>
+        {[
+          { t: "Senaryo analizi", d: "Komutları doğrudan uygular" },
+          { t: "Sonuç yorumu", d: "IBNR & LR değişimini açıklar" },
+          { t: "Formül desteği", d: "A priori LR, tail model seçimi" },
+          { t: "Veri güvenliği", d: "Ham veri LLM'e iletilmez" },
+        ].map((f) => (
+          <div key={f.t} className="lcard px-4 py-3 flex items-start gap-3">
+            <div className="w-5 h-5 rounded flex items-center justify-center shrink-0 mt-0.5" style={{ background: "#eaf0ff" }}>
+              <CheckIcon color="#1d4ed8" size={11} />
+            </div>
+            <div>
+              <div className="text-[13px] font-semibold" style={{ color: "#0f172a" }}>{f.t}</div>
+              <div className="text-[12px]" style={{ color: "#64748b" }}>{f.d}</div>
+            </div>
+          </div>
+        ))}
+        <Link href="/reserve" className="btn-primary w-full justify-center mt-2">
+          Deneyin
+          <Arrow />
+        </Link>
+      </div>
+      {/* Right: chat mock fixed size */}
+      <div className="flex-1 min-w-0">
+        <ChatPanelMock />
+      </div>
+    </div>
+  );
+}
+
 // ─── Agent (matches real ChatPanel) ───────────────────────────────────────────
 
 function AgentSection() {
@@ -1081,7 +1118,7 @@ function ChatPanelMock() {
   }, []);
 
   return (
-    <div className="lcard" style={{ overflow: "hidden", boxShadow: "0 20px 50px rgba(15,23,42,.08)" }}>
+    <div className="lcard" style={{ overflow: "hidden", boxShadow: "0 20px 50px rgba(15,23,42,.08)", width: "100%", display: "flex", flexDirection: "column", height: 420 }}>
       {/* Header — matches ChatPanel */}
       <div className="flex items-center gap-3 px-4 h-14" style={{ borderBottom: "1px solid #e2e5ea" }}>
         <div className="flex items-center gap-2.5 flex-1">
@@ -1114,7 +1151,7 @@ function ChatPanelMock() {
       </div>
 
       {/* Messages */}
-      <div className="p-4 space-y-5" style={{ minHeight: 340 }}>
+      <div className="p-4 space-y-5 flex-1 overflow-y-auto overflow-x-hidden">
         {shown.map((m, i) => (
           <ChatBubble key={i} msg={m} />
         ))}
@@ -1133,8 +1170,8 @@ function ChatPanelMock() {
           </div>
         )}
         {partial && (
-          <div className="flex justify-start">
-            <div className="flex items-start gap-0">
+          <div className="flex justify-start w-full">
+            <div className="flex items-start gap-0 min-w-0 w-full">
               <div className="h-6 w-6 rounded-full grid place-items-center shrink-0 mt-0.5 mr-2" style={{ background: "#1d4ed8" }}>
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
                   <path d="M12 2a5 5 0 1 1 0 10A5 5 0 0 1 12 2zm0 13c-5.33 0-8 2.67-8 4v1h16v-1c0-1.33-2.67-4-8-4z" fill="white" />
@@ -1150,7 +1187,7 @@ function ChatPanelMock() {
       </div>
 
       {/* Input — matches ChatPanel */}
-      <div className="px-4 py-3" style={{ borderTop: "1px solid #e2e5ea" }}>
+      <div className="px-4 py-3 shrink-0" style={{ borderTop: "1px solid #e2e5ea" }}>
         <div className="flex items-end gap-2">
           <div className="flex-1 rounded-md px-3 py-2 text-[13px]" style={{ background: "#fff", border: "1px solid #e2e5ea", color: "#94a3b8" }}>
             Bir soru sorun veya komut verin…
@@ -1172,7 +1209,7 @@ function ChatPanelMock() {
 function ChatBubble({ msg }: { msg: Msg }) {
   if (msg.role === "user") {
     return (
-      <div className="flex justify-end">
+      <div className="flex justify-end w-full">
         <div className="max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap" style={{ background: "#1d4ed8", color: "#fff", borderTopRightRadius: 4 }}>
           {msg.text}
         </div>
@@ -1180,8 +1217,8 @@ function ChatBubble({ msg }: { msg: Msg }) {
     );
   }
   return (
-    <div className="flex justify-start">
-      <div className="flex items-start gap-0">
+    <div className="flex justify-start w-full">
+      <div className="flex items-start gap-0 min-w-0 w-full">
         <div className="h-6 w-6 rounded-full grid place-items-center shrink-0 mt-0.5 mr-2" style={{ background: "#1d4ed8" }}>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
             <path d="M12 2a5 5 0 1 1 0 10A5 5 0 0 1 12 2zm0 13c-5.33 0-8 2.67-8 4v1h16v-1c0-1.33-2.67-4-8-4z" fill="white" />

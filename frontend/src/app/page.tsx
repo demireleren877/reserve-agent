@@ -493,7 +493,7 @@ function ModuleExplorer() {
   const [active, setActive] = useState<ModuleKey>("reserve");
 
   return (
-    <section id="modules" className="py-10 md:py-12" style={{ background: "#f6f7f9", borderTop: "1px solid #e2e5ea", borderBottom: "1px solid #e2e5ea" }}>
+    <section id="modules" className="py-12 md:py-16" style={{ background: "#f6f7f9", borderTop: "1px solid #e2e5ea", borderBottom: "1px solid #e2e5ea" }}>
       <div className="max-w-[1100px] mx-auto px-6 md:px-8">
         {/* Tab pills */}
         <div data-rv className="flex justify-center mb-5 flex-wrap gap-2">
@@ -958,7 +958,7 @@ function ComingSoonPreview({ module, eta }: { module: string; eta: string }) {
 
 function AgentExplorerContent() {
   return (
-    <div className="fi flex flex-col lg:flex-row gap-6 lg:h-[420px]">
+    <div className="fi flex flex-col lg:flex-row gap-6 lg:h-[560px]">
       {/* Left: feature list */}
       <div className="lg:w-72 shrink-0 space-y-3 lg:overflow-y-auto">
         <div className="flex items-center gap-3 mb-4">

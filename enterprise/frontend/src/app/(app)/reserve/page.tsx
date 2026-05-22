@@ -13,6 +13,8 @@ import { ILRTab } from "@/components/ILRTab";
 import { FileAnalysisTab } from "@/components/FileAnalysisTab";
 import { Breadcrumb } from "@/components/ProjectNav";
 import { FolderBrowser } from "@/components/FolderBrowser";
+import { ModelLockBanner } from "@/components/ModelLockBanner";
+import { useModelLock } from "@/lib/use-model-lock";
 import { useBranchSetters, useProject } from "@/lib/project-store";
 import { formatNumber, type SessionState } from "@/lib/api";
 import { exportToExcel } from "@/lib/export";
@@ -50,6 +52,24 @@ export default function Home() {
   const setters = useBranchSetters("user");
 
   const [tab, setTab] = useState<Tab>("data");
+
+  const lockKey =
+    navLevel === "branch" && activePeriod && activeBranch
+      ? `branch:${activePeriod.id}/${activeBranch.id}`
+      : null;
+  const { state: lockState } = useModelLock(lockKey);
+  const isReadOnly = lockState.status === "locked_by_other";
+
+  // Kilitliyken tüm setter'lar no-op — tek merkezden blok
+  const guardedSetters = useMemo(
+    () =>
+      isReadOnly
+        ? (Object.fromEntries(
+            Object.keys(setters).map((k) => [k, () => {}])
+          ) as unknown as typeof setters)
+        : setters,
+    [isReadOnly, setters],
+  );
 
   const triangle = activeBranch?.triangle ?? null;
   const method = (activeBranch?.method ?? "volume_weighted") as LDFMethod;
@@ -89,8 +109,8 @@ export default function Home() {
     if (!triangle || !activeBranch) return;
     const raw = activeBranch.excludedCells ?? [];
     if (raw.length === excludedCells.size) return;
-    setters.setExcludedCells(excludedCells);
-  }, [triangle, activeBranch, excludedCells, setters]);
+    guardedSetters.setExcludedCells(excludedCells);
+  }, [triangle, activeBranch, excludedCells, guardedSetters]);
 
   const ratios = useMemo(
     () => (triangle ? developmentRatios(triangle, excludedCells) : []),
@@ -643,7 +663,7 @@ export default function Home() {
         preIbnr: summary.totals.ibnr,
       };
     }
-    setters.toggleCell(origin, step);
+    guardedSetters.toggleCell(origin, step);
   }
 
   // Eleme/dahil sonrası IBNR farkını göster
@@ -664,7 +684,7 @@ export default function Home() {
   }, [toggleToast]);
 
   function setExcludedCellsHandler(next: Set<string>) {
-    setters.setExcludedCells(next);
+    guardedSetters.setExcludedCells(next);
   }
 
   // Global ReserveAgentBridge (root) tüm proje snapshot'ını ve action
@@ -683,6 +703,7 @@ export default function Home() {
 
   return (
     <Shell onUploaded={() => setTab("data")}>
+      <ModelLockBanner state={lockState} />
       <div className="border-b bg-[color:var(--surface)] sticky top-[calc(3.5rem+var(--nav-h,0px))] z-20">
         <div className="flex items-stretch">
           <nav className="flex px-4 overflow-x-auto flex-1" role="tablist">
@@ -776,12 +797,12 @@ export default function Home() {
             excludedCells={excludedCells}
             cdfsOverride={initialCDFs}
             karmaWindowPerStep={activeBranch?.karmaWindowPerStep ?? {}}
-            onWindowChange={setters.setWindow}
+            onWindowChange={guardedSetters.setWindow}
             onToggleCell={toggleCellHandler}
             onClearCells={() => setExcludedCellsHandler(new Set())}
-            onSetKarmaWindow={setters.setKarmaWindow}
-            onInitKarma={setters.initKarma}
-            onClearKarma={setters.clearKarma}
+            onSetKarmaWindow={guardedSetters.setKarmaWindow}
+            onInitKarma={guardedSetters.initKarma}
+            onClearKarma={guardedSetters.clearKarma}
           />
         )}
         {tab === "curve" && (
@@ -794,10 +815,10 @@ export default function Home() {
             cdfModelPerPeriod={cdfModelPerPeriod}
             curveIncludePerPeriod={curveIncludePerPeriod}
             tailFits={tailFits}
-            onSetUserValue={setters.setCdfInitial}
-            onSetModel={setters.setCdfModel}
-            onToggleInclude={setters.setCurveInclude}
-            onReset={setters.resetCdfInitial}
+            onSetUserValue={guardedSetters.setCdfInitial}
+            onSetModel={guardedSetters.setCdfModel}
+            onToggleInclude={guardedSetters.setCurveInclude}
+            onReset={guardedSetters.resetCdfInitial}
           />
         )}
         {tab === "bf" && (
@@ -810,19 +831,19 @@ export default function Home() {
             lrErrors={lrErrors}
             correctionPerOrigin={correctionPerOrigin}
             onPremiumChange={(o, v) =>
-              setters.setPremiums(
+              guardedSetters.setPremiums(
                 (p) => ({ ...p, [o]: v }),
                 "premiums_updated",
                 { origin: o, value: v },
               )
             }
             onPremiumsBulk={(map) =>
-              setters.setPremiums((p) => ({ ...p, ...map }), "premiums_bulk", {
+              guardedSetters.setPremiums((p) => ({ ...p, ...map }), "premiums_bulk", {
                 count: Object.keys(map).length,
               })
             }
-            onLRInputChange={(o, expr) => setters.setLrInput(o, expr)}
-            onCorrectionChange={setters.setCorrection}
+            onLRInputChange={(o, expr) => guardedSetters.setLrInput(o, expr)}
+            onCorrectionChange={guardedSetters.setCorrection}
           />
         )}
         {tab === "ultimate" && (
@@ -833,7 +854,7 @@ export default function Home() {
             elrPerOrigin={elrPerOrigin}
             basisPerOrigin={basisPerOrigin}
             correctionPerOrigin={correctionPerOrigin}
-            onBasisChange={setters.setBasis}
+            onBasisChange={guardedSetters.setBasis}
           />
         )}
         {tab === "summary" && summary && (

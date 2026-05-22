@@ -1752,7 +1752,7 @@ def _compute_discount(
         results.append({
             "origin": origin,
             "unpaid_liability": round(unpaid),
-            "approx_duration_months": round(approx_months, 1),
+            "approx_completion_month": round(approx_months),
             "discount_factor": round(v, 4),
             "discounted_unpaid": round(discounted),
             "discount_amount": round(discount_amt),
@@ -1763,7 +1763,7 @@ def _compute_discount(
         total_weighted_duration += approx_months * unpaid
 
     total_discount = total_unpaid - total_discounted
-    avg_duration = total_weighted_duration / total_unpaid if total_unpaid > 0 else 0
+    max_completion = max((r["approx_completion_month"] for r in results), default=0)
     total_discount_pct = total_discount / total_unpaid * 100 if total_unpaid > 0 else 0
 
     return {
@@ -1776,7 +1776,7 @@ def _compute_discount(
             "discounted_unpaid": round(total_discounted),
             "discount_amount": round(total_discount),
             "discount_pct": round(total_discount_pct, 2),
-            "avg_duration_months": round(avg_duration, 1),
+            "completion_month": max_completion,
         },
         "by_origin": results,
         "note": discount_pct_note,

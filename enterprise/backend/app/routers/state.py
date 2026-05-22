@@ -88,19 +88,16 @@ async def put_state(body: PutStateRequest, user: CurrentUser) -> PutStateRespons
                     raise HTTPException(status_code=409, detail="version_conflict")
                 new_version = current_version + 1
 
-                sets = ["version = :v", "updated_at = :ts"]
-                params: dict = {"v": new_version, "ts": now, "uid": uid}
-
-                if body.project is not None:
-                    sets.append("project_json = :proj")
-                    params["proj"] = json.dumps(body.project)
-                if body.chat is not None:
-                    sets.append("chat_json = :chat")
-                    params["chat"] = json.dumps(body.chat)
-
                 await cur.execute(
-                    f"UPDATE user_state SET {', '.join(sets)} WHERE user_id = :uid",
-                    params,
+                    "UPDATE user_state SET version=:1, updated_at=:2, project_json=:3, chat_json=:4 "
+                    "WHERE user_id=:5",
+                    [
+                        new_version,
+                        now,
+                        json.dumps(body.project) if body.project is not None else None,
+                        json.dumps(body.chat) if body.chat is not None else None,
+                        uid,
+                    ],
                 )
             else:
                 new_version = 1

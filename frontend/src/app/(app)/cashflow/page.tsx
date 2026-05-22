@@ -581,13 +581,11 @@ export default function CashflowPage() {
   }
 
   function toggleCell(origin: string, step: number) {
-    setExcludedCells((prev) => {
-      const next = new Set(prev);
-      const key = `${origin}|${step}`;
-      if (next.has(key)) next.delete(key); else next.add(key);
-      if (activeBranchId) saveLdfToStore(activeBranchId, ldfWindow, next);
-      return next;
-    });
+    const key = `${origin}|${step}`;
+    const next = new Set(excludedCells);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    setExcludedCells(next);
+    if (activeBranchId) saveLdfToStore(activeBranchId, ldfWindow, next);
   }
 
   function clearCells() {
@@ -727,20 +725,17 @@ export default function CashflowPage() {
     );
   }, [activeBranch, selectedLDFs, tailFits]);
 
-  // Curve seçimleri uygulanmış CDFs — useMemo ile referans stabilize edildi
-  const effectiveCdfs = useMemo(
-    () => (cascade.effective.length ? cascade.effective : ldfExportCdfs),
-    [cascade.effective, ldfExportCdfs],
-  );
-  const initialCDFs = useMemo(
-    () => (cascade.initial.length ? cascade.initial : ldfExportCdfs),
-    [cascade.initial, ldfExportCdfs],
-  );
+  // Curve seçimleri uygulanmış CDFs — cascade useMemo'sından referans alır (stable)
+  const effectiveCdfs = cascade.effective.length ? cascade.effective : ldfExportCdfs;
+  const initialCDFs = cascade.initial.length ? cascade.initial : ldfExportCdfs;
 
   // result gelince veya CDF seçimi değişince pattern yeniden hesaplanmalı.
   // report_date + origin_years kombinasyonu: yeni branş açıldığında değişir,
   // ama setResult ile sadece pattern güncellenince değişmez → döngü olmaz.
   const resultKey = result ? `${result.report_date}|${result.origin_years.join(",")}` : null;
+  // Referans kararlılığı: useMemo'lar activeBranch değişince yeni dizi üretir (aynı değerler).
+  // join ile değer bazlı karşılaştırma yaparak pattern effect'in gereksiz ateşlenmesini önle.
+  const effectiveCdfsKey = effectiveCdfs.join(",");
 
   // Curve setters — project store üzerinden D1'e persist edilir
   function setCfCdfModel(devPeriod: string, model: 1 | 2 | 3 | 4 | 5 | 6) {
@@ -815,7 +810,7 @@ export default function CashflowPage() {
         }
       })
       .catch(() => {/* sessizce geç */});
-  }, [effectiveCdfs, resultKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [effectiveCdfsKey, resultKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function goRoot() {
     setNavLevel("root");

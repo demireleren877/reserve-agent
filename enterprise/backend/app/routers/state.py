@@ -1,4 +1,4 @@
-"""Proje state persist — Cloudflare Worker'ın yerini alır."""
+"""Paylaşımlı ekip state — tüm kullanıcılar aynı proje üzerinde çalışır."""
 
 from __future__ import annotations
 
@@ -22,6 +22,7 @@ class StateResponse(BaseModel):
     chat: Any
     version: int
     updated_at: int
+    updated_by_name: str | None = None
 
 
 class PutStateRequest(BaseModel):
@@ -36,10 +37,8 @@ class PutStateResponse(BaseModel):
 
 
 async def _read_clob(val: Any) -> Any:
-    """CLOB değerini string'e çevirir — async read gerektirir."""
     if val is None:
         return None
-    # python-oracledb async modda CLOB bir LOB nesnesi döner
     raw = await val.read() if hasattr(val, "read") else val
     if raw is None:
         return None
@@ -47,39 +46,43 @@ async def _read_clob(val: Any) -> Any:
 
 
 @router.get("", response_model=StateResponse)
-async def get_state(user: CurrentUser) -> StateResponse:
+async def get_state(_user: CurrentUser) -> StateResponse:
     pool = await get_pool()
     async with pool.acquire() as conn:
         with conn.cursor() as cur:
             await cur.execute(
-                "SELECT project_json, chat_json, version, updated_at "
-                "FROM user_state WHERE user_id = :1",
-                [int(user["sub"])],
+                "SELECT project_json, chat_json, version, updated_at, updated_by_name "
+                "FROM team_state WHERE id = 1"
             )
             row = await cur.fetchone()
 
     if not row:
         return StateResponse(project=None, chat=None, version=0, updated_at=0)
 
-    proj_json, chat_json, version, updated_at = row
+    proj_json, chat_json, version, updated_at, updated_by_name = row
     proj = await _read_clob(proj_json)
     chat = await _read_clob(chat_json)
     ts = int(updated_at.timestamp() * 1000) if updated_at else 0
-    return StateResponse(project=proj, chat=chat, version=version, updated_at=ts)
+    return StateResponse(
+        project=proj,
+        chat=chat,
+        version=version,
+        updated_at=ts,
+        updated_by_name=updated_by_name,
+    )
 
 
 @router.put("", response_model=PutStateResponse)
 async def put_state(body: PutStateRequest, user: CurrentUser) -> PutStateResponse:
     uid = int(user["sub"])
-    pool = await get_pool()
+    uname = user["username"]
     now = datetime.now(timezone.utc)
     now_ts = int(now.timestamp() * 1000)
 
+    pool = await get_pool()
     async with pool.acquire() as conn:
         with conn.cursor() as cur:
-            await cur.execute(
-                "SELECT version FROM user_state WHERE user_id = :1", [uid]
-            )
+            await cur.execute("SELECT version FROM team_state WHERE id = 1")
             existing = await cur.fetchone()
 
             if existing:
@@ -87,29 +90,26 @@ async def put_state(body: PutStateRequest, user: CurrentUser) -> PutStateRespons
                 if body.expectedVersion is not None and body.expectedVersion != current_version:
                     raise HTTPException(status_code=409, detail="version_conflict")
                 new_version = current_version + 1
-
                 await cur.execute(
-                    "UPDATE user_state SET version=:1, updated_at=:2, project_json=:3, chat_json=:4 "
-                    "WHERE user_id=:5",
+                    "UPDATE team_state SET version=:1, updated_at=:2, "
+                    "updated_by_id=:3, updated_by_name=:4, "
+                    "project_json=:5, chat_json=:6 WHERE id=1",
                     [
-                        new_version,
-                        now,
+                        new_version, now, uid, uname,
                         json.dumps(body.project) if body.project is not None else None,
                         json.dumps(body.chat) if body.chat is not None else None,
-                        uid,
                     ],
                 )
             else:
                 new_version = 1
                 await cur.execute(
-                    "INSERT INTO user_state (user_id, project_json, chat_json, version, updated_at) "
-                    "VALUES (:1, :2, :3, :4, :5)",
+                    "INSERT INTO team_state "
+                    "(id, project_json, chat_json, version, updated_at, updated_by_id, updated_by_name) "
+                    "VALUES (1, :1, :2, :3, :4, :5, :6)",
                     [
-                        uid,
                         json.dumps(body.project) if body.project is not None else None,
                         json.dumps(body.chat) if body.chat is not None else None,
-                        new_version,
-                        now,
+                        new_version, now, uid, uname,
                     ],
                 )
         await conn.commit()
@@ -118,9 +118,9 @@ async def put_state(body: PutStateRequest, user: CurrentUser) -> PutStateRespons
 
 
 @router.delete("", status_code=204)
-async def delete_state(user: CurrentUser) -> None:
+async def delete_state(_user: CurrentUser) -> None:
     pool = await get_pool()
     async with pool.acquire() as conn:
         with conn.cursor() as cur:
-            await cur.execute("DELETE FROM user_state WHERE user_id = :1", [int(user["sub"])])
+            await cur.execute("DELETE FROM team_state WHERE id = 1")
         await conn.commit()

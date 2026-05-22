@@ -1,4 +1,4 @@
-"""Veri dönemleri ve dataset'ler — Oracle'da persist."""
+"""Paylaşımlı veri dönemleri ve dataset'ler."""
 
 from __future__ import annotations
 
@@ -39,24 +39,20 @@ async def _read_clob(val: Any) -> Any:
 
 
 @router.get("/periods", response_model=list[PeriodOut])
-async def list_periods(user: CurrentUser) -> list[PeriodOut]:
-    uid = int(user["sub"])
+async def list_periods(_user: CurrentUser) -> list[PeriodOut]:
     pool = await get_pool()
     async with pool.acquire() as conn:
         with conn.cursor() as cur:
             await cur.execute(
-                "SELECT period_id, label, created_at FROM periods "
-                "WHERE user_id = :1 ORDER BY created_at DESC",
-                [uid],
+                "SELECT period_id, label, created_at FROM periods ORDER BY created_at DESC"
             )
             period_rows = await cur.fetchall()
 
             result = []
             for pid, label, created_at in period_rows:
                 await cur.execute(
-                    "SELECT dataset_id, type_id, meta_json FROM datasets "
-                    "WHERE user_id = :1 AND period_id = :2",
-                    [uid, pid],
+                    "SELECT dataset_id, type_id, meta_json FROM datasets WHERE period_id = :1",
+                    [pid],
                 )
                 ds_rows = await cur.fetchall()
                 metas: dict[str, Any] = {}
@@ -69,54 +65,47 @@ async def list_periods(user: CurrentUser) -> list[PeriodOut]:
 
 
 @router.post("/periods", status_code=200)
-async def upsert_period(body: UpsertPeriodRequest, user: CurrentUser) -> dict:
-    uid = int(user["sub"])
+async def upsert_period(body: UpsertPeriodRequest, _user: CurrentUser) -> dict:
     pool = await get_pool()
     async with pool.acquire() as conn:
         with conn.cursor() as cur:
             await cur.execute(
-                "SELECT period_id FROM periods WHERE user_id = :1 AND period_id = :2",
-                [uid, body.period_id],
+                "SELECT period_id FROM periods WHERE period_id = :1",
+                [body.period_id],
             )
             if await cur.fetchone():
                 await cur.execute(
-                    "UPDATE periods SET label = :1, created_at = :2 "
-                    "WHERE user_id = :3 AND period_id = :4",
-                    [body.label, body.created_at, uid, body.period_id],
+                    "UPDATE periods SET label = :1, created_at = :2 WHERE period_id = :3",
+                    [body.label, body.created_at, body.period_id],
                 )
             else:
                 await cur.execute(
-                    "INSERT INTO periods (user_id, period_id, label, created_at) "
-                    "VALUES (:1, :2, :3, :4)",
-                    [uid, body.period_id, body.label, body.created_at],
+                    "INSERT INTO periods (period_id, label, created_at) VALUES (:1, :2, :3)",
+                    [body.period_id, body.label, body.created_at],
                 )
         await conn.commit()
     return {"ok": True}
 
 
 @router.delete("/periods/{period_id}", status_code=200)
-async def delete_period(period_id: str, user: CurrentUser) -> dict:
+async def delete_period(period_id: str, _user: CurrentUser) -> dict:
     pool = await get_pool()
     async with pool.acquire() as conn:
         with conn.cursor() as cur:
-            await cur.execute(
-                "DELETE FROM periods WHERE user_id = :1 AND period_id = :2",
-                [int(user["sub"]), period_id],
-            )
+            await cur.execute("DELETE FROM periods WHERE period_id = :1", [period_id])
         await conn.commit()
     return {"ok": True}
 
 
 @router.get("/periods/{period_id}/datasets/{dataset_id}")
-async def get_dataset(period_id: str, dataset_id: str, user: CurrentUser) -> dict:
-    uid = int(user["sub"])
+async def get_dataset(period_id: str, dataset_id: str, _user: CurrentUser) -> dict:
     pool = await get_pool()
     async with pool.acquire() as conn:
         with conn.cursor() as cur:
             await cur.execute(
                 "SELECT type_id, meta_json, records_json FROM datasets "
-                "WHERE user_id = :1 AND period_id = :2 AND dataset_id = :3",
-                [uid, period_id, dataset_id],
+                "WHERE period_id = :1 AND dataset_id = :2",
+                [period_id, dataset_id],
             )
             row = await cur.fetchone()
 
@@ -139,51 +128,45 @@ class PutDatasetRequest(BaseModel):
 
 @router.put("/periods/{period_id}/datasets/{dataset_id}", status_code=200)
 async def put_dataset(
-    period_id: str, dataset_id: str, body: PutDatasetRequest, user: CurrentUser
+    period_id: str, dataset_id: str, body: PutDatasetRequest, _user: CurrentUser
 ) -> dict:
-    uid = int(user["sub"])
     pool = await get_pool()
     async with pool.acquire() as conn:
         with conn.cursor() as cur:
             await cur.execute(
-                "SELECT dataset_id FROM datasets "
-                "WHERE user_id = :1 AND period_id = :2 AND dataset_id = :3",
-                [uid, period_id, dataset_id],
+                "SELECT dataset_id FROM datasets WHERE period_id = :1 AND dataset_id = :2",
+                [period_id, dataset_id],
             )
             if await cur.fetchone():
                 await cur.execute(
                     "UPDATE datasets SET type_id=:1, meta_json=:2, records_json=:3 "
-                    "WHERE user_id=:4 AND period_id=:5 AND dataset_id=:6",
+                    "WHERE period_id=:4 AND dataset_id=:5",
                     [
                         body.typeId,
                         json.dumps(body.meta),
                         json.dumps(body.records),
-                        uid, period_id, dataset_id,
+                        period_id, dataset_id,
                     ],
                 )
             else:
                 await cur.execute(
-                    "INSERT INTO datasets "
-                    "(user_id, period_id, dataset_id, type_id, meta_json, records_json) "
-                    "VALUES (:1, :2, :3, :4, :5, :6)",
-                    [
-                        uid, period_id, dataset_id, body.typeId,
-                        json.dumps(body.meta),
-                        json.dumps(body.records),
-                    ],
+                    "INSERT INTO datasets (period_id, dataset_id, type_id, meta_json, records_json) "
+                    "VALUES (:1, :2, :3, :4, :5)",
+                    [period_id, dataset_id, body.typeId,
+                     json.dumps(body.meta), json.dumps(body.records)],
                 )
         await conn.commit()
     return {"ok": True}
 
 
 @router.delete("/periods/{period_id}/datasets/{dataset_id}", status_code=200)
-async def delete_dataset(period_id: str, dataset_id: str, user: CurrentUser) -> dict:
+async def delete_dataset(period_id: str, dataset_id: str, _user: CurrentUser) -> dict:
     pool = await get_pool()
     async with pool.acquire() as conn:
         with conn.cursor() as cur:
             await cur.execute(
-                "DELETE FROM datasets WHERE user_id=:1 AND period_id=:2 AND dataset_id=:3",
-                [int(user["sub"]), period_id, dataset_id],
+                "DELETE FROM datasets WHERE period_id=:1 AND dataset_id=:2",
+                [period_id, dataset_id],
             )
         await conn.commit()
     return {"ok": True}

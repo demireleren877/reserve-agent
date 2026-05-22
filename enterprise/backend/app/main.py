@@ -34,6 +34,7 @@ from app.routers.users import router as users_router  # noqa: E402
 from app.routers.state import router as state_router  # noqa: E402
 from app.routers.data import router as data_router  # noqa: E402
 from app.routers.agent import router as agent_router  # noqa: E402
+from app.routers.locks import router as locks_router  # noqa: E402
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -59,6 +60,7 @@ app.include_router(users_router)
 app.include_router(state_router)
 app.include_router(data_router)
 app.include_router(agent_router)
+app.include_router(locks_router)
 app.include_router(compute_router)
 
 

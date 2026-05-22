@@ -567,7 +567,14 @@ export default function DiscountPage() {
 
   const reserveRows = useMemo<{ origin: string; unpaid: number }[]>(() => {
     if (!activeBranch) return [];
-    return computeBranchSummary(activeBranch).rows.map((r) => ({
+    // Hasar üçgeni yoksa paid üçgenini fallback olarak kullan
+    const branchForSummary =
+      activeBranch.triangle
+        ? activeBranch
+        : activeBranch.paidTriangle
+        ? { ...activeBranch, triangle: activeBranch.paidTriangle }
+        : activeBranch;
+    return computeBranchSummary(branchForSummary).rows.map((r) => ({
       origin: r.origin,
       unpaid: r.latest + r.ibnr,
     }));
@@ -698,8 +705,11 @@ export default function DiscountPage() {
               </div>
             </div>
           ) : !discountResult ? (
-            <div className="h-full flex items-center justify-center">
-              <p className="text-sm text-[color:var(--muted)]">Hesaplanıyor…</p>
+            <div className="h-full flex items-center justify-center text-center">
+              <div className="space-y-2">
+                <p className="text-sm text-[color:var(--muted)]">Rezerv verisi hesaplanamadı.</p>
+                <p className="text-xs text-[color:var(--muted)]">Branşa bir üçgen yüklendiğinden emin olun.</p>
+              </div>
             </div>
           ) : (
             <>

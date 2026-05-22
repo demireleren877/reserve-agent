@@ -1,4 +1,4 @@
-"""Proje state persist testleri."""
+"""Paylaşımlı team state testleri."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ import pytest
 @pytest.mark.asyncio
 async def test_get_state_empty(client, user_headers):
     c, cur = client
-    cur.fetchone.return_value = None  # state yok
+    cur.fetchone.return_value = None
 
     res = await c.get("/v1/state", headers=user_headers)
     assert res.status_code == 200
@@ -22,18 +22,17 @@ async def test_get_state_empty(client, user_headers):
 @pytest.mark.asyncio
 async def test_get_state_existing(client, user_headers):
     c, cur = client
-    from unittest.mock import MagicMock
     from datetime import datetime, timezone
 
     proj = {"periods": [], "activePeriodId": None}
     chat = [{"role": "user", "content": "merhaba"}]
 
-    # CLOB değerleri string olarak döner (thin mode LOB değil)
     cur.fetchone.return_value = (
         json.dumps(proj),
         json.dumps(chat),
         3,
         datetime(2025, 1, 1, tzinfo=timezone.utc),
+        "ErenD",
     )
 
     res = await c.get("/v1/state", headers=user_headers)
@@ -41,24 +40,24 @@ async def test_get_state_existing(client, user_headers):
     data = res.json()
     assert data["version"] == 3
     assert data["project"]["periods"] == []
+    assert data["updated_by_name"] == "ErenD"
 
 
 @pytest.mark.asyncio
 async def test_put_state_new(client, user_headers):
     c, cur = client
-    cur.fetchone.return_value = None  # state henüz yok → INSERT
+    cur.fetchone.return_value = None
 
     proj = {"periods": [{"id": "p1", "label": "2024"}]}
     res = await c.put("/v1/state", json={"project": proj}, headers=user_headers)
     assert res.status_code == 200
-    data = res.json()
-    assert data["version"] == 1
+    assert res.json()["version"] == 1
 
 
 @pytest.mark.asyncio
 async def test_put_state_update(client, user_headers):
     c, cur = client
-    cur.fetchone.return_value = (2,)  # mevcut version=2 → UPDATE
+    cur.fetchone.return_value = (2,)
 
     res = await c.put("/v1/state", json={"project": {"x": 1}}, headers=user_headers)
     assert res.status_code == 200
@@ -68,11 +67,11 @@ async def test_put_state_update(client, user_headers):
 @pytest.mark.asyncio
 async def test_put_state_version_conflict(client, user_headers):
     c, cur = client
-    cur.fetchone.return_value = (5,)  # server version=5
+    cur.fetchone.return_value = (5,)
 
     res = await c.put(
         "/v1/state",
-        json={"project": {}, "expectedVersion": 3},  # client version=3 → conflict
+        json={"project": {}, "expectedVersion": 3},
         headers=user_headers,
     )
     assert res.status_code == 409

@@ -34,14 +34,20 @@ SCHEMA = (Path(__file__).parent / "schema.sql").read_text()
 ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "ErenD")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "qwertyadmin123.")
 
+# Eski tablolar → bağımlılık sırasına göre (FK önce child)
+_OLD_TABLES = [
+    "model_locks",
+    "datasets",
+    "periods",
+    "user_state",
+    "users",
+]
+
 
 def _ora_code(e: oracledb.DatabaseError) -> int:
-    """oracledb v2/v4 uyumlu hata kodu çıkarıcı."""
     arg = e.args[0]
-    # v2: _Error nesnesi → .code
     if hasattr(arg, "code"):
         return int(arg.code)
-    # v4+: string "ORA-00955: ..." formatı
     msg = str(arg)
     if "ORA-" in msg:
         try:
@@ -59,15 +65,34 @@ def _execute(cur: oracledb.Cursor, stmt: str, label: str) -> bool:
         return True
     except oracledb.DatabaseError as e:
         code = _ora_code(e)
-        if code in (955, 1408):          # ORA-00955: name already used / ORA-01408: index exists
+        if code in (955, 1408):
             print(f"  –  {label}  (zaten var, atlandı)")
             return False
-        # Beklenmedik hata — tam mesajı göster ve dur
         print(f"\n  ✗  {label}")
         print(f"     Hata kodu : ORA-{code:05d}")
         print(f"     Mesaj     : {e.args[0]}")
         print()
         sys.exit(1)
+
+
+def _drop_old_tables(cur: oracledb.Cursor) -> None:
+    """Eski tabloları düşür. Yoksa sessizce geç."""
+    print("Eski tablolar temizleniyor:")
+    for table in _OLD_TABLES:
+        try:
+            cur.execute(f"DROP TABLE {table} CASCADE CONSTRAINTS")
+            print(f"  ✓  DROP {table}")
+        except oracledb.DatabaseError as e:
+            code = _ora_code(e)
+            if code == 942:   # ORA-00942: table or view does not exist
+                print(f"  –  DROP {table}  (yok, atlandı)")
+            else:
+                print(f"\n  ✗  DROP {table}")
+                print(f"     Hata kodu : ORA-{code:05d}")
+                print(f"     Mesaj     : {e.args[0]}")
+                print()
+                sys.exit(1)
+    print()
 
 
 def run() -> None:
@@ -92,12 +117,13 @@ def run() -> None:
         sys.exit(1)
 
     print("Bağlantı başarılı.\n")
-    print("Tablolar oluşturuluyor:")
 
     cur = conn.cursor()
 
-    # Schema'yı noktalı virgüle göre böl ve sırayla çalıştır
-    # Yorum satırlarını temizle (-- ...) ve boş ifadeleri atla
+    _drop_old_tables(cur)
+
+    print("Tablolar oluşturuluyor:")
+
     def _strip_comments(sql: str) -> str:
         lines = [ln for ln in sql.splitlines() if not ln.strip().startswith("--")]
         return "\n".join(lines).strip()
@@ -108,14 +134,12 @@ def run() -> None:
         first_word = stmt.upper().split()[0] if stmt.split() else ""
         if first_word not in ("CREATE", "ALTER"):
             continue
-        # Label: ilk anlamlı satır
         label = next((ln.strip() for ln in stmt.splitlines() if ln.strip()), stmt[:80])[:80]
         _execute(cur, stmt, label)
 
     conn.commit()
     print()
 
-    # Admin kullanıcıyı kontrol et / oluştur
     print(f"Admin kullanıcı kontrol ediliyor: {ADMIN_USERNAME}")
     try:
         cur.execute("SELECT id FROM users WHERE username = :1", [ADMIN_USERNAME])

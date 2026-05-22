@@ -1,4 +1,4 @@
-"""Veri dönemleri ve dataset persist testleri."""
+"""Paylaşımlı veri dönemleri ve dataset testleri."""
 
 from __future__ import annotations
 
@@ -20,7 +20,6 @@ async def test_list_periods_empty(client, user_headers):
 async def test_list_periods_with_data(client, user_headers):
     c, cur = client
 
-    # İlk fetchall → period listesi, sonraki fetchall → dataset'ler
     call_count = 0
     async def side_effect():
         nonlocal call_count
@@ -43,7 +42,7 @@ async def test_list_periods_with_data(client, user_headers):
 @pytest.mark.asyncio
 async def test_upsert_period_new(client, user_headers):
     c, cur = client
-    cur.fetchone.return_value = None  # yok → INSERT
+    cur.fetchone.return_value = None
 
     res = await c.post(
         "/v1/data/periods",
@@ -57,7 +56,7 @@ async def test_upsert_period_new(client, user_headers):
 @pytest.mark.asyncio
 async def test_upsert_period_update(client, user_headers):
     c, cur = client
-    cur.fetchone.return_value = ("p-existing",)  # var → UPDATE
+    cur.fetchone.return_value = ("p-existing",)
 
     res = await c.post(
         "/v1/data/periods",
@@ -102,7 +101,7 @@ async def test_get_dataset_success(client, user_headers):
 @pytest.mark.asyncio
 async def test_put_dataset_new(client, user_headers):
     c, cur = client
-    cur.fetchone.return_value = None  # yok → INSERT
+    cur.fetchone.return_value = None
 
     res = await c.put(
         "/v1/data/periods/p-1/datasets/ds-new",
@@ -116,7 +115,7 @@ async def test_put_dataset_new(client, user_headers):
 @pytest.mark.asyncio
 async def test_put_dataset_update(client, user_headers):
     c, cur = client
-    cur.fetchone.return_value = ("ds-existing",)  # var → UPDATE
+    cur.fetchone.return_value = ("ds-existing",)
 
     res = await c.put(
         "/v1/data/periods/p-1/datasets/ds-existing",

@@ -10,6 +10,7 @@ Kullanım:
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 
 for candidate in (Path(__file__).parent / ".env", Path(__file__).parent.parent / ".env"):
@@ -24,8 +25,8 @@ for candidate in (Path(__file__).parent / ".env", Path(__file__).parent.parent /
 import oracledb
 import bcrypt
 
-DSN = os.environ["ORACLE_DSN"]
-USER = os.environ["ORACLE_USER"]
+DSN      = os.environ["ORACLE_DSN"]
+USER     = os.environ["ORACLE_USER"]
 PASSWORD = os.environ["ORACLE_PASSWORD"]
 
 SCHEMA = (Path(__file__).parent / "schema.sql").read_text()
@@ -34,31 +35,98 @@ ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "ErenD")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "qwertyadmin123.")
 
 
+def _ora_code(e: oracledb.DatabaseError) -> int:
+    """oracledb v2/v4 uyumlu hata kodu çıkarıcı."""
+    arg = e.args[0]
+    # v2: _Error nesnesi → .code
+    if hasattr(arg, "code"):
+        return int(arg.code)
+    # v4+: string "ORA-00955: ..." formatı
+    msg = str(arg)
+    if "ORA-" in msg:
+        try:
+            return int(msg.split("ORA-")[1].split(":")[0].split()[0])
+        except (IndexError, ValueError):
+            pass
+    return -1
+
+
+def _execute(cur: oracledb.Cursor, stmt: str, label: str) -> bool:
+    """DDL çalıştırır. 'zaten var' hatalarını atlar, diğerlerinde durur."""
+    try:
+        cur.execute(stmt)
+        print(f"  ✓  {label}")
+        return True
+    except oracledb.DatabaseError as e:
+        code = _ora_code(e)
+        if code in (955, 1408):          # ORA-00955: name already used / ORA-01408: index exists
+            print(f"  –  {label}  (zaten var, atlandı)")
+            return False
+        # Beklenmedik hata — tam mesajı göster ve dur
+        print(f"\n  ✗  {label}")
+        print(f"     Hata kodu : ORA-{code:05d}")
+        print(f"     Mesaj     : {e.args[0]}")
+        print()
+        sys.exit(1)
+
+
 def run() -> None:
-    print(f"Oracle'a bağlanılıyor: {DSN}")
-    conn = oracledb.connect(user=USER, password=PASSWORD, dsn=DSN)
+    print(f"\nOracle'a bağlanılıyor...")
+    print(f"  DSN  : {DSN}")
+    print(f"  User : {USER}\n")
+
+    try:
+        conn = oracledb.connect(user=USER, password=PASSWORD, dsn=DSN)
+    except oracledb.DatabaseError as e:
+        print(f"BAĞLANTI HATASI: {e}")
+        print()
+        code = _ora_code(e)
+        if code == 12541:
+            print("→ Oracle sunucusuna ulaşılamıyor. IP ve port doğru mu?")
+        elif code == 1017:
+            print("→ Kullanıcı adı veya şifre yanlış.")
+        elif code == 12514:
+            print("→ Servis adı (DSN'deki / sonrası) yanlış.")
+        elif code == 12154:
+            print("→ DSN formatı hatalı. Örnek: 192.168.1.10:1521/ORCLPDB1")
+        sys.exit(1)
+
+    print("Bağlantı başarılı.\n")
+    print("Tablolar oluşturuluyor:")
+
     cur = conn.cursor()
 
-    statements = [s.strip() for s in SCHEMA.split(";") if s.strip()]
+    # Schema'yı noktalı virgüle göre böl ve sırayla çalıştır
+    # Yorum satırlarını temizle (-- ...) ve boş ifadeleri atla
+    def _strip_comments(sql: str) -> str:
+        lines = [ln for ln in sql.splitlines() if not ln.strip().startswith("--")]
+        return "\n".join(lines).strip()
+
+    statements = [_strip_comments(s) for s in SCHEMA.split(";")]
+    statements = [s for s in statements if s]
     for stmt in statements:
-        if not stmt.upper().startswith(("CREATE", "ALTER")):
+        first_word = stmt.upper().split()[0] if stmt.split() else ""
+        if first_word not in ("CREATE", "ALTER"):
             continue
-        try:
-            cur.execute(stmt)
-            print(f"  OK: {stmt[:70]}...")
-        except oracledb.DatabaseError as e:
-            err = e.args[0]
-            if err.code in (955, 1408):
-                print(f"  ATLANDI (zaten var): {stmt[:70]}...")
-            else:
-                print(f"  HATA: {e}")
-                raise
+        # Label: ilk anlamlı satır
+        label = next((ln.strip() for ln in stmt.splitlines() if ln.strip()), stmt[:80])[:80]
+        _execute(cur, stmt, label)
 
     conn.commit()
+    print()
 
-    cur.execute("SELECT id FROM users WHERE username = :1", [ADMIN_USERNAME])
-    if cur.fetchone():
-        print(f"\nAdmin kullanıcı zaten var: {ADMIN_USERNAME}")
+    # Admin kullanıcıyı kontrol et / oluştur
+    print(f"Admin kullanıcı kontrol ediliyor: {ADMIN_USERNAME}")
+    try:
+        cur.execute("SELECT id FROM users WHERE username = :1", [ADMIN_USERNAME])
+        row = cur.fetchone()
+    except oracledb.DatabaseError as e:
+        print(f"\nKULLANICI SORGUSU HATASI: {e}")
+        print("users tablosu oluşturulamamış olabilir. Yukarıdaki çıktıyı kontrol edin.")
+        sys.exit(1)
+
+    if row:
+        print(f"  –  Zaten var (id={row[0]}), şifre değiştirilmedi.")
     else:
         pw_hash = bcrypt.hashpw(ADMIN_PASSWORD.encode(), bcrypt.gensalt()).decode()
         cur.execute(
@@ -66,11 +134,11 @@ def run() -> None:
             [ADMIN_USERNAME, pw_hash],
         )
         conn.commit()
-        print(f"\nAdmin kullanıcı oluşturuldu: {ADMIN_USERNAME}")
+        print(f"  ✓  Oluşturuldu → kullanıcı: {ADMIN_USERNAME}")
 
     cur.close()
     conn.close()
-    print("\nKurulum tamamlandı.")
+    print("\nKurulum tamamlandı.\n")
 
 
 if __name__ == "__main__":

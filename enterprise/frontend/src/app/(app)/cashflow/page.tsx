@@ -727,9 +727,15 @@ export default function CashflowPage() {
     );
   }, [activeBranch, selectedLDFs, tailFits]);
 
-  // Curve seçimleri uygulanmış CDFs — cascade useMemo'sından referans alır (stable)
-  const effectiveCdfs = cascade.effective.length ? cascade.effective : ldfExportCdfs;
-  const initialCDFs = cascade.initial.length ? cascade.initial : ldfExportCdfs;
+  // Curve seçimleri uygulanmış CDFs — useMemo ile referans stabilize edildi
+  const effectiveCdfs = useMemo(
+    () => (cascade.effective.length ? cascade.effective : ldfExportCdfs),
+    [cascade.effective, ldfExportCdfs],
+  );
+  const initialCDFs = useMemo(
+    () => (cascade.initial.length ? cascade.initial : ldfExportCdfs),
+    [cascade.initial, ldfExportCdfs],
+  );
 
   // result gelince veya CDF seçimi değişince pattern yeniden hesaplanmalı.
   // report_date + origin_years kombinasyonu: yeni branş açıldığında değişir,

@@ -6,10 +6,7 @@ import { useProject } from "@/lib/project-store";
 import type { CopyAssumptionsOptions } from "@/lib/project-store";
 import type { Branch, Frequency, Period } from "@/types/project";
 import { CopyAssumptionsModal } from "@/components/CopyAssumptionsModal";
-import { useUserPlan } from "@/lib/auth/user-plan-context";
 
-const FREE_PERIOD_LIMIT = 1;
-const FREE_BRANCH_LIMIT = 1;
 
 // ——————————————————————— Copy / Move Modal ———————————————————————
 
@@ -164,10 +161,9 @@ export function FolderBrowser() {
 
 function RootView() {
   const { project, actions } = useProject();
-  const plan = useUserPlan();
   const [adding, setAdding] = useState(false);
   const [label, setLabel] = useState("");
-  const atLimit = plan === "free" && project.periods.length >= FREE_PERIOD_LIMIT;
+  const atLimit = false;
 
   return (
     <div className="max-w-6xl mx-auto">
@@ -278,14 +274,9 @@ function PeriodView() {
 function FrequencyView() {
   const { activePeriod, project, branchesForActiveFrequency, actions } =
     useProject();
-  const plan = useUserPlan();
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
-  const totalBranches = project.periods.reduce(
-    (sum, p) => sum + p.branches.length,
-    0,
-  );
-  const atBranchLimit = plan === "free" && totalBranches >= FREE_BRANCH_LIMIT;
+  const atBranchLimit = false;
   const [modal, setModal] = useState<{
     branch: Branch;
     mode: "copy" | "move";

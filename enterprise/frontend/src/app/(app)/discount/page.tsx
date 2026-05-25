@@ -7,6 +7,8 @@ import {
   ReferenceLine,
 } from "recharts";
 import { useProject } from "@/lib/project-store";
+import { useModelLock } from "@/lib/use-model-lock";
+import { ModelLockBanner } from "@/components/ModelLockBanner";
 import { computeBranchSummary } from "@/lib/reserve-pipeline";
 import {
   buildFlatRateFn,
@@ -565,6 +567,11 @@ export default function DiscountPage() {
   const selectedEntry = allBranches.find((e) => e.branch.id === selectedBranchId) ?? allBranches[0] ?? null;
   const activeBranch = selectedEntry?.branch ?? null;
 
+  const lockKey = selectedEntry
+    ? `discount:${selectedEntry.period.id}/${activeBranch!.id}`
+    : null;
+  const { state: lockState } = useModelLock(lockKey);
+
   const reserveRows = useMemo<{ origin: string; unpaid: number }[]>(() => {
     if (!activeBranch) return [];
     // Hasar üçgeni yoksa paid üçgenini fallback olarak kullan
@@ -594,7 +601,9 @@ export default function DiscountPage() {
   }, [reserveRows, monthlyPattern, getRateFn, hasPattern]);
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex flex-col h-screen overflow-hidden">
+      <ModelLockBanner state={lockState} />
+      <div className="flex flex-1 overflow-hidden">
       {/* Left panel */}
       <div
         className="shrink-0 border-r bg-[color:var(--surface)] flex flex-col overflow-y-auto transition-[width] duration-150"
@@ -742,6 +751,7 @@ export default function DiscountPage() {
             </>
           )}
         </div>
+      </div>
       </div>
     </div>
   );

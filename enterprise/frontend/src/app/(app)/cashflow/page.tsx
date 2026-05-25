@@ -5,6 +5,8 @@ import * as XLSX from "xlsx";
 import Link from "next/link";
 import { useUserPlan } from "@/lib/auth/user-plan-context";
 import { useProject } from "@/lib/project-store";
+import { useModelLock } from "@/lib/use-model-lock";
+import { ModelLockBanner } from "@/components/ModelLockBanner";
 import type { Branch, Period } from "@/types/project";
 import type { Triangle } from "@/types/triangle";
 import { LDFTab } from "@/components/LDFTab";
@@ -550,6 +552,13 @@ export default function CashflowPage() {
   const [activePeriodId, setActivePeriodId] = useState<string | null>(null);
   const [activeBranchId, setActiveBranchId] = useState<string | null>(null);
 
+  const lockKey =
+    navLevel === "branch" && activePeriodId && activeBranchId
+      ? `cashflow:${activePeriodId}/${activeBranchId}`
+      : null;
+  const { state: lockState } = useModelLock(lockKey);
+  const isReadOnly = lockState.status === "locked_by_other";
+
   const [result, setResult] = useState<CashflowComputeResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [computingBranchId, setComputingBranchId] = useState<string | null>(null);
@@ -561,6 +570,7 @@ export default function CashflowPage() {
   const [excludedCells, setExcludedCells] = useState<Set<string>>(new Set());
 
   function saveLdfToStore(branchId: string, window: Window, cells: Set<string>) {
+    if (isReadOnly) return;
     actions.updateBranch(
       branchId,
       () => ({
@@ -595,7 +605,7 @@ export default function CashflowPage() {
   }
 
   function setCfKarmaWindow(step: string, w: Window) {
-    if (!activeBranchId) return;
+    if (isReadOnly || !activeBranchId) return;
     actions.updateBranch(
       activeBranchId,
       (prev) => ({ cashflowKarmaWindowPerStep: { ...(prev.cashflowKarmaWindowPerStep ?? {}), [step]: w } }),
@@ -606,7 +616,7 @@ export default function CashflowPage() {
   }
 
   function initCfKarma(stepCount: number, globalWindow: Window) {
-    if (!activeBranchId) return;
+    if (isReadOnly || !activeBranchId) return;
     const initial: Record<string, Window> = {};
     for (let j = 0; j < stepCount; j++) initial[String(j)] = globalWindow;
     actions.updateBranch(
@@ -619,7 +629,7 @@ export default function CashflowPage() {
   }
 
   function clearCfKarma() {
-    if (!activeBranchId) return;
+    if (isReadOnly || !activeBranchId) return;
     actions.updateBranch(
       activeBranchId,
       () => ({ cashflowKarmaWindowPerStep: {} }),
@@ -739,7 +749,7 @@ export default function CashflowPage() {
 
   // Curve setters — project store üzerinden D1'e persist edilir
   function setCfCdfModel(devPeriod: string, model: 1 | 2 | 3 | 4 | 5 | 6) {
-    if (!activeBranchId) return;
+    if (isReadOnly || !activeBranchId) return;
     actions.updateBranch(
       activeBranchId,
       (b) => ({ cashflowCdfModelPerPeriod: { ...(b.cashflowCdfModelPerPeriod ?? {}), [devPeriod]: model } }),
@@ -748,7 +758,7 @@ export default function CashflowPage() {
   }
 
   function setCfCurveInclude(devPeriod: string, include: boolean) {
-    if (!activeBranchId) return;
+    if (isReadOnly || !activeBranchId) return;
     actions.updateBranch(
       activeBranchId,
       (b) => ({ cashflowCurveIncludePerPeriod: { ...(b.cashflowCurveIncludePerPeriod ?? {}), [devPeriod]: include } }),
@@ -757,7 +767,7 @@ export default function CashflowPage() {
   }
 
   function setCfCdfInitial(devPeriod: string, value: number) {
-    if (!activeBranchId) return;
+    if (isReadOnly || !activeBranchId) return;
     actions.updateBranch(
       activeBranchId,
       (b) => ({ cashflowCdfInitial: { ...(b.cashflowCdfInitial ?? {}), [devPeriod]: value } }),
@@ -766,7 +776,7 @@ export default function CashflowPage() {
   }
 
   function resetCfCurve() {
-    if (!activeBranchId) return;
+    if (isReadOnly || !activeBranchId) return;
     actions.updateBranch(
       activeBranchId,
       () => ({ cashflowCdfModelPerPeriod: {}, cashflowCurveIncludePerPeriod: {}, cashflowCdfInitial: {} }),
@@ -896,6 +906,7 @@ export default function CashflowPage() {
 
   return (
     <div className="min-h-screen">
+      <ModelLockBanner state={lockState} />
       {/* Header */}
       <header className="border-b bg-[color:var(--surface)] px-6 h-14 flex items-center justify-between sticky top-0 z-40">
         <div className="flex items-center gap-3">

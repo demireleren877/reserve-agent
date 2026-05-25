@@ -340,7 +340,20 @@ export function ChatPanel({
       ) : (
         /* ── Messages ── */
         <div ref={scrollRef} className="flex-1 overflow-y-auto">
-          {messages.length === 0 ? (
+          {!modelsLoading && models.length === 0 ? (
+            /* Agent placeholder — not active yet */
+            <div className="flex flex-col items-center justify-center h-full px-8 gap-4 text-center">
+              <div className="h-11 w-11 rounded-2xl grid place-items-center" style={{ background: "var(--surface-alt)", border: "1px solid var(--border)" }}>
+                <AgentIconLg />
+              </div>
+              <div>
+                <div className="text-sm font-semibold">Agent şu an etkin değil</div>
+                <div className="text-xs text-[color:var(--muted)] mt-1 leading-relaxed">
+                  AI asistanı yakında kullanıma açılacak.
+                </div>
+              </div>
+            </div>
+          ) : messages.length === 0 ? (
             /* Empty state */
             <div className="flex flex-col items-center justify-center h-full px-8 gap-4 text-center">
               <div className="h-11 w-11 rounded-2xl bg-[color:var(--primary)] text-white grid place-items-center">
@@ -377,15 +390,15 @@ export function ChatPanel({
             value={input}
             onChange={(e) => { setInput(e.target.value); resizeTextarea(); }}
             onKeyDown={handleKeyDown}
-            placeholder="Mesaj yazın…"
-            disabled={loading}
+            placeholder={!modelsLoading && models.length === 0 ? "Agent etkin değil" : "Mesaj yazın…"}
+            disabled={loading || (!modelsLoading && models.length === 0)}
             rows={1}
             className="flex-1 input-base resize-none leading-relaxed overflow-y-auto"
             style={{ minHeight: "38px", maxHeight: "128px" }}
           />
           <button
             onClick={() => dispatchSend(input)}
-            disabled={loading || !input.trim()}
+            disabled={loading || !input.trim() || (!modelsLoading && models.length === 0)}
             className="btn btn-primary shrink-0 h-[38px] w-[38px] p-0 rounded-lg"
             title="Gönder (Enter)"
           >

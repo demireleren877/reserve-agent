@@ -61,12 +61,14 @@ def build_triangles(
     brans: str,
     origin_granularity: Literal["yearly", "quarterly"],
     development_granularity: Literal["yearly", "quarterly"],
-) -> tuple[Triangle, Triangle, dict | None]:
+) -> tuple[Triangle, Triangle, Triangle | None, dict | None]:
     """
-    Brans'a göre filtreli kayıtlardan (paid, incurred) üçgen çifti döner.
+    Brans'a göre filtreli kayıtlardan (paid, incurred, count, file_data) döner.
 
     paid    : artımsal ödemelerin kümülatifi
     incurred: kümülatif ödeme + dönem sonu muallak
+    count   : kümülatif ihbar edilen hasar adedi (distinct dosya_no). dosya_no
+              kolonu yoksa None — Frekans-Şiddet bu branşta kullanılamaz.
     """
     orig_gran = Granularity(origin_granularity)
     dev_gran = Granularity(development_granularity)
@@ -83,6 +85,9 @@ def build_triangles(
     inc_odeme: dict[tuple[int, int], float] = defaultdict(float)
     # (o_seq, d_seq_agg) → {dosya_no: (exact_d_seq, muallak)}
     _latest_muallak: dict[tuple[int, int], dict[str, tuple[int, float]]] = defaultdict(dict)
+    # Frekans-Şiddet için: her origin'de her dosya_no'nun İLK görüldüğü (aggregated)
+    # d_seq — kümülatif ihbar adedi üçgeni buradan türetilir.
+    _first_seen: dict[int, dict[str, int]] = defaultdict(dict)
     origin_label: dict[int, str] = {}
     dev_label: dict[int, str] = {}
 
@@ -113,6 +118,12 @@ def build_triangles(
         if existing is None or d_seq_exact > existing[0]:
             _latest_muallak[cell_key][dosya_no] = (d_seq_exact, muallak_val)
 
+        # Frekans-Şiddet: dosya'nın bu origin'de ilk göründüğü (aggregated) d_seq
+        if dosya_no:
+            fs = _first_seen[o_seq]
+            if dosya_no not in fs or d_seq < fs[dosya_no]:
+                fs[dosya_no] = d_seq
+
     if not origin_label:
         raise ValueError("Geçerli kayıt bulunamadı")
 
@@ -121,6 +132,14 @@ def build_triangles(
         cell: sum(v for _, v in per_dosya.values())
         for cell, per_dosya in _latest_muallak.items()
     }
+
+    # Frekans-Şiddet: (o_seq, d_seq) hücresinde İLK ihbar edilen yeni dosya adedi.
+    # Kümülatif ihbar adedi, satır kurulumunda cum_paid gibi taşınarak elde edilir.
+    new_count: dict[tuple[int, int], int] = defaultdict(int)
+    for o_seq, fs in _first_seen.items():
+        for _dosya_no, d_first in fs.items():
+            new_count[(o_seq, d_first)] += 1
+    has_counts = bool(new_count)
 
     # Değerleme tarihi = dataset'teki en büyük gelişim seq'i
     eval_dev_seq = max(dev_label.keys())
@@ -165,18 +184,22 @@ def build_triangles(
 
     paid_values: list[list[float | None]] = []
     incurred_values: list[list[float | None]] = []
+    count_values: list[list[float | None]] = []
 
     for o_seq in origin_seqs:
         max_age_for_origin = (eval_dev_seq - o_seq) // 4 if both_yearly else eval_dev_seq - o_seq
         paid_row: list[float | None] = []
         incurred_row: list[float | None] = []
+        count_row: list[float | None] = []
         cum_paid = 0.0
+        cum_count = 0.0
 
         for age in dev_ages:
             if age > max_age_for_origin:
                 # Bu origin için değerleme tarihini geçti → alt köşegen
                 paid_row.append(None)
                 incurred_row.append(None)
+                count_row.append(None)
                 continue
 
             d_seq = o_seq + age * 4 if both_yearly else o_seq + age
@@ -185,11 +208,14 @@ def build_triangles(
 
             # Veri yoksa: kümülatif ödeme taşınır (carry-forward), muallak = 0
             cum_paid += inc
+            cum_count += new_count.get((o_seq, d_seq), 0)
             paid_row.append(cum_paid)
             incurred_row.append(cum_paid + mual)
+            count_row.append(cum_count)
 
         paid_values.append(paid_row)
         incurred_values.append(incurred_row)
+        count_values.append(count_row)
 
     paid_tri = Triangle(
         origin_periods=origin_periods,
@@ -207,6 +233,18 @@ def build_triangles(
         origin_granularity=orig_gran,
         development_granularity=dev_gran,
     )
+    # Adet üçgeni: dosya_no kolonu varsa kümülatif ihbar adedi (tip metadata
+    # için PAID; adet üçgeninin paid/incurred ayrımı yoktur).
+    count_tri: Triangle | None = None
+    if has_counts:
+        count_tri = Triangle(
+            origin_periods=origin_periods,
+            development_periods=development_periods,
+            values=count_values,
+            triangle_type=TriangleType.PAID,
+            origin_granularity=orig_gran,
+            development_granularity=dev_gran,
+        )
 
     # ── Dosya bazlı kümülatif ödeme (file_data) ───────────────────────────────
     # {origin_label: {dev_label: {dosya_no: cum_paid}}}
@@ -247,4 +285,4 @@ def build_triangles(
                 fd[o_lbl][d_lbl] = dict(cum)
         file_data = fd
 
-    return paid_tri, incurred_tri, file_data
+    return paid_tri, incurred_tri, count_tri, file_data

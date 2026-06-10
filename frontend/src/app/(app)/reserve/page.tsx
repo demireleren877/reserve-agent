@@ -11,6 +11,7 @@ import { UltimateTab } from "@/components/UltimateTab";
 import { SummaryTab } from "@/components/SummaryTab";
 import { ILRTab } from "@/components/ILRTab";
 import { FileAnalysisTab } from "@/components/FileAnalysisTab";
+import { FrequencySeverityTab } from "@/components/FrequencySeverityTab";
 import { Breadcrumb } from "@/components/ProjectNav";
 import { FolderBrowser } from "@/components/FolderBrowser";
 import { useBranchSetters, useProject } from "@/lib/project-store";
@@ -32,7 +33,7 @@ import {
 } from "@/lib/tail-fit";
 import { evalFormula, type FormulaContext } from "@/lib/formula";
 
-type Tab = "data" | "file" | "ldf" | "curve" | "ilr" | "bf" | "ultimate" | "summary";
+type Tab = "data" | "file" | "ldf" | "curve" | "ilr" | "bf" | "freq" | "ultimate" | "summary";
 
 const TABS: { id: Tab; label: string; sub: string }[] = [
   { id: "data",     label: "Veri",          sub: "Üçgen önizleme" },
@@ -41,6 +42,7 @@ const TABS: { id: Tab; label: string; sub: string }[] = [
   { id: "curve",    label: "Curve",         sub: "CDF eğrisi" },
   { id: "ilr",      label: "ILR",           sub: "Loss ratio üçgeni" },
   { id: "bf",       label: "BF",            sub: "Bornhuetter–Ferguson" },
+  { id: "freq",     label: "Frekans-Şiddet", sub: "Adet × ort. maliyet" },
   { id: "ultimate", label: "Ultimate/IBNR", sub: "Rezerv projeksiyonu" },
   { id: "summary",  label: "Özet",          sub: "Model raporu" },
 ];
@@ -862,6 +864,14 @@ export default function Home() {
             premiums={premiums}
             correctionPerOrigin={correctionPerOrigin}
             selectedLDFs={effectiveLDFs}
+          />
+        )}
+        {tab === "freq" && (
+          <FrequencySeverityTab
+            amountTriangle={activeBranch.incurredTriangle ?? triangle}
+            countTriangle={activeBranch.countTriangle}
+            window={window}
+            clIbnr={summary?.totals.ibnr ?? null}
           />
         )}
         {tab === "file" && (

@@ -14,7 +14,9 @@ import { computeBranchSummary } from "@/lib/reserve-pipeline";
 import {
   buildFlatRateFn,
   buildCurveFn,
+  defaultDiscountConfig,
   discountBranch,
+  discountWithStandard,
   type CurveNode,
 } from "@/lib/discount-engine";
 import type { AgentAction } from "@/types/triangle";
@@ -70,11 +72,38 @@ function buildDiscountSnapshot(periods: Period[], activeBranch: Branch | null) {
           duration_months: number;
         } = null;
 
+        // IFRS 17 varsayılan konfigürasyonla hızlı özet (BEL + RA = LIC)
+        let quickIfrs17: null | {
+          bel: number;
+          risk_adjustment: number;
+          lic: number;
+        } = null;
+
+        // per_origin: backend compute_discount için unpaid + ağırlıklı ortalama
+        // ödeme ayı (rate-bağımsız, gerçek aylık pattern'den). Aylık pattern'in
+        // tamamı gönderilmez — payload küçük kalır.
+        let perOrigin: { origin: string; unpaid: number; avg_month: number }[] = [];
+
         if (hasPattern && summary.rows.length > 0) {
           const rows = summary.rows.map((r) => ({
             origin: r.origin,
             unpaid: r.latest + r.ibnr,
           }));
+          perOrigin = rows
+            .filter((r) => r.unpaid > 0)
+            .map((r) => {
+              const weights = pattern[r.origin] ?? [];
+              const wsum = weights.reduce((s, w) => s + w.weight, 0);
+              const avgMonth =
+                wsum > 0
+                  ? weights.reduce((s, w) => s + w.month * w.weight, 0) / wsum
+                  : 0;
+              return {
+                origin: r.origin,
+                unpaid: Math.round(r.unpaid),
+                avg_month: Math.round(avgMonth * 10) / 10,
+              };
+            });
           const getRateFn = buildFlatRateFn(0.3);
           try {
             const res = discountBranch(rows, pattern, getRateFn);
@@ -84,6 +113,16 @@ function buildDiscountSnapshot(periods: Period[], activeBranch: Branch | null) {
               discount_amount: Math.round(res.totals.unpaid - res.totals.bel),
               discount_pct: Math.round(res.totals.discountPct * 10000) / 100,
               duration_months: Math.round(res.totals.duration * 10) / 10,
+            };
+            const r17 = discountWithStandard(
+              rows,
+              pattern,
+              defaultDiscountConfig("ifrs17"),
+            );
+            quickIfrs17 = {
+              bel: Math.round(r17.base.totals.bel),
+              risk_adjustment: Math.round(r17.riskAdjustment.total),
+              lic: Math.round(r17.lic),
             };
           } catch {
             // pattern uyumsuzluğu — sessizce geç
@@ -101,17 +140,22 @@ function buildDiscountSnapshot(periods: Period[], activeBranch: Branch | null) {
           origin_count: summary.rows.length,
           total_unpaid_liability: Math.round(summary.totals.latest + summary.totals.ibnr),
           quick_discount_at_30pct: quickDiscount,
+          quick_ifrs17_default: quickIfrs17,
+          per_origin: perOrigin,
           note: hasPattern
-            ? "compute_discount ile özel faiz oranı veya eğri kullanabilirsiniz."
+            ? "compute_discount ile standart (ifrs4/ifrs17), faiz oranı/eğrisi ve Risk Adjustment parametreleri özelleştirilebilir."
             : "Nakit akışı pattern eksik — Cashflow modülünde hesaplayın.",
         };
       }),
   );
 
+  // session_state sarmalı: backend payload.get("session_state") ile okur
   return {
-    branches,
-    active_branch_id: activeBranch?.id ?? null,
-    note: "İskonto modülü: her branş için Unpaid Liability ve iskonto özeti. compute_discount ile detaylı hesap.",
+    session_state: {
+      branches,
+      active_branch_id: activeBranch?.id ?? null,
+      note: "İskonto modülü: her branş için Unpaid Liability ve iskonto özeti. compute_discount ile detaylı hesap.",
+    },
   };
 }
 

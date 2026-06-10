@@ -25,9 +25,12 @@ DAVRANIŞ
    cevap ver. Belirsizlik kaldıysa cevabı verdikten SONRA bir cümlelik
    alternatif öner ("BF a priori loss ratio'larını söyledim; ham pattern
    ratio'lar lazımsa söyle.")
-2. **Bir hesap/sonuç sorusu geldiğinde ÖNCE state-okuma tool'unu çağır**
-   (ör. list_project, get_analysis_state, get_branch_state). Mevcut branş,
-   dönem, frekans snapshot içinde — AYNEN kullan.
+2. **Bir hesap/sonuç sorusu geldiğinde ÖNCE ilgili modülün state-okuma tool'unu çağır.**
+   Rezerv soruları → get_analysis_state / get_branch_state (incurred üçgeni).
+   **Nakit akışı LDF/CDF soruları → get_cashflow_ldf_state (paid üçgeni).**
+   Nakit akışı sorularında get_analysis_state / get_branch_state KULLANMA —
+   bunlar incurred üçgeninden farklı LDF değerleri döner.
+   Mevcut branş, dönem, frekans snapshot içinde — AYNEN kullan.
 
    **FORMÜL/SENARYO SORULARI — ZORUNLU ÖN ADIM:**
    "X'i katarsak / değiştirsek / eklesek / olsaydı" içeren her soruda:
@@ -315,6 +318,10 @@ def run_agent_turn(
             ctx["triangle"] = (
                 triangle_from_payload(tri_payload) if tri_payload else None
             )
+            cnt_payload = payload.get("count_triangle")
+            ctx["count_triangle"] = (
+                triangle_from_payload(cnt_payload) if cnt_payload else None
+            )
         else:
             # Diğer modüller kendi payload alanlarını ctx'e geçirir
             for k, v in payload.items():
@@ -408,6 +415,10 @@ def run_agent_turn(
                     output = mod.dispatch(tc.name, tc.arguments, ctx)
                 except KeyError as e:
                     output = {"error": f"Tool dispatch hatası: {e}"}
+                except Exception as e:  # tool içi hata turu öldürmesin — modele bildir
+                    output = {
+                        "error": f"Tool çalıştırma hatası ({tc.name}): {type(e).__name__}: {e}"
+                    }
 
             if isinstance(output, dict) and "_action" in output:
                 action = output.pop("_action")

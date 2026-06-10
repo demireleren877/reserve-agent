@@ -9,48 +9,82 @@ from app.agent.tools import TOOL_SCHEMAS, dispatch_tool
 
 _CASHFLOW_TOOL_NAMES = {
     "get_cashflow_state",
+    "get_cashflow_ldf_state",
+    "get_cashflow_pattern_state",
     "set_cashflow_window",
+    "exclude_cashflow_cells",
+    "clear_cashflow_exclusions",
     "set_cashflow_cdf_model",
     "set_cashflow_cdf_model_bulk",
+    "set_cashflow_cdf_user_value",
     "reset_cashflow_curve",
 }
 
-CASHFLOW_PROMPT = """Nakit Akışı modülü — branş bazlı aylık ödeme dağılımı hesaplama.
+CASHFLOW_PROMPT = """Nakit Akışı modülü — branş bazlı LDF/CDF ve aylık ödeme dağılımı.
 
 AMAÇ
-Paid üçgeninden CDF cascade → nakit akışı pattern → aylık ödeme dağılımı
-(180 aya kadar). Bu pattern iskonto modülünde kullanılır.
+Paid üçgeninden LDF hesabı → CDF cascade → nakit akışı pattern → aylık ödeme
+dağılımı (180 aya kadar). Bu pattern iskonto modülünde kullanılır.
 
 TEMEL KAVRAMLAR
-* LDF penceresi (cashflow_ldf_window): Rezerv LDF'inden BAĞIMSIZ. Cashflow için
-  ayrı bir "volume" penceresi seçilebilir. set_cashflow_window ile değiştir.
-* CDF model (cashflow_cdf_model): Her gelişim dönemi için tail curve modeli.
+* LDF penceresi (ldf_window): Son N origin bazlı hacim ağırlıklı LDF agregasyonu.
+  Rezerv LDF'inden BAĞIMSIZ. set_cashflow_window ile değiştir.
+* Elenen hücreler (cashflowLdfExcludedCells): Paid üçgeninden belirli (origin, step)
+  çiftlerini LDF hesabından çıkar. exclude_cashflow_cells ile ekle,
+  clear_cashflow_exclusions ile temizle.
+* CDF model: Her gelişim dönemi için tail curve modeli.
   1=Initial (LDF'ten), 2=Exp Decay, 3=Inv Power, 4=Power, 5=Weibull, 6=User Value.
   set_cashflow_cdf_model ile değiştir.
-* Aylık pattern: Cashflow sayfasında hesaplama çalıştırıldıktan sonra
-  has_pattern=true olur. Bu pattern iskonto hesabı için gereklidir.
+* User Value CDF: Manuel CDF değeri. set_cashflow_cdf_user_value ile yaz
+  (otomatik olarak model=6 aktif eder).
+* Aylık pattern: Nakit Akışı sayfasında CF Pattern sekmesindeki hesaplama
+  çalıştırıldığında has_pattern=true olur. Pattern iskonto için zorunludur.
 
 AKIŞ KURALLARI
-* Hangi branşlarda cashflow hesaplanmış? → get_cashflow_state
+* Branşların durumunu öğren → get_cashflow_state (özet)
+* Belirli branş LDF detayı → get_cashflow_ldf_state (branch_id opsiyonel, yoksa aktif)
 * LDF penceresini değiştir → set_cashflow_window(window=..., branch_id=...)
+* Hücre ele → exclude_cashflow_cells(cells=[{origin, step}], branch_id=...)
+* Tüm elemeleri temizle → clear_cashflow_exclusions(branch_id=...)
 * Curve modelini değiştir → set_cashflow_cdf_model(dev_period=..., model=...)
+* User CDF yaz → set_cashflow_cdf_user_value(dev_period=..., value=...)
 * Curve'i sıfırla → reset_cashflow_curve(branch_id=...)
-* Hesaplama (computeCashflow) agent tarafından tetiklenemez — kullanıcı
-  Nakit Akışı sayfasında "Hesapla" butonuna tıklamalıdır.
 
-ÖNEMLİ
+KRİTİK — ARAÇ SEÇİMİ
+* Nakit akışı LDF/CDF soruları için SADECE get_cashflow_ldf_state kullan.
+  ASLA get_branch_state veya get_analysis_state kullanma — bunlar rezerv modülüne
+  aittir ve incurred üçgeninden hesaplanan farklı LDF değerlerini döner.
+* Cashflow LDF'leri PAID üçgeninden hesaplanır; rezerv LDF'leri INCURRED üçgeninden.
+  Değerler tamamen farklı olabilir — karıştırma.
 * branch_id verilmezse aktif branş varsayılır.
-* Pattern hesaplanmamış branşta iskonto çalışmaz → kullanıcıyı Cashflow
-  modülüne yönlendir.
+* per_dev dizisindeki step_idx 0-tabanlıdır. step=0 → 1.→2. dönem geçişi.
+* Pattern hesaplanmamış branşta iskonto çalışmaz.
+* Nakit Akışı sayfasında paid üçgeni yüklü branşlar görünür.
+* Pattern verisi → get_cashflow_pattern_state
+  - Varsayılan mode='quarterly': CF Pattern sekmesindeki çeyreklik dağılım (period, weight)
+  - mode='monthly': 180 aylık Aylık Pattern dağılımı
+  - origin belirtilirse o kaza yılının detaylı dizisi, belirtilmezse tüm origin'ler özet
+  - Pattern, Nakit Akışı sayfasında branş açılınca otomatik hesaplanır ve kaydedilir.
+    Daha önce hiç açılmamış branşta has_pattern=false olur — kullanıcıya Nakit Akışı
+    sayfasında o branşa tıklamasını söyle.
 """
 
 
 def _cashflow_context(session_state: dict[str, Any] | None) -> str:
     if not session_state:
         return "yüklenmemiş"
-    branches = session_state.get("branches", []) or []
-    with_pattern = sum(1 for b in branches if b.get("has_pattern"))
-    return f"{len(branches)} branş, {with_pattern} tanesi hesaplanmış"
+    periods = session_state.get("periods", []) or []
+    branches = [b for p in periods for b in p.get("branches", [])]
+    with_tri = sum(1 for b in branches if b.get("has_paid_triangle"))
+    with_pat = sum(1 for b in branches if b.get("has_pattern"))
+    active_id = session_state.get("active_branch_id")
+    active_name = next(
+        (b.get("name") for p in periods for b in p.get("branches", [])
+         if b.get("id") == active_id),
+        None,
+    )
+    active_str = f", aktif={active_name}" if active_name else ""
+    return f"{len(branches)} branş, {with_tri} üçgen yüklü, {with_pat} pattern hesaplı{active_str}"
 
 
 def _cashflow_dispatch(

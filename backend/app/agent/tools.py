@@ -1,15 +1,21 @@
 """Agent tool'ları.
 
 Read (durum sorgulama):
-    describe_triangle, get_analysis_state
+    list_project, get_branch_state, describe_triangle, get_analysis_state,
+    get_ilr_triangle, get_file_summary, get_cashflow_state,
+    get_cashflow_ldf_state, get_cashflow_pattern_state, get_discount_state,
+    list_data_periods
 
 Scenario (durumu değiştirmeden hipotetik hesap):
-    simulate_bf, run_chain_ladder
+    simulate_bf, simulate_bf_formula, run_chain_ladder,
+    simulate_frequency_severity, compute_discount
 
 Write (UI durumunu güncelle — kullanıcı onayı İSTENMEZ):
-    exclude_cells, include_cells, clear_exclusions, exclude_outliers,
-    set_method, set_window,
-    set_selected_loss_ratio, set_premium, set_basis
+    select_branch, exclude_cells, include_cells, clear_exclusions,
+    exclude_outliers, set_window, set_selected_loss_ratio(s), set_premium(s),
+    set_basis(_bulk), set_correction(s), set_cdf_user_value, set_cdf_choice(s),
+    reset_curve, cashflow karşılıkları (set_cashflow_*, exclude_cashflow_cells,
+    clear_cashflow_exclusions, reset_cashflow_curve), navigate_to
 
 Write tool'ları çıktılarında "_action" anahtarı içerir — agent loop bunu
 ChatResponse.actions listesine ekler, frontend otomatik uygular.
@@ -20,6 +26,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.core.chain_ladder import run_chain_ladder
+from app.core.frequency_severity import run_frequency_severity
 from app.core.ldf import LDFMethod
 from app.core.triangle import Triangle
 
@@ -62,11 +69,11 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
         "function": {
             "name": "get_branch_state",
             "description": (
-                "Belirli bir branşın tam analizi: per-origin satırlar (latest, "
-                "exposure, correction, cdf, cl_ult, bf_ult, basis, selected_ult, "
-                "ibnr, ulr), totals, selected_ldfs, effective_cdfs. Aktif branş "
-                "için list_project zaten bunları içerir; başka branş için "
-                "branch_id ile sor."
+                "REZERV modülü — belirli bir branşın INCURRED üçgeni analizi: per-origin "
+                "satırlar (latest, exposure, correction, cdf, cl_ult, bf_ult, basis, "
+                "selected_ult, ibnr, ulr), totals, selected_ldfs, effective_cdfs. "
+                "SADECE rezerv soruları için kullan. Nakit akışı LDF/CDF soruları için "
+                "get_cashflow_ldf_state kullan — o PAID üçgeninden hesaplar."
             ),
             "parameters": {
                 "type": "object",
@@ -91,10 +98,11 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
         "function": {
             "name": "get_analysis_state",
             "description": (
-                "Mevcut analizin tam durumu: method/window/elenen hücreler + "
-                "LDF/CDF + her origin için latest/premium/pattern_ratio/"
-                "selected_lr/cl_ultimate/bf_ultimate/basis/selected_ultimate/"
-                "ibnr/ulr. Sonuçla ilgili her soruda ÖNCE çağır."
+                "REZERV modülü — INCURRED üçgeninden hesaplanan LDF/CDF + her origin için "
+                "latest/premium/pattern_ratio/selected_lr/cl_ultimate/bf_ultimate/basis/"
+                "selected_ultimate/ibnr/ulr. SADECE rezerv soruları için çağır. "
+                "Nakit akışı LDF/CDF soruları için get_cashflow_ldf_state kullan — "
+                "o PAID üçgeninden hesaplar, değerler tamamen farklı olabilir."
             ),
             "parameters": {"type": "object", "properties": {}, "required": []},
         },
@@ -540,6 +548,44 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "simulate_frequency_severity",
+            "description": (
+                "SENARYO — Frekans-Şiddet (Average Cost per Claim) yöntemiyle ult hasar "
+                "ve IBNR. Durumu DEĞİŞTİRMEZ. Adet üçgeni (kümülatif ihbar adedi) → CL → "
+                "ult adet; şiddet üçgeni (tutar/adet) → CL → ult şiddet; ult hasar = "
+                "ult adet × ult şiddet. Saf CL'den FARKLI sonuç verir — frekans ve şiddet "
+                "gelişimini ayrıştırır, saf CL için makullük kontrolüdür. Aktif branşın "
+                "incurred üçgeni + adet üçgeni kullanılır. Adet üçgeni yalnızca dosya "
+                "bazlı (DOSYA_NO) hasar verisinden yüklenen branşlarda mevcuttur; yoksa "
+                "hata döner. 'Frekans-şiddet ile IBNR ne', 'ortalama hasar maliyeti "
+                "yöntemi', 'adet ve şiddeti ayrı geliştir' sorularında kullan."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "method": {
+                        "type": "string",
+                        "enum": [m.value for m in LDFMethod],
+                        "description": "Gelişim faktörü yöntemi (varsayılan volume_weighted).",
+                    },
+                    "n_years": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "description": "Son N origin ile sınırla (volume seçimi).",
+                    },
+                    "excluded_origins": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Hesaptan dışlanacak kaza yılları.",
+                    },
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "get_ilr_triangle",
             "description": (
                 "Aktif branş için ILR (Incurred Loss Ratio) üçgeni. "
@@ -571,11 +617,102 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
         "function": {
             "name": "get_cashflow_state",
             "description": (
-                "Tüm branşların cashflow ayarlarını ve aylık nakit akışı pattern "
-                "durumunu döner. Hangi branşlarda cashflow hesaplanmış, LDF penceresi "
-                "ne, curve model seçimleri neler sorularında kullan."
+                "Tüm branşların cashflow özetini döner: has_paid_triangle, n_origins, "
+                "n_developments, ldf_window, excluded_cells_count, cdf_model_overrides, "
+                "has_pattern, pattern_origin_count. Hangi branşlarda cashflow mevcut, "
+                "LDF penceresi ne sorularında kullan. Detaylı LDF/CDF için "
+                "get_cashflow_ldf_state kullan."
             ),
             "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_cashflow_ldf_state",
+            "description": (
+                "Nakit akışı modülüne ait PAID üçgeninden hesaplanan LDF/CDF durumunu döner. "
+                "Rezerv modülündeki get_branch_state'ten FARKLIDIR — o incurred üçgeni kullanır, "
+                "bu PAID üçgeni kullanır. Değerler farklı olabilir. "
+                "Her gelişim dönemi için: selected_ldf, initial_cdf, effective_cdf, model, user_value. "
+                "Ayrıca ldf_window, excluded_cells, selected_ldfs dizisi, effective_cdfs dizisi. "
+                "Nakit akışı LDF/CDF sorusu geldiğinde get_branch_state DEĞİL BU TOOL'U kullan. "
+                "branch_id verilmezse aktif branş varsayılır."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "branch_id": {"type": "string", "description": "Opsiyonel hedef branş."},
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "exclude_cashflow_cells",
+            "description": (
+                "Cashflow LDF hesabından (origin, step) hücrelerini çıkar. "
+                "Rezerv modülündeki exclude_cells ile aynı mantık ama cashflow paid "
+                "üçgeni için. step 0-index'li: step=0 → 1.→2. gelişim dönemi geçişi. "
+                "branch_id verilmezse aktif branşa uygulanır."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "cells": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "origin": {"type": "string"},
+                                "step": {"type": "integer"},
+                            },
+                            "required": ["origin", "step"],
+                        },
+                    },
+                    "branch_id": {"type": "string", "description": "Opsiyonel hedef branş."},
+                },
+                "required": ["cells"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "clear_cashflow_exclusions",
+            "description": (
+                "Cashflow LDF'indeki tüm hücre elemelerini kaldır. "
+                "branch_id verilmezse aktif branşa uygulanır."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "branch_id": {"type": "string", "description": "Opsiyonel hedef branş."},
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "set_cashflow_cdf_user_value",
+            "description": (
+                "Cashflow Curve sekmesinde bir development period için User Value (manuel CDF) "
+                "yaz ve model=6 (User Value) olarak aktifleştir. "
+                "branch_id verilmezse aktif branşa uygulanır."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "dev_period": {"type": "string", "description": "Gelişim dönemi (triangle'daki değer)."},
+                    "value": {"type": "number", "description": "CDF değeri (örn. 1.05)."},
+                    "branch_id": {"type": "string", "description": "Opsiyonel hedef branş."},
+                },
+                "required": ["dev_period", "value"],
+            },
         },
     },
     {
@@ -658,6 +795,30 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_cashflow_pattern_state",
+            "description": (
+                "Nakit akışı pattern verilerini döner. Varsayılan mode='quarterly' — "
+                "CF Pattern sekmesindeki çeyreklik dağılımı (period, weight) döner. "
+                "mode='monthly' ile 180 aylık dağılıma geçilebilir. "
+                "origin belirtilirse o kaza yılının detaylı ağırlık dizisi, "
+                "belirtilmezse tüm origin'ler için özet döner. "
+                "Pattern Nakit Akışı sayfasında branş açılınca otomatik hesaplanır. "
+                "branch_id verilmezse aktif branş varsayılır."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "origin": {"type": "string", "description": "Kaza yılı (ör. '2024'). Boş bırakılırsa tüm origin'ler özet."},
+                    "branch_id": {"type": "string", "description": "Opsiyonel hedef branş."},
+                    "mode": {"type": "string", "enum": ["quarterly", "monthly"], "description": "quarterly (varsayılan) = CF Pattern sekmesi, monthly = 180 aylık Aylık Pattern."},
+                },
+                "required": [],
+            },
+        },
+    },
     # ─── Discount tools ───────────────────────────────────────────────────────
     {
         "type": "function",
@@ -676,11 +837,16 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
         "function": {
             "name": "compute_discount",
             "description": (
-                "Belirli bir branş için iskonto hesapla. Sabit faiz (flat) veya "
-                "term yapısı (curve) kullanılabilir. Sonuç: kaza yılı bazlı "
-                "Unpaid Liability, İskontolu Unpaid, iskonto tutarı, iskonto%, duration. "
-                "Cashflow pattern eksikse hata döner. "
-                "SEDDK 2025: flat_rate=0.30. IFRS 17: piyasa gözlemlenebilir oran."
+                "Belirli bir branş için standart-bazlı iskonto hesapla. "
+                "standard='ifrs4' (varsayılan): SEDDK düzenleyici iskonto — sabit "
+                "faiz (2025: %30), eğri veya nominal (rate_mode='none'); Risk "
+                "Adjustment yok. standard='ifrs17': bottom-up eğri (risk-free + "
+                "illiquidity_premium_bps) ile BEL + Risk Adjustment = LIC. "
+                "RA yöntemi: 'pct_of_bel' (BEL × yüzde, varsayılan %6) veya "
+                "'cost_of_capital' (CoC × sermaye oranı × yükümlülük süresi). "
+                "Sonuç: kaza yılı bazlı Unpaid, BEL/İskontolu Unpaid, RA, LIC, "
+                "iskonto%, duration. Cashflow pattern eksikse hata döner. "
+                "Parametre verilmezse standardın varsayılanları kullanılır."
             ),
             "parameters": {
                 "type": "object",
@@ -689,10 +855,19 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                         "type": "string",
                         "description": "Hedef branş. Verilmezse aktif branş.",
                     },
+                    "standard": {
+                        "type": "string",
+                        "enum": ["ifrs4", "ifrs17"],
+                        "description": "Raporlama standardı. Varsayılan 'ifrs4'.",
+                    },
                     "rate_mode": {
                         "type": "string",
-                        "enum": ["flat", "curve"],
-                        "description": "'flat' = sabit faiz, 'curve' = vade yapısı.",
+                        "enum": ["none", "flat", "curve"],
+                        "description": (
+                            "'flat' = sabit faiz, 'curve' = vade yapısı, 'none' = "
+                            "iskontosuz (sadece ifrs4). Verilmezse: ifrs4→flat, "
+                            "ifrs17→curve (varsayılan risk-free eğri)."
+                        ),
                     },
                     "flat_rate": {
                         "type": "number",
@@ -700,7 +875,10 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                     },
                     "curve_nodes": {
                         "type": "array",
-                        "description": "Eğri noktaları. rate_mode='curve' için.",
+                        "description": (
+                            "Eğri noktaları. rate_mode='curve' için. Verilmezse "
+                            "varsayılan TL risk-free eğri kullanılır."
+                        ),
                         "items": {
                             "type": "object",
                             "properties": {
@@ -710,8 +888,32 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                             "required": ["month", "rate"],
                         },
                     },
+                    "illiquidity_premium_bps": {
+                        "type": "number",
+                        "description": (
+                            "IFRS 17 illikidite primi (baz puan), eğrinin üzerine "
+                            "eklenir. Varsayılan 100."
+                        ),
+                    },
+                    "risk_adjustment_method": {
+                        "type": "string",
+                        "enum": ["none", "pct_of_bel", "cost_of_capital"],
+                        "description": "IFRS 17 RA yöntemi. Varsayılan 'pct_of_bel'.",
+                    },
+                    "risk_adjustment_pct": {
+                        "type": "number",
+                        "description": "RA = BEL × bu oran (0.06 = %6). pct_of_bel için.",
+                    },
+                    "coc_rate": {
+                        "type": "number",
+                        "description": "Cost of Capital yıllık oranı (0.06 = %6).",
+                    },
+                    "capital_ratio": {
+                        "type": "number",
+                        "description": "SCR proxy oranı: kalan yükümlülük × bu oran (0.10 = %10).",
+                    },
                 },
-                "required": ["rate_mode"],
+                "required": [],
             },
         },
     },
@@ -767,6 +969,27 @@ _TRIANGLE_REQUIRED = {
     "exclude_outliers",
     "run_chain_ladder",
     "get_ilr_triangle",
+    "simulate_frequency_severity",
+}
+
+# Aktif branş üzerine yazan rezerv tool'ları. Aktif branş yokken frontend bu
+# action'ları sessizce düşürür (updateActiveBranch no-op) — agent'ın "yaptım"
+# deyip hiçbir şeyin değişmemesi yerine burada net hata dönüyoruz.
+_ACTIVE_BRANCH_WRITE = {
+    "clear_exclusions",
+    "set_window",
+    "set_selected_loss_ratio",
+    "set_selected_loss_ratios",
+    "set_premium",
+    "set_premiums",
+    "set_basis",
+    "set_basis_bulk",
+    "set_correction",
+    "set_corrections",
+    "set_cdf_user_value",
+    "set_cdf_choice",
+    "set_cdf_choices",
+    "reset_curve",
 }
 
 
@@ -776,6 +999,7 @@ def dispatch_tool(
     *,
     triangle: Triangle | None = None,
     session_state: dict[str, Any] | None = None,
+    count_triangle: Triangle | None = None,
 ) -> dict[str, Any]:
     # Triangle gerektirenler için aktif branş kontrolü
     if name in _TRIANGLE_REQUIRED and triangle is None:
@@ -784,6 +1008,21 @@ def dispatch_tool(
                 "Bu araç aktif bir branş gerektirir. Önce list_project ile "
                 "mevcut branşları gör, sonra select_branch(branch_id) ile birini "
                 "aktifleştir."
+            )
+        }
+
+    # Yazma tool'ları aktif branş gerektirir (triangle yüklüyse aktif branş var
+    # demektir; session_state.active da güvenilir göstergedir).
+    if (
+        name in _ACTIVE_BRANCH_WRITE
+        and triangle is None
+        and not (session_state or {}).get("active")
+    ):
+        return {
+            "error": (
+                "Aktif branş yok — bu yazma aracı aktif branş üzerinde çalışır. "
+                "Önce select_branch(branch_id) ile bir branş aç (branşları "
+                "list_project ile görebilirsin), sonra tekrar dene."
             )
         }
 
@@ -977,6 +1216,8 @@ def dispatch_tool(
         return _simulate_bf_formula(session_state, args)
     if name == "run_chain_ladder":
         return _run_chain_ladder(triangle, args)
+    if name == "simulate_frequency_severity":
+        return _simulate_frequency_severity(triangle, count_triangle, args)  # type: ignore[arg-type]
     if name == "get_ilr_triangle":
         return _get_ilr_triangle(triangle, session_state)  # type: ignore[arg-type]
     if name == "get_file_summary":
@@ -984,6 +1225,37 @@ def dispatch_tool(
     # ─── Cashflow ─────────────────────────────────────────────────────────────
     if name == "get_cashflow_state":
         return _get_cashflow_state(session_state)
+    if name == "get_cashflow_ldf_state":
+        return _get_cashflow_ldf_state(session_state, args)
+    if name == "get_cashflow_pattern_state":
+        return _get_cashflow_pattern_state(session_state, args)
+    if name == "exclude_cashflow_cells":
+        cells = args.get("cells", []) or []
+        clean = [{"origin": str(c.get("origin", "")), "step": int(c.get("step", 0))} for c in cells if c.get("origin") is not None]
+        branch_id = args.get("branch_id")
+        payload: dict[str, Any] = {"cells": clean}
+        if branch_id:
+            payload["branch_id"] = str(branch_id)
+        if not clean:
+            return {"error": "cells boş — en az bir hücre belirt."}
+        return {"applied": clean, "count": len(clean), "_action": {"type": "exclude_cashflow_cells", "payload": payload, "module": "cashflow"}}
+    if name == "clear_cashflow_exclusions":
+        branch_id = args.get("branch_id")
+        payload = {}
+        if branch_id:
+            payload["branch_id"] = str(branch_id)
+        return {"cleared": True, "_action": {"type": "clear_cashflow_exclusions", "payload": payload, "module": "cashflow"}}
+    if name == "set_cashflow_cdf_user_value":
+        dev = str(args.get("dev_period", ""))
+        try:
+            v = float(args.get("value", 1))
+        except (TypeError, ValueError):
+            return {"error": "Geçersiz value"}
+        branch_id = args.get("branch_id")
+        payload = {"dev_period": dev, "value": v}
+        if branch_id:
+            payload["branch_id"] = str(branch_id)
+        return {"dev_period": dev, "value": v, "_action": {"type": "set_cashflow_cdf_user_value", "payload": payload, "module": "cashflow"}}
     if name == "set_cashflow_window":
         window = str(args.get("window", "all"))
         if window not in {"4", "5", "7", "all"}:
@@ -1035,12 +1307,28 @@ def dispatch_tool(
     raise KeyError(f"Tool bulunamadı: {name}")
 
 
+_BRANCH_VERBOSE_FIELDS = {"per_origin", "formula_context", "selected_ldfs", "effective_cdfs"}
+
+
 def _list_project(session_state: dict[str, Any] | None) -> dict[str, Any]:
     if not session_state:
         return {"periods": [], "active": None, "totals_all_branches": {}}
+    # Strip verbose LDF/CDF arrays — agent must call get_analysis_state/get_branch_state
+    # for those. Leaving them here causes the agent to skip proper tool calls and read
+    # incurred triangle LDFs as if they were cashflow paid LDFs.
+    periods = [
+        {
+            **{k: v for k, v in p.items() if k != "branches"},
+            "branches": [
+                {k: v for k, v in b.items() if k not in _BRANCH_VERBOSE_FIELDS}
+                for b in p.get("branches", [])
+            ],
+        }
+        for p in (session_state.get("periods") or [])
+    ]
     return {
         "active": session_state.get("active"),
-        "periods": session_state.get("periods", []),
+        "periods": periods,
         "totals_all_branches": session_state.get("totals_all_branches", {}),
     }
 
@@ -1238,7 +1526,13 @@ def _evaluate_lr_formula(
     formula_context: dict[str, Any] | None = None,
 ) -> float:
     """LR formül sözdizimini değerlendir ve float döner.
-    Desteklenen formlar: sayı (0.75 veya 75%), vw(y1:y2), avg(y1:y2).
+
+    Frontend'deki formula.ts ile aynı gramer:
+      * Sayı: 0.75, 75%
+      * Fonksiyonlar: vw(...), avg(...), sum_cl(...), sum_exp(...), pattern(y)
+        — argümanlar yıl listesi/aralığı: "2020:2022", "2020, 2022"
+      * Aritmetik: + - * / ve parantez — örn. avg(2020:2022)*1.1,
+        sum_cl(2020:2022)/sum_exp(2020:2022)
 
     formula_context (öncelikli): frontend'in evalFormula ile ürettiği cl_ult,
     exposure, pattern haritaları — bunlar CDF cascade uygulanmış, kesin doğru
@@ -1247,15 +1541,19 @@ def _evaluate_lr_formula(
     import re
 
     f = formula.strip()
+    if not f:
+        raise ValueError("Boş formül")
 
-    # Yüzde: "75%"
+    # Hızlı yol — tek yüzde: "75%"
     if f.endswith("%"):
-        return float(f[:-1]) / 100
+        try:
+            return float(f[:-1]) / 100
+        except ValueError:
+            pass
 
-    # Sayı: "0.75"
+    # Hızlı yol — tek sayı: "0.75" (>5 ise yüzde varsay: "75" → 0.75)
     try:
         v = float(f)
-        # >5 ise yüzde varsay (örn. "75" → 0.75)
         return v / 100 if v > 5 else v
     except ValueError:
         pass
@@ -1339,32 +1637,136 @@ def _evaluate_lr_formula(
         cl = _cl_for(o)
         return cl / exp if exp > 0 else None
 
-    # vw(...) = Σ cl_ult / Σ exposure — range veya virgüllü yıl listesi
-    m = re.fullmatch(r"vw\((.+)\)", f, re.DOTALL)
-    if m:
-        ors = _parse_year_list(m.group(1).strip())
-        sum_cl = sum(_cl_for(o) for o in ors)
-        sum_exp = sum(_exp_for(o) for o in ors)
-        if sum_exp == 0:
-            raise ValueError(
-                f"Exposure sıfır: vw({m.group(1).strip()}) hesaplanamıyor. "
-                "BF sekmesinden bu yıllar için prim girdiniz mi?"
-            )
-        return sum_cl / sum_exp
+    def _eval_func(fname: str, inner: str) -> float:
+        ors = _parse_year_list(inner.strip())
+        if fname == "vw":
+            sum_cl = sum(_cl_for(o) for o in ors)
+            sum_exp = sum(_exp_for(o) for o in ors)
+            if sum_exp == 0:
+                raise ValueError(
+                    f"Exposure sıfır: vw({inner.strip()}) hesaplanamıyor. "
+                    "BF sekmesinden bu yıllar için prim girdiniz mi?"
+                )
+            return sum_cl / sum_exp
+        if fname == "avg":
+            ratios: list[float] = [p for o in ors if (p := _pat_for(o)) is not None]
+            if not ratios:
+                raise ValueError("Pattern ratio hesaplanamadı")
+            return sum(ratios) / len(ratios)
+        if fname == "sum_cl":
+            return sum(_cl_for(o) for o in ors)
+        if fname in {"sum_exp", "sum_exposure"}:
+            return sum(_exp_for(o) for o in ors)
+        if fname == "pattern":
+            if len(ors) != 1:
+                raise ValueError("pattern(y) tek bir origin alır")
+            p = _pat_for(ors[0])
+            if p is None:
+                raise ValueError(
+                    f"Pattern ratio hesaplanamadı: '{ors[0]}' (exposure sıfır olabilir)"
+                )
+            return p
+        raise ValueError(f"Bilinmeyen fonksiyon: {fname}")
 
-    # avg(...) = ortalama pattern ratio — range veya virgüllü yıl listesi
-    m = re.fullmatch(r"avg\((.+)\)", f, re.DOTALL)
-    if m:
-        ors = _parse_year_list(m.group(1).strip())
-        ratios: list[float] = [p for o in ors if (p := _pat_for(o)) is not None]
-        if not ratios:
-            raise ValueError("Pattern ratio hesaplanamadı")
-        return sum(ratios) / len(ratios)
-
-    raise ValueError(
-        f"Formül tanınamadı: '{formula}'. "
-        "Desteklenen: sayı (0.75 veya 75%), vw(2021:2023), vw(2021, 2022, 2024), avg(2021:2023), avg(2021, 2023)."
+    # Fonksiyon çağrılarını sayıya indir (argümanlarda parantez olmaz),
+    # kalan ifadeyi saf aritmetik olarak değerlendir:
+    # avg(2020:2022)*1.1, sum_cl(2020:2022)/sum_exp(2020:2022) vb.
+    func_re = re.compile(
+        r"\b(vw|avg|sum_cl|sum_exposure|sum_exp|pattern)\s*\(([^()]*)\)",
+        re.IGNORECASE,
     )
+    # Not: :.12f — repr bilimsel gösterim (1e-05) üretebilir, tokenizer tanımaz
+    expr = func_re.sub(
+        lambda m: f"({_eval_func(m.group(1).lower(), m.group(2)):.12f})", f
+    )
+    return _eval_arithmetic(expr, original=formula)
+
+
+def _eval_arithmetic(expr: str, *, original: str) -> float:
+    """Saf aritmetik ifade değerlendirici: sayı, %, + - * / ve parantez.
+    eval kullanılmaz; tanınmayan karakterde anlaşılır hata verir."""
+    import re
+
+    def _unrecognized() -> ValueError:
+        return ValueError(
+            f"Formül tanınamadı: '{original}'. Desteklenen: sayı (0.75 veya 75%), "
+            "vw(2021:2023), avg(2021, 2023), sum_cl(...), sum_exp(...), pattern(y) "
+            "ve bunların + - * / kombinasyonları (örn. avg(2020:2022)*1.1)."
+        )
+
+    token_re = re.compile(r"\s*(?:(\d+\.?\d*|\.\d+)(%?)|([()+\-*/]))")
+    tokens: list[float | str] = []
+    pos = 0
+    stripped = expr.strip()
+    while pos < len(stripped):
+        m = token_re.match(stripped, pos)
+        if not m:
+            raise _unrecognized()
+        if m.group(1) is not None:
+            num = float(m.group(1))
+            tokens.append(num / 100 if m.group(2) else num)
+        else:
+            tokens.append(m.group(3))
+        pos = m.end()
+
+    i = 0
+
+    def peek() -> float | str | None:
+        return tokens[i] if i < len(tokens) else None
+
+    def parse_expr() -> float:
+        nonlocal i
+        val = parse_term()
+        while peek() in {"+", "-"}:
+            op = tokens[i]
+            i += 1
+            rhs = parse_term()
+            val = val + rhs if op == "+" else val - rhs
+        return val
+
+    def parse_term() -> float:
+        nonlocal i
+        val = parse_factor()
+        while peek() in {"*", "/"}:
+            op = tokens[i]
+            i += 1
+            rhs = parse_factor()
+            if op == "*":
+                val *= rhs
+            else:
+                if rhs == 0:
+                    raise ValueError(f"Sıfıra bölme: '{original}'")
+                val /= rhs
+        return val
+
+    def parse_factor() -> float:
+        nonlocal i
+        t = peek()
+        if t == "-":
+            i += 1
+            return -parse_factor()
+        if t == "+":
+            i += 1
+            return parse_factor()
+        if t == "(":
+            i += 1
+            v = parse_expr()
+            if peek() != ")":
+                raise _unrecognized()
+            i += 1
+            return v
+        if isinstance(t, float):
+            i += 1
+            return t
+        raise _unrecognized()
+
+    try:
+        result = parse_expr()
+    except RecursionError as e:  # aşırı iç içe parantez
+        raise _unrecognized() from e
+    if i != len(tokens):
+        raise _unrecognized()
+    return result
 
 
 def _simulate_bf_formula(
@@ -1632,165 +2034,412 @@ def _get_file_summary(session_state: dict[str, Any] | None) -> dict[str, Any]:
 
 def _get_cashflow_state(session_state: dict[str, Any] | None) -> dict[str, Any]:
     if not session_state:
-        return {"error": "Session state yok."}
-    cashflow = session_state.get("cashflow")
-    if not cashflow:
         return {"branches": [], "note": "Cashflow verisi henüz yüklenmemiş."}
-    return cashflow
+    periods = session_state.get("periods", [])
+    totals = session_state.get("totals", {})
+    active_id = session_state.get("active_branch_id")
+
+    branches_summary = []
+    for p in periods:
+        for b in p.get("branches", []):
+            branches_summary.append({
+                "branch_id": b.get("id"),
+                "branch_name": b.get("name"),
+                "period_id": p.get("id"),
+                "period_label": p.get("label"),
+                "frequency": b.get("frequency"),
+                "is_active": b.get("is_active"),
+                "has_paid_triangle": b.get("has_paid_triangle"),
+                "n_origins": b.get("n_origins"),
+                "n_developments": b.get("n_developments"),
+                "ldf_window": b.get("ldf_window"),
+                "excluded_cells_count": b.get("excluded_cells_count"),
+                "cdf_model_overrides": b.get("cdf_model_overrides", []),
+                "cdf_user_values": b.get("cdf_user_values", []),
+                "has_pattern": b.get("has_pattern"),
+                "pattern_origin_count": b.get("pattern_origin_count"),
+            })
+
+    return {
+        "active_branch_id": active_id,
+        "branches": branches_summary,
+        "totals": totals,
+        "note": "Detaylı LDF/CDF için get_cashflow_ldf_state kullanın.",
+    }
+
+
+def _get_cashflow_ldf_state(
+    session_state: dict[str, Any] | None, args: dict[str, Any]
+) -> dict[str, Any]:
+    if not session_state:
+        return {"error": "Session state yok."}
+    branch_id = args.get("branch_id")
+    target: dict[str, Any] | None = None
+    for p in session_state.get("periods", []):
+        for b in p.get("branches", []):
+            if branch_id:
+                if b.get("id") == str(branch_id):
+                    target = b
+                    break
+            elif b.get("is_active"):
+                target = b
+                break
+        if target:
+            break
+    if target is None:
+        if branch_id:
+            return {"error": f"branch_id bulunamadı: {branch_id}"}
+        return {"error": "Aktif branş yok. branch_id belirtin veya önce select_branch kullanın."}
+    return {
+        "branch_id": target.get("id"),
+        "branch_name": target.get("name"),
+        "n_origins": target.get("n_origins"),
+        "n_developments": target.get("n_developments"),
+        "ldf_window": target.get("ldf_window"),
+        "excluded_cells_count": target.get("excluded_cells_count"),
+        "excluded_cells": target.get("excluded_cells", [])[:50],
+        "selected_ldfs": target.get("selected_ldfs", []),
+        "effective_cdfs": target.get("effective_cdfs", []),
+        "per_dev": target.get("per_dev", []),
+        "cdf_model_overrides": target.get("cdf_model_overrides", []),
+        "cdf_user_values": target.get("cdf_user_values", []),
+    }
+
+
+def _get_cashflow_pattern_state(
+    session_state: dict[str, Any] | None, args: dict[str, Any]
+) -> dict[str, Any]:
+    if not session_state:
+        return {"error": "Session state yok."}
+    branch_id = args.get("branch_id")
+    target: dict[str, Any] | None = None
+    for p in session_state.get("periods", []):
+        for b in p.get("branches", []):
+            if branch_id:
+                if b.get("id") == str(branch_id):
+                    target = b
+                    break
+            elif b.get("is_active"):
+                target = b
+                break
+        if target:
+            break
+    if target is None:
+        if branch_id:
+            return {"error": f"branch_id bulunamadı: {branch_id}"}
+        return {"error": "Aktif branş yok. branch_id belirtin."}
+
+    quarterly_pattern: dict[str, Any] = target.get("quarterly_pattern") or {}
+    monthly_pattern: dict[str, Any] = target.get("monthly_pattern") or {}
+    origin_req = args.get("origin")
+    mode = str(args.get("mode", "quarterly"))  # "quarterly" | "monthly"
+
+    if origin_req:
+        pattern = quarterly_pattern if mode == "quarterly" else monthly_pattern
+        weights = pattern.get(str(origin_req))
+        if weights is None:
+            available = list(quarterly_pattern.keys()) or list(monthly_pattern.keys())
+            return {"error": f"Origin '{origin_req}' için {mode} pattern yok. Mevcut: {available}"}
+        total = sum(w.get("weight", 0) for w in weights)
+        period_key = "period" if mode == "quarterly" else "month"
+        last_period = max((w.get(period_key, 0) for w in weights), default=0)
+        return {
+            "branch_id": target.get("id"),
+            "branch_name": target.get("name"),
+            "origin": origin_req,
+            "mode": mode,
+            "periods_count": len(weights),
+            "last_period": last_period,
+            "weight_sum": round(total, 6),
+            "weights": weights,
+        }
+
+    # Özet: tüm originler, quarterly öncelikli
+    use_pattern = quarterly_pattern if quarterly_pattern else monthly_pattern
+    use_mode = "quarterly" if quarterly_pattern else "monthly"
+    period_key = "period" if use_mode == "quarterly" else "month"
+    summary_rows = []
+    for orig, weights in use_pattern.items():
+        if not weights:
+            continue
+        total = sum(w.get("weight", 0) for w in weights)
+        peak = max(weights, key=lambda w: w.get("weight", 0))
+        summary_rows.append({
+            "origin": orig,
+            "periods_count": len(weights),
+            "weight_sum": round(total, 6),
+            "peak_period": peak.get(period_key),
+            "peak_weight": round(peak.get("weight", 0), 6),
+        })
+    return {
+        "branch_id": target.get("id"),
+        "branch_name": target.get("name"),
+        "has_pattern": target.get("has_pattern"),
+        "pattern_origin_count": target.get("pattern_origin_count"),
+        "mode": use_mode,
+        "origins": summary_rows,
+        "note": (
+            "Belirli bir kaza yılı için origin='2024' parametresiyle tekrar çağırın. "
+            "mode='monthly' ekleyerek 180 aylık dağılıma geçebilirsiniz."
+        ),
+    }
 
 
 def _get_discount_state(session_state: dict[str, Any] | None) -> dict[str, Any]:
     if not session_state:
         return {"error": "Session state yok."}
-    discount = session_state.get("discount")
-    if not discount:
+    branches = session_state.get("branches")
+    if not branches:
         return {"branches": [], "note": "İskonto verisi henüz yüklenmemiş."}
-    return discount
+    return {
+        "active_branch_id": session_state.get("active_branch_id"),
+        "branches": branches,
+        "note": session_state.get("note"),
+    }
+
+
+# IFRS 17 bottom-up varsayılan TL risk-free eğrisi (frontend ile aynı).
+_DEFAULT_RISK_FREE_CURVE = [
+    {"month": 12, "rate": 0.28},
+    {"month": 36, "rate": 0.25},
+    {"month": 60, "rate": 0.22},
+    {"month": 120, "rate": 0.20},
+]
+_SEDDK_FLAT_RATE = 0.30
 
 
 def _compute_discount(
     session_state: dict[str, Any] | None, args: dict[str, Any]
 ) -> dict[str, Any]:
-    """Discount hesaplama — session_state'ten cashflow pattern + reserve verisi kullanır."""
+    """Standart-bazlı iskonto — discount snapshot'ındaki branş başına per_origin
+    (unpaid + ağırlıklı ortalama ödeme ayı) üzerinden hesaplar.
+
+    IFRS 4: nominal / sabit (SEDDK) / eğri; RA yok.
+    IFRS 17: eğri (veya sabit) + illikidite primi → BEL; üzerine Risk
+    Adjustment (pct_of_bel veya cost_of_capital) → LIC = BEL + RA.
+    Not: tek-nokta (avg_month) yaklaşımı kullanılır; tam aylık hesap İskonto
+    modülündedir.
+    """
     if not session_state:
         return {"error": "Session state yok."}
 
-    rate_mode = str(args.get("rate_mode", "flat"))
-    if rate_mode not in {"flat", "curve"}:
-        return {"error": f"Geçersiz rate_mode: {rate_mode}. 'flat' veya 'curve' olmalı."}
+    standard = str(args.get("standard", "ifrs4"))
+    if standard not in {"ifrs4", "ifrs17"}:
+        return {"error": f"Geçersiz standard: {standard}. 'ifrs4' veya 'ifrs17' olmalı."}
 
-    # Hedef branşı bul
+    # rate_mode varsayılanı standarda göre
+    default_mode = "flat" if standard == "ifrs4" else "curve"
+    rate_mode = str(args.get("rate_mode", default_mode))
+    if rate_mode not in {"none", "flat", "curve"}:
+        return {"error": f"Geçersiz rate_mode: {rate_mode}. 'none', 'flat' veya 'curve' olmalı."}
+    if rate_mode == "none" and standard == "ifrs17":
+        return {"error": "IFRS 17'de iskontosuz (rate_mode='none') hesap yapılmaz — BEL iskontolu tanımlıdır."}
+
+    # Hedef branşı discount snapshot'ından bul (anahtar: branch_id)
     branch_id = args.get("branch_id")
+    branches = session_state.get("branches", []) or []
     target_branch: dict[str, Any] | None = None
-    for p in session_state.get("periods", []):
-        for b in p.get("branches", []):
-            if branch_id:
-                if b.get("id") == str(branch_id):
-                    target_branch = b
-                    break
-            elif b.get("is_active"):
+    for b in branches:
+        if branch_id:
+            if b.get("branch_id") == str(branch_id):
                 target_branch = b
                 break
-        if target_branch:
+        elif b.get("is_active"):
+            target_branch = b
             break
 
     if target_branch is None:
         if branch_id:
             return {"error": f"branch_id bulunamadı: {branch_id}"}
-        return {"error": "Aktif branş yok. branch_id belirtin veya önce select_branch kullanın."}
+        return {"error": "Aktif branş yok. branch_id belirtin."}
 
-    # Cashflow snapshot'tan bu branşın pattern bilgisini al
-    cashflow_snap = session_state.get("cashflow", {})
-    cf_branches = cashflow_snap.get("branches", []) if isinstance(cashflow_snap, dict) else []
-    cf_branch = next((b for b in cf_branches if b.get("branch_id") == target_branch.get("id")), None)
-
-    if not cf_branch or not cf_branch.get("has_pattern"):
+    if not target_branch.get("has_cashflow_pattern"):
         return {
             "error": (
-                f"'{target_branch.get('name')}' branşında cashflow pattern hesaplanmamış. "
-                "Cashflow modülünde bu branşı seçip hesaplamayı çalıştırın."
+                f"'{target_branch.get('branch_name')}' branşında cashflow pattern hesaplanmamış. "
+                "Nakit Akışı modülünde bu branşı açın (pattern otomatik hesaplanır)."
             )
         }
 
-    # Rezerv sonuçlarından per_origin al
     per_origin = target_branch.get("per_origin", []) or []
     if not per_origin:
-        return {"error": "Bu branş için rezerv sonuçları yok. Rezerv modülünde üçgen yükleyin."}
+        return {"error": "Bu branş için iskonto edilecek ödeme satırı yok."}
 
-    # Faiz fonksiyonu
-    if rate_mode == "flat":
-        flat_rate = float(args.get("flat_rate", 0.30))
-        rate_label = f"%{flat_rate * 100:.1f} sabit"
-    else:
-        curve_nodes = args.get("curve_nodes", []) or []
-        if not curve_nodes:
-            return {"error": "curve_nodes boş. Eğri noktalarını belirtin: [{month: 12, rate: 0.28}, ...]"}
-        rate_label = f"Eğri ({len(curve_nodes)} nokta)"
-
-    # İskonto hesaplama (Python'da)
-    discount_pct_note = (
-        "Not: Detaylı aylık nakit akışı pattern bilgisi frontend'de tutulduğundan "
-        "bu hesaplama per_origin ağırlıklı ortalama ay üzerinden basitleştirilmiştir. "
-        "Tam sonuç için İskonto modülüne gidin."
+    # İskonto oranı fonksiyonu — IFRS 17'de illikidite primi spread olarak eklenir
+    spread = (
+        float(args.get("illiquidity_premium_bps", 100)) / 10000
+        if standard == "ifrs17"
+        else 0.0
     )
+
+    if rate_mode == "none":
+        rate_label = "Nominal (iskontosuz)"
+
+        def rate_at(_month: float) -> float:
+            return 0.0
+    elif rate_mode == "flat":
+        flat_rate = float(args.get("flat_rate", _SEDDK_FLAT_RATE))
+        rate_label = f"%{flat_rate * 100:.1f} sabit"
+        if spread:
+            rate_label += f" + {spread * 10000:.0f}bp illikidite"
+
+        def rate_at(_month: float) -> float:
+            return flat_rate + spread
+    else:
+        curve_nodes = args.get("curve_nodes") or _DEFAULT_RISK_FREE_CURVE
+        sorted_nodes = sorted(curve_nodes, key=lambda x: x.get("month", 0))
+        rate_label = f"Eğri ({len(curve_nodes)} nokta)"
+        if spread:
+            rate_label += f" + {spread * 10000:.0f}bp illikidite"
+
+        def rate_at(month: float) -> float:
+            rate = sorted_nodes[0].get("rate", 0.3)
+            for node in sorted_nodes:
+                if month >= node.get("month", 0):
+                    rate = node.get("rate", 0.3)
+            return rate + spread
+
+    # Risk Adjustment konfigürasyonu — sadece IFRS 17
+    ra_method = str(args.get("risk_adjustment_method", "pct_of_bel"))
+    if ra_method not in {"none", "pct_of_bel", "cost_of_capital"}:
+        return {"error": f"Geçersiz risk_adjustment_method: {ra_method}"}
+    if standard == "ifrs4":
+        ra_method = "none"
+    ra_pct = float(args.get("risk_adjustment_pct", 0.06))
+    coc_rate = float(args.get("coc_rate", 0.06))
+    capital_ratio = float(args.get("capital_ratio", 0.10))
+
+    def risk_adjustment_for(discounted: float, month: float) -> float:
+        if ra_method == "pct_of_bel":
+            return discounted * ra_pct
+        if ra_method == "cost_of_capital":
+            # Outstanding-yıl proxy'si: Σ tutar × t = toplam × avg_month
+            return coc_rate * capital_ratio * discounted * (month / 12)
+        return 0.0
 
     results = []
     total_unpaid = 0.0
     total_discounted = 0.0
-    total_weighted_duration = 0.0
+    total_ra = 0.0
+    max_month = 0.0
 
     for row in per_origin:
         origin = str(row.get("origin", ""))
-        latest = float(row.get("latest", 0) or 0)
-        ibnr = float(row.get("ibnr", 0) or 0)
-        unpaid = latest + ibnr
-
+        unpaid = float(row.get("unpaid", 0) or 0)
         if unpaid <= 0:
             continue
-
-        # Pattern bilgisi olmadan duration'ı yaklaşık hesapla (CDF'ten)
-        cdf = float(row.get("cdf", 1) or 1)
-        pct_dev = 1 / cdf if cdf and cdf > 0 else 1
-        # Gelecek ödeme ağırlığı ortalama ay: basit yaklaşım
-        approx_months = 12 * (1 / pct_dev - 1) if pct_dev < 1 else 12
-
-        if rate_mode == "flat":
-            v = 1 / ((1 + flat_rate) ** (approx_months / 12))
-        else:
-            # Eğriden en yakın nokta
-            sorted_nodes = sorted(curve_nodes, key=lambda x: x.get("month", 0))
-            rate = sorted_nodes[-1].get("rate", 0.3) if sorted_nodes else 0.3
-            for node in sorted_nodes:
-                if approx_months >= node.get("month", 0):
-                    rate = node.get("rate", 0.3)
-            v = 1 / ((1 + rate) ** (approx_months / 12))
-
+        # avg_month = ağırlıklı ortalama ödeme ayı (gerçek aylık pattern'den, frontend hesaplar)
+        month = float(row.get("avg_month", 0) or 0)
+        r = rate_at(month)
+        v = 1 / ((1 + r) ** (month / 12)) if month > 0 else 1.0
         discounted = unpaid * v
         discount_amt = unpaid - discounted
-        discount_pct_val = discount_amt / unpaid if unpaid > 0 else 0
+        ra_amt = risk_adjustment_for(discounted, month)
 
-        results.append({
+        entry: dict[str, Any] = {
             "origin": origin,
             "unpaid_liability": round(unpaid),
-            "approx_completion_month": round(approx_months),
+            "avg_payment_month": round(month, 1),
             "discount_factor": round(v, 4),
             "discounted_unpaid": round(discounted),
             "discount_amount": round(discount_amt),
-            "discount_pct": round(discount_pct_val * 100, 2),
-        })
+            "discount_pct": round(discount_amt / unpaid * 100, 2) if unpaid > 0 else 0,
+        }
+        if standard == "ifrs17":
+            entry["risk_adjustment"] = round(ra_amt)
+            entry["lic"] = round(discounted + ra_amt)
+        results.append(entry)
         total_unpaid += unpaid
         total_discounted += discounted
-        total_weighted_duration += approx_months * unpaid
+        total_ra += ra_amt
+        max_month = max(max_month, month)
 
     total_discount = total_unpaid - total_discounted
-    max_completion = max((r["approx_completion_month"] for r in results), default=0)
     total_discount_pct = total_discount / total_unpaid * 100 if total_unpaid > 0 else 0
 
+    totals: dict[str, Any] = {
+        "unpaid_liability": round(total_unpaid),
+        "discounted_unpaid": round(total_discounted),
+        "discount_amount": round(total_discount),
+        "discount_pct": round(total_discount_pct, 2),
+        "max_payment_month": round(max_month, 1),
+    }
+    if standard == "ifrs17":
+        totals["risk_adjustment"] = round(total_ra)
+        totals["lic"] = round(total_discounted + total_ra)
+
+    ra_label = {
+        "none": "yok",
+        "pct_of_bel": f"BEL × %{ra_pct * 100:.1f}",
+        "cost_of_capital": f"CoC %{coc_rate * 100:.1f} × sermaye %{capital_ratio * 100:.0f}",
+    }[ra_method]
+
     return {
-        "branch": target_branch.get("name"),
-        "branch_id": target_branch.get("id"),
+        "branch": target_branch.get("branch_name"),
+        "branch_id": target_branch.get("branch_id"),
+        "standard": standard,
         "rate_mode": rate_mode,
         "rate_label": rate_label,
-        "totals": {
-            "unpaid_liability": round(total_unpaid),
-            "discounted_unpaid": round(total_discounted),
-            "discount_amount": round(total_discount),
-            "discount_pct": round(total_discount_pct, 2),
-            "completion_month": max_completion,
-        },
+        "risk_adjustment_method": ra_method,
+        "risk_adjustment_label": ra_label,
+        "totals": totals,
         "by_origin": results,
-        "note": discount_pct_note,
-        "tip": "Tam hesaplama için navigate_to(module='discount') ile İskonto modülüne gidin.",
+        "note": (
+            ("IFRS 17: LIC = BEL + Risk Adjustment. " if standard == "ifrs17" else "")
+            + "Her kaza yılı, gerçek aylık pattern'den türetilen ağırlıklı ortalama "
+            "ödeme ayında tek noktadan iskonto edilir (konveksite nedeniyle tam aylık "
+            "hesaba göre iskontoyu hafif eksik tahmin eder). Tam aylık hesap için "
+            "navigate_to(module='discount') ile İskonto modülüne gidin."
+        ),
     }
 
 
 def _list_data_periods(session_state: dict[str, Any] | None) -> dict[str, Any]:
     if not session_state:
         return {"error": "Session state yok."}
-    data = session_state.get("data")
-    if not data:
+    periods = session_state.get("periods")
+    if not periods:
         return {"periods": [], "note": "Veri modülü verisi henüz yüklenmemiş."}
-    return data
+    return {
+        "active_period_id": session_state.get("active_period_id"),
+        "periods": periods,
+        "note": session_state.get("note"),
+    }
+
+
+def _simulate_frequency_severity(
+    amount: Triangle,
+    count: Triangle | None,
+    args: dict[str, Any],
+) -> dict[str, Any]:
+    if count is None:
+        return {
+            "error": (
+                "Adet üçgeni yok. Frekans-Şiddet yalnızca dosya bazlı (DOSYA_NO kolonlu) "
+                "hasar verisinden yüklenen branşlarda kullanılabilir. Bu branş doğrudan "
+                "üçgen yüklemesiyle oluşturulmuş olabilir."
+            )
+        }
+    method_str = args.get("method", LDFMethod.VOLUME_WEIGHTED.value)
+    try:
+        method = LDFMethod(method_str)
+    except ValueError as e:
+        return {"error": f"Geçersiz method: {method_str} ({e})"}
+
+    try:
+        result = run_frequency_severity(
+            amount,
+            count,
+            method=method,
+            n_years=args.get("n_years"),
+            excluded_origins={str(o) for o in args["excluded_origins"]}
+            if args.get("excluded_origins")
+            else None,
+        )
+    except ValueError as e:
+        return {"error": str(e)}
+
+    return result.summary()
 
 
 def _run_chain_ladder(triangle: Triangle, args: dict[str, Any]) -> dict[str, Any]:

@@ -5,6 +5,9 @@ from __future__ import annotations
 from typing import Any
 
 from app.agent.modules.base import ModuleSpec
+from app.agent.modules.cashflow import _CASHFLOW_TOOL_NAMES
+from app.agent.modules.data import _DATA_NAV_TOOL_NAMES
+from app.agent.modules.discount import _DISCOUNT_TOOL_NAMES
 from app.agent.tools import TOOL_SCHEMAS, dispatch_tool
 from app.core.triangle import Granularity, Triangle, TriangleType
 
@@ -122,7 +125,9 @@ LDF: set_window (= volume) · exclude_cells · include_cells · clear_exclusions
 Curve: set_cdf_user_value · set_cdf_choice · set_cdf_choices · reset_curve
 BF: set_selected_loss_ratio(s) · set_premium(s) · set_correction(s)
 Ultimate: set_basis · set_basis_bulk
-Senaryo (durumu DEĞİŞTİRMEZ): simulate_bf · simulate_bf_formula · run_chain_ladder
+Senaryo (durumu DEĞİŞTİRMEZ): simulate_bf · simulate_bf_formula · run_chain_ladder ·
+            simulate_frequency_severity (Frekans-Şiddet: adet × ortalama maliyet;
+            sadece DOSYA_NO'lu hasar verisinden yüklenen branşlarda adet üçgeni mevcut)
 ILR: get_ilr_triangle — aktif branşın ILR üçgenini döner (prim girilmemişse null)
 Dosya: get_file_summary — son diagonal dosya kırılımı özeti (DOSYA_NO kolonu gerekir)
 
@@ -164,6 +169,7 @@ def _reserve_dispatch(
         args,
         triangle=ctx.get("triangle"),
         session_state=ctx.get("session_state"),
+        count_triangle=ctx.get("count_triangle"),
     )
 
 
@@ -222,11 +228,18 @@ def triangle_from_payload(payload: dict[str, Any]) -> Triangle:
     )
 
 
+# Rezerv = diğer modüllerin sahiplenmediği tüm tool'lar. Kümeyi diğer
+# modüllerin kendi tanımlarından türetiyoruz — yeni bir cashflow/discount/data
+# tool'u eklendiğinde burada elle güncelleme gerekmez, yanlış modüle düşemez.
+_NON_RESERVE_TOOL_NAMES = (
+    _CASHFLOW_TOOL_NAMES | _DISCOUNT_TOOL_NAMES | _DATA_NAV_TOOL_NAMES
+)
+
 reserve_module = ModuleSpec(
     name="reserve",
     label="Rezerv",
     system_prompt=RESERVE_PROMPT,
-    tool_schemas=TOOL_SCHEMAS,
+    tool_schemas=[s for s in TOOL_SCHEMAS if s["function"]["name"] not in _NON_RESERVE_TOOL_NAMES],
     dispatch=_reserve_dispatch,
     context_provider=_reserve_context,
 )

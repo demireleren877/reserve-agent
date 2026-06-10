@@ -11,7 +11,18 @@ from fastapi.testclient import TestClient
 
 from app.agent.client import AgentClient, ToolCall
 from app.agent.loop import run_agent_turn
+from app.firebase_auth import verify_firebase_token
 from app.main import app
+
+
+@pytest.fixture
+def authed_client():
+    """Auth dependency'sini override ederek TestClient döndür (401 atlatılır)."""
+    app.dependency_overrides[verify_firebase_token] = lambda: {"uid": "test"}
+    try:
+        yield TestClient(app)
+    finally:
+        app.dependency_overrides.pop(verify_firebase_token, None)
 
 
 @pytest.fixture
@@ -132,7 +143,7 @@ class TestAgentLoopWithTools:
 
 class TestAgentChatEndpoint:
     def test_chat_endpoint_returns_agent_response(
-        self, sample_triangle_payload, monkeypatch
+        self, sample_triangle_payload, monkeypatch, authed_client
     ):
         """Endpoint mock LLM ile çalışıp 200 dönmeli."""
         mock_response = {
@@ -147,7 +158,7 @@ class TestAgentChatEndpoint:
         # API key gerekmesin diye
         monkeypatch.setattr(AgentClient, "__init__", lambda self, **kw: None)
 
-        client = TestClient(app)
+        client = authed_client
         response = client.post(
             "/v1/agent/chat",
             json={
@@ -160,7 +171,7 @@ class TestAgentChatEndpoint:
         assert data["assistant_message"] == "Tamam."
         assert data["tool_invocations"] == []
 
-    def test_chat_endpoint_works_without_triangle(self, monkeypatch):
+    def test_chat_endpoint_works_without_triangle(self, monkeypatch, authed_client):
         """Triangle (ve modules) opsiyonel — agent'a sade bir mesaj göndermek
         bile başarılı yanıt dönmeli."""
         monkeypatch.setattr(AgentClient, "__init__", lambda self, **kw: None)
@@ -169,7 +180,7 @@ class TestAgentChatEndpoint:
             "chat",
             lambda self, messages, tools: {"content": "ok", "tool_calls": []},
         )
-        client = TestClient(app)
+        client = authed_client
         response = client.post(
             "/v1/agent/chat",
             json={"messages": [{"role": "user", "content": "hi"}]},

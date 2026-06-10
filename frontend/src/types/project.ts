@@ -35,6 +35,9 @@ export interface Branch {
   paidTriangle?: Triangle | null;
   /** Gerçekleşen (incurred) üçgeni — DataTab görünümü ve Muallak hesabı için */
   incurredTriangle?: Triangle | null;
+  /** Kümülatif ihbar adedi üçgeni — Frekans-Şiddet için. Yalnızca DOSYA_NO'lu
+   *  hasar verisinden yüklenen branşlarda dolu olur. */
+  countTriangle?: Triangle | null;
 
   method: LDFMethod;
   window: Window;
@@ -84,6 +87,10 @@ export interface Branch {
   /** Cashflow'dan hesaplanan aylık dağılım — iskonto için kullanılır.
    *  Key: origin period string. Value: { month (1-based offset), weight }[] sums to 1. */
   cashflowMonthlyPattern?: Record<string, { month: number; weight: number }[]>;
+
+  /** Cashflow'dan hesaplanan çeyreklik dağılım — agent erişimi ve özet için.
+   *  Key: origin period string. Value: { period (0-based dev index), weight }[] non-zero only. */
+  cashflowQuarterlyPattern?: Record<string, { period: number; weight: number }[]>;
 }
 
 export interface Period {

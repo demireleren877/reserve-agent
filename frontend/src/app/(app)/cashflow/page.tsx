@@ -802,9 +802,18 @@ export default function CashflowPage() {
           monthly_pattern: p.monthly_pattern,
         } : prev);
         if (activeBranchId && p.monthly_pattern) {
+          const quarterly = Object.fromEntries(
+            Object.entries(p.quarterly_pattern ?? {}).map(([origin, rows]) => [
+              origin,
+              rows.filter((r) => r.weight > 0),
+            ]),
+          );
           actions.updateBranch(
             activeBranchId,
-            () => ({ cashflowMonthlyPattern: p.monthly_pattern }),
+            () => ({
+              cashflowMonthlyPattern: p.monthly_pattern,
+              cashflowQuarterlyPattern: quarterly,
+            }),
             "cashflow_pattern_computed", undefined, "user",
           );
         }

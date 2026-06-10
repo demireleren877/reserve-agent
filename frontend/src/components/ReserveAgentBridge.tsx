@@ -71,6 +71,9 @@ export function ReserveAgentBridge() {
     return {
       triangle:
         (activeBranch?.triangle as unknown as Record<string, unknown>) ?? null,
+      count_triangle:
+        (activeBranch?.countTriangle as unknown as Record<string, unknown>) ??
+        null,
       session_state: {
         // Full project tree (yeni tool'lar için)
         active: snapshot.active,
@@ -309,12 +312,14 @@ function applyReserveAction(
     const cells =
       (a.payload?.cells as { origin: string; step: number }[]) || [];
     if (cells.length === 0) return;
-    s.setExcludedCells(new Set(cells.map((c) => `${c.origin}|${c.step}`)));
+    // Additive: mevcut elemeler korunur (backend exclude_cells/exclude_outliers
+    // yalnızca YENİ hücreleri gönderir).
+    s.addExcludedCells(cells.map((c) => `${c.origin}|${c.step}`));
   } else if (a.type === "include_cells") {
-    // include = aktif branşın setinden çıkar (basit: setter replace)
-    // (ReserveBridge aktif branşın listesine erişemez burada — agent toplu
-    // dönerse next set'i hesaplaması daha hassas; basit yaklaşım: kullanıcı
-    // bunun yerine clear sonrası tekrar exclude eder)
+    const cells =
+      (a.payload?.cells as { origin: string; step: number }[]) || [];
+    if (cells.length === 0) return;
+    s.removeExcludedCells(cells.map((c) => `${c.origin}|${c.step}`));
   } else if (a.type === "clear_exclusions") {
     s.clearExclusions();
   } else if (a.type === "set_method") {

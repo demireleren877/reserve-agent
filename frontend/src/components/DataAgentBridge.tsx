@@ -15,7 +15,8 @@ export function DataAgentBridge() {
     useAgentRegistry();
 
   const snapshot = useMemo(() => {
-    return {
+    // session_state sarmalı: backend payload.get("session_state") ile okur
+    const sessionState = {
       periods: store.periods.map((p) => ({
         period_id: p.id,
         label: p.label,
@@ -41,6 +42,7 @@ export function DataAgentBridge() {
       active_period_id: store.activePeriodId,
       note: "Veri modülü: yüklü dönemler ve dataset meta bilgileri. Veri yükleme/silme agent tarafından yapılamaz.",
     };
+    return { session_state: sessionState };
   }, [store.periods, store.activePeriodId]);
 
   useEffect(() => {

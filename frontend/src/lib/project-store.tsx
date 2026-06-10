@@ -35,6 +35,43 @@ import {
   type ChatSession,
 } from "@/lib/chat-storage";
 
+// Strips file_data / fileData fields before syncing to the worker.
+// These are raw upload blobs kept only in-memory/localStorage for the File Analysis tab.
+function stripTriangle(t: unknown): unknown {
+  if (!t || typeof t !== "object") return t;
+  const { file_data: _fd, ...rest } = t as Record<string, unknown>;
+  void _fd;
+  return rest;
+}
+function stripFileDataForSync(project: unknown): unknown {
+  if (!project || typeof project !== "object") return project;
+  const p = project as Record<string, unknown>;
+  const periods = p.periods;
+  if (!Array.isArray(periods)) return project;
+  return {
+    ...p,
+    periods: periods.map((period) => {
+      const per = period as Record<string, unknown>;
+      const branches = per.branches;
+      if (!Array.isArray(branches)) return period;
+      return {
+        ...per,
+        branches: branches.map((branch) => {
+          const { fileData: _fileData, triangle, paidTriangle, incurredTriangle, ...rest } =
+            branch as Record<string, unknown>;
+          void _fileData;
+          return {
+            ...rest,
+            triangle: stripTriangle(triangle),
+            paidTriangle: stripTriangle(paidTriangle),
+            incurredTriangle: stripTriangle(incurredTriangle),
+          };
+        }),
+      };
+    }),
+  };
+}
+
 const STORAGE_KEY_PREFIX = "reserve-agent-project-v2";
 const CHAT_STORAGE_KEY_PREFIX = "reserve-agent-chat-v1";
 const MAX_HISTORY = 500;
@@ -248,7 +285,7 @@ export function ProjectProvider({ children, userId }: ProjectProviderProps) {
       return; // nothing actually changed
     }
     try {
-      const projectVal = projectStr ? JSON.parse(projectStr) : null;
+      const projectVal = projectStr ? stripFileDataForSync(JSON.parse(projectStr)) : null;
       const chatVal = chatStr ? JSON.parse(chatStr) : null;
       await putState({ project: projectVal, chat: chatVal });
       lastSerializedRef.current = { project: projectStr, chat: chatStr };
@@ -719,10 +756,12 @@ export function useProject(): Ctx {
 
 export interface BranchSetters {
   setTriangle: (t: Branch["triangle"], fileName?: string | null, fileData?: FileData) => void;
-  setBothTriangles: (paid: Branch["triangle"], incurred: Branch["triangle"], fileName?: string, fileData?: FileData | null) => void;
+  setBothTriangles: (paid: Branch["triangle"], incurred: Branch["triangle"], fileName?: string, fileData?: FileData | null, count?: Branch["triangle"]) => void;
   setMethod: (m: LDFMethod) => void;
   setWindow: (w: Window) => void;
   setExcludedCells: (next: Set<string>) => void;
+  addExcludedCells: (keys: string[]) => void;
+  removeExcludedCells: (keys: string[]) => void;
   toggleCell: (origin: string, step: number) => void;
   clearExclusions: () => void;
   setKarmaWindow: (step: string, w: Window) => void;
@@ -780,7 +819,7 @@ export function useBranchSetters(source: ChangeSource = "user"): BranchSetters {
           fileName ? { fileName } : {},
           source,
         ),
-      setBothTriangles: (paid, incurred, fileName, fileData) =>
+      setBothTriangles: (paid, incurred, fileName, fileData, count) =>
         actions.updateActiveBranch(
           () => ({
             triangle: incurred,
@@ -794,6 +833,7 @@ export function useBranchSetters(source: ChangeSource = "user"): BranchSetters {
             cdfChoicePerPeriod: {},
             paidTriangle: paid,
             incurredTriangle: incurred,
+            countTriangle: count ?? null,
           }),
           "triangle_loaded",
           fileName ? { fileName } : {},
@@ -818,6 +858,28 @@ export function useBranchSetters(source: ChangeSource = "user"): BranchSetters {
           () => ({ excludedCells: Array.from(next) }),
           "exclusions_replaced",
           { count: next.size },
+          source,
+        ),
+      addExcludedCells: (keys) =>
+        actions.updateActiveBranch(
+          (prev) => {
+            const set = new Set(prev.excludedCells);
+            for (const k of keys) set.add(k);
+            return { excludedCells: Array.from(set) };
+          },
+          "cells_excluded",
+          { count: keys.length },
+          source,
+        ),
+      removeExcludedCells: (keys) =>
+        actions.updateActiveBranch(
+          (prev) => {
+            const set = new Set(prev.excludedCells);
+            for (const k of keys) set.delete(k);
+            return { excludedCells: Array.from(set) };
+          },
+          "cells_included",
+          { count: keys.length },
           source,
         ),
       toggleCell: (origin, step) => {

@@ -138,3 +138,232 @@ class TestPrivacyGuarantee:
         # ham kümülatif matris içermez
         assert "values" not in out_describe
         assert "values" not in out_run
+
+
+@pytest.fixture
+def cashflow_state() -> dict:
+    """Aktif branşta hem quarterly hem monthly pattern içeren cashflow state."""
+    return {
+        "active_branch_id": "b1",
+        "periods": [
+            {
+                "id": "p1",
+                "branches": [
+                    {
+                        "id": "b1",
+                        "name": "Test",
+                        "is_active": True,
+                        "has_paid_triangle": True,
+                        "n_origins": 2,
+                        "ldf_window": "all",
+                        "selected_ldfs": [2.7333, 1.6109],
+                        "effective_cdfs": [4.4, 1.6],
+                        "per_dev": [],
+                        "has_pattern": True,
+                        "pattern_origin_count": 1,
+                        "quarterly_pattern": {
+                            "2024": [
+                                {"period": 1, "weight": 0.6},
+                                {"period": 2, "weight": 0.3},
+                                {"period": 3, "weight": 0.1},
+                            ]
+                        },
+                        "monthly_pattern": {
+                            "2024": [
+                                {"month": 1, "weight": 0.2},
+                                {"month": 2, "weight": 0.2},
+                                {"month": 3, "weight": 0.2},
+                                {"month": 6, "weight": 0.4},
+                            ]
+                        },
+                    }
+                ],
+            }
+        ],
+    }
+
+
+class TestCashflowLdfState:
+    def test_active_branch_paid_ldfs(self, cashflow_state):
+        out = dispatch_tool("get_cashflow_ldf_state", {}, session_state=cashflow_state)
+        assert out["branch_id"] == "b1"
+        assert out["selected_ldfs"][0] == pytest.approx(2.7333)
+
+    def test_unknown_branch_id_errors(self, cashflow_state):
+        out = dispatch_tool(
+            "get_cashflow_ldf_state", {"branch_id": "nope"}, session_state=cashflow_state
+        )
+        assert "error" in out
+
+
+class TestCashflowPatternState:
+    def test_defaults_to_quarterly_summary(self, cashflow_state):
+        """mode verilmezse quarterly özet dönmeli (CF Pattern sekmesi)."""
+        out = dispatch_tool(
+            "get_cashflow_pattern_state", {}, session_state=cashflow_state
+        )
+        assert out["mode"] == "quarterly"
+        row = out["origins"][0]
+        assert row["origin"] == "2024"
+        assert row["periods_count"] == 3
+        assert row["peak_period"] == 1  # en yüksek ağırlık 1. çeyrekte
+
+    def test_quarterly_origin_detail(self, cashflow_state):
+        out = dispatch_tool(
+            "get_cashflow_pattern_state",
+            {"origin": "2024", "mode": "quarterly"},
+            session_state=cashflow_state,
+        )
+        assert out["mode"] == "quarterly"
+        assert out["periods_count"] == 3
+        assert out["weight_sum"] == pytest.approx(1.0)
+        assert out["weights"][0] == {"period": 1, "weight": 0.6}
+
+    def test_monthly_mode_distinct_from_quarterly(self, cashflow_state):
+        """monthly mode 180 aylık dağılımı döner — quarterly'den farklı veri."""
+        out = dispatch_tool(
+            "get_cashflow_pattern_state",
+            {"origin": "2024", "mode": "monthly"},
+            session_state=cashflow_state,
+        )
+        assert out["mode"] == "monthly"
+        assert out["periods_count"] == 4
+        assert out["last_period"] == 6  # son ödeme ayı
+        assert out["weights"][-1] == {"month": 6, "weight": 0.4}
+
+    def test_unknown_origin_lists_available(self, cashflow_state):
+        out = dispatch_tool(
+            "get_cashflow_pattern_state",
+            {"origin": "1999"},
+            session_state=cashflow_state,
+        )
+        assert "error" in out
+        assert "2024" in str(out["error"])
+
+
+class TestSimulateFrequencySeverity:
+    def _tris(self):
+        amount = Triangle(
+            origin_periods=["2020", "2021", "2022"],
+            development_periods=[0, 1, 2],
+            values=[
+                [1000.0, 1800.0, 2210.0],
+                [1320.0, 2520.0, None],
+                [1680.0, None, None],
+            ],
+            triangle_type=TriangleType.INCURRED,
+        )
+        count = Triangle(
+            origin_periods=["2020", "2021", "2022"],
+            development_periods=[0, 1, 2],
+            values=[
+                [10.0, 15.0, 17.0],
+                [12.0, 18.0, None],
+                [14.0, None, None],
+            ],
+            triangle_type=TriangleType.PAID,
+        )
+        return amount, count
+
+    def test_returns_per_origin_breakdown(self):
+        amount, count = self._tris()
+        out = dispatch_tool(
+            "simulate_frequency_severity", {}, triangle=amount, count_triangle=count
+        )
+        assert "error" not in out
+        assert out["method"] == "volume_weighted"
+        assert len(out["rows"]) == 3
+        assert "ultimate_loss" in out["rows"][0]
+        assert out["total_ibnr"] == pytest.approx(
+            out["total_ultimate_loss"] - out["total_latest_amount"]
+        )
+
+    def test_missing_count_triangle_errors(self):
+        amount, _ = self._tris()
+        out = dispatch_tool(
+            "simulate_frequency_severity", {}, triangle=amount, count_triangle=None
+        )
+        assert "error" in out
+        assert "Adet üçgeni yok" in out["error"]
+
+    def test_missing_active_branch_errors(self):
+        out = dispatch_tool("simulate_frequency_severity", {}, triangle=None)
+        assert "error" in out
+
+
+# ─── LR formül değerlendirici ────────────────────────────────────────────────────
+
+
+class TestEvaluateLrFormula:
+    """Backend formül grameri frontend formula.ts ile aynı olmalı — tool
+    açıklamaları sum_cl/sum_exp ve aritmetik vadediyor."""
+
+    @pytest.fixture
+    def per_origin(self) -> list[dict]:
+        return [
+            {"origin": "2020", "cl_ultimate": 700.0, "premium_annual": 1000.0},
+            {"origin": "2021", "cl_ultimate": 800.0, "premium_annual": 1000.0},
+            {"origin": "2022", "cl_ultimate": 900.0, "premium_annual": 1000.0},
+        ]
+
+    def _eval(self, formula: str, per_origin: list[dict]) -> float:
+        from app.agent.tools import _evaluate_lr_formula
+
+        return _evaluate_lr_formula(formula, per_origin)
+
+    def test_plain_number_and_percent(self, per_origin):
+        assert self._eval("0.75", per_origin) == pytest.approx(0.75)
+        assert self._eval("75%", per_origin) == pytest.approx(0.75)
+        assert self._eval("75", per_origin) == pytest.approx(0.75)
+
+    def test_vw_range(self, per_origin):
+        # (700+800+900) / 3000 = 0.8
+        assert self._eval("vw(2020:2022)", per_origin) == pytest.approx(0.8)
+
+    def test_avg_list(self, per_origin):
+        # pattern: 0.7, 0.9 → ort 0.8
+        assert self._eval("avg(2020, 2022)", per_origin) == pytest.approx(0.8)
+
+    def test_arithmetic_scaling(self, per_origin):
+        assert self._eval("avg(2020:2022) * 1.1", per_origin) == pytest.approx(0.88)
+        assert self._eval("vw(2020:2022)*0.5 + 0.1", per_origin) == pytest.approx(0.5)
+
+    def test_sum_cl_over_sum_exp(self, per_origin):
+        got = self._eval("sum_cl(2020:2022) / sum_exp(2020:2022)", per_origin)
+        assert got == pytest.approx(0.8)
+
+    def test_pattern_single_origin(self, per_origin):
+        assert self._eval("pattern(2021)", per_origin) == pytest.approx(0.8)
+
+    def test_unknown_origin_raises(self, per_origin):
+        with pytest.raises(ValueError, match="Origin bulunamadı"):
+            self._eval("vw(2015:2016)", per_origin)
+
+    def test_unrecognized_formula_raises(self, per_origin):
+        with pytest.raises(ValueError, match="Formül tanınamadı"):
+            self._eval("foo(2020)", per_origin)
+
+    def test_division_by_zero_raises(self, per_origin):
+        with pytest.raises(ValueError, match="Sıfıra bölme"):
+            self._eval("avg(2020:2022) / 0", per_origin)
+
+    def test_simulate_bf_formula_with_arithmetic(self):
+        """Uçtan uca: simulate_bf_formula aritmetikli formülü kabul etmeli."""
+        session_state = {
+            "active": {"branch_name": "T"},
+            "per_origin": [
+                {"origin": "2022", "cl_ultimate": 700.0, "premium_annual": 1000.0,
+                 "latest": 500.0, "cdf": 1.0, "premium": 1000.0,
+                 "selected_ultimate": 700.0, "ibnr": 200.0},
+                {"origin": "2024", "cl_ultimate": 900.0, "premium_annual": 1000.0,
+                 "latest": 400.0, "cdf": 2.0, "premium": 1000.0,
+                 "selected_ultimate": 800.0, "ibnr": 400.0},
+            ],
+        }
+        out = dispatch_tool(
+            "simulate_bf_formula",
+            {"formula": "vw(2022) * 1.1", "origin": "2024"},
+            session_state=session_state,
+        )
+        assert "error" not in out
+        assert out["evaluated_lr"] == pytest.approx(0.77)

@@ -452,7 +452,7 @@ export async function buildTriangleFromRecords(
   brans: string,
   originGranularity: "yearly" | "quarterly",
   developmentGranularity: "yearly" | "quarterly",
-): Promise<{ paidTriangle: Triangle; incurredTriangle: Triangle; fileData?: Record<string, Record<string, Record<string, number>>> | null }> {
+): Promise<{ paidTriangle: Triangle; incurredTriangle: Triangle; countTriangle: Triangle | null; fileData?: Record<string, Record<string, Record<string, number>>> | null }> {
   const authHeaders = await getAuthHeaders();
   const res = await fetch(`${API_BASE}/v1/data/build-triangle`, {
     method: "POST",
@@ -472,6 +472,7 @@ export async function buildTriangleFromRecords(
   return {
     paidTriangle: data.paid_triangle as Triangle,
     incurredTriangle: data.incurred_triangle as Triangle,
+    countTriangle: (data.count_triangle as Triangle | null) ?? null,
     fileData: data.file_data ?? null,
   };
 }

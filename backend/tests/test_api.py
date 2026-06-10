@@ -11,12 +11,18 @@ import pytest
 from fastapi.testclient import TestClient
 from openpyxl import Workbook
 
+from app.firebase_auth import verify_firebase_token
 from app.main import app
 
 
 @pytest.fixture
 def client() -> TestClient:
-    return TestClient(app)
+    # Auth dependency'sini override et — endpoint testleri token doğrulamasına takılmasın
+    app.dependency_overrides[verify_firebase_token] = lambda: {"uid": "test"}
+    try:
+        yield TestClient(app)
+    finally:
+        app.dependency_overrides.pop(verify_firebase_token, None)
 
 
 @pytest.fixture

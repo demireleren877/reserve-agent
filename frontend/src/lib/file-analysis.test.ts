@@ -1,0 +1,70 @@
+import { describe, it, expect } from "vitest";
+import { buildFileSummary, lastDiagFiles } from "@/lib/file-analysis";
+import type { Triangle, FileData } from "@/types/triangle";
+
+const tri: Triangle = {
+  origin_periods: ["2022", "2023"],
+  development_periods: [1, 2],
+  values: [
+    [100, 180],
+    [120, null],
+  ],
+  triangle_type: "incurred",
+  origin_granularity: "yearly",
+  development_granularity: "yearly",
+} as Triangle;
+
+// origin → devLabel → { dosya_no: tutar }.
+// development_periods=[1,2] → devDate = origin + age. 2022 son diagonal (step1,
+// age2) = "2024"; 2023 son diagonal (step0, age1) = "2024".
+const fd: FileData = {
+  "2022": {
+    "2023": { A: 60, B: 40 }, // step0 (age1)
+    "2024": { A: 120, B: 60 }, // step1 (age2) = son diagonal, toplam 180
+  },
+  "2023": {
+    "2024": { C: 90, D: 20, E: 10 }, // step0 (age1) = son diagonal, toplam 120
+  },
+};
+
+describe("buildFileSummary", () => {
+  it("üçgen/fileData yoksa null", () => {
+    expect(buildFileSummary(null, fd)).toBeNull();
+    expect(buildFileSummary(tri, null)).toBeNull();
+    expect(buildFileSummary(tri, {})).toBeNull();
+  });
+
+  it("son diagonalden dosya kırılımı + konsantrasyon üretir", () => {
+    const s = buildFileSummary(tri, fd)!;
+    expect(s.has_file_data).toBe(true);
+    expect(s.n_files).toBe(5); // A,B (2022) + C,D,E (2023)
+    expect(s.total_last_diagonal).toBe(300); // 180 + 120
+
+    const o2022 = s.per_origin.find((o) => o.origin === "2022")!;
+    expect(o2022.total).toBe(180);
+    expect(o2022.n_files).toBe(2);
+    expect(o2022.top1_share).toBeCloseTo(120 / 180, 6);
+
+    const o2023 = s.per_origin.find((o) => o.origin === "2023")!;
+    expect(o2023.top3_share).toBeCloseTo(1, 6); // 3 dosya = tümü
+  });
+
+  it("en büyük dosyalar tüm portföyde sıralı döner", () => {
+    const s = buildFileSummary(tri, fd)!;
+    expect(s.largest_files[0]).toMatchObject({ origin: "2022", dosya_no: "A", amount: 120 });
+    expect(s.largest_files.map((f) => f.amount)).toEqual([120, 90, 60, 20, 10]);
+    expect(s.largest_files[0].share_of_origin).toBeCloseTo(120 / 180, 6);
+  });
+
+  it("topN limiti uygulanır", () => {
+    const s = buildFileSummary(tri, fd, 2)!;
+    expect(s.largest_files).toHaveLength(2);
+    expect(s.n_files).toBe(5); // sayım limitten bağımsız
+  });
+
+  it("lastDiagFiles son gözlem dönemini seçer", () => {
+    const diag = lastDiagFiles(tri, fd);
+    expect(diag["2022"]).toEqual({ A: 120, B: 60 });
+    expect(diag["2023"]).toEqual({ C: 90, D: 20, E: 10 });
+  });
+});

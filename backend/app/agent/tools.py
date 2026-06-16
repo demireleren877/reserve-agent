@@ -602,11 +602,13 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
         "function": {
             "name": "get_file_summary",
             "description": (
-                "Dosya (DOSYA_NO) kırılımlı veri özeti. Son diagonal için kaza yılı "
-                "bazlı: toplam, dosya sayısı, ortalama, top-1/top-3 konsantrasyon. "
-                "Yalnızca DOSYA_NO kolonu içeren Excel yüklenmiş branşlarda çalışır. "
-                "'Kaç dosya var?', 'en büyük dosya hangisi?', 'konsantrasyon?' "
-                "sorularında kullan."
+                "Dosya (DOSYA_NO) kırılımlı veri özeti. Son diagonal için: toplam, "
+                "dosya sayısı, kaza yılı bazlı top-1/top-3 konsantrasyon ve tüm "
+                "portföydeki en büyük tekil dosyalar (largest_files: origin, "
+                "dosya_no, tutar, origin payı). 'Kaç dosya var?', 'en büyük dosya "
+                "hangisi?', 'hangi dosyalar dikkat çekiyor?', 'konsantrasyon?' "
+                "sorularında kullan. Boş dönerse sütun adı sorunu DEĞİLDİR — hata "
+                "mesajındaki gerçek nedeni (hazır üçgen yüklenmiş olması) aktar."
             ),
             "parameters": {"type": "object", "properties": {}, "required": []},
         },
@@ -2025,8 +2027,12 @@ def _get_file_summary(session_state: dict[str, Any] | None) -> dict[str, Any]:
     if not summary:
         return {
             "error": (
-                "Dosya verisi yok. Bu branşta DOSYA_NO kolonu içeren Excel "
-                "yüklenmemiş olabilir."
+                "Bu branşta dosya bazlı kırılım yok. Sütun adı sorun değil — "
+                "'Dosya No', 'DOSYA_NO' vb. otomatik tanınır. En olası neden: "
+                "üçgen, dosya bazlı hasar verisinden değil, hazır/toplulaştırılmış "
+                "bir üçgen dosyasından yüklenmiş; o formatta tekil dosya kırılımı "
+                "bulunmaz. Dosya analizi için Veri modülünden DOSYA_NO içeren hasar "
+                "veri setini yükleyip üçgeni oradan türetmek gerekir."
             )
         }
     return summary

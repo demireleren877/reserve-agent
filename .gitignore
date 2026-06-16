@@ -41,3 +41,6 @@ uploads/
 *.xlsx
 *.xls
 !backend/tests/fixtures/*.xlsx
+
+# Video (Remotion tanıtım filmi — kayıtlar, çıktılar, bağımlılıklar)
+video/

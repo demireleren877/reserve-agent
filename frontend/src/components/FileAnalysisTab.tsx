@@ -5,6 +5,7 @@ import type { Triangle, FileData } from "@/types/triangle";
 import type { Branch, Period } from "@/types/project";
 import { formatNumber } from "@/lib/api";
 import { useProject } from "@/lib/project-store";
+import { lastDiagFiles, lastDiagTotals } from "@/lib/file-analysis";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   LineChart, Line, Legend,
@@ -23,58 +24,6 @@ const TOOLTIP_STYLE = {
   fontSize: 11,
   color: "var(--foreground)",
 };
-
-// Python convention: quarterly seq = y*4+q where q ∈ {1..4}
-// To recover YYYYQq from seq: q_raw = seq%4; quarter = q_raw===0 ? 4 : q_raw; year = floor(seq/4) - (q_raw===0 ? 1 : 0)
-function seqToQLabel(seq: number): string {
-  const q_raw = seq % 4;
-  const quarter = q_raw === 0 ? 4 : q_raw;
-  const year = q_raw === 0 ? Math.floor(seq / 4) - 1 : Math.floor(seq / 4);
-  return `${year}Q${quarter}`;
-}
-
-function devDate(origin: string, step: number, tri: Triangle): string {
-  const age = tri.development_periods[step];
-  if (tri.origin_granularity === "yearly") {
-    const oy = parseInt(origin, 10);
-    if (tri.development_granularity === "quarterly") {
-      return seqToQLabel(oy * 4 + age);
-    }
-    return String(oy + age);
-  }
-  const [yr, qt] = origin.split("Q");
-  const oq = parseInt(yr, 10) * 4 + parseInt(qt || "1", 10) - 1;
-  if (tri.development_granularity === "quarterly") {
-    return seqToQLabel(oq + age);
-  }
-  return String(parseInt(yr, 10) + age);
-}
-
-function lastDate(orig: string, tri: Triangle): string {
-  const idx = tri.origin_periods.indexOf(orig);
-  for (let s = tri.development_periods.length - 1; s >= 0; s--) {
-    if (tri.values[idx]?.[s] != null) return devDate(orig, s, tri);
-  }
-  return "";
-}
-
-function lastDiagFiles(tri: Triangle, fd: FileData): Record<string, Record<string, number>> {
-  const result: Record<string, Record<string, number>> = {};
-  for (const orig of tri.origin_periods) {
-    const d = lastDate(orig, tri);
-    if (d) result[orig] = fd[orig]?.[d] ?? {};
-  }
-  return result;
-}
-
-function lastDiagTotals(tri: Triangle, fd: FileData): Record<string, number> {
-  const diagFiles = lastDiagFiles(tri, fd);
-  const result: Record<string, number> = {};
-  for (const [orig, files] of Object.entries(diagFiles)) {
-    result[orig] = Object.values(files).reduce((s, v) => s + v, 0);
-  }
-  return result;
-}
 
 function pct(n: number, d = 1) {
   return (n * 100).toFixed(d) + "%";

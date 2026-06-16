@@ -16,6 +16,7 @@ import { useEffect, useMemo } from "react";
 import { useAgentRegistry } from "@/lib/agent-registry";
 import { useBranchSetters, useProject } from "@/lib/project-store";
 import { computeBranchSummary } from "@/lib/reserve-pipeline";
+import { buildFileSummary } from "@/lib/file-analysis";
 import type { AgentAction } from "@/types/triangle";
 import type { Branch, Period } from "@/types/project";
 
@@ -66,6 +67,14 @@ export function ReserveAgentBridge() {
         branch: snapshot.active!.branch_name,
         frequency: snapshot.active!.frequency,
       };
+
+      // Dosya bazlı (DOSYA_NO) son-diagonal özeti — get_file_summary tool'u
+      // bunu okur. Yoksa agent dosya analizini yapamaz/reddeder.
+      const fileSummary = buildFileSummary(
+        activeBranch.triangle,
+        activeBranch.fileData,
+      );
+      if (fileSummary) legacyFields.file_data_summary = fileSummary;
     }
 
     return {

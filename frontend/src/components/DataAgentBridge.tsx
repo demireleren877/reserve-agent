@@ -32,8 +32,9 @@ export function DataAgentBridge() {
           // hasar alanları
           hasar_tarihi_min: ds.meta.hasar_tarihi_min ?? null,
           hasar_tarihi_max: ds.meta.hasar_tarihi_max ?? null,
-          total_odeme: ds.meta.total_odeme ?? null,
-          total_muallak: ds.meta.total_muallak ?? null,
+          total_odeme: ds.meta.total_odeme ?? null, // kümülatif ödeme (akış)
+          total_muallak: ds.meta.total_muallak ?? null, // son dönem muallağı (stok)
+          total_incurred: ds.meta.total_incurred ?? null,
           // prim alanları
           donem_list: ds.meta.donem_list ?? null,
           total_ep: ds.meta.total_ep ?? null,

@@ -278,6 +278,26 @@ class TestDataImport:
         assert data["total_odeme"] == 3300.0
         assert data["hasar_tarihi_min"] == "2023-03-15"
 
+    def test_muallak_is_stock_odeme_is_flow(self, client):
+        """Bir dosya çok gelişim döneminde görünürse: ödeme dönemler boyunca
+        TOPLANIR (akış), muallak yalnızca SON dönemden alınır (stok)."""
+        csv = (
+            "Dosya No;Brans;Hasar Tarihi;Gelisim Tarihi;Odeme;Muallak\n"
+            "A;Yangin;01.01.2022;31.03.2022;100;900\n"
+            "A;Yangin;01.01.2022;30.06.2022;150;700\n"
+            "A;Yangin;01.01.2022;30.09.2022;200;400\n"
+        )
+        resp = client.post(
+            "/v1/data/import",
+            json={"file_b64": _b64(csv.encode()), "filename": "h.csv",
+                  "column_mapping": _HASAR_MAPPING},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total_odeme"] == 450.0          # 100+150+200 (akış)
+        assert data["total_muallak"] == 400.0         # son dönem (stok), 2000 DEĞİL
+        assert data["total_incurred"] == 850.0        # 450 + 400
+
     def test_missing_mapping_field(self, client):
         mapping = {k: v for k, v in _HASAR_MAPPING.items() if k != "odeme"}
         resp = client.post(

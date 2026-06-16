@@ -86,8 +86,9 @@ export interface DatasetMeta {
   hasar_tarihi_max?: string;
   gelisim_tarihi_min?: string;
   gelisim_tarihi_max?: string;
-  total_odeme?: number;
-  total_muallak?: number;
+  total_odeme?: number; // kümülatif ödeme (akış)
+  total_muallak?: number; // son dönem muallağı (stok — toplam değil)
+  total_incurred?: number;
   // prim alanları
   donem_list?: string[];
   total_ep?: number;

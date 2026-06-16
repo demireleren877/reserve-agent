@@ -331,6 +331,7 @@ export interface DataImportResult {
   gelisim_tarihi_max: string;
   total_odeme: number;
   total_muallak: number;
+  total_incurred?: number;
   records: {
     dosya_no: string;
     brans: string;

@@ -507,8 +507,12 @@ async def data_import(
     hasar_max: str | None = None
     gelisim_min: str | None = None
     gelisim_max: str | None = None
+    # Ödeme = AKIŞ (flow): dönemler boyunca toplanır → kümülatif ödeme.
     total_odeme = 0.0
-    total_muallak = 0.0
+    # Muallak = STOK (stock): her gelişim döneminde yeniden yazılır; toplanmaz.
+    # Her dosyanın yalnızca SON gelişim tarihindeki muallağı alınmalı, aksi
+    # halde aynı bakiye onlarca kez sayılır. (dosya başına son muallağı izle.)
+    last_muallak: dict[tuple[str, str], tuple[str, float]] = {}
     serialized: list[dict[str, Any]] = []
 
     for r in records:
@@ -524,7 +528,10 @@ async def data_import(
         if gelisim_max is None or g > gelisim_max:
             gelisim_max = g
         total_odeme += r.odeme
-        total_muallak += r.muallak
+        key = (r.brans, r.dosya_no)
+        prev = last_muallak.get(key)
+        if prev is None or g > prev[0]:
+            last_muallak[key] = (g, r.muallak)
         serialized.append({
             "dosya_no": r.dosya_no,
             "brans": r.brans,
@@ -533,6 +540,9 @@ async def data_import(
             "odeme": r.odeme,
             "muallak": r.muallak,
         })
+
+    # Son diagonal muallağı: her dosyanın son gelişim dönemindeki bakiye toplamı.
+    total_muallak = sum(v for _, v in last_muallak.values())
 
     return {
         "record_count": len(records),
@@ -543,6 +553,8 @@ async def data_import(
         "gelisim_tarihi_max": gelisim_max,
         "total_odeme": total_odeme,
         "total_muallak": total_muallak,
+        # Incurred = kümülatif ödeme + son dönem muallağı (stok+akış doğru birleşimi)
+        "total_incurred": total_odeme + total_muallak,
         "records": serialized,
     }
 

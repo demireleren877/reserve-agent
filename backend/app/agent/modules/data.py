@@ -19,6 +19,18 @@ VERİ MODÜLÜNDEKİ VERİ TİPLERİ
 * prim: Dönemsel prim kazanım verileri (branş, dönem, ep)
 * ucgen: Hazır paid/incurred gelişim üçgeni
 
+KRİTİK — STOK vs AKIŞ (muallak ve ödeme yorumu):
+* **Ödeme = AKIŞ.** Her gelişim döneminde o döneme ait ödeme yazılır; dönemler
+  boyunca TOPLANIR → kümülatif ödeme. dataset meta'daki total_odeme budur.
+* **Muallak = STOK** (dönem sonu rezerv bakiyesi). Her gelişim döneminde
+  YENİDEN yazılır; ASLA dönemler boyunca toplama. Bir dosyanın muallağı =
+  yalnızca SON gelişim dönemindeki bakiye. Portföy muallağı = her dosyanın son
+  muallağının toplamı. dataset meta'daki total_muallak zaten bu şekilde
+  (son diagonal) hesaplanır — onu olduğu gibi kullan, satır satır TOPLAMA.
+* Incurred = kümülatif ödeme + son dönem muallağı (meta'da total_incurred).
+* Kendi ham kayıt toplaman gerekirse muallağı satırlar boyunca toplama hatasına
+  düşme; bu, aynı bakiyeyi defalarca sayıp gerçek değerin katlarına çıkarır.
+
 VERİ ARAÇLARI
 * list_data_periods: Tüm dönemleri ve dataset meta bilgilerini listele.
   Hangi dönemlerde hangi veriler var, kayıt sayıları, branş listeleri, toplam tutarlar.

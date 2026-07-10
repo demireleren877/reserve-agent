@@ -22,8 +22,8 @@ Kullanıcı → Actuarius.exe (çift tık)
 - **oracledb thin mode**: Oracle Instant Client kurulumu gerekmez.
 - **Offline ≠ veritabanısız**: internet yok, ama Oracle şirket ağında erişilebilir.
 
-Kod, `enterprise/` klasöründeki mevcut backend ve frontend'i **yeniden kullanır**
-(fork yok). `enterprise-v2/` yalnızca masaüstü kabuğunu ve paketlemeyi içerir.
+Tek klasör: `enterprise-v2/{backend, frontend, desktop, installer}`. Backend +
+frontend enterprise ürününün tamamıdır; `desktop/` onları masaüstüne paketler.
 
 ## İlk açılış akışı
 
@@ -49,11 +49,11 @@ python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\act
 pip install -r requirements.txt
 
 # 2) Frontend statik export (aynı origin için boş API base)
-cd ../../enterprise/frontend
+cd ../frontend
 DESKTOP_BUILD=1 NEXT_PUBLIC_API_BASE= npm run build   # → out/
 
 # 3) Uygulamayı çalıştır (repodaki kaynakları kullanır)
-cd ../../enterprise-v2/desktop
+cd ../desktop
 python launcher.py
 ```
 

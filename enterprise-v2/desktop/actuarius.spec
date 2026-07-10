@@ -4,8 +4,8 @@
 Windows'ta çalıştır:
     pyinstaller actuarius.spec
 
-Önkoşul: frontend statik export'u alınmış olmalı (enterprise/frontend/out).
-    cd enterprise/frontend && set DESKTOP_BUILD=1 && set NEXT_PUBLIC_API_BASE= && npm run build
+Önkoşul: frontend statik export'u alınmış olmalı (enterprise-v2/frontend/out).
+    cd enterprise-v2/frontend && set DESKTOP_BUILD=1 && set NEXT_PUBLIC_API_BASE= && npm run build
 
 Sonuç: dist/Actuarius/ (tek klasör). İçinde Actuarius.exe — çift tıkla çalışır.
 """
@@ -14,7 +14,7 @@ import os
 from PyInstaller.utils.hooks import collect_all, collect_submodules
 
 SPEC_DIR = os.path.dirname(os.path.abspath(SPEC))
-ENT = os.path.abspath(os.path.join(SPEC_DIR, "..", "..", "enterprise"))
+ENT = os.path.abspath(os.path.join(SPEC_DIR, ".."))  # enterprise-v2/
 
 BACKEND_APP = os.path.join(ENT, "backend", "app")
 SCHEMA_SQL = os.path.join(ENT, "backend", "schema.sql")

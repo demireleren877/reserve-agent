@@ -28,7 +28,7 @@ jobs:
           python-version: "3.12"
 
       - name: Frontend statik export
-        working-directory: enterprise/frontend
+        working-directory: enterprise-v2/frontend
         env:
           DESKTOP_BUILD: "1"
           NEXT_PUBLIC_API_BASE: ""

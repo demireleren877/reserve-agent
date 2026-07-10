@@ -20,8 +20,8 @@ from pathlib import Path
 # .absolute() (not .resolve()): eşlenmiş sürücüyü (P:) UNC'ye çevirmez —
 # npm/cmd.exe UNC yolu çalışma dizini olarak kabul etmez.
 DESKTOP_DIR = Path(__file__).absolute().parent
-ENTERPRISE = DESKTOP_DIR.parents[1] / "enterprise"
-FRONTEND = ENTERPRISE / "frontend"
+V2_ROOT = DESKTOP_DIR.parent            # enterprise-v2/
+FRONTEND = V2_ROOT / "frontend"
 
 
 def _npm() -> str | None:
@@ -41,7 +41,7 @@ def build_frontend(force: bool = False) -> None:
             "HATA: npm bulunamadı — Node.js kurulu değil veya PATH'te yok.\n"
             "Seçenekler:\n"
             "  • Node.js kur (kurumsal npm registry / Nexus ile), sonra tekrar dene, ya da\n"
-            "  • Node'lu bir makinede/CI'da alınmış enterprise/frontend/out klasörünü\n"
+            "  • Node'lu bir makinede/CI'da alınmış enterprise-v2/frontend/out klasörünü\n"
             "    buraya kopyala; build.py Node'suz paketler."
         )
 

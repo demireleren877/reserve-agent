@@ -1,6 +1,6 @@
 # Masaüstü (offline) uygulama bağımlılıkları.
 # Backend bağımlılıklarını da içerir.
--r ../../enterprise/backend/requirements.txt
+-r ../backend/requirements.txt
 
 pywebview>=5.1
 pyinstaller>=6.6

@@ -50,23 +50,23 @@ def _bundle_base() -> Path:
     return Path(__file__).resolve().parent
 
 
-def _repo_enterprise() -> Path:
-    """Geliştirme modunda repodaki enterprise/ klasörü."""
-    return Path(__file__).resolve().parents[2] / "enterprise"
+def _repo_v2() -> Path:
+    """Geliştirme modunda enterprise-v2/ klasörü (backend + frontend kardeş)."""
+    return Path(__file__).resolve().parents[1]
 
 
 def _resolve_backend_dir() -> Path:
     bundled = _bundle_base() / "backend"
     if (bundled / "app" / "main.py").is_file():
         return bundled
-    return _repo_enterprise() / "backend"
+    return _repo_v2() / "backend"
 
 
 def _resolve_static_dir() -> Path:
     bundled = _bundle_base() / "frontend"
     if (bundled / "index.html").is_file():
         return bundled
-    return _repo_enterprise() / "frontend" / "out"
+    return _repo_v2() / "frontend" / "out"
 
 
 def _free_port() -> int:
@@ -111,7 +111,7 @@ def main() -> None:
     if not (static_dir / "index.html").is_file():
         _fatal(
             "Frontend derlenmemiş. Önce statik export alın:\n"
-            "  cd enterprise/frontend && DESKTOP_BUILD=1 NEXT_PUBLIC_API_BASE= npm run build"
+            "  cd enterprise-v2/frontend && DESKTOP_BUILD=1 NEXT_PUBLIC_API_BASE= npm run build"
         )
 
     sys.path.insert(0, str(backend_dir))
@@ -144,7 +144,7 @@ def main() -> None:
     # Selftest: pencere açmadan paketin sağlığını doğrula (CI / build sonrası kontrol).
     if os.environ.get("ACTUARIUS_SELFTEST") == "1":
         try:
-            with urllib.request.urlopen(f"{base_url}/v1/setup/status", timeout=3) as r:
+            with urllib.request.urlopen(f"{base_url}/v1/connections", timeout=3) as r:
                 ok = r.status == 200
         except Exception:
             ok = False

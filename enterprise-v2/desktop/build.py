@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -21,19 +22,34 @@ ENTERPRISE = DESKTOP_DIR.parents[1] / "enterprise"
 FRONTEND = ENTERPRISE / "frontend"
 
 
-def _npm() -> str:
-    return "npm.cmd" if os.name == "nt" else "npm"
+def _npm() -> str | None:
+    # Windows'ta npm bir .cmd script'idir; tam yolu bulmak WinError 2'yi önler.
+    return shutil.which("npm.cmd") or shutil.which("npm")
 
 
-def build_frontend() -> None:
+def build_frontend(force: bool = False) -> None:
+    out = FRONTEND / "out"
+    if (out / "index.html").is_file() and not force:
+        print(f"→ Frontend zaten hazır, atlanıyor (Node gerekmez): {out}")
+        return
+
+    npm = _npm()
+    if npm is None:
+        sys.exit(
+            "HATA: npm bulunamadı — Node.js kurulu değil veya PATH'te yok.\n"
+            "Seçenekler:\n"
+            "  • Node.js kur (kurumsal npm registry / Nexus ile), sonra tekrar dene, ya da\n"
+            "  • Node'lu bir makinede/CI'da alınmış enterprise/frontend/out klasörünü\n"
+            "    buraya kopyala; build.py Node'suz paketler."
+        )
+
     print("→ Frontend statik export alınıyor...")
     env = os.environ.copy()
     env["DESKTOP_BUILD"] = "1"
     env["NEXT_PUBLIC_API_BASE"] = ""  # aynı origin
     if not (FRONTEND / "node_modules").is_dir():
-        subprocess.run([_npm(), "ci"], cwd=FRONTEND, env=env, check=True)
-    subprocess.run([_npm(), "run", "build"], cwd=FRONTEND, env=env, check=True)
-    out = FRONTEND / "out"
+        subprocess.run([npm, "ci"], cwd=FRONTEND, env=env, check=True)
+    subprocess.run([npm, "run", "build"], cwd=FRONTEND, env=env, check=True)
     if not (out / "index.html").is_file():
         sys.exit("HATA: out/index.html üretilmedi — export başarısız.")
     print(f"  ✓ {out}")
@@ -58,7 +74,7 @@ def main() -> None:
     args = ap.parse_args()
     do_all = not (args.frontend or args.pack)
     if args.frontend or do_all:
-        build_frontend()
+        build_frontend(force=args.frontend)  # --frontend = zorla yeniden derle
     if args.pack or do_all:
         pack()
     print("\nBitti.")

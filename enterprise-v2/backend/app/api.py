@@ -353,13 +353,14 @@ class BuildTriangleRequest(BaseModel):
 class BuildTriangleResponse(BaseModel):
     paid_triangle: TriangleSchema
     incurred_triangle: TriangleSchema
+    count_triangle: TriangleSchema | None = None
     file_data: dict | None = None
 
 
 @router.post("/data/build-triangle", response_model=BuildTriangleResponse)
 def data_build_triangle(body: BuildTriangleRequest, _: Auth) -> BuildTriangleResponse:
     try:
-        paid, incurred, file_data = build_triangles(
+        paid, incurred, count, file_data = build_triangles(
             records=body.records, brans=body.brans,
             origin_granularity=body.origin_granularity,  # type: ignore[arg-type]
             development_granularity=body.development_granularity,  # type: ignore[arg-type]
@@ -369,7 +370,49 @@ def data_build_triangle(body: BuildTriangleRequest, _: Auth) -> BuildTriangleRes
     return BuildTriangleResponse(
         paid_triangle=TriangleSchema.from_domain(paid),
         incurred_triangle=TriangleSchema.from_domain(incurred),
+        count_triangle=TriangleSchema.from_domain(count) if count else None,
         file_data=file_data,
+    )
+
+
+# ─── Roll-forward (artımsal): önceki üçgen + güncel dönem dosya-bazlı kayıt ────
+
+class RollForwardRequest(BaseModel):
+    prior_paid: TriangleSchema
+    prior_incurred: TriangleSchema | None = None
+    records: list[dict]
+    brans: str
+    origin_granularity: str = "yearly"
+    development_granularity: str = "yearly"
+
+
+class RollForwardResponse(BaseModel):
+    paid_triangle: TriangleSchema
+    incurred_triangle: TriangleSchema | None = None
+    new_diagonal_files: dict | None = None
+
+
+@router.post("/data/roll-forward", response_model=RollForwardResponse)
+def data_roll_forward(body: RollForwardRequest, _: Auth) -> RollForwardResponse:
+    from app.data.triangle_builder import roll_forward
+
+    try:
+        prior_paid = body.prior_paid.to_domain()
+        prior_incurred = body.prior_incurred.to_domain() if body.prior_incurred else None
+        paid, incurred, new_files = roll_forward(
+            prior_paid=prior_paid,
+            prior_incurred=prior_incurred,
+            records=body.records,
+            brans=body.brans,
+            origin_granularity=body.origin_granularity,  # type: ignore[arg-type]
+            development_granularity=body.development_granularity,  # type: ignore[arg-type]
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    return RollForwardResponse(
+        paid_triangle=TriangleSchema.from_domain(paid),
+        incurred_triangle=TriangleSchema.from_domain(incurred) if incurred else None,
+        new_diagonal_files=new_files,
     )
 
 

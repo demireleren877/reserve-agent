@@ -307,7 +307,12 @@ async def data_import(body: DataImportRequest, _: Auth) -> dict[str, Any]:
 
     brans_set: set[str] = set()
     hasar_min = hasar_max = gelisim_min = gelisim_max = None
-    total_odeme = total_muallak = 0.0
+    # Ödeme = AKIŞ (flow): dönemler boyunca toplanır → kümülatif ödeme.
+    total_odeme = 0.0
+    # Muallak = STOK (stock): her gelişim döneminde yeniden yazılır, toplanmaz.
+    # Her dosyanın yalnızca SON gelişim tarihindeki muallağı alınır; aksi halde
+    # aynı bakiye onlarca kez sayılır. (dosya başına son muallağı izle.)
+    last_muallak: dict[tuple[str, str], tuple[str, float]] = {}
     serialized = []
 
     for r in records:
@@ -318,15 +323,23 @@ async def data_import(body: DataImportRequest, _: Auth) -> dict[str, Any]:
         gelisim_min = g if gelisim_min is None or g < gelisim_min else gelisim_min
         gelisim_max = g if gelisim_max is None or g > gelisim_max else gelisim_max
         total_odeme += r.odeme
-        total_muallak += r.muallak
+        key = (r.brans, r.dosya_no)
+        prev = last_muallak.get(key)
+        if prev is None or g > prev[0]:
+            last_muallak[key] = (g, r.muallak)
         serialized.append({"dosya_no": r.dosya_no, "brans": r.brans, "hasar_tarihi": h,
                             "gelisim_tarihi": g, "odeme": r.odeme, "muallak": r.muallak})
+
+    # Son diagonal muallağı: her dosyanın son gelişim dönemindeki bakiye toplamı.
+    total_muallak = sum(v for _, v in last_muallak.values())
 
     return {
         "record_count": len(records), "brans_list": sorted(brans_set),
         "hasar_tarihi_min": hasar_min, "hasar_tarihi_max": hasar_max,
         "gelisim_tarihi_min": gelisim_min, "gelisim_tarihi_max": gelisim_max,
-        "total_odeme": total_odeme, "total_muallak": total_muallak, "records": serialized,
+        "total_odeme": total_odeme, "total_muallak": total_muallak,
+        # Incurred = kümülatif ödeme + son dönem muallağı (stok+akış doğru birleşimi)
+        "total_incurred": total_odeme + total_muallak, "records": serialized,
     }
 
 

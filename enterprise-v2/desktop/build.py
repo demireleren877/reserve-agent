@@ -17,7 +17,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-DESKTOP_DIR = Path(__file__).resolve().parent
+# .absolute() (not .resolve()): eşlenmiş sürücüyü (P:) UNC'ye çevirmez —
+# npm/cmd.exe UNC yolu çalışma dizini olarak kabul etmez.
+DESKTOP_DIR = Path(__file__).absolute().parent
 ENTERPRISE = DESKTOP_DIR.parents[1] / "enterprise"
 FRONTEND = ENTERPRISE / "frontend"
 
@@ -47,8 +49,15 @@ def build_frontend(force: bool = False) -> None:
     env = os.environ.copy()
     env["DESKTOP_BUILD"] = "1"
     env["NEXT_PUBLIC_API_BASE"] = ""  # aynı origin
+    if str(FRONTEND).startswith("\\\\"):
+        sys.exit(
+            "HATA: frontend UNC yolunda (\\\\sunucu\\...). npm UNC'de çalışmaz.\n"
+            "Repoyu yerel diske kopyala (örn. C:\\reserve-agent) ve orada derle."
+        )
     if not (FRONTEND / "node_modules").is_dir():
-        subprocess.run([npm, "ci"], cwd=FRONTEND, env=env, check=True)
+        # npm ci lock dosyası ister; yoksa npm install'a düş.
+        cmd = [npm, "ci"] if (FRONTEND / "package-lock.json").is_file() else [npm, "install"]
+        subprocess.run(cmd, cwd=FRONTEND, env=env, check=True)
     subprocess.run([npm, "run", "build"], cwd=FRONTEND, env=env, check=True)
     if not (out / "index.html").is_file():
         sys.exit("HATA: out/index.html üretilmedi — export başarısız.")

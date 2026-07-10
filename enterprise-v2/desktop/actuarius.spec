@@ -33,7 +33,8 @@ hiddenimports = [
 ]
 
 # Dinamik import'ları olan paketleri tam topla.
-for pkg in ("uvicorn", "oracledb", "keyring", "chainladder", "fastapi", "starlette", "webview"):
+# cryptography: oracledb thin mode bağlantı için zorunlu (yoksa DPY-3016).
+for pkg in ("uvicorn", "oracledb", "cryptography", "cffi", "keyring", "chainladder", "fastapi", "starlette", "webview"):
     d, b, h = collect_all(pkg)
     datas += d
     binaries += b

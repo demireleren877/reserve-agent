@@ -1,0 +1,78 @@
+name: Enterprise Desktop (Windows)
+
+# Actuarius Enterprise masaüstü uygulamasını (offline .exe) Windows'ta üretir.
+# Elle tetiklenir veya v* tag push'unda çalışır. Çıktı: dist/Actuarius (artifact).
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "enterprise-v*"
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Frontend statik export
+        working-directory: enterprise/frontend
+        env:
+          DESKTOP_BUILD: "1"
+          NEXT_PUBLIC_API_BASE: ""
+        run: |
+          npm ci
+          npm run build
+          test -f out/index.html
+
+      - name: Python bağımlılıkları
+        working-directory: enterprise-v2/desktop
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: PyInstaller ile paketle
+        working-directory: enterprise-v2/desktop
+        run: python -m PyInstaller --noconfirm actuarius.spec
+
+      - name: Paketi doğrula (selftest — pencere açmadan boot + serve)
+        working-directory: enterprise-v2/desktop
+        env:
+          ACTUARIUS_SELFTEST: "1"
+          RESERVE_AGENT_CONFIG_DIR: ${{ runner.temp }}/rae_cfg
+        run: |
+          ./dist/Actuarius/Actuarius.exe | tee out.txt
+          grep -q SELFTEST_OK out.txt
+
+      - name: Portable klasörü yükle
+        uses: actions/upload-artifact@v4
+        with:
+          name: Actuarius-Windows
+          path: enterprise-v2/desktop/dist/Actuarius
+          if-no-files-found: error
+
+      # Opsiyonel: Inno Setup varsa tek tıklık installer üret.
+      - name: Installer (Inno Setup)
+        working-directory: enterprise-v2
+        run: |
+          iscc installer/actuarius.iss || echo "Inno Setup atlandı (opsiyonel)"
+        continue-on-error: true
+
+      - name: Installer'ı yükle
+        uses: actions/upload-artifact@v4
+        with:
+          name: Actuarius-Setup
+          path: enterprise-v2/installer/Output/*.exe
+          if-no-files-found: ignore

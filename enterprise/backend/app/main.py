@@ -29,6 +29,7 @@ def _load_env() -> None:
 _load_env()
 
 from app.api import router as compute_router  # noqa: E402
+from app.routers.setup import router as setup_router  # noqa: E402
 from app.routers.auth_router import router as auth_router  # noqa: E402
 from app.routers.users import router as users_router  # noqa: E402
 from app.routers.state import router as state_router  # noqa: E402
@@ -55,6 +56,7 @@ app.add_middleware(
     allow_headers=["Content-Type", "Authorization"],
 )
 
+app.include_router(setup_router)
 app.include_router(auth_router)
 app.include_router(users_router)
 app.include_router(state_router)
@@ -68,3 +70,29 @@ app.include_router(compute_router)
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+# ─── Masaüstü modu: statik frontend'i aynı origin'den servis et ───────────────
+# DESKTOP_STATIC_DIR, launcher tarafından Next statik export (out/) klasörüne ayarlanır.
+# API /v1 ve /health üstte tanımlı; geri kalan her yol statik dosya/SPA fallback.
+_static_dir = os.environ.get("DESKTOP_STATIC_DIR")
+if _static_dir and Path(_static_dir).is_dir():
+    from fastapi.responses import FileResponse
+    from fastapi.staticfiles import StaticFiles
+
+    _static_root = Path(_static_dir)
+
+    class _SpaStatic(StaticFiles):
+        """Bulunamayan yolları uygun index.html'e düşür (trailingSlash export)."""
+
+        async def get_response(self, path: str, scope):  # type: ignore[override]
+            try:
+                return await super().get_response(path, scope)
+            except Exception:
+                # /login → /login/index.html, kök → /index.html
+                candidate = _static_root / path / "index.html"
+                if candidate.is_file():
+                    return FileResponse(candidate)
+                return FileResponse(_static_root / "index.html")
+
+    app.mount("/", _SpaStatic(directory=str(_static_root), html=True), name="static")

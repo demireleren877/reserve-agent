@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth/auth-context";
-import { ApiError } from "@/lib/sync/worker-client";
+import { ApiError, getSetupStatus } from "@/lib/sync/worker-client";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -12,6 +12,15 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // İlk açılış: bağlantı hiç kurulmamışsa kurulum ekranına yönlendir.
+  useEffect(() => {
+    getSetupStatus()
+      .then((s) => {
+        if (!s.env_mode && !s.configured) router.replace("/setup");
+      })
+      .catch(() => { /* backend hazır değil — form yine de gösterilir */ });
+  }, [router]);
 
   useEffect(() => {
     if (!auth.loading && auth.user) {

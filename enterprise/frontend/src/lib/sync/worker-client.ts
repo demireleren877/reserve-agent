@@ -5,8 +5,9 @@
 
 import { getToken } from "@/lib/auth/jwt";
 
+// Boş string ("") = aynı origin (masaüstü: frontend+API tek sunucudan).
 export const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000";
+  process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000";
 
 export interface StateResponse<P = unknown, C = unknown> {
   project: P | null;
@@ -71,6 +72,59 @@ export async function login(username: string, password: string) {
     throw new ApiError(res.status, body.detail ?? "login_failed");
   }
   return res.json() as Promise<{ token: string; user_id: number; username: string; role: string }>;
+}
+
+// ─── Setup (masaüstü ilk kurulum) ─────────────────────────────────────────────
+
+export interface SetupStatus {
+  env_mode: boolean;
+  configured: boolean;
+  ready: boolean;
+}
+
+export interface ConnectionInput {
+  host: string;
+  port: number;
+  service_name: string;
+  user: string;
+  password: string;
+}
+
+export async function getSetupStatus(): Promise<SetupStatus> {
+  const res = await fetch(`${API_BASE}/v1/setup/status`, { method: "GET" });
+  if (!res.ok) throw new ApiError(res.status, "setup_status_failed");
+  return res.json() as Promise<SetupStatus>;
+}
+
+export async function testConnection(conn: ConnectionInput): Promise<void> {
+  const res = await fetch(`${API_BASE}/v1/setup/test`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(conn),
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { detail?: string };
+    throw new ApiError(res.status, body.detail ?? "test_failed");
+  }
+}
+
+export async function saveConnection(
+  conn: ConnectionInput & { admin_username?: string; admin_password?: string },
+): Promise<{ ok: boolean; admin_created: boolean }> {
+  const token = getToken();
+  const res = await fetch(`${API_BASE}/v1/setup/save`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(conn),
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { detail?: string };
+    throw new ApiError(res.status, body.detail ?? "save_failed");
+  }
+  return res.json() as Promise<{ ok: boolean; admin_created: boolean }>;
 }
 
 // ─── State ────────────────────────────────────────────────────────────────────

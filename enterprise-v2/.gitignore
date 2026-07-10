@@ -1,0 +1,10 @@
+# PyInstaller çıktıları
+desktop/build/
+desktop/dist/
+desktop/out.txt
+
+# Inno Setup çıktısı
+installer/Output/
+
+# venv
+desktop/.venv/

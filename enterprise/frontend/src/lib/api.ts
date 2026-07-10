@@ -9,8 +9,9 @@ import type {
 } from "@/types/triangle";
 import { getToken } from "@/lib/auth/jwt";
 
+// Boş string ("") = aynı origin (masaüstü: frontend+API tek sunucudan).
 export const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000";
+  process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000";
 
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 MB
 

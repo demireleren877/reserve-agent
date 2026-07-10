@@ -27,6 +27,18 @@ from pathlib import Path
 APP_TITLE = "Actuarius Enterprise"
 
 
+def _ensure_std_streams() -> None:
+    """Windowed (konsolsuz) PyInstaller build'inde sys.stdout/stderr None olur;
+    uvicorn'un log formatter'ı isatty() çağırınca patlar. Boş akışa yönlendir."""
+    if sys.stdout is None:
+        sys.stdout = open(os.devnull, "w")
+    if sys.stderr is None:
+        sys.stderr = open(os.devnull, "w")
+
+
+_ensure_std_streams()
+
+
 def _frozen() -> bool:
     return bool(getattr(sys, "frozen", False))
 
@@ -115,7 +127,11 @@ def main() -> None:
     port = _free_port()
     base_url = f"http://127.0.0.1:{port}"
 
-    config = uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning")
+    # log_config=None: uvicorn'un renkli formatter'ını kurma (windowed build'de stdout yok).
+    config = uvicorn.Config(
+        app, host="127.0.0.1", port=port,
+        log_config=None, log_level="warning", access_log=False,
+    )
     server = uvicorn.Server(config)
     thread = threading.Thread(target=server.run, daemon=True)
     thread.start()

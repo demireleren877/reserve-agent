@@ -29,13 +29,13 @@ def _create_pool(conn: desktop_config.Connection) -> oracledb.AsyncConnectionPoo
 
 
 async def init_pool() -> None:
-    """Uygulama başlangıcı: kayıtlı/ortam bağlantısı varsa pool'u kur, yoksa sessizce geç."""
+    """Uygulama başlangıcı: seçili/ortam bağlantısı varsa pool'u kur, yoksa sessizce geç."""
     global _pool
     if _pool is not None:
         return
-    conn = desktop_config.load_connection()
+    conn = desktop_config.get_selected_connection()
     if conn is None:
-        return  # Masaüstü ilk açılış — kullanıcı bağlantıyı sonra kuracak.
+        return  # Masaüstü ilk açılış — kullanıcı bağlantıyı sonra seçecek.
     _pool = _create_pool(conn)
 
 

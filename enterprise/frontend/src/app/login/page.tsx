@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth/auth-context";
-import { ApiError, getSetupStatus } from "@/lib/sync/worker-client";
+import { ApiError, getConnections } from "@/lib/sync/worker-client";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -13,11 +13,11 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  // İlk açılış: bağlantı hiç kurulmamışsa kurulum ekranına yönlendir.
+  // İlk açılış: hiç bağlantı yoksa bağlantı yöneticisine yönlendir.
   useEffect(() => {
-    getSetupStatus()
-      .then((s) => {
-        if (!s.env_mode && !s.configured) router.replace("/setup");
+    getConnections()
+      .then((l) => {
+        if (!l.env_mode && l.connections.length === 0) router.replace("/setup");
       })
       .catch(() => { /* backend hazır değil — form yine de gösterilir */ });
   }, [router]);
@@ -123,6 +123,16 @@ export default function LoginPage() {
               {busy ? "Giriş yapılıyor..." : "Giriş yap"}
             </button>
           </form>
+
+          <button
+            type="button"
+            onClick={() => router.push("/setup")}
+            disabled={busy}
+            className="w-full mt-3 py-2 rounded-lg text-[12.5px] font-semibold transition disabled:opacity-50"
+            style={{ background: "#faf9f6", border: "1px solid #e8e5dd", color: "#45445a" }}
+          >
+            Bağlantılar
+          </button>
         </div>
 
         <p className="text-center text-[11px] mt-5" style={{ color: "#8a8898" }}>

@@ -74,13 +74,7 @@ export async function login(username: string, password: string) {
   return res.json() as Promise<{ token: string; user_id: number; username: string; role: string }>;
 }
 
-// ─── Setup (masaüstü ilk kurulum) ─────────────────────────────────────────────
-
-export interface SetupStatus {
-  env_mode: boolean;
-  configured: boolean;
-  ready: boolean;
-}
+// ─── Bağlantı yöneticisi (masaüstü, çok bağlantı) ─────────────────────────────
 
 export interface ConnectionInput {
   host: string;
@@ -90,41 +84,62 @@ export interface ConnectionInput {
   password: string;
 }
 
-export async function getSetupStatus(): Promise<SetupStatus> {
-  const res = await fetch(`${API_BASE}/v1/setup/status`, { method: "GET" });
-  if (!res.ok) throw new ApiError(res.status, "setup_status_failed");
-  return res.json() as Promise<SetupStatus>;
+export interface ConnectionMeta {
+  id: string;
+  name: string;
+  host: string;
+  port: number;
+  service_name: string;
+  user: string;
+}
+
+export interface ConnectionsList {
+  connections: ConnectionMeta[];
+  selected_id: string | null;
+  ready: boolean;
+  env_mode: boolean;
+}
+
+async function _reqJson<T>(path: string, method: string, body?: unknown): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method,
+    headers: body !== undefined ? { "Content-Type": "application/json" } : {},
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) {
+    const b = (await res.json().catch(() => ({}))) as { detail?: string };
+    throw new ApiError(res.status, b.detail ?? `http_${res.status}`);
+  }
+  return res.json() as Promise<T>;
+}
+
+export async function getConnections(): Promise<ConnectionsList> {
+  return _reqJson<ConnectionsList>("/v1/connections", "GET");
 }
 
 export async function testConnection(conn: ConnectionInput): Promise<void> {
-  const res = await fetch(`${API_BASE}/v1/setup/test`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(conn),
-  });
-  if (!res.ok) {
-    const body = (await res.json().catch(() => ({}))) as { detail?: string };
-    throw new ApiError(res.status, body.detail ?? "test_failed");
-  }
+  await _reqJson("/v1/connections/test", "POST", conn);
 }
 
-export async function saveConnection(
-  conn: ConnectionInput & { admin_username?: string; admin_password?: string },
-): Promise<{ ok: boolean; admin_created: boolean }> {
-  const token = getToken();
-  const res = await fetch(`${API_BASE}/v1/setup/save`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify(conn),
-  });
-  if (!res.ok) {
-    const body = (await res.json().catch(() => ({}))) as { detail?: string };
-    throw new ApiError(res.status, body.detail ?? "save_failed");
-  }
-  return res.json() as Promise<{ ok: boolean; admin_created: boolean }>;
+export async function createConnection(
+  body: ConnectionInput & { name: string; admin_username?: string; admin_password?: string },
+): Promise<{ ok: boolean; id: string; selected: boolean }> {
+  return _reqJson("/v1/connections", "POST", body);
+}
+
+export async function updateConnection(
+  id: string,
+  body: ConnectionInput & { name: string },
+): Promise<void> {
+  await _reqJson(`/v1/connections/${encodeURIComponent(id)}`, "PUT", body);
+}
+
+export async function deleteConnection(id: string): Promise<void> {
+  await _reqJson(`/v1/connections/${encodeURIComponent(id)}`, "DELETE");
+}
+
+export async function selectConnection(id: string): Promise<void> {
+  await _reqJson(`/v1/connections/${encodeURIComponent(id)}/select`, "POST");
 }
 
 // ─── State ────────────────────────────────────────────────────────────────────

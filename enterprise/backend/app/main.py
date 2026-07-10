@@ -29,7 +29,7 @@ def _load_env() -> None:
 _load_env()
 
 from app.api import router as compute_router  # noqa: E402
-from app.routers.setup import router as setup_router  # noqa: E402
+from app.routers.connections import router as connections_router  # noqa: E402
 from app.routers.auth_router import router as auth_router  # noqa: E402
 from app.routers.users import router as users_router  # noqa: E402
 from app.routers.state import router as state_router  # noqa: E402
@@ -56,7 +56,7 @@ app.add_middleware(
     allow_headers=["Content-Type", "Authorization"],
 )
 
-app.include_router(setup_router)
+app.include_router(connections_router)
 app.include_router(auth_router)
 app.include_router(users_router)
 app.include_router(state_router)

@@ -448,7 +448,7 @@ export async function buildTriangleFromRecords(
   brans: string,
   originGranularity: "yearly" | "quarterly",
   developmentGranularity: "yearly" | "quarterly",
-): Promise<{ paidTriangle: Triangle; incurredTriangle: Triangle; fileData?: Record<string, Record<string, Record<string, number>>> | null }> {
+): Promise<{ paidTriangle: Triangle; incurredTriangle: Triangle; countTriangle?: Triangle | null; fileData?: Record<string, Record<string, Record<string, number>>> | null }> {
   const authHeaders = await getAuthHeaders();
   const res = await fetch(`${API_BASE}/v1/data/build-triangle`, {
     method: "POST",
@@ -468,7 +468,45 @@ export async function buildTriangleFromRecords(
   return {
     paidTriangle: data.paid_triangle as Triangle,
     incurredTriangle: data.incurred_triangle as Triangle,
+    countTriangle: (data.count_triangle as Triangle | null) ?? null,
     fileData: data.file_data ?? null,
+  };
+}
+
+export async function rollForwardTriangle(
+  priorPaid: Triangle,
+  priorIncurred: Triangle | null,
+  records: ClaimRecord[],
+  brans: string,
+  originGranularity: "yearly" | "quarterly",
+  developmentGranularity: "yearly" | "quarterly",
+): Promise<{
+  paidTriangle: Triangle;
+  incurredTriangle: Triangle | null;
+  newDiagonalFiles: Record<string, Record<string, number>> | null;
+}> {
+  const authHeaders = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/v1/data/roll-forward`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders },
+    body: JSON.stringify({
+      prior_paid: priorPaid,
+      prior_incurred: priorIncurred,
+      records,
+      brans,
+      origin_granularity: originGranularity,
+      development_granularity: developmentGranularity,
+    }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ detail: "Roll-forward hatası" }));
+    throw new Error(body.detail || `HTTP ${res.status}`);
+  }
+  const data = await res.json();
+  return {
+    paidTriangle: data.paid_triangle as Triangle,
+    incurredTriangle: (data.incurred_triangle as Triangle | null) ?? null,
+    newDiagonalFiles: data.new_diagonal_files ?? null,
   };
 }
 

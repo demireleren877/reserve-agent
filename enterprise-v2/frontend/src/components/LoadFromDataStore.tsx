@@ -4,7 +4,8 @@ import { useState, useEffect } from "react";
 import { useDataStore, type TriangleRecord } from "@/lib/data-store";
 import { buildTriangleFromRecords, rollForwardTriangle, type ClaimRecord } from "@/lib/api";
 import { newDiagonalToFileData } from "@/lib/roll-forward-util";
-import { useBranchSetters, useProject } from "@/lib/project-store";
+import { useBranchSetters } from "@/lib/project-store";
+import type { Triangle } from "@/types/triangle";
 
 interface Props {
   onClose: () => void;
@@ -17,7 +18,6 @@ type Source = "hasar" | "ucgen" | "rollforward";
 export function LoadFromDataStore({ onClose, onLoaded }: Props) {
   const store = useDataStore();
   const setters = useBranchSetters("user");
-  const { project, activeBranch } = useProject();
 
   const [source, setSource] = useState<Source>("hasar");
   const [periodId, setPeriodId] = useState<string>(store.activePeriodId ?? "");
@@ -43,23 +43,36 @@ export function LoadFromDataStore({ onClose, onLoaded }: Props) {
   // hasar ve rollforward güncel dönem hasar dataset'ini kullanır; ucgen → üçgen dataset'i
   const activeDatasets = source === "ucgen" ? ucgenDatasets : hasarDatasets;
 
-  // Roll-forward temeli: sistemde (projede) üçgeni olan dönemler. Yeni artımsal
-  // veri bunlardan seçilenin üzerine "ileri taşınır".
-  // Roll-forward temeli, HEM paid HEM incurred üçgeni olan branch olmalı.
-  function baseBranchOf(prjPeriodId: string) {
-    const p = project.periods.find((x) => x.id === prjPeriodId);
-    if (!p) return null;
-    const withBoth = p.branches.filter((b) => b.paidTriangle && b.incurredTriangle);
-    return (
-      withBoth.find((b) => activeBranch && b.frequency === activeBranch.frequency && b.name === activeBranch.name) ??
-      withBoth.find((b) => activeBranch && b.frequency === activeBranch.frequency) ??
-      withBoth[0] ??
-      null
-    );
-  }
-  const priorPeriodOptions = project.periods.filter(
-    (p) => p.id !== project.activePeriodId && p.branches.some((b) => b.paidTriangle && b.incurredTriangle),
+  // Roll-forward temeli: VERİ MODÜLÜNDE üçgen (ucgen) dataset'i olan dönemler.
+  // Kullanıcı önceki döneme ödeme+muallak üçgeni yüklediğinde o dönem burada çıkar.
+  const priorPeriodOptions = store.periods.filter(
+    (p) => p.id !== periodId && Object.values(p.datasets).some((d) => d.typeId === "ucgen"),
   );
+
+  function recToTri(rec: TriangleRecord): Triangle {
+    return {
+      origin_periods: rec.origin_periods,
+      development_periods: rec.development_periods,
+      values: rec.values,
+      triangle_type: rec.triangle_type,
+      origin_granularity: rec.origin_granularity,
+      development_granularity: rec.development_granularity,
+    } as Triangle;
+  }
+
+  // Seçili önceki dönemin ucgen dataset'inden paid + incurred üçgenlerini yükler.
+  async function loadPriorTriangles(pId: string): Promise<{ paid: Triangle | null; incurred: Triangle | null }> {
+    const period = store.periods.find((p) => p.id === pId);
+    const ucgens = period ? Object.values(period.datasets).filter((d) => d.typeId === "ucgen") : [];
+    let dsMeta = ucgens.find((d) => d.meta.brans_list?.includes(brans)) ?? ucgens[0] ?? null;
+    if (!dsMeta) return { paid: null, incurred: null };
+    let ds = dsMeta;
+    if (!ds.records?.length) ds = (await store.loadDatasetRecords(pId, ds.datasetId)) ?? ds;
+    const recs = (ds.records as TriangleRecord[]) ?? [];
+    const paidRec = recs.find((r) => r.triangle_type === "paid");
+    const incRec = recs.find((r) => r.triangle_type === "incurred");
+    return { paid: paidRec ? recToTri(paidRec) : null, incurred: incRec ? recToTri(incRec) : null };
+  }
 
   // Seçili dönem/kaynak değişince dataset seçimini sıfırla
   useEffect(() => {
@@ -170,13 +183,12 @@ export function LoadFromDataStore({ onClose, onLoaded }: Props) {
     setError(null);
     setLoading(true);
     try {
-      const base = baseBranchOf(priorPeriodId);
-      // paid için ASLA incurred'a düşme — temelde ikisi de olmalı.
-      if (!base?.paidTriangle || !base?.incurredTriangle) {
-        throw new Error("Seçilen dönemde hem ödeme hem muallak üçgeni olmalı (ikisini de yükleyin).");
+      const prior = await loadPriorTriangles(priorPeriodId);
+      if (!prior.paid || !prior.incurred) {
+        throw new Error("Seçilen dönemin üçgeninde hem ödeme (paid) hem muallak (incurred) olmalı. Önceki döneme ödeme+muallak üçgenini birlikte yükleyin.");
       }
-      const priorPaid = base.paidTriangle;
-      const priorIncurred = base.incurredTriangle;
+      const priorPaid = prior.paid;
+      const priorIncurred = prior.incurred;
 
       // Güncel dönem artımsal hasar kayıtları
       let ds = selectedPeriod?.datasets[selectedDatasetId] ?? null;
@@ -265,14 +277,9 @@ export function LoadFromDataStore({ onClose, onLoaded }: Props) {
                   className="w-full text-sm border border-[color:var(--border)] rounded-md px-3 py-2 bg-[color:var(--surface)] text-[color:var(--foreground)]"
                 >
                   <option value="">— dönem seçin —</option>
-                  {priorPeriodOptions.map((p) => {
-                    const b = baseBranchOf(p.id);
-                    return (
-                      <option key={p.id} value={p.id}>
-                        {p.label}{b ? ` — ${b.name}` : ""}
-                      </option>
-                    );
-                  })}
+                  {priorPeriodOptions.map((p) => (
+                    <option key={p.id} value={p.id}>{p.label}</option>
+                  ))}
                 </select>
               )}
               <p className="text-[10px]" style={{ color: "var(--muted)" }}>

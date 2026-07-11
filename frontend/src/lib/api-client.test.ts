@@ -15,6 +15,7 @@ import {
   chatWithAgent,
   compute,
   listModels,
+  rollForwardTriangle,
   uploadExcel,
 } from "@/lib/api";
 import type { Triangle } from "@/types/triangle";
@@ -164,5 +165,47 @@ describe("listModels", () => {
     mockFetch(200, { models: [{ id: "m1", label: "M1" }], default: "m1" });
     const out = await listModels();
     expect(out.models[0].id).toBe("m1");
+  });
+});
+
+describe("rollForwardTriangle", () => {
+  const PRIOR = { ...TRIANGLE, origin_periods: ["2021", "2022"], development_periods: [0, 1], values: [[1000, 1500], [1100, null]] } as Triangle;
+  const RECS = [
+    { dosya_no: "A", brans: "Yangın", hasar_tarihi: "2022", gelisim_tarihi: "2023", odeme: 120, muallak: 90 },
+  ];
+
+  it("prior_paid + prior_incurred + records + granülariteyi doğru gönderir", async () => {
+    const fetchMock = mockFetch(200, { paid_triangle: PRIOR, incurred_triangle: null, new_diagonal_files: {} });
+    await rollForwardTriangle(PRIOR, null, RECS, "Yangın", "yearly", "yearly");
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${API_BASE}/v1/data/roll-forward`);
+    const body = JSON.parse(init.body);
+    expect(body.prior_paid).toEqual(PRIOR);
+    expect(body.prior_incurred).toBeNull();
+    expect(body.records).toEqual(RECS);
+    expect(body.brans).toBe("Yangın");
+    expect(body.origin_granularity).toBe("yearly");
+    expect(body.development_granularity).toBe("yearly");
+  });
+
+  it("yanıtı paidTriangle/incurredTriangle/newDiagonalFiles'a eşler", async () => {
+    const paid = { ...PRIOR, development_periods: [0, 1, 2] } as Triangle;
+    mockFetch(200, { paid_triangle: paid, incurred_triangle: PRIOR, new_diagonal_files: { "2022": { A: 120 } } });
+    const out = await rollForwardTriangle(PRIOR, PRIOR, RECS, "Yangın", "yearly", "yearly");
+    expect(out.paidTriangle.development_periods).toEqual([0, 1, 2]);
+    expect(out.incurredTriangle).toEqual(PRIOR);
+    expect(out.newDiagonalFiles).toEqual({ "2022": { A: 120 } });
+  });
+
+  it("incurred_triangle null gelirse null döner", async () => {
+    mockFetch(200, { paid_triangle: PRIOR, incurred_triangle: null, new_diagonal_files: null });
+    const out = await rollForwardTriangle(PRIOR, null, RECS, "Yangın", "yearly", "yearly");
+    expect(out.incurredTriangle).toBeNull();
+    expect(out.newDiagonalFiles).toBeNull();
+  });
+
+  it("backend hata detail'ini fırlatır", async () => {
+    mockFetch(400, { detail: "Granülarite uyuşmuyor" });
+    await expect(rollForwardTriangle(PRIOR, null, RECS, "Yangın", "quarterly", "quarterly")).rejects.toThrow("Granülarite uyuşmuyor");
   });
 });

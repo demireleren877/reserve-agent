@@ -1,9 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useDataStore, type TriangleRecord } from "@/lib/data-store";
-import { buildTriangleFromRecords } from "@/lib/api";
-import { useBranchSetters } from "@/lib/project-store";
+import { buildTriangleFromRecords, rollForwardTriangle } from "@/lib/api";
+import { useBranchSetters, useProject } from "@/lib/project-store";
+import { newDiagonalToFileData } from "@/lib/file-analysis";
+import type { FileData, Triangle } from "@/types/triangle";
 
 interface Props {
   onClose: () => void;
@@ -11,13 +13,16 @@ interface Props {
 }
 
 type Granularity = "yearly" | "quarterly";
-type Source = "hasar" | "ucgen";
+type Source = "hasar" | "ucgen" | "rollforward";
 
 export function LoadFromDataStore({ onClose, onLoaded }: Props) {
   const store = useDataStore();
   const setters = useBranchSetters("user");
+  const { project, activeBranch } = useProject();
 
   const [source, setSource] = useState<Source>("hasar");
+  // Roll-forward: temel alınacak önceki üçgen (paid'i olan bir branş)
+  const [priorBranchId, setPriorBranchId] = useState<string>("");
   const [periodId, setPeriodId] = useState<string>(store.activePeriodId ?? "");
   const [selectedDatasetId, setSelectedDatasetId] = useState<string>("");
   const [brans, setBrans] = useState<string>("");
@@ -28,6 +33,22 @@ export function LoadFromDataStore({ onClose, onLoaded }: Props) {
   const [loadingRecords, setLoadingRecords] = useState(false);
   const [bransList, setBransList] = useState<string[]>([]);
 
+  // Roll-forward için temel alınabilecek üçgenler: paid üçgeni olan, aktif
+  // olmayan branşlar (her dönem/branş).
+  const priorOptions = useMemo(() => {
+    const out: { id: string; label: string; branch: import("@/types/project").Branch }[] = [];
+    for (const p of project.periods) {
+      for (const b of p.branches) {
+        if (b.id === activeBranch?.id) continue;
+        if (b.paidTriangle) out.push({ id: b.id, label: `${p.label} · ${b.name}`, branch: b });
+      }
+    }
+    return out;
+  }, [project.periods, activeBranch?.id]);
+
+  // Seçim boşsa ilk seçeneğe düş (effect yerine türetilmiş değer)
+  const effectivePriorId = priorBranchId || priorOptions[0]?.id || "";
+
   const selectedPeriod = store.periods.find((p) => p.id === periodId);
   const hasarDatasets = selectedPeriod
     ? Object.values(selectedPeriod.datasets).filter((d) => d.typeId === "hasar")
@@ -35,7 +56,7 @@ export function LoadFromDataStore({ onClose, onLoaded }: Props) {
   const ucgenDatasets = selectedPeriod
     ? Object.values(selectedPeriod.datasets).filter((d) => d.typeId === "ucgen")
     : [];
-  const activeDatasets = source === "hasar" ? hasarDatasets : ucgenDatasets;
+  const activeDatasets = source === "ucgen" ? ucgenDatasets : hasarDatasets;
 
   // Seçili dönem/kaynak değişince dataset seçimini sıfırla
   useEffect(() => {
@@ -137,8 +158,52 @@ export function LoadFromDataStore({ onClose, onLoaded }: Props) {
     }
   }
 
+  async function handleRollForward() {
+    if (!periodId || !brans || !selectedDatasetId || !effectivePriorId) return;
+    const prior = priorOptions.find((o) => o.id === effectivePriorId)?.branch;
+    if (!prior?.paidTriangle) {
+      setError("Seçilen önceki branşta paid üçgeni yok. Roll-forward için paid üçgeni gerekli.");
+      return;
+    }
+    setError(null);
+    setLoading(true);
+    try {
+      let ds = selectedPeriod?.datasets[selectedDatasetId] ?? null;
+      if (!ds?.records?.length) ds = await store.loadDatasetRecords(periodId, selectedDatasetId);
+      if (!ds?.records?.length) throw new Error("Güncel dönem kaydı bulunamadı");
+
+      const pPaid = prior.paidTriangle as Triangle;
+      const { paidTriangle, incurredTriangle, newDiagonalFiles } = await rollForwardTriangle(
+        pPaid,
+        (prior.incurredTriangle as Triangle | null) ?? null,
+        ds.records as import("@/lib/api").ClaimRecord[],
+        brans,
+        pPaid.origin_granularity,
+        pPaid.development_granularity,
+      );
+
+      // Yeni diagonalin dosya kırılımını, o diagonalin dev etiketiyle eşleyip
+      // fileData'ya çevir (Dosya sekmesi bu dönemin hareketini gösterir).
+      let fileData: FileData | undefined;
+      if (newDiagonalFiles) {
+        const fd = newDiagonalToFileData(paidTriangle, newDiagonalFiles);
+        if (Object.keys(fd).length) fileData = fd;
+      }
+
+      const fileName = `${selectedPeriod?.label ?? ""} – ${brans} (roll-forward)`;
+      setters.setBothTriangles(paidTriangle, incurredTriangle, fileName, fileData, null);
+      onLoaded();
+      onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Bilinmeyen hata");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   function handleBuild() {
     if (source === "ucgen") return handleLoadFromUcgen();
+    if (source === "rollforward") return handleRollForward();
     return handleBuildFromHasar();
   }
 
@@ -158,20 +223,44 @@ export function LoadFromDataStore({ onClose, onLoaded }: Props) {
         <div className="p-5 space-y-4">
           {/* Kaynak seçimi */}
           <div className="flex rounded-lg overflow-hidden border border-[color:var(--border)]">
-            {(["hasar", "ucgen"] as Source[]).map((s) => (
+            {(["hasar", "ucgen", "rollforward"] as Source[]).map((s) => (
               <button
                 key={s}
                 onClick={() => setSource(s)}
-                className="flex-1 py-2 text-xs font-medium transition"
+                className="flex-1 py-2 text-[11px] font-medium transition leading-tight"
                 style={{
                   background: source === s ? "var(--primary)" : "var(--surface)",
                   color: source === s ? "#fff" : "var(--muted-strong)",
                 }}
               >
-                {s === "hasar" ? "Hasar verisinden" : "Hazır üçgenden"}
+                {s === "hasar" ? "Hasar verisinden" : s === "ucgen" ? "Hazır üçgenden" : "Roll-forward"}
               </button>
             ))}
           </div>
+
+          {/* Roll-forward: temel alınacak önceki üçgen */}
+          {source === "rollforward" && (
+            <div>
+              <label className="block text-xs font-medium text-[color:var(--muted-strong)] mb-1">
+                Temel üçgen (önceki dönem)
+              </label>
+              {priorOptions.length === 0 ? (
+                <p className="text-xs text-[color:var(--muted)]">
+                  Paid üçgeni olan başka bir branş yok. Önce bir dönemi normal yükleyin.
+                </p>
+              ) : (
+                <select
+                  value={effectivePriorId}
+                  onChange={(e) => setPriorBranchId(e.target.value)}
+                  className="w-full text-sm border border-[color:var(--border)] rounded-md px-3 py-2 bg-[color:var(--surface)] text-[color:var(--foreground)]"
+                >
+                  {priorOptions.map((o) => (
+                    <option key={o.id} value={o.id}>{o.label}</option>
+                  ))}
+                </select>
+              )}
+            </div>
+          )}
 
           {/* Dönem */}
           <div>
@@ -215,18 +304,20 @@ export function LoadFromDataStore({ onClose, onLoaded }: Props) {
             </div>
           )}
 
-          {/* Hasar kaynağı: branş + granülarite */}
-          {source === "hasar" && (
+          {/* Hasar / roll-forward: branş (+ granülarite yalnızca hasar) */}
+          {(source === "hasar" || source === "rollforward") && (
             <>
               {hasarDatasets.length === 0 ? (
                 <p className="text-xs text-[color:var(--muted)]">
-                  Bu döneme hasar verisi yüklenmemiş.
+                  {source === "rollforward"
+                    ? "Bu döneme güncel dosya-bazlı hasar verisi yüklenmemiş."
+                    : "Bu döneme hasar verisi yüklenmemiş."}
                 </p>
               ) : (
                 <>
                   <div>
                     <label className="block text-xs font-medium text-[color:var(--muted-strong)] mb-1">
-                      Branş
+                      {source === "rollforward" ? "Güncel dönem branşı" : "Branş"}
                     </label>
                     {loadingRecords ? (
                       <p className="text-xs text-[color:var(--muted)]">Yükleniyor…</p>
@@ -245,37 +336,29 @@ export function LoadFromDataStore({ onClose, onLoaded }: Props) {
                     )}
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-medium text-[color:var(--muted-strong)] mb-1">
-                        Kaza Dönemi
-                      </label>
-                      <select
-                        value={originGran}
-                        onChange={(e) => setOriginGran(e.target.value as Granularity)}
-                        className="w-full text-sm border border-[color:var(--border)] rounded-md px-3 py-2 bg-[color:var(--surface)] text-[color:var(--foreground)]"
-                      >
-                        <option value="yearly">Yıllık</option>
-                        <option value="quarterly">Çeyreklik</option>
-                      </select>
+                  {source === "hasar" && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-[color:var(--muted-strong)] mb-1">Kaza Dönemi</label>
+                        <select value={originGran} onChange={(e) => setOriginGran(e.target.value as Granularity)} className="w-full text-sm border border-[color:var(--border)] rounded-md px-3 py-2 bg-[color:var(--surface)] text-[color:var(--foreground)]">
+                          <option value="yearly">Yıllık</option>
+                          <option value="quarterly">Çeyreklik</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-[color:var(--muted-strong)] mb-1">Gelişim Dönemi</label>
+                        <select value={devGran} onChange={(e) => setDevGran(e.target.value as Granularity)} className="w-full text-sm border border-[color:var(--border)] rounded-md px-3 py-2 bg-[color:var(--surface)] text-[color:var(--foreground)]">
+                          <option value="yearly">Yıllık</option>
+                          <option value="quarterly">Çeyreklik</option>
+                        </select>
+                      </div>
                     </div>
-                    <div>
-                      <label className="block text-xs font-medium text-[color:var(--muted-strong)] mb-1">
-                        Gelişim Dönemi
-                      </label>
-                      <select
-                        value={devGran}
-                        onChange={(e) => setDevGran(e.target.value as Granularity)}
-                        className="w-full text-sm border border-[color:var(--border)] rounded-md px-3 py-2 bg-[color:var(--surface)] text-[color:var(--foreground)]"
-                      >
-                        <option value="yearly">Yıllık</option>
-                        <option value="quarterly">Çeyreklik</option>
-                      </select>
-                    </div>
-                  </div>
+                  )}
 
                   <p className="text-xs text-[color:var(--muted)] leading-relaxed">
-                    Paid üçgeni (kümülatif ödeme) ve Incurred üçgeni (kümülatif ödeme + dönem sonu muallak) otomatik oluşturulur.
+                    {source === "rollforward"
+                      ? "Güncel dönemin ARTIMSAL hareketi (bu dönem ödemesi + dönem sonu muallak), temel üçgenin son diagonaline eklenir. Granülarite temel üçgenden alınır."
+                      : "Paid üçgeni (kümülatif ödeme) ve Incurred üçgeni (kümülatif ödeme + dönem sonu muallak) otomatik oluşturulur."}
                   </p>
                 </>
               )}
@@ -329,14 +412,15 @@ export function LoadFromDataStore({ onClose, onLoaded }: Props) {
               loading ||
               !periodId ||
               !selectedDatasetId ||
-              (source === "hasar" && (!brans || bransList.length === 0)) ||
+              ((source === "hasar" || source === "rollforward") && (!brans || bransList.length === 0)) ||
+              (source === "rollforward" && !effectivePriorId) ||
               (source === "ucgen" && ucgenDatasets.length === 0)
             }
             className="px-4 py-2 text-sm rounded-md bg-[color:var(--primary)] text-white font-medium hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading
-              ? source === "ucgen" ? "Yükleniyor…" : "Oluşturuluyor…"
-              : source === "ucgen" ? "Üçgeni Yükle" : "Üçgenleri Yükle"}
+              ? source === "ucgen" ? "Yükleniyor…" : source === "rollforward" ? "Taşınıyor…" : "Oluşturuluyor…"
+              : source === "ucgen" ? "Üçgeni Yükle" : source === "rollforward" ? "İleri Taşı" : "Üçgenleri Yükle"}
           </button>
         </div>
       </div>

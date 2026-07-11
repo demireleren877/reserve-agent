@@ -4,183 +4,197 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
-// ─── Palette (matches the real app — globals.css) ─────────────────────────────
-//  bg:            #f6f7f9
-//  surface:       #ffffff
-//  surface-alt:   #f1f3f6
-//  border:        #e2e5ea
-//  border-strong: #cbd1d9
-//  foreground:    #0f172a
-//  muted:         #64748b
-//  muted-strong:  #475569
-//  primary:       #1d4ed8
-//  primary-soft:  #eaf0ff
-//  primary-border:#bfd3ff
-//  success:       #15803d
-//  warning:       #b45309
+/* ─────────────────────────────────────────────────────────────────────────────
+   Actuarius — color-drenched. Saturated indigo→violet→blue mesh carries the
+   hero and key bands; bright app surfaces float out of the color; gold accent
+   pops. Oversized Archivo display + Fira Code data. Light sections between
+   color bands for rhythm. No gradient text, no eyebrow grammar, no card-grid.
+   ──────────────────────────────────────────────────────────────────────────── */
 
 const STYLES = `
-@keyframes fadeUp    { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
-@keyframes blink     { 0%,100% { opacity:1; } 50% { opacity:0; } }
-@keyframes bounce-d  { 0%,80%,100% { transform:scale(.6); opacity:.5; } 40% { transform:scale(1); opacity:1; } }
+.lp {
+  --paper:   #f4f5fa;
+  --paper-2: #ffffff;
+  --card:    #ffffff;
+  --ink:     #120f2e;
+  --ink-2:   #3b3a63;
+  --muted:   #6c6b94;
+  --line:    #e6e6f1;
+  --line-2:  #d6d6e6;
 
-[data-rv]          { opacity:0; transform:translateY(18px); transition:opacity .65s cubic-bezier(.22,1,.36,1), transform .65s cubic-bezier(.22,1,.36,1); }
-[data-rv][data-on] { opacity:1; transform:none; }
+  --indigo-950:#15102e;
+  --indigo-900:#1e1b4b;
+  --indigo-700:#3730a3;
+  --violet:    #6d28d9;
+  --violet-2:  #7c3aed;
+  --blue:      #1d4ed8;
+  --blue-2:    #2563eb;
+  --gold:      #f59e0b;
+  --gold-2:    #fbbf24;
+  --gold-soft: #fef3da;
+  --on-color:  #f4f2ff;
+  --on-color-2:#c5c2ec;
+  --ok:        #16a34a;
 
-.mono     { font-family:var(--font-geist-mono,ui-monospace,'SF Mono',monospace); }
-.fi       { animation:fadeUp .7s cubic-bezier(.22,1,.36,1) backwards; }
-
-/* Nav */
-.nav-blur { background:rgba(255,255,255,.92); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px); }
-
-/* Buttons */
-.btn-primary {
-  background:#1d4ed8; color:#fff;
-  padding:11px 20px; font-size:14px; font-weight:600;
-  border-radius:6px;
-  display:inline-flex; align-items:center; gap:8px;
-  transition:background .15s ease, box-shadow .15s ease, transform .15s ease;
-  box-shadow:0 1px 2px rgba(29,78,216,.15);
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-archivo), var(--font-geist-sans), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
-.btn-primary:hover { background:#1e40af; box-shadow:0 4px 12px rgba(29,78,216,.25); }
+.lp .mono { font-family: var(--font-fira), var(--font-geist-mono), ui-monospace, monospace; font-variant-numeric: tabular-nums; }
 
-.btn-secondary {
-  background:#fff; color:#0f172a;
-  padding:11px 20px; font-size:14px; font-weight:600;
-  border-radius:6px; border:1px solid #cbd1d9;
-  display:inline-flex; align-items:center; gap:8px;
-  transition:background .15s ease, border-color .15s ease;
+/* ── Type ───────────────────────────────────────────────────── */
+.lp .display { font-weight: 800; letter-spacing: -0.03em; line-height: 0.96; text-wrap: balance; }
+.lp .h2 { font-weight: 800; letter-spacing: -0.025em; line-height: 1.02; font-size: clamp(2.1rem,1.2rem+3.4vw,3.5rem); text-wrap: balance; }
+.lp .lede { color: var(--ink-2); line-height: 1.56; text-wrap: pretty; }
+.lp .kick { font-family: var(--font-fira),monospace; font-size: 12px; letter-spacing: .16em; text-transform: uppercase; }
+
+/* ── Color drench + animated mesh ───────────────────────────── */
+.lp .drench { position: relative; overflow: hidden; background: var(--indigo-900); color: var(--on-color); isolation: isolate; }
+.lp .drench .blob { position: absolute; border-radius: 50%; filter: blur(64px); opacity: .85; z-index: -1; will-change: transform; }
+.lp .b1 { width: 620px; height: 620px; background: radial-gradient(circle, var(--violet-2), transparent 65%); top: -180px; left: -120px; animation: drift1 22s ease-in-out infinite; }
+.lp .b2 { width: 560px; height: 560px; background: radial-gradient(circle, var(--blue-2), transparent 62%); top: -80px; right: -120px; animation: drift2 26s ease-in-out infinite; }
+.lp .b3 { width: 520px; height: 520px; background: radial-gradient(circle, #4338ca, transparent 64%); bottom: -220px; left: 30%; animation: drift3 30s ease-in-out infinite; }
+.lp .b-gold { width: 320px; height: 320px; background: radial-gradient(circle, rgba(251,191,36,.5), transparent 60%); bottom: -120px; right: 12%; animation: drift2 24s ease-in-out infinite reverse; opacity: .5; }
+.lp .grain { position:absolute; inset:0; z-index:-1; opacity:.4;
+  background: linear-gradient(rgba(255,255,255,.06) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.06) 1px, transparent 1px);
+  background-size: 52px 52px; mask-image: radial-gradient(80% 80% at 50% 30%, #000, transparent 78%); -webkit-mask-image: radial-gradient(80% 80% at 50% 30%, #000, transparent 78%); }
+
+@keyframes drift1 { 0%,100%{ transform: translate(0,0) scale(1) } 50%{ transform: translate(70px,40px) scale(1.12) } }
+@keyframes drift2 { 0%,100%{ transform: translate(0,0) scale(1) } 50%{ transform: translate(-60px,50px) scale(1.1) } }
+@keyframes drift3 { 0%,100%{ transform: translate(0,0) scale(1) } 50%{ transform: translate(40px,-50px) scale(1.15) } }
+
+/* ── Buttons ────────────────────────────────────────────────── */
+.lp .btn { display:inline-flex; align-items:center; gap:8px; font-weight:700; font-size:15px; border-radius:11px; padding:13px 22px; cursor:pointer; transition: transform .35s cubic-bezier(.16,1,.3,1), box-shadow .35s, background .2s, border-color .2s, color .2s; }
+.lp .btn-gold { background: var(--gold-2); color: #3b2606; box-shadow: 0 10px 28px -10px rgba(251,191,36,.7); }
+.lp .btn-gold:hover { transform: translateY(-2px); box-shadow: 0 18px 38px -12px rgba(251,191,36,.85); }
+.lp .btn-gold .arr, .lp .btn-dark .arr, .lp .btn-glass .arr { transition: transform .35s cubic-bezier(.16,1,.3,1); }
+.lp .btn-gold:hover .arr, .lp .btn-dark:hover .arr, .lp .btn-glass:hover .arr { transform: translateX(3px); }
+.lp .btn-dark { background: var(--ink); color:#fff; }
+.lp .btn-dark:hover { transform: translateY(-2px); box-shadow: 0 16px 32px -14px rgba(18,15,46,.6); }
+.lp .btn-glass { background: rgba(255,255,255,.1); color:#fff; border:1px solid rgba(255,255,255,.28); backdrop-filter: blur(8px); }
+.lp .btn-glass:hover { background: rgba(255,255,255,.18); transform: translateY(-2px); }
+.lp .btn-outline { background: transparent; color: var(--ink); border:1px solid var(--line-2); }
+.lp .btn-outline:hover { border-color: var(--ink); transform: translateY(-2px); }
+.lp .link-arr { color: var(--violet-2); font-weight:700; font-size:14px; display:inline-flex; align-items:center; gap:6px; transition: gap .3s cubic-bezier(.16,1,.3,1); }
+.lp .link-arr:hover { gap:10px; }
+
+/* ── Tags ───────────────────────────────────────────────────── */
+.lp .tag { display:inline-flex; align-items:center; gap:7px; font-family:var(--font-fira),monospace; font-size:11.5px; letter-spacing:.05em; padding:5px 12px; border-radius:8px; border:1px solid var(--line-2); background: var(--card); color: var(--ink-2); }
+.lp .tag-onc { background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.25); color:#fff; }
+.lp .tag-gold { background: var(--gold-soft); border-color:#f4dca6; color:#a86a08; }
+.lp .tag-ok { background:#e6f7ec; border-color:#bce7c9; color:#15803d; }
+
+/* ── Bright floating surface ────────────────────────────────── */
+.lp .float { background: var(--card); border:1px solid rgba(255,255,255,.5); border-radius:16px; box-shadow: 0 2px 4px rgba(18,15,46,.1), 0 40px 80px -36px rgba(18,15,46,.55), 0 0 0 1px rgba(124,58,237,.12); }
+.lp .panel { background: var(--card); border:1px solid var(--line); border-radius:14px; }
+
+/* triangle cells */
+.lp .tcell { font-family:var(--font-fira),monospace; font-size:13px; text-align:right; padding:7px 11px; color:var(--ink-2); border-radius:6px; opacity:0; transform:translateY(6px); }
+.reveal-ready .lp .tcell.fill { animation: cellin .5s cubic-bezier(.16,1,.3,1) forwards; }
+.lp .tcell.diag { background: var(--gold-soft); color:#a86a08; font-weight:700; box-shadow: inset 0 0 0 1px #f0d49b; }
+.lp .tcell.head { color:var(--muted); font-size:11px; opacity:1; transform:none; }
+.lp .trow { font-family:var(--font-fira),monospace; font-size:12px; font-weight:700; }
+
+/* pipeline */
+.lp .pnode { transition: transform .3s cubic-bezier(.16,1,.3,1), border-color .3s, background .3s, box-shadow .3s; }
+.lp .pnode:hover { transform: translateY(-3px); }
+
+/* nav */
+.lp .nav { transition: background .3s, border-color .3s; border-bottom:1px solid transparent; }
+.lp .nav.on { background: rgba(244,245,250,.82); backdrop-filter: saturate(1.4) blur(14px); -webkit-backdrop-filter: saturate(1.4) blur(14px); border-bottom:1px solid var(--line); }
+.lp .navlink { font-size:14px; color:var(--ink-2); font-weight:600; padding:7px 11px; border-radius:8px; transition: color .2s, background .2s; }
+.lp .navlink:hover { color:var(--ink); background: rgba(18,15,46,.05); }
+
+/* agent terminal (on indigo) */
+.lp .term { background: rgba(11,8,32,.55); border:1px solid rgba(255,255,255,.14); border-radius:16px; backdrop-filter: blur(10px); }
+.lp .term-h { border-bottom:1px solid rgba(255,255,255,.12); }
+.lp .bub-u { background: var(--gold-2); color:#3b2606; }
+.lp .bub-a { background: rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.16); color:#ece9ff; }
+.lp .bdot { width:6px;height:6px;border-radius:50%;background:#a59fd6;display:inline-block;animation:bnc 1.3s infinite ease-in-out both; }
+.lp .bdot:nth-child(2){animation-delay:.16s}.lp .bdot:nth-child(3){animation-delay:.32s}
+.lp .cur { display:inline-block;width:2px;height:14px;background:var(--gold-2);vertical-align:middle;margin-left:2px;animation:blink .9s steps(1) infinite; }
+
+/* faq */
+.lp .faq { display:grid; grid-template-rows:0fr; transition: grid-template-rows .42s cubic-bezier(.16,1,.3,1); }
+.lp .faq.open { grid-template-rows:1fr; }
+.lp .faq > div { overflow:hidden; }
+
+/* app mock */
+.lp .lcard { background: var(--card); border:1px solid var(--line); border-radius:10px; }
+.lp .mtab { padding:10px 12px; font-size:12px; color:var(--muted); border-bottom:2px solid transparent; white-space:nowrap; }
+.lp .mtab.on { color:var(--violet-2); border-bottom-color:var(--violet-2); font-weight:700; }
+
+@keyframes bnc{0%,80%,100%{transform:scale(.6);opacity:.5}40%{transform:scale(1);opacity:1}}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+@keyframes cellin{to{opacity:1;transform:none}}
+@keyframes rise{from{opacity:0;transform:translateY(22px)}to{opacity:1;transform:none}}
+.lp .rise{ animation: rise .9s cubic-bezier(.16,1,.3,1) backwards; }
+
+.reveal-ready .lp [data-rv]{opacity:0;transform:translateY(24px);transition:opacity .9s cubic-bezier(.16,1,.3,1),transform .9s cubic-bezier(.16,1,.3,1);}
+.reveal-ready .lp [data-rv][data-on]{opacity:1;transform:none;}
+
+@media (prefers-reduced-motion: reduce){
+  .lp .rise{animation:none}
+  .lp .blob{animation:none!important}
+  .reveal-ready .lp [data-rv]{opacity:1!important;transform:none!important;transition:none}
+  .reveal-ready .lp .tcell{opacity:1!important;transform:none!important;animation:none}
+  .lp [data-parallax]{transform:none!important}
 }
-.btn-secondary:hover { background:#f6f7f9; border-color:#94a3b8; }
-
-.btn-ghost {
-  background:transparent; color:#1d4ed8;
-  font-size:14px; font-weight:600;
-  display:inline-flex; align-items:center; gap:6px;
-  transition:gap .2s ease;
-}
-.btn-ghost:hover { gap:10px; }
-
-/* Cards */
-.lcard {
-  background:#fff;
-  border:1px solid #e2e5ea;
-  border-radius:10px;
-  transition:border-color .2s ease, box-shadow .2s ease, transform .2s ease;
-}
-.lcard-h:hover { border-color:#cbd1d9; box-shadow:0 8px 24px rgba(15,23,42,.06); transform:translateY(-2px); }
-
-/* Status pill */
-.pill {
-  display:inline-flex; align-items:center; gap:6px;
-  font-size:11.5px; font-weight:600;
-  padding:4px 10px; border-radius:9999px;
-}
-.pill-active  { background:#dcfce7; color:#15803d; border:1px solid #86efac; }
-.pill-dev     { background:#fef3c7; color:#b45309; border:1px solid #fde68a; }
-.pill-info    { background:#eaf0ff; color:#1d4ed8; border:1px solid #bfd3ff; }
-
-/* Cursor + typing */
-.cursor { display:inline-block; width:2px; height:14px; background:#1d4ed8; vertical-align:middle; margin-left:2px; animation:blink .9s steps(1) infinite; }
-.bdot   { animation:bounce-d 1.3s infinite ease-in-out both; display:inline-block; width:6px; height:6px; border-radius:50%; background:#64748b; }
-.bdot:nth-child(2) { animation-delay:.16s; }
-.bdot:nth-child(3) { animation-delay:.32s; }
-
-/* FAQ */
-.q-body { max-height:0; overflow:hidden; opacity:0; transition:max-height .4s cubic-bezier(.22,1,.36,1), opacity .25s ease; }
-.q-body.open { max-height:360px; opacity:1; }
-
-/* Eyebrow */
-.eyebrow { display:inline-block; font-size:11.5px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:#1d4ed8; margin-bottom:14px; }
-
-/* Pricing highlighted */
-.plan-featured { border:1px solid #1d4ed8; box-shadow:0 8px 32px rgba(29,78,216,.12); position:relative; }
-.plan-featured::before {
-  content:'Önerilen';
-  position:absolute; top:-12px; left:24px;
-  background:#1d4ed8; color:#fff;
-  font-size:10.5px; font-weight:700;
-  letter-spacing:.05em; text-transform:uppercase;
-  padding:4px 10px; border-radius:4px;
-}
-
-/* App-style mock — replicates real app surfaces */
-.mock {
-  background:#fff;
-  border:1px solid #e2e5ea;
-  border-radius:12px;
-  overflow:hidden;
-  box-shadow:0 20px 50px rgba(15,23,42,.08), 0 2px 6px rgba(15,23,42,.03);
-}
-.mock-sidebar { width:200px; background:#fff; border-right:1px solid #e2e5ea; }
-.mock-nav-item {
-  display:flex; align-items:center; gap:8px;
-  padding:6px 10px; border-radius:6px;
-  font-size:13px; color:#475569;
-  transition:background .15s ease;
-}
-.mock-nav-item.active { background:#eaf0ff; color:#1d4ed8; font-weight:500; }
-.mock-tabs { display:flex; gap:0; border-bottom:1px solid #e2e5ea; padding:0 24px; }
-.mock-tab {
-  padding:12px 14px; font-size:13px; color:#64748b;
-  border-bottom:2px solid transparent;
-  cursor:pointer; transition:color .15s ease, border-color .15s ease;
-  white-space:nowrap;
-}
-.mock-tab:hover { color:#0f172a; }
-.mock-tab.active { color:#1d4ed8; border-bottom-color:#1d4ed8; font-weight:500; }
-
-/* Explorer tab pill */
-.exp-tab {
-  padding:10px 18px; font-size:13.5px; font-weight:500;
-  color:#475569; cursor:pointer;
-  border-radius:8px; background:transparent;
-  transition:background .15s ease, color .15s ease;
-  display:inline-flex; align-items:center; gap:8px;
-}
-.exp-tab:hover { background:#f1f3f6; color:#0f172a; }
-.exp-tab.active { background:#eaf0ff; color:#1d4ed8; }
-.exp-tab.active .exp-tab-dot { background:#1d4ed8; }
-.exp-tab-dot { width:6px; height:6px; border-radius:50%; background:#cbd1d9; }
-.exp-tab.dev .exp-tab-dot { background:#fbbf24; }
 `;
 
-// ─── Scroll reveal ────────────────────────────────────────────────────────────
+// ─── Motion ───────────────────────────────────────────────────────────────────
 
-function useScrollReveal() {
+function useMotion() {
   useEffect(() => {
-    const els = Array.from(document.querySelectorAll<HTMLElement>("[data-rv]"));
-    if (!els.length) return;
+    document.documentElement.classList.add("reveal-ready");
     const obs = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((e) => {
-          if (!e.isIntersecting) return;
-          const el = e.target as HTMLElement;
-          const delay = parseFloat(el.dataset.rvd ?? "0") * 1000;
-          setTimeout(() => el.setAttribute("data-on", ""), delay);
-          obs.unobserve(el);
-        });
-      },
-      { threshold: 0.12, rootMargin: "0px 0px -40px 0px" },
+      (es) => es.forEach((e) => {
+        if (!e.isIntersecting) return;
+        const el = e.target as HTMLElement;
+        window.setTimeout(() => el.setAttribute("data-on", ""), parseFloat(el.dataset.rvd ?? "0") * 1000);
+        obs.unobserve(el);
+      }),
+      { threshold: 0.14, rootMargin: "0px 0px -8% 0px" },
     );
-    els.forEach((el) => obs.observe(el));
-    return () => obs.disconnect();
+    document.querySelectorAll<HTMLElement>("[data-rv]").forEach((el) => obs.observe(el));
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    let raf = 0;
+    const onScroll = () => {
+      if (reduce) return;
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const y = window.scrollY;
+        document.querySelectorAll<HTMLElement>("[data-parallax]").forEach((el) => {
+          el.style.transform = `translate3d(0, ${y * parseFloat(el.dataset.parallax ?? "0")}px, 0)`;
+        });
+      });
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => { obs.disconnect(); window.removeEventListener("scroll", onScroll); document.documentElement.classList.remove("reveal-ready"); };
   }, []);
+}
+function useScrolled(t = 12) {
+  const [s, setS] = useState(false);
+  useEffect(() => { const on = () => setS(window.scrollY > t); on(); window.addEventListener("scroll", on, { passive: true }); return () => window.removeEventListener("scroll", on); }, [t]);
+  return s;
 }
 
 // ─── Root ─────────────────────────────────────────────────────────────────────
 
 export default function Landing() {
-  useScrollReveal();
+  useMotion();
   return (
-    <div className="min-h-screen" style={{ background: "#ffffff", color: "#0f172a" }}>
+    <div className="lp min-h-screen">
       <style>{STYLES}</style>
       <Nav />
       <Hero />
-      <ModuleExplorer />
+      <Pipeline />
+      <Agent />
       <Security />
       <Pricing />
       <FAQ />
+      <CTABand />
       <Footer />
     </div>
   );
@@ -189,592 +203,226 @@ export default function Landing() {
 // ─── Nav ──────────────────────────────────────────────────────────────────────
 
 function Nav() {
+  const on = useScrolled();
   return (
-    <nav className="sticky top-0 z-50 nav-blur" style={{ borderBottom: "1px solid #e2e5ea" }}>
-      <div className="w-full px-6 md:px-8 flex items-center justify-between" style={{ height: 64 }}>
-        <Link href="/" className="flex items-center gap-3 shrink-0">
-          <img src="/favicon.png" alt="Actuarius" className="h-8 w-8" />
-          <span className="text-[18px] font-bold tracking-tight" style={{ color: "#0f172a" }}>
-            Actuarius
-          </span>
+    <nav className={"sticky top-0 z-50 nav " + (on ? "on" : "")}>
+      <div className="mx-auto max-w-[1180px] px-6 md:px-8 flex items-center justify-between" style={{ height: 68 }}>
+        <Link href="/" className="flex items-center gap-2.5 shrink-0">
+          <img src="/favicon.png" alt="Actuarius" className="h-7 w-7" />
+          <span className="text-[17px] font-extrabold tracking-tight">Actuarius</span>
         </Link>
-        <div className="flex items-center gap-1">
-          {[
-            ["#modules", "Modüller"],
-            ["#security", "Güvenlik"],
-            ["#pricing", "Fiyatlandırma"],
-          ].map(([href, label]) => (
-            <a
-              key={href}
-              href={href}
-              className="text-[13.5px] font-medium px-3 py-1.5 rounded-md hidden md:block transition-colors hover:bg-slate-100"
-              style={{ color: "#475569" }}
-            >
-              {label}
-            </a>
+        <div className="hidden md:flex items-center gap-1 absolute left-1/2 -translate-x-1/2">
+          {[["#modules", "Modüller"], ["#agent", "AI Agent"], ["#security", "Güvenlik"], ["#pricing", "Fiyat"]].map(([h, l]) => (
+            <a key={h} href={h} className="navlink">{l}</a>
           ))}
-          <Link href="/login" className="text-[13.5px] font-medium px-3 py-1.5 hidden sm:block hover:underline" style={{ color: "#475569" }}>
-            Giriş
-          </Link>
-          <Link href="/reserve" className="btn-primary ml-2">
-            Ücretsiz Başla
-          </Link>
+        </div>
+        <div className="flex items-center gap-2.5">
+          <Link href="/login" className="navlink hidden sm:block">Giriş</Link>
+          <Link href="/reserve" className="btn btn-dark" style={{ padding: "9px 16px", fontSize: 14, borderRadius: 10 }}>Ücretsiz başla <Arrow /></Link>
         </div>
       </div>
     </nav>
   );
 }
 
-// ─── Hero ─────────────────────────────────────────────────────────────────────
+// ─── Hero (drench) ────────────────────────────────────────────────────────────
 
 function Hero() {
   return (
-    <section
-      className="px-6 md:px-8 flex flex-col items-center justify-center"
-      style={{
-        minHeight: "calc(100vh - 64px)",
-        background: "radial-gradient(ellipse 90% 55% at 50% -5%, #dbeafe 0%, #fff 62%)",
-      }}
-    >
-      <div className="text-center max-w-3xl mx-auto">
-        <div className="fi mb-7">
-          <span className="pill pill-info">
-            <span className="w-1.5 h-1.5 rounded-full" style={{ background: "#1d4ed8" }} />
-            Rezerv ve Nakit Akışı modülleri canlı
-          </span>
+    <section className="drench" style={{ marginTop: -68, paddingTop: 68 }}>
+      <span className="blob b1" /><span className="blob b2" /><span className="blob b3" /><span className="blob b-gold" /><span className="grain" />
+      <div className="relative mx-auto max-w-[1180px] px-6 md:px-8 pt-16 md:pt-24 pb-20 md:pb-28 grid lg:grid-cols-[1.04fr_0.96fr] gap-12 lg:gap-12 items-center">
+        <div>
+          <div className="rise"><span className="tag tag-onc"><span className="w-1.5 h-1.5 rounded-full" style={{ background: "var(--gold-2)" }} />REZERV &amp; NAKİT AKIŞI CANLI</span></div>
+          <h1 className="display rise mt-6" style={{ fontSize: "clamp(2.9rem,1.3rem+5.6vw,5.4rem)", color: "#fff", animationDelay: ".06s" }}>
+            Hasar üçgeninden<br />
+            <span style={{ color: "var(--gold-2)" }}>nihai rezerve</span>,<br />
+            tek akışta.
+          </h1>
+          <p className="rise mt-7 text-[17px] md:text-[18.5px]" style={{ color: "var(--on-color-2)", lineHeight: 1.55, maxWidth: "46ch", animationDelay: ".16s" }}>
+            Chain-Ladder ve Bornhuetter–Ferguson&apos;dan parametrik tail&apos;e, nakit akışından
+            IFRS 17 iskontoya — ve yanında doğal dilde çalışan bir AI aktüer.
+          </p>
+          <div className="rise mt-9 flex flex-wrap gap-3" style={{ animationDelay: ".24s" }}>
+            <Link href="/reserve" className="btn btn-gold">Ücretsiz başla <Arrow /></Link>
+            <a href="#modules" className="btn btn-glass">Modülleri gör</a>
+          </div>
+          <div className="rise mt-8 flex flex-wrap gap-x-6 gap-y-2 mono text-[12px]" style={{ color: "var(--on-color-2)", animationDelay: ".32s" }}>
+            {["free plan kalıcı ücretsiz", "ham veri LLM'e gitmez", "Türkçe"].map((t) => (
+              <span key={t} className="inline-flex items-center gap-1.5"><span style={{ color: "var(--gold-2)" }}>✦</span>{t}</span>
+            ))}
+          </div>
         </div>
-        <h1
-          className="fi text-[46px] sm:text-[60px] md:text-[72px] font-bold tracking-tight leading-[1.04] mb-7"
-          style={{ color: "#0f172a", animationDelay: "0.05s", letterSpacing: "-0.03em" }}
-        >
-          Aktüeryal analiz için
-          <br />
-          <span style={{ background: "linear-gradient(135deg,#1d4ed8 0%,#3b82f6 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
-            profesyonel platform
-          </span>
-        </h1>
-        <p className="fi text-[18px] leading-[1.65] mx-auto max-w-xl" style={{ color: "#475569", animationDelay: "0.15s" }}>
-          Chain-Ladder, Bornhuetter–Ferguson ve parametrik tail fitting&apos;den
-          AI Agent destekli senaryo analizine kadar — eksiksiz rezerv iş akışı.
-        </p>
-        <div className="fi flex flex-wrap gap-3 justify-center mt-10" style={{ animationDelay: "0.22s" }}>
-          <Link href="/reserve" className="btn-primary" style={{ fontSize: 15, padding: "10px 22px" }}>
-            Ücretsiz Başla
-            <Arrow />
-          </Link>
-          <a href="#modules" className="btn-secondary" style={{ fontSize: 15, padding: "10px 22px" }}>
-            Modülleri İnceleyin
-          </a>
-        </div>
-        <div className="fi mt-8 text-[13px] flex items-center justify-center gap-6 flex-wrap" style={{ color: "#64748b", animationDelay: "0.3s" }}>
-          <span className="flex items-center gap-1.5">
-            <CheckIcon /> Free plan kalıcı ücretsiz
-          </span>
-          <span className="flex items-center gap-1.5">
-            <CheckIcon /> Ham veri LLM&apos;e iletilmez
-          </span>
-          <span className="flex items-center gap-1.5">
-            <CheckIcon /> Türkçe arayüz
-          </span>
-        </div>
+        <div className="rise" style={{ animationDelay: ".3s" }} data-parallax="-0.022"><TriangleHero /></div>
       </div>
     </section>
   );
 }
 
-function HeroAppPreview() {
-  return (
-    <div className="mock mx-auto" style={{ maxWidth: 1080 }}>
-      {/* Browser chrome */}
-      <div className="px-4 py-2.5 flex items-center gap-3" style={{ background: "#f1f3f6", borderBottom: "1px solid #e2e5ea" }}>
-        <div className="flex gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-full" style={{ background: "#cbd1d9" }} />
-          <span className="w-2.5 h-2.5 rounded-full" style={{ background: "#cbd1d9" }} />
-          <span className="w-2.5 h-2.5 rounded-full" style={{ background: "#cbd1d9" }} />
-        </div>
-        <div className="flex-1 max-w-md mx-auto px-3 py-1 rounded text-[11.5px] text-center mono flex items-center justify-center gap-1.5" style={{ background: "#fff", border: "1px solid #e2e5ea", color: "#64748b" }}>
-          <LockIcon />
-          actuarius.com.tr/reserve
-        </div>
-        <div className="w-12" />
-        <div className="w-12" />
-      </div>
-
-      {/* App shell */}
-      <div className="flex" style={{ background: "#f6f7f9", minHeight: 460 }}>
-        <AppSidebarMock active="reserve" />
-        <div className="flex-1 bg-white">
-          <ReserveTabBar active="ultimate" />
-          <div className="p-6">
-            <UltimateTabContent />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── App-style mock components (match real app exactly) ──────────────────────
-
-function AppSidebarMock({ active }: { active: "home" | "data" | "reserve" | "cashflow" }) {
-  const items = [
-    { id: "home", label: "Anasayfa", icon: <HomeIcon /> },
-    { id: "data", label: "Veri", icon: <DatabaseIcon /> },
-    { id: "reserve", label: "Rezerv", icon: <StackIcon /> },
-    { id: "cashflow", label: "Nakit Akışı", icon: <CashflowIcon /> },
+function TriangleHero() {
+  const ORIG = ["2021", "2022", "2023", "2024", "2025"];
+  const DEV = ["12", "24", "36", "48", "60"];
+  const T: (number | null)[][] = [
+    [165595, 181230, 188940, 192100, 193520],
+    [199135, 217640, 226880, 231050, null],
+    [213510, 233190, 243120, null, null],
+    [224580, 245880, null, null, null],
+    [232470, null, null, null, null],
   ];
+  const lastIdx = (r: number) => T[r].filter((x) => x !== null).length - 1;
   return (
-    <aside className="mock-sidebar flex flex-col">
-      <div className="h-14 flex items-center gap-2 px-4" style={{ borderBottom: "1px solid #e2e5ea" }}>
-        <img src="/favicon.png" alt="" className="h-7 w-7" />
-        <span className="text-[13px] font-semibold">Actuarius</span>
-      </div>
-      <nav className="p-2 flex-1">
-        <div className="text-[10px] uppercase tracking-wide font-semibold px-2 py-2" style={{ color: "#64748b" }}>
-          Modüller
+    <div className="float p-5 md:p-6">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <div className="kick" style={{ color: "var(--muted)", fontSize: 11 }}>LOSS DEVELOPMENT</div>
+          <div className="text-[14px] font-extrabold mt-1" style={{ color: "var(--ink)" }}>Motor TPL · 2025Q4 · incurred</div>
         </div>
-        <ul className="space-y-0.5">
-          {items.map((it) => (
-            <li key={it.id}>
-              <div className={"mock-nav-item " + (it.id === active ? "active" : "")}>
-                <span className="opacity-80 shrink-0">{it.icon}</span>
-                <span className="flex-1">{it.label}</span>
-              </div>
-            </li>
-          ))}
-        </ul>
-      </nav>
-      <div className="p-2" style={{ borderTop: "1px solid #e2e5ea" }}>
-        <div className="flex items-center gap-2 px-2 py-1.5 rounded-md">
-          <div className="w-[26px] h-[26px] rounded-full grid place-items-center text-[10px] font-semibold" style={{ background: "linear-gradient(135deg,#dbeafe,#ede9fe)", color: "#3730a3" }}>
-            AE
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-[12px] font-medium leading-tight" style={{ color: "#0f172a" }}>aktuer</div>
-            <div className="text-[10px] leading-tight" style={{ color: "#64748b" }}>✦ Pro</div>
-          </div>
-        </div>
+        <span className="tag tag-gold">SON DİAGONAL</span>
       </div>
-    </aside>
-  );
-}
-
-function ReserveTabBar({ active }: { active: string }) {
-  const tabs = [
-    { id: "data", label: "Veri", sub: "Üçgen önizleme" },
-    { id: "ldf", label: "LDF", sub: "Gelişim faktörleri" },
-    { id: "curve", label: "Curve", sub: "CDF eğrisi" },
-    { id: "ilr", label: "ILR", sub: "Loss ratio üçgeni" },
-    { id: "bf", label: "BF", sub: "Bornhuetter–Ferguson" },
-    { id: "ultimate", label: "Ultimate/IBNR", sub: "Rezerv projeksiyonu" },
-    { id: "summary", label: "Özet", sub: "Model raporu" },
-  ];
-  return (
-    <div>
-      <div className="px-6 py-3 flex items-center gap-2 text-[12px]" style={{ borderBottom: "1px solid #e2e5ea", color: "#64748b" }}>
-        <span style={{ color: "#0f172a" }} className="font-medium">Rezerv</span>
-        <span style={{ color: "#cbd1d9" }}>/</span>
-        <span>2025Q4</span>
-        <span style={{ color: "#cbd1d9" }}>/</span>
-        <span>Motor TPL</span>
-      </div>
-      <div className="mock-tabs overflow-x-auto">
-        {tabs.map((t) => (
-          <div key={t.id} className={"mock-tab " + (t.id === active ? "active" : "")}>
-            {t.label}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function UltimateTabContent() {
-  const rows = [
-    { y: "2021", reported: "165.595", ibnr: "825", ult: "166.420" },
-    { y: "2022", reported: "199.135", ibnr: "4.345", ult: "203.480" },
-    { y: "2023", reported: "213.510", ibnr: "16.250", ult: "229.760" },
-    { y: "2024", reported: "224.580", ibnr: "43.260", ult: "267.840" },
-    { y: "2025", reported: "232.470", ibnr: "105.720", ult: "338.190" },
-  ];
-  return (
-    <div>
-      <div className="grid grid-cols-3 gap-3 mb-5">
-        <MetricBox label="Reported" value="1.035.290" />
-        <MetricBox label="IBNR" value={<CountUp to={170400} />} accent />
-        <MetricBox label="Ultimate" value="1.205.690" />
-      </div>
-      <div className="lcard p-0 overflow-hidden">
-        <div className="px-4 py-2.5 flex items-center justify-between" style={{ borderBottom: "1px solid #e2e5ea", background: "#f6f7f9" }}>
-          <div className="text-[11.5px] font-semibold uppercase tracking-wider" style={{ color: "#64748b" }}>
-            Origin Yılı Bazında
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="pill pill-info" style={{ fontSize: 11 }}>Chain-Ladder</span>
-            <span className="text-[11px] font-medium px-2 py-0.5 rounded" style={{ background: "#f1f3f6", color: "#64748b" }}>Volume 5Y</span>
-          </div>
-        </div>
-        <table className="w-full text-[12.5px]">
-          <thead>
-            <tr style={{ borderBottom: "1px solid #e2e5ea" }}>
-              <th className="text-left px-4 py-2 text-[10.5px] font-semibold uppercase tracking-wider" style={{ color: "#64748b" }}>Yıl</th>
-              <th className="text-right px-4 py-2 text-[10.5px] font-semibold uppercase tracking-wider" style={{ color: "#64748b" }}>Reported</th>
-              <th className="text-right px-4 py-2 text-[10.5px] font-semibold uppercase tracking-wider" style={{ color: "#64748b" }}>IBNR</th>
-              <th className="text-right px-4 py-2 text-[10.5px] font-semibold uppercase tracking-wider" style={{ color: "#64748b" }}>Ultimate</th>
-            </tr>
-          </thead>
+      <div className="overflow-x-auto">
+        <table style={{ borderCollapse: "separate", borderSpacing: "3px", width: "100%" }}>
+          <thead><tr><th className="tcell head" style={{ textAlign: "left" }}>orig\dev</th>{DEV.map((d) => <th key={d} className="tcell head">{d}</th>)}</tr></thead>
           <tbody>
-            {rows.map((r) => (
-              <tr key={r.y} style={{ borderBottom: "1px solid #f1f3f6" }}>
-                <td className="px-4 py-2 font-semibold mono" style={{ color: "#0f172a" }}>{r.y}</td>
-                <td className="px-4 py-2 text-right mono tabular-nums" style={{ color: "#475569" }}>{r.reported}</td>
-                <td className="px-4 py-2 text-right mono tabular-nums font-medium" style={{ color: "#1d4ed8" }}>{r.ibnr}</td>
-                <td className="px-4 py-2 text-right mono tabular-nums font-semibold" style={{ color: "#0f172a" }}>{r.ult}</td>
+            {T.map((row, r) => (
+              <tr key={ORIG[r]}>
+                <td className="trow" style={{ paddingRight: 8, color: "var(--ink)" }}>{ORIG[r]}</td>
+                {row.map((v, c) => v === null ? <td key={c} /> : (
+                  <td key={c} className={"tcell fill " + (c === lastIdx(r) ? "diag" : "")} style={{ animationDelay: `${(r + c) * 90 + 320}ms` }}>{(v / 1000).toFixed(1)}</td>
+                ))}
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-    </div>
-  );
-}
-
-function MetricBox({ label, value, accent }: { label: string; value: ReactNode; accent?: boolean }) {
-  return (
-    <div className="lcard px-4 py-3" style={{ background: accent ? "#eaf0ff" : "#fff", borderColor: accent ? "#bfd3ff" : "#e2e5ea" }}>
-      <div className="text-[10.5px] font-semibold uppercase tracking-wider mb-1" style={{ color: "#64748b" }}>
-        {label}
-      </div>
-      <div className="flex items-baseline gap-1.5">
-        <span className="text-[20px] font-bold tabular-nums mono" style={{ color: accent ? "#1d4ed8" : "#0f172a" }}>{value}</span>
-        <span className="text-[11px] font-medium" style={{ color: "#64748b" }}>TL</span>
+      <div className="mt-4 pt-4 grid grid-cols-3 gap-3" style={{ borderTop: "1px solid var(--line)" }}>
+        {[["REPORTED", "1.035.290", "var(--ink)"], ["IBNR", <CountUp key="i" to={170400} />, "#b8770a"], ["ULTIMATE", "1.205.690", "var(--ink)"]].map(([k, v, col]) => (
+          <div key={k as string}>
+            <div className="kick" style={{ fontSize: 10, color: "var(--muted)" }}>{k as string}</div>
+            <div className="mono text-[19px] font-extrabold mt-1" style={{ color: col as string }}>{v as ReactNode}</div>
+          </div>
+        ))}
       </div>
     </div>
   );
 }
 
-// ─── Module Explorer ──────────────────────────────────────────────────────────
+// ─── Pipeline ────────────────────────────────────────────────────────────────
 
-type ModuleKey = "reserve" | "cashflow" | "ifrs17" | "discount" | "agent";
+type ModKey = "reserve" | "cashflow" | "discount" | "ifrs17";
+const STEPS: { key: ModKey; n: string; name: string; status: "active" | "dev"; line: string }[] = [
+  { key: "reserve", n: "01", name: "Rezerv Analizi", status: "active", line: "Chain-Ladder + BF, tail fitting, ILR ısı haritası" },
+  { key: "cashflow", n: "02", name: "Nakit Akışı", status: "active", line: "CDF tabanlı çeyreklik & aylık projeksiyon" },
+  { key: "discount", n: "03", name: "İskonto", status: "dev", line: "Risk-free eğriyle bugünkü değere indirgeme" },
+  { key: "ifrs17", n: "04", name: "IFRS 17", status: "dev", line: "Sözleşme grubu bazlı muhasebe, CSM" },
+];
 
-const MODULE_DEFS: Record<ModuleKey, { name: string; status: "active" | "dev"; tagline: string; href?: string }> = {
-  reserve: {
-    name: "Rezerv Analizi",
-    status: "active",
-    tagline: "Üçgenden Ultimate'a, eksiksiz rezerv iş akışı",
-    href: "/reserve",
-  },
-  cashflow: {
-    name: "Nakit Akışı",
-    status: "active",
-    tagline: "CDF tabanlı CF pattern ve dönemsel projeksiyon",
-    href: "/cashflow",
-  },
-  ifrs17: {
-    name: "IFRS 17",
-    status: "dev",
-    tagline: "Sözleşme grubu bazlı muhasebeleştirme",
-  },
-  discount: {
-    name: "İskonto",
-    status: "dev",
-    tagline: "Yield curve ile bugünkü değere indirgeme",
-  },
-  agent: {
-    name: "AI Agent",
-    status: "active",
-    tagline: "Doğal dilde aktüer desteği",
-  },
-};
-
-const MODULE_ORDER: ModuleKey[] = ["reserve", "cashflow", "discount", "ifrs17", "agent"];
-
-function ModuleExplorer() {
-  const [active, setActive] = useState<ModuleKey>("reserve");
-
+function Pipeline() {
+  const [active, setActive] = useState<ModKey>("reserve");
   return (
-    <section id="modules" className="py-12 md:py-16" style={{ background: "#f6f7f9", borderTop: "1px solid #e2e5ea", borderBottom: "1px solid #e2e5ea" }}>
-      <div className="max-w-[1100px] mx-auto px-6 md:px-8">
-        {/* Tab pills */}
-        <div data-rv className="flex justify-center mb-5 flex-wrap gap-2">
-          {MODULE_ORDER.map((k) => {
-            const m = MODULE_DEFS[k];
+    <section id="modules" className="py-20 md:py-28" style={{ background: "var(--paper-2)" }}>
+      <div className="mx-auto max-w-[1180px] px-6 md:px-8">
+        <div className="max-w-2xl" data-rv>
+          <div className="kick" style={{ color: "var(--violet-2)" }}>VERİ → REZERV → NAKİT AKIŞI → İSKONTO</div>
+          <h2 className="h2 mt-3">Bir veri seti, bütün bir süreç</h2>
+          <p className="lede mt-4 text-[16.5px]" style={{ maxWidth: "56ch" }}>
+            Her adım bir öncekinin çıktısından beslenir. Rezerv sonuçları nakit akışını, nakit akışı
+            iskontoyu doğrudan besler — sayfalar arası manuel veri taşımak yok.
+          </p>
+        </div>
+        <div className="mt-10 grid sm:grid-cols-2 lg:grid-cols-4 gap-3" data-rv data-rvd={0.04}>
+          {STEPS.map((s) => {
+            const on = active === s.key;
             return (
-              <button
-                key={k}
-                onClick={() => setActive(k)}
-                className={"exp-tab " + (active === k ? "active " : "") + (m.status === "dev" ? "dev " : "")}
-              >
-                <span className="exp-tab-dot" />
-                {m.name}
-                {m.status === "dev" && (
-                  <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ml-1" style={{ background: "#fef3c7", color: "#b45309" }}>
-                    Yakında
-                  </span>
-                )}
+              <button key={s.key} onClick={() => setActive(s.key)} className="pnode text-left p-5 rounded-2xl"
+                style={{ background: on ? "var(--card)" : "transparent", border: `1px solid ${on ? "transparent" : "var(--line)"}`, boxShadow: on ? "0 18px 36px -20px rgba(109,40,217,.4), 0 0 0 1.5px var(--violet-2)" : "none" }}>
+                <div className="flex items-center justify-between">
+                  <span className="mono text-[13px] font-extrabold" style={{ color: on ? "var(--violet-2)" : "var(--muted)" }}>{s.n}</span>
+                  {s.status === "dev" ? <span className="tag tag-gold" style={{ fontSize: 10, padding: "2px 7px" }}>YAKINDA</span> : <span className="tag tag-ok" style={{ fontSize: 10, padding: "2px 7px" }}>AKTİF</span>}
+                </div>
+                <div className="text-[16px] font-extrabold tracking-tight mt-3">{s.name}</div>
+                <div className="text-[12.5px] mt-1" style={{ color: "var(--muted)", lineHeight: 1.45 }}>{s.line}</div>
               </button>
             );
           })}
         </div>
-
-        {/* Active module content */}
-        <div data-rv data-rvd={0.05}>
-          {active === "reserve" && <ReserveExplorerContent />}
-          {active === "cashflow" && <CashflowExplorerContent />}
-          {active === "discount" && <ComingSoonContent moduleKey="discount" />}
-          {active === "ifrs17" && <ComingSoonContent moduleKey="ifrs17" />}
-          {active === "agent" && <AgentExplorerContent />}
+        <div className="mt-6" data-rv data-rvd={0.06}>
+          {active === "reserve" && <ReservePanel />}
+          {active === "cashflow" && <CashflowPanel />}
+          {active === "discount" && <SoonPanel module="İskonto" eta="Q4 2026" desc="Nakit akışlarının risk-free eğri veya şirket eğrisiyle bugünkü değere indirgenmesi; IFRS 17 ile entegre." />}
+          {active === "ifrs17" && <SoonPanel module="IFRS 17" eta="Q1 2027" desc="GMM, PAA ve VFA yaklaşımlarıyla sözleşme grubu bazlı muhasebe; CSM amortismanı ve risk düzeltmesi." />}
         </div>
       </div>
     </section>
   );
 }
 
-function ExplorerLayout({
-  badge,
-  title,
-  description,
-  features,
-  href,
-  cta,
-  children,
-}: {
-  badge: ReactNode;
-  title: string;
-  description: string;
-  features: { t: string; d: string }[];
-  href?: string;
-  cta?: string;
-  children: ReactNode;
-}) {
+function PreviewFrame({ crumb, children }: { crumb: string[]; children: ReactNode }) {
   return (
-    <div className="fi">
-      {/* Top row: meta + title + cta */}
-      <div className="flex flex-col lg:flex-row lg:items-center gap-4 mb-5">
-        <div className="flex-1 flex items-center gap-4">
-          <div>{badge}</div>
-          <h3
-            className="text-[22px] md:text-[26px] font-bold tracking-tight"
-            style={{ color: "#0f172a", letterSpacing: "-0.02em" }}
-          >
-            {title}
-          </h3>
-        </div>
-        {href && cta && (
-          <Link href={href} className="btn-primary shrink-0">
-            {cta}
-            <Arrow />
-          </Link>
-        )}
+    <div className="panel overflow-hidden" style={{ boxShadow: "0 1px 0 rgba(18,15,46,.04), 0 28px 54px -32px rgba(18,15,46,.3)" }}>
+      <div className="px-5 py-2.5 flex items-center gap-2 mono text-[11.5px]" style={{ borderBottom: "1px solid var(--line)", background: "var(--paper)", color: "var(--muted)" }}>
+        {crumb.map((c, i) => <span key={i} style={{ color: i === 0 ? "var(--ink)" : undefined, fontWeight: i === 0 ? 700 : 400 }}>{c}{i < crumb.length - 1 && <span style={{ color: "var(--line-2)", margin: "0 6px" }}>/</span>}</span>)}
       </div>
-
-      {/* Feature chips */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
-        {features.map((f) => (
-          <div
-            key={f.t}
-            className="lcard px-4 py-2.5 flex items-center gap-2"
-          >
-            <div
-              className="w-5 h-5 rounded flex items-center justify-center shrink-0"
-              style={{ background: "#eaf0ff" }}
-            >
-              <CheckIcon color="#1d4ed8" size={11} />
-            </div>
-            <div className="text-[13px] font-semibold" style={{ color: "#0f172a" }}>
-              {f.t}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Full-width preview */}
       {children}
     </div>
   );
 }
 
-function ReserveExplorerContent() {
-  return (
-    <ExplorerLayout
-      badge={<span className="pill pill-active"><span className="w-1.5 h-1.5 rounded-full" style={{ background: "#15803d" }} />Aktif</span>}
-      title="Rezerv Analizi"
-      description="Chain-Ladder ve Bornhuetter–Ferguson. Dört parametrik tail modeli, ILR ısı haritası, LDF window seçimi, hücre eleme ve manuel override. Origin yılı bazlı CL/BF basis seçimi ile profesyonel rezerv analizi."
-      features={[
-        { t: "İki temel yöntem", d: "Chain-Ladder ve Bornhuetter–Ferguson, origin bazlı basis seçimiyle karşılaştırma." },
-        { t: "Parametrik tail fitting", d: "Exponential, Inverse Power, Power ve Weibull modelleri. Period bazlı model seçimi." },
-        { t: "ILR ısı haritası", d: "Hasar/(Prim × Düzeltme) oranı ile anormal gelişim örüntülerinin tespiti." },
-        { t: "Esnek LDF kontrolü", d: "Volume veya simple average, window seçimi, hücre eleme, manuel override." },
-      ]}
-      href="/reserve"
-      cta="Modüle git"
-    >
-      <ReservePreview />
-    </ExplorerLayout>
-  );
-}
-
-function CashflowExplorerContent() {
-  return (
-    <ExplorerLayout
-      badge={<span className="pill pill-active"><span className="w-1.5 h-1.5 rounded-full" style={{ background: "#15803d" }} />Aktif</span>}
-      title="Nakit Akışı"
-      description="Rezerv modülünün sonuçlarından CDF tabanlı CF pattern üretir. Kalan rezervin gelecek çeyrek ve aylara dağılımını rapor dönemine göre hesaplar. Çeyreklik ve aylık projeksiyon, branş bazlı pattern."
-      features={[
-        { t: "Rezerv ile tam senkron", d: "LDF seçimleriniz değiştiğinde CF pattern otomatik güncellenir." },
-        { t: "Rapor dönemine duyarlı", d: "Period offset doğru hesaplanır — Q1 raporu için Q2'den itibaren projeksiyon." },
-        { t: "Çeyreklik ve aylık", d: "Aynı temel pattern üzerinden iki farklı granülerlikte dağılım." },
-        { t: "Branş bazlı pattern", d: "Her branşın kendi tail karakteristiğine göre ayrı projeksiyon." },
-      ]}
-      href="/cashflow"
-      cta="Modüle git"
-    >
-      <CashflowPreview />
-    </ExplorerLayout>
-  );
-}
-
-function ComingSoonContent({ moduleKey }: { moduleKey: "ifrs17" | "discount" }) {
-  const content = {
-    ifrs17: {
-      title: "IFRS 17",
-      description:
-        "GMM, PAA ve VFA yaklaşımlarıyla sözleşme grubu bazlı muhasebeleştirme. CSM amortismanı, risk düzeltmesi ve IFRS 17 uyumlu disclosure raporlaması.",
-      features: [
-        { t: "GMM / PAA / VFA", d: "Üç yaklaşımın tamamı, sözleşme grubu seviyesinde." },
-        { t: "CSM amortismanı", d: "Coverage unit bazlı CSM dağılımı ve revize edilmiş tahmin etkisi." },
-        { t: "Risk düzeltmesi", d: "Cost of Capital yaklaşımıyla risk margin hesaplaması." },
-        { t: "Uyumlu disclosure", d: "Notlar için hazır tablo ve hareket analizleri." },
-      ],
-      preview: <ComingSoonPreview module="IFRS 17" eta="Q1 2027" />,
-    },
-    discount: {
-      title: "İskonto",
-      description:
-        "Nakit akışlarının risk-free eğri veya şirket iskonto eğrisiyle bugünkü değere indirgenmesi. IFRS 17 modülü ile entegre çalışır.",
-      features: [
-        { t: "Risk-free eğri", d: "TCMB veya kullanıcı tanımlı eğri girdileri." },
-        { t: "Yield curve uygulaması", d: "Süre uyumlu iskonto faktörleri." },
-        { t: "Liquidity premium", d: "Eğri üzerine likidite primi ekleme." },
-        { t: "Duyarlılık analizi", d: "Eğri parametrelerine göre PV duyarlılığı." },
-      ],
-      preview: <ComingSoonPreview module="İskonto" eta="Q4 2026" />,
-    },
-  }[moduleKey];
-
-  return (
-    <ExplorerLayout
-      badge={<span className="pill pill-dev">Geliştiriliyor</span>}
-      title={content.title}
-      description={content.description}
-      features={content.features}
-    >
-      {content.preview}
-    </ExplorerLayout>
-  );
-}
-
-// ─── Reserve preview (real app shell) ─────────────────────────────────────────
-
-function ReservePreview() {
+function ReservePanel() {
   const [tab, setTab] = useState<"ldf" | "ilr" | "ultimate">("ldf");
-
-  const allTabs = [
-    { id: "veri", label: "Veri" },
-    { id: "ldf", label: "LDF" },
-    { id: "curve", label: "Curve" },
-    { id: "ilr", label: "ILR" },
-    { id: "bf", label: "BF" },
-    { id: "ultimate", label: "Ultimate/IBNR" },
-    { id: "summary", label: "Özet" },
-  ];
-
+  const tabs = ["Veri", "LDF", "Curve", "ILR", "BF", "Ultimate/IBNR", "Özet"];
+  const click: Record<string, "ldf" | "ilr" | "ultimate"> = { LDF: "ldf", ILR: "ilr", "Ultimate/IBNR": "ultimate" };
+  const onLabel = { ldf: "LDF", ilr: "ILR", ultimate: "Ultimate/IBNR" }[tab];
   return (
-    <div className="mock">
-      {/* breadcrumb */}
-      <div
-        className="px-6 py-2.5 flex items-center gap-2 text-[12px]"
-        style={{ borderBottom: "1px solid #e2e5ea", background: "#f6f7f9", color: "#64748b" }}
-      >
-        <span style={{ color: "#0f172a" }} className="font-medium">Rezerv</span>
-        <span style={{ color: "#cbd1d9" }}>/</span>
-        <span>2025Q4</span>
-        <span style={{ color: "#cbd1d9" }}>/</span>
-        <span>Motor TPL</span>
+    <PreviewFrame crumb={["Rezerv", "2025Q4", "Motor TPL"]}>
+      <div className="flex overflow-x-auto px-5" style={{ borderBottom: "1px solid var(--line)", background: "var(--card)" }}>
+        {tabs.map((t) => { const tg = click[t]; return <button key={t} onClick={tg ? () => setTab(tg) : undefined} className={"mtab " + (t === onLabel ? "on" : "")} style={{ cursor: tg ? "pointer" : "default" }}>{t}</button>; })}
       </div>
+      <div className="p-5 md:p-6" style={{ background: "var(--card)" }}>{tab === "ldf" && <LDF />}{tab === "ilr" && <ILR />}{tab === "ultimate" && <Ultimate />}</div>
+    </PreviewFrame>
+  );
+}
 
-      {/* tab bar — clicking LDF / ILR / Ultimate switches content */}
-      <div className="mock-tabs overflow-x-auto" style={{ background: "#fff" }}>
-        {allTabs.map((t) => {
-          const isActive =
-            t.id === tab || (t.id === "veri" && false) || (t.id === "curve" && false);
-          const isClickable = t.id === "ldf" || t.id === "ilr" || t.id === "ultimate";
-          return (
-            <button
-              key={t.id}
-              onClick={isClickable ? () => setTab(t.id as "ldf" | "ilr" | "ultimate") : undefined}
-              className={"mock-tab " + (t.id === tab ? "active" : "")}
-              style={{ cursor: isClickable ? "pointer" : "default" }}
-            >
-              {t.label}
-            </button>
-          );
-        })}
+function Ultimate() {
+  const rows = [["2021", "165.595", "825", "166.420"], ["2022", "199.135", "4.345", "203.480"], ["2023", "213.510", "16.250", "229.760"], ["2024", "224.580", "43.260", "267.840"], ["2025", "232.470", "105.720", "338.190"]];
+  return (
+    <div>
+      <div className="grid grid-cols-3 gap-3 mb-5">
+        {[["Reported", "1.035.290", false], ["IBNR", "170.400", true], ["Ultimate", "1.205.690", false]].map(([l, v, a]) => (
+          <div key={l as string} className="rounded-[11px] px-4 py-3" style={{ background: a ? "var(--gold-soft)" : "var(--card)", border: `1px solid ${a ? "#f0d49b" : "var(--line)"}` }}>
+            <div className="kick" style={{ fontSize: 10, color: "var(--muted)" }}>{l as string}</div>
+            <div className="mono text-[19px] font-extrabold mt-1" style={{ color: a ? "#b8770a" : "var(--ink)" }}>{v as string}<span className="text-[11px] font-medium ml-1" style={{ color: "var(--muted)" }}>TL</span></div>
+          </div>
+        ))}
       </div>
-
-      {/* content */}
-      <div className="p-6 bg-white">
-        {tab === "ldf" && <LDFTabContent />}
-        {tab === "ilr" && <ILRTabContent />}
-        {tab === "ultimate" && <UltimateTabContent />}
+      <div className="lcard overflow-hidden">
+        <table className="w-full text-[12.5px] mono">
+          <thead><tr style={{ borderBottom: "1px solid var(--line)", background: "var(--paper)" }}>{["Yıl", "Reported", "IBNR", "Ultimate"].map((h, i) => <th key={h} className={"px-4 py-2 text-[10.5px] tracking-wider " + (i ? "text-right" : "text-left")} style={{ color: "var(--muted)" }}>{h.toUpperCase()}</th>)}</tr></thead>
+          <tbody>{rows.map((r) => (
+            <tr key={r[0]} style={{ borderBottom: "1px solid #f2f2f8" }}>
+              <td className="px-4 py-2 font-extrabold">{r[0]}</td><td className="px-4 py-2 text-right" style={{ color: "var(--ink-2)" }}>{r[1]}</td>
+              <td className="px-4 py-2 text-right font-bold" style={{ color: "#b8770a" }}>{r[2]}</td><td className="px-4 py-2 text-right font-extrabold">{r[3]}</td>
+            </tr>
+          ))}</tbody>
+        </table>
       </div>
     </div>
   );
 }
 
-function LDFTabContent() {
-  const rows = [
-    { y: "2021", v: ["1.638", "1.091", "1.041", "1.018", "1.005"] },
-    { y: "2022", v: ["1.721", "1.102", "1.049", "1.021", "—"] },
-    { y: "2023", v: ["1.684", "1.118", "1.051", "—", "—"] },
-    { y: "2024", v: ["1.702", "1.095", "—", "—", "—"] },
-    { y: "2025", v: ["1.631", "—", "—", "—", "—"] },
-  ];
+function LDF() {
+  const rows = [["2021", ["1.638", "1.091", "1.041", "1.018", "1.005"]], ["2022", ["1.721", "1.102", "1.049", "1.021", "—"]], ["2023", ["1.684", "1.118", "1.051", "—", "—"]], ["2024", ["1.702", "1.095", "—", "—", "—"]], ["2025", ["1.631", "—", "—", "—", "—"]]] as [string, string[]][];
   return (
     <div>
       <div className="flex items-center gap-2 mb-4">
-        <span className="text-[11px] font-medium px-2.5 py-1 rounded-md" style={{ background: "#eaf0ff", color: "#1d4ed8" }}>Volume</span>
-        <span className="text-[11px] font-medium px-2.5 py-1 rounded-md" style={{ background: "#f1f3f6", color: "#64748b" }}>Simple</span>
-        <span className="text-[11px] font-medium px-2.5 py-1 rounded-md" style={{ background: "#f1f3f6", color: "#64748b" }}>5Y window</span>
-        <span className="text-[11px] font-medium ml-auto" style={{ color: "#64748b" }}>5 origin · 5 dev</span>
+        <span className="tag tag-gold" style={{ fontSize: 11 }}>Volume</span><span className="tag" style={{ fontSize: 11 }}>Simple</span><span className="tag" style={{ fontSize: 11 }}>5Y window</span>
+        <span className="mono text-[11px] ml-auto" style={{ color: "var(--muted)" }}>5 origin · 5 dev</span>
       </div>
-      <div className="lcard p-0 overflow-hidden">
+      <div className="lcard overflow-hidden">
         <table className="w-full text-[12.5px] mono">
-          <thead>
-            <tr style={{ borderBottom: "1px solid #e2e5ea", background: "#f6f7f9" }}>
-              <th className="text-left px-3 py-2 text-[10.5px] font-semibold uppercase tracking-wider" style={{ color: "#64748b" }}>Origin</th>
-              {["12→24", "24→36", "36→48", "48→60", "60→tail"].map((m) => (
-                <th key={m} className="text-right px-3 py-2 text-[10.5px] font-semibold uppercase tracking-wider" style={{ color: "#64748b" }}>{m}</th>
-              ))}
-            </tr>
-          </thead>
+          <thead><tr style={{ borderBottom: "1px solid var(--line)", background: "var(--paper)" }}><th className="text-left px-3 py-2 text-[10.5px] tracking-wider" style={{ color: "var(--muted)" }}>ORIGIN</th>{["12→24", "24→36", "36→48", "48→60", "60→TAIL"].map((m) => <th key={m} className="text-right px-3 py-2 text-[10.5px] tracking-wider" style={{ color: "var(--muted)" }}>{m}</th>)}</tr></thead>
           <tbody>
-            {rows.map((r) => (
-              <tr key={r.y} style={{ borderBottom: "1px solid #f1f3f6" }}>
-                <td className="px-3 py-1.5 font-semibold" style={{ color: "#0f172a" }}>{r.y}</td>
-                {r.v.map((c, j) => (
-                  <td key={j} className="text-right px-3 py-1.5 tabular-nums" style={{ color: c === "—" ? "#cbd1d9" : "#475569" }}>
-                    {c}
-                  </td>
-                ))}
-              </tr>
-            ))}
-            <tr style={{ background: "#f6f7f9", borderTop: "2px solid #e2e5ea" }}>
-              <td className="px-3 py-2 text-[10.5px] font-bold uppercase tracking-wider" style={{ color: "#1d4ed8" }}>Seçili</td>
-              {["1,412", "1,083", "1,031", "1,012", "1,004"].map((v, i) => (
-                <td key={i} className="text-right px-3 py-2 tabular-nums font-bold" style={{ color: "#1d4ed8" }}>{v}</td>
-              ))}
-            </tr>
+            {rows.map(([y, v]) => <tr key={y} style={{ borderBottom: "1px solid #f2f2f8" }}><td className="px-3 py-1.5 font-extrabold">{y}</td>{v.map((c, j) => <td key={j} className="text-right px-3 py-1.5" style={{ color: c === "—" ? "var(--line-2)" : "var(--ink-2)" }}>{c}</td>)}</tr>)}
+            <tr style={{ background: "var(--gold-soft)", borderTop: "2px solid #f0d49b" }}><td className="px-3 py-2 text-[10.5px] font-extrabold tracking-wider" style={{ color: "#b8770a" }}>SEÇİLİ</td>{["1,412", "1,083", "1,031", "1,012", "1,004"].map((v, i) => <td key={i} className="text-right px-3 py-2 font-extrabold" style={{ color: "#b8770a" }}>{v}</td>)}</tr>
           </tbody>
         </table>
       </div>
@@ -782,497 +430,169 @@ function LDFTabContent() {
   );
 }
 
-function ILRTabContent() {
-  const rows: { y: string; vals: (number | null)[] }[] = [
-    { y: "2020", vals: [1.4, 3.2, 9.4, 11.3, 12.8, 12.6, 10.3] },
-    { y: "2021", vals: [28.3, 7.1, 14.4, 32.5, 27.6, 23.5, 29.4] },
-    { y: "2022", vals: [3.5, 3.0, 17.6, 14.6, 14.5, 14.3, null] },
-    { y: "2023", vals: [12.6, 15.2, 26.9, 23.1, 30.8, null, null] },
-    { y: "2024", vals: [4.4, 16.3, 18.3, 22.8, null, null, null] },
-    { y: "2025", vals: [8.3, 34.9, 42.0, 60.3, 86.8, null, null] },
-  ];
-  const heat = (v: number) => {
-    if (v >= 80) return { bg: "#fee2e2", color: "#991b1b", w: 700 };
-    if (v >= 40) return { bg: "#ffedd5", color: "#c2410c", w: 600 };
-    if (v >= 25) return { bg: "#fef3c7", color: "#a16207", w: 500 };
-    if (v >= 12) return { bg: "#eaf0ff", color: "#1e40af", w: 500 };
-    return { bg: "transparent", color: "#64748b", w: 400 };
-  };
+function ILR() {
+  const rows: [string, (number | null)[]][] = [["2020", [1.4, 3.2, 9.4, 11.3, 12.8, 12.6, 10.3]], ["2021", [28.3, 7.1, 14.4, 32.5, 27.6, 23.5, 29.4]], ["2022", [3.5, 3.0, 17.6, 14.6, 14.5, 14.3, null]], ["2023", [12.6, 15.2, 26.9, 23.1, 30.8, null, null]], ["2024", [4.4, 16.3, 18.3, 22.8, null, null, null]], ["2025", [8.3, 34.9, 42.0, 60.3, 86.8, null, null]]];
+  const heat = (v: number) => v >= 80 ? { bg: "#fde2e0", c: "#9a2218", w: 800 } : v >= 40 ? { bg: "#fbe0c4", c: "#b8770a", w: 700 } : v >= 25 ? { bg: "var(--gold-soft)", c: "#b8770a", w: 600 } : v >= 12 ? { bg: "#eee9ff", c: "var(--violet)", w: 600 } : { bg: "transparent", c: "var(--muted)", w: 400 };
   return (
     <div>
       <div className="flex items-center gap-3 mb-4">
-        <span className="text-[11px] font-medium" style={{ color: "#64748b" }}>Hasar / (Prim × Düz.) %</span>
-        <div className="flex items-center gap-3 ml-auto">
-          {[
-            ["#eaf0ff", "Normal"],
-            ["#fef3c7", "Yüksek"],
-            ["#ffedd5", "Çok yüksek"],
-            ["#fee2e2", "Anomali"],
-          ].map(([c, l]) => (
-            <span key={l} className="flex items-center gap-1.5 text-[10.5px]" style={{ color: "#64748b" }}>
-              <span className="w-3 h-3 rounded-sm" style={{ background: c, border: "1px solid #e2e5ea" }} />
-              {l}
-            </span>
-          ))}
-        </div>
+        <span className="mono text-[11px]" style={{ color: "var(--muted)" }}>Hasar / (Prim × Düz.) %</span>
+        <div className="hidden sm:flex items-center gap-3 ml-auto">{[["#eee9ff", "Normal"], ["var(--gold-soft)", "Yüksek"], ["#fbe0c4", "Çok yüksek"], ["#fde2e0", "Anomali"]].map(([c, l]) => <span key={l} className="flex items-center gap-1.5 text-[10.5px]" style={{ color: "var(--muted)" }}><span className="w-3 h-3 rounded-sm" style={{ background: c, border: "1px solid var(--line)" }} />{l}</span>)}</div>
       </div>
       <div className="lcard p-3">
-        <table className="w-full text-[12px] mono tabular-nums" style={{ borderCollapse: "separate", borderSpacing: "2px" }}>
-          <thead>
-            <tr>
-              <th className="text-left px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wider" style={{ color: "#64748b" }}>Yıl</th>
-              {Array.from({ length: 7 }).map((_, i) => (
-                <th key={i} className="text-right px-2 py-1.5 text-[10px] font-semibold" style={{ color: "#64748b" }}>{i + 1}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.y}>
-                <td className="px-2 py-1.5 font-semibold text-[11.5px]" style={{ color: "#0f172a" }}>{r.y}</td>
-                {r.vals.map((v, j) =>
-                  v == null ? (
-                    <td key={j} className="text-right px-2 py-1.5 rounded" style={{ color: "#e2e5ea" }}>—</td>
-                  ) : (
-                    <td key={j} className="text-right px-2 py-1.5 rounded" style={{ background: heat(v).bg, color: heat(v).color, fontWeight: heat(v).w }}>
-                      {v.toFixed(1)}
-                    </td>
-                  ),
-                )}
-              </tr>
-            ))}
-          </tbody>
+        <table className="w-full text-[12px] mono" style={{ borderCollapse: "separate", borderSpacing: "2px" }}>
+          <thead><tr><th className="text-left px-2 py-1.5 text-[10px] tracking-wider" style={{ color: "var(--muted)" }}>YIL</th>{Array.from({ length: 7 }).map((_, i) => <th key={i} className="text-right px-2 py-1.5 text-[10px]" style={{ color: "var(--muted)" }}>{i + 1}</th>)}</tr></thead>
+          <tbody>{rows.map(([y, vals]) => <tr key={y}><td className="px-2 py-1.5 font-extrabold text-[11.5px]">{y}</td>{vals.map((v, j) => v == null ? <td key={j} className="text-right px-2 py-1.5" style={{ color: "var(--line-2)" }}>—</td> : <td key={j} className="text-right px-2 py-1.5 rounded" style={{ background: heat(v).bg, color: heat(v).c, fontWeight: heat(v).w }}>{v.toFixed(1)}</td>)}</tr>)}</tbody>
         </table>
       </div>
     </div>
   );
 }
 
-// ─── Cashflow preview ─────────────────────────────────────────────────────────
-
-function CashflowPreview() {
+function CashflowPanel() {
+  const data = [["2026Q2", 18, "1.840"], ["2026Q3", 32, "3.275"], ["2026Q4", 48, "4.910"], ["2027Q1", 62, "6.345"], ["2027Q2", 71, "7.265"], ["2027Q3", 58, "5.935"], ["2027Q4", 46, "4.705"], ["2028Q1", 36, "3.685"]] as [string, number, string][];
   return (
-    <div className="mock">
-      {/* breadcrumb */}
-      <div
-        className="px-6 py-2.5 flex items-center gap-2 text-[12px]"
-        style={{ borderBottom: "1px solid #e2e5ea", background: "#f6f7f9", color: "#64748b" }}
-      >
-        <span style={{ color: "#0f172a" }} className="font-medium">Nakit Akışı</span>
-        <span style={{ color: "#cbd1d9" }}>/</span>
-        <span>2026Q1</span>
-        <span style={{ color: "#cbd1d9" }}>/</span>
-        <span>Motor TPL</span>
-      </div>
-      <div className="p-6 bg-white">
-        <CFChartContent />
-      </div>
-    </div>
-  );
-}
-
-function CFChartContent() {
-  const data = [
-    { l: "2026Q2", p: 18, v: "1.840" },
-    { l: "2026Q3", p: 32, v: "3.275" },
-    { l: "2026Q4", p: 48, v: "4.910" },
-    { l: "2027Q1", p: 62, v: "6.345" },
-    { l: "2027Q2", p: 71, v: "7.265" },
-    { l: "2027Q3", p: 58, v: "5.935" },
-    { l: "2027Q4", p: 46, v: "4.705" },
-    { l: "2028Q1", p: 36, v: "3.685" },
-  ];
-  return (
-    <div>
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <div className="text-[15px] font-semibold" style={{ color: "#0f172a" }}>CF Pattern Projeksiyonu</div>
-          <div className="text-[11.5px] mt-0.5" style={{ color: "#64748b" }}>Rapor dönemi: 2026Q1 · Tüm origin yılları</div>
+    <PreviewFrame crumb={["Nakit Akışı", "2026Q1", "Motor TPL"]}>
+      <div className="p-5 md:p-6" style={{ background: "var(--card)" }}>
+        <div className="flex items-center justify-between mb-4">
+          <div><div className="text-[15px] font-extrabold">CF Pattern Projeksiyonu</div><div className="mono text-[11.5px] mt-0.5" style={{ color: "var(--muted)" }}>rapor: 2026Q1 · tüm origin</div></div>
+          <div className="flex gap-1.5"><span className="tag tag-gold" style={{ fontSize: 11 }}>Çeyreklik</span><span className="tag" style={{ fontSize: 11 }}>Aylık</span></div>
         </div>
-        <div className="flex items-center gap-1.5">
-          <span className="pill pill-info" style={{ fontSize: 11 }}>Çeyreklik</span>
-          <span className="text-[11px] font-medium px-2.5 py-1 rounded" style={{ background: "#f1f3f6", color: "#64748b" }}>Aylık</span>
-        </div>
-      </div>
-      <div className="space-y-2">
-        {data.map((b) => (
-          <div key={b.l} className="flex items-center gap-3 text-[12px]">
-            <span className="w-14 shrink-0 mono font-medium" style={{ color: "#475569" }}>{b.l}</span>
-            <div className="flex-1 h-5 rounded relative overflow-hidden" style={{ background: "#f1f3f6" }}>
-              <div className="absolute inset-y-0 left-0 rounded" style={{ width: `${b.p}%`, background: "#1d4ed8" }} />
-            </div>
-            <span className="w-14 text-right mono tabular-nums font-semibold" style={{ color: "#0f172a" }}>{b.v}</span>
-          </div>
-        ))}
-      </div>
-      <div className="mt-5 pt-4 grid grid-cols-3 gap-3" style={{ borderTop: "1px solid #e2e5ea" }}>
-        <div>
-          <div className="text-[10px] font-semibold uppercase tracking-wider mb-1" style={{ color: "#64748b" }}>Toplam</div>
-          <div className="text-[15px] font-bold tabular-nums mono" style={{ color: "#0f172a" }}>37.960 TL</div>
-        </div>
-        <div>
-          <div className="text-[10px] font-semibold uppercase tracking-wider mb-1" style={{ color: "#64748b" }}>Tepe</div>
-          <div className="text-[15px] font-bold tabular-nums mono" style={{ color: "#0f172a" }}>2027Q2</div>
-        </div>
-        <div>
-          <div className="text-[10px] font-semibold uppercase tracking-wider mb-1" style={{ color: "#64748b" }}>Ort. süre</div>
-          <div className="text-[15px] font-bold tabular-nums mono" style={{ color: "#0f172a" }}>5.4 ç.</div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Coming soon preview ──────────────────────────────────────────────────────
-
-function ComingSoonPreview({ module, eta }: { module: string; eta: string }) {
-  return (
-    <div className="mock" style={{ minHeight: 340, display: "flex", alignItems: "center", justifyContent: "center", padding: 48 }}>
-      <div className="text-center max-w-sm">
-        <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl mb-5" style={{ background: "#fef3c7" }}>
-          <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
-            <circle cx="12" cy="12" r="9" stroke="#b45309" strokeWidth="2" />
-            <path d="M12 7v5l3 2" stroke="#b45309" strokeWidth="2" strokeLinecap="round" />
-          </svg>
-        </div>
-        <div className="text-[20px] font-bold mb-2" style={{ color: "#0f172a" }}>
-          {module} modülü geliştiriliyor
-        </div>
-        <p className="text-[14px] leading-relaxed mb-5" style={{ color: "#64748b" }}>
-          Aktif geliştirme aşamasındayız. Pro plan kullanıcılarımız modül yayınlandığında otomatik
-          olarak erken erişim kazanır.
-        </p>
-        <div className="inline-flex items-center gap-2 text-[12.5px] font-semibold px-3 py-1.5 rounded-md" style={{ background: "#fef3c7", color: "#b45309", border: "1px solid #fde68a" }}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-            <path d="M12 6v6l4 2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-            <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" />
-          </svg>
-          Beklenen: {eta}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Agent Explorer (tab in ModuleExplorer) ──────────────────────────────────
-
-function AgentExplorerContent() {
-  return (
-    <div className="fi flex flex-col lg:flex-row gap-6 lg:items-start">
-      {/* Left: feature list */}
-      <div className="lg:w-72 shrink-0 space-y-3">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="h-8 w-8 rounded-lg grid place-items-center shrink-0" style={{ background: "#1d4ed8" }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-              <path d="M12 2a5 5 0 1 1 0 10A5 5 0 0 1 12 2zm0 13c-5.33 0-8 2.67-8 4v1h16v-1c0-1.33-2.67-4-8-4z" fill="white" />
-            </svg>
-          </div>
-          <div>
-            <div className="text-[15px] font-bold" style={{ color: "#0f172a" }}>AI Aktüer Agent</div>
-            <div className="text-[12px]" style={{ color: "#64748b" }}>Tüm modüllerde çalışır</div>
-          </div>
-        </div>
-        {[
-          { t: "Senaryo analizi", d: "Komutları doğrudan uygular" },
-          { t: "Sonuç yorumu", d: "IBNR & LR değişimini açıklar" },
-          { t: "Formül desteği", d: "A priori LR, tail model seçimi" },
-          { t: "Veri güvenliği", d: "Ham veri LLM'e iletilmez" },
-        ].map((f) => (
-          <div key={f.t} className="lcard px-4 py-3 flex items-start gap-3">
-            <div className="w-5 h-5 rounded flex items-center justify-center shrink-0 mt-0.5" style={{ background: "#eaf0ff" }}>
-              <CheckIcon color="#1d4ed8" size={11} />
-            </div>
-            <div>
-              <div className="text-[13px] font-semibold" style={{ color: "#0f172a" }}>{f.t}</div>
-              <div className="text-[12px]" style={{ color: "#64748b" }}>{f.d}</div>
-            </div>
-          </div>
-        ))}
-        <Link href="/reserve" className="btn-primary w-full justify-center mt-2">
-          Deneyin
-          <Arrow />
-        </Link>
-      </div>
-      {/* Right: chat mock same height as left */}
-      <div className="flex-1 min-w-0 flex flex-col">
-        <ChatPanelMock />
-      </div>
-    </div>
-  );
-}
-
-// ─── Agent (matches real ChatPanel) ───────────────────────────────────────────
-
-function AgentSection() {
-  return (
-    <section id="agent" className="py-24 md:py-28">
-      <div className="max-w-5xl mx-auto px-6 md:px-8">
-        {/* Centered header */}
-        <div className="text-center max-w-2xl mx-auto mb-10" data-rv>
-          <div className="eyebrow">AI Aktüer Agent</div>
-          <h2 className="text-[36px] md:text-[44px] font-bold tracking-tight mb-4" style={{ color: "#0f172a", letterSpacing: "-0.025em" }}>
-            Doğal dilde aktüer desteği
-          </h2>
-          <p className="text-[17px] leading-relaxed" style={{ color: "#475569" }}>
-            Tüm modüllerde çalışan tek Agent. Soru sorun, senaryo çalıştırın, sonucu yorumlayın —
-            veya uygulamayı doğrudan Agent&apos;a bırakın.
-          </p>
-        </div>
-
-        {/* Feature chips */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-10" data-rv data-rvd={0.05}>
-          {[
-            { t: "Senaryo analizi", d: "Komutları doğrudan uygular" },
-            { t: "Sonuç yorumu", d: "IBNR & LR değişimini açıklar" },
-            { t: "Formül desteği", d: "A priori LR, tail model seçimi" },
-            { t: "Veri güvenliği", d: "Ham veri LLM&apos;e iletilmez" },
-          ].map((f) => (
-            <div key={f.t} className="lcard px-4 py-3 flex items-start gap-3">
-              <div className="w-6 h-6 rounded flex items-center justify-center shrink-0 mt-0.5" style={{ background: "#eaf0ff" }}>
-                <CheckIcon color="#1d4ed8" size={11} />
+        <div className="space-y-2">
+          {data.map(([l, p, v], i) => (
+            <div key={l} className="flex items-center gap-3 text-[12px]">
+              <span className="w-14 shrink-0 mono font-medium" style={{ color: "var(--ink-2)" }}>{l}</span>
+              <div className="flex-1 h-5 rounded relative overflow-hidden" style={{ background: "var(--paper)" }}>
+                <div className="cfb absolute inset-y-0 left-0 rounded" style={{ width: `${p}%`, background: i === 4 ? "var(--gold-2)" : "var(--violet-2)", animationDelay: `${i * 60}ms` }} />
               </div>
-              <div>
-                <div className="text-[13px] font-semibold mb-0.5" style={{ color: "#0f172a" }}>{f.t}</div>
-                <div className="text-[12px]" style={{ color: "#64748b" }} dangerouslySetInnerHTML={{ __html: f.d }} />
-              </div>
+              <span className="w-14 text-right mono font-extrabold">{v}</span>
             </div>
           ))}
         </div>
+        <div className="mt-5 pt-4 grid grid-cols-3 gap-3" style={{ borderTop: "1px solid var(--line)" }}>{[["TOPLAM", "37.960 TL"], ["TEPE", "2027Q2"], ["ORT. SÜRE", "5.4 ç."]].map(([k, v]) => <div key={k}><div className="kick" style={{ fontSize: 10, color: "var(--muted)" }}>{k}</div><div className="mono text-[15px] font-extrabold mt-1">{v}</div></div>)}</div>
+        <style>{`.lp .cfb{transform-origin:left;animation:cfg .8s cubic-bezier(.16,1,.3,1) backwards}@keyframes cfg{from{transform:scaleX(0)}to{transform:scaleX(1)}}@media(prefers-reduced-motion:reduce){.lp .cfb{animation:none}}`}</style>
+      </div>
+    </PreviewFrame>
+  );
+}
 
-        {/* Chat panel — centered, wider */}
-        <div data-rv data-rvd={0.1}>
-          <ChatPanelMock />
+function SoonPanel({ module, eta, desc }: { module: string; eta: string; desc: string }) {
+  return (
+    <PreviewFrame crumb={[module, "geliştiriliyor"]}>
+      <div className="grid place-items-center" style={{ minHeight: 320, padding: 40, background: "var(--card)" }}>
+        <div className="text-center max-w-sm">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl mb-5" style={{ background: "var(--gold-soft)" }}><svg width="26" height="26" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#b8770a" strokeWidth="2" /><path d="M12 7v5l3 2" stroke="#b8770a" strokeWidth="2" strokeLinecap="round" /></svg></div>
+          <div className="text-[19px] font-extrabold mb-2">{module} modülü yolda</div>
+          <p className="text-[14px] leading-relaxed mb-5" style={{ color: "var(--ink-2)" }}>{desc}</p>
+          <span className="tag tag-gold">Beklenen: {eta}</span>
         </div>
+      </div>
+    </PreviewFrame>
+  );
+}
+
+// ─── Agent (indigo band) ──────────────────────────────────────────────────────
+
+function Agent() {
+  return (
+    <section id="agent" className="drench py-20 md:py-28">
+      <span className="blob b1" style={{ top: "-160px", left: "55%" }} /><span className="blob b3" style={{ bottom: "-180px", left: "5%" }} /><span className="grain" />
+      <div className="relative mx-auto max-w-[1180px] px-6 md:px-8 grid lg:grid-cols-[1fr_1.05fr] gap-10 lg:gap-14 items-center">
+        <div data-rv>
+          <span className="tag tag-onc">AI AKTÜER AGENT</span>
+          <h2 className="h2 mt-5" style={{ color: "#fff" }}>Bir araç değil,<br />ekibinize katılan <span style={{ color: "var(--gold-2)" }}>bir aktüer</span></h2>
+          <p className="mt-5 text-[16.5px] leading-relaxed" style={{ color: "var(--on-color-2)", maxWidth: "50ch" }}>
+            Tüm modülleri gören tek agent. Doğal dilde isteyin — senaryoyu hesaplar, hücreyi eler,
+            BF&apos;e geçirir, sonucu yorumlar. Yazma işlemleri doğrudan ekranınıza uygulanır.
+          </p>
+          <ul className="mt-7 space-y-3.5">
+            {[["Doğal dilde komut", "“2024'ü BF'e al, vw(2021:2023) uygula” — ve uygulanır."], ["Sonuç yorumu", "IBNR ve loss ratio değişimini gerekçesiyle açıklar."], ["Veri güvenliği", "Ham üçgen LLM'e iletilmez; yalnızca agrega sonuçlar."]].map(([t, d]) => (
+              <li key={t} className="flex items-start gap-3"><span className="mt-1 mono text-[13px] font-extrabold shrink-0" style={{ color: "var(--gold-2)" }}>›</span><span><span className="text-[14.5px] font-bold" style={{ color: "#fff" }}>{t}</span><span className="text-[14px]" style={{ color: "var(--on-color-2)" }}> — {d}</span></span></li>
+            ))}
+          </ul>
+          <Link href="/reserve" className="btn btn-gold mt-8">Agent&apos;ı deneyin <Arrow /></Link>
+        </div>
+        <div data-rv data-rvd={0.08}><Terminal /></div>
       </div>
     </section>
   );
 }
 
 type Msg = { role: "user" | "agent"; text: string };
+const SCRIPT: Msg[] = [
+  { role: "user", text: "2024 ve 2025 için BF kullansak toplam IBNR kaç değişir?" },
+  { role: "agent", text: "BF basis'e geçince toplam IBNR 107,1M TL'den 94,3M TL'ye düşüyor (−12,8M, %12).\n\nA priori LR olarak vw(2021–2023) = %68,4 hesaplandı. 2024 origin için ultimate 184,6M, 2025 için 156,2M.\n\nUygulamamı ister misiniz?" },
+  { role: "user", text: "Evet, uygula." },
+  { role: "agent", text: "Tamamlandı.\n\n• 2024–2025 BF basis'e geçirildi\n• Selected IBNR: 94,3M TL\n• Toplam ultimate: 542,7M TL" },
+];
 
-function ChatPanelMock() {
-  const ALL: Msg[] = [
-    { role: "user", text: "2024 ve 2025 için BF kullansak toplam IBNR kaç değişir?" },
-    {
-      role: "agent",
-      text: "BF basis'e geçince toplam IBNR 107,1M TL'den 94,3M TL'ye düşüyor (−12,8M, %12).\n\nA priori LR olarak vw(2021–2023) = %68,4 hesaplandı. 2024 origin yılı için ultimate 184,6M, 2025 için 156,2M.\n\nUygulamamı ister misiniz?",
-    },
-    { role: "user", text: "Evet, uygula." },
-    {
-      role: "agent",
-      text: "Tamamlandı.\n\n• 2024–2025 BF basis'e geçirildi\n• Selected IBNR: 94,3M TL\n• Toplam ultimate: 542,7M TL",
-    },
-  ];
-
+function Terminal() {
   const [shown, setShown] = useState<Msg[]>([]);
   const [typing, setTyping] = useState(false);
   const [partial, setPartial] = useState("");
-  const aliveRef = useRef(true);
-  const scrollRef = useRef<HTMLDivElement>(null);
-
+  const alive = useRef(true);
+  const scroll = useRef<HTMLDivElement>(null);
+  useEffect(() => { const el = scroll.current; if (el) el.scrollTop = el.scrollHeight; }, [shown, typing, partial]);
   useEffect(() => {
-    const el = scrollRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [shown, typing, partial]);
-
-  useEffect(() => {
-    aliveRef.current = true;
+    alive.current = true;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const timers: ReturnType<typeof setTimeout>[] = [];
-    const wait = (ms: number) =>
-      new Promise<void>((r) => {
-        const id = setTimeout(() => {
-          if (aliveRef.current) r();
-        }, ms);
-        timers.push(id);
-      });
-    const typeOut = async (text: string, speed = 14) => {
-      for (let i = 1; i <= text.length; i++) {
-        if (!aliveRef.current) return;
-        setPartial(text.slice(0, i));
-        await wait(speed);
-      }
-    };
+    const wait = (ms: number) => new Promise<void>((r) => { const id = setTimeout(() => alive.current && r(), ms); timers.push(id); });
+    const type = async (t: string, s = 13) => { if (reduce) { setPartial(t); return; } for (let i = 1; i <= t.length; i++) { if (!alive.current) return; setPartial(t.slice(0, i)); await wait(s); } };
     (async function loop() {
-      while (aliveRef.current) {
-        setShown([]);
-        setPartial("");
-        setTyping(false);
-        await wait(700);
-        for (let i = 0; i < ALL.length; i++) {
-          if (!aliveRef.current) return;
-          const m = ALL[i];
-          if (m.role === "user") {
-            setShown((p) => [...p, m]);
-            await wait(900);
-          } else {
-            setTyping(true);
-            await wait(700);
-            setTyping(false);
-            await typeOut(m.text);
-            setShown((p) => [...p, m]);
-            setPartial("");
-            await wait(900);
-          }
+      while (alive.current) {
+        setShown([]); setPartial(""); setTyping(false); await wait(700);
+        for (const m of SCRIPT) {
+          if (!alive.current) return;
+          if (m.role === "user") { setShown((p) => [...p, m]); await wait(900); }
+          else { setTyping(true); await wait(700); setTyping(false); await type(m.text); setShown((p) => [...p, m]); setPartial(""); await wait(900); }
         }
-        await wait(6000);
+        await wait(5500);
       }
     })();
-    return () => {
-      aliveRef.current = false;
-      timers.forEach(clearTimeout);
-    };
+    return () => { alive.current = false; timers.forEach(clearTimeout); };
   }, []);
-
   return (
-    <div className="lcard" style={{ overflow: "hidden", boxShadow: "0 20px 50px rgba(15,23,42,.08)", width: "100%", display: "flex", flexDirection: "column", height: 400 }}>
-      {/* Header — matches ChatPanel */}
-      <div className="flex items-center gap-3 px-4 h-14" style={{ borderBottom: "1px solid #e2e5ea" }}>
-        <div className="flex items-center gap-2.5 flex-1">
-          <div className="h-7 w-7 rounded-lg grid place-items-center" style={{ background: "#1d4ed8" }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-              <path d="M12 2a5 5 0 1 1 0 10A5 5 0 0 1 12 2zm0 13c-5.33 0-8 2.67-8 4v1h16v-1c0-1.33-2.67-4-8-4z" fill="white" />
-            </svg>
-          </div>
-          <span className="text-sm font-semibold tracking-tight" style={{ color: "#0f172a" }}>Actuarius</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <select
-            disabled
-            className="h-6 rounded-md text-[11px] px-1.5 outline-none"
-            style={{ background: "#f1f3f6", border: "1px solid #e2e5ea", color: "#475569" }}
-            defaultValue="claude-sonnet"
-          >
-            <option>Claude Sonnet 4.6</option>
-          </select>
-        </div>
+    <div className="term" style={{ display: "flex", flexDirection: "column", height: 430, boxShadow: "0 40px 80px -36px rgba(0,0,0,.6)" }}>
+      <div className="term-h flex items-center gap-2.5 px-4 h-12">
+        <div className="h-6 w-6 rounded-md grid place-items-center" style={{ background: "var(--gold-2)" }}><AgentGlyph s={13} c="#3b2606" /></div>
+        <span className="text-[13px] font-extrabold" style={{ color: "#fff" }}>Actuarius</span>
+        <span className="mono ml-auto text-[10.5px] px-2 py-0.5 rounded" style={{ background: "rgba(255,255,255,.1)", color: "#c5c2ec" }}>Motor TPL · 2025Q4</span>
       </div>
-
-      {/* Active context strip — matches ChatPanel */}
-      <div className="flex items-center gap-2 px-4 h-8 text-xs" style={{ borderBottom: "1px solid #e2e5ea", background: "#f1f3f6", color: "#475569" }}>
-        <span className="font-medium" style={{ color: "#0f172a" }}>Motor TPL</span>
-        <span style={{ color: "#cbd1d9" }}>·</span>
-        <span>2025Q4</span>
-        <span style={{ color: "#cbd1d9" }}>·</span>
-        <span>Yıllık</span>
+      <div ref={scroll} className="p-4 space-y-4 flex-1 overflow-y-auto">
+        {shown.map((m, i) => <Bubble key={i} m={m} />)}
+        {typing && <div className="flex items-center gap-2"><div className="h-6 w-6 rounded-full grid place-items-center shrink-0" style={{ background: "var(--gold-2)" }}><AgentGlyph s={12} c="#3b2606" /></div><div className="bub-a rounded-2xl px-4 py-3 flex items-center gap-1" style={{ borderTopLeftRadius: 4 }}><span className="bdot" /><span className="bdot" /><span className="bdot" /></div></div>}
+        {partial && <div className="flex justify-start"><div className="flex items-start w-full"><div className="h-6 w-6 rounded-full grid place-items-center shrink-0 mt-0.5 mr-2" style={{ background: "var(--gold-2)" }}><AgentGlyph s={12} c="#3b2606" /></div><div className="bub-a max-w-[85%] rounded-2xl px-4 py-2.5 text-[13.5px] leading-relaxed whitespace-pre-wrap" style={{ borderTopLeftRadius: 4 }}>{partial}<span className="cur" /></div></div></div>}
       </div>
-
-      {/* Messages */}
-      <div ref={scrollRef} className="p-4 space-y-5 flex-1 overflow-y-auto overflow-x-hidden">
-        {shown.map((m, i) => (
-          <ChatBubble key={i} msg={m} />
-        ))}
-        {typing && (
-          <div className="flex items-center gap-2">
-            <div className="h-6 w-6 rounded-full grid place-items-center shrink-0" style={{ background: "#1d4ed8" }}>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-                <path d="M12 2a5 5 0 1 1 0 10A5 5 0 0 1 12 2zm0 13c-5.33 0-8 2.67-8 4v1h16v-1c0-1.33-2.67-4-8-4z" fill="white" />
-              </svg>
-            </div>
-            <div className="rounded-2xl px-4 py-3 flex items-center gap-1" style={{ background: "#f1f3f6", border: "1px solid #e2e5ea", borderTopLeftRadius: 4 }}>
-              <span className="bdot" />
-              <span className="bdot" />
-              <span className="bdot" />
-            </div>
-          </div>
-        )}
-        {partial && (
-          <div className="flex justify-start w-full">
-            <div className="flex items-start gap-0 min-w-0 w-full">
-              <div className="h-6 w-6 rounded-full grid place-items-center shrink-0 mt-0.5 mr-2" style={{ background: "#1d4ed8" }}>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-                  <path d="M12 2a5 5 0 1 1 0 10A5 5 0 0 1 12 2zm0 13c-5.33 0-8 2.67-8 4v1h16v-1c0-1.33-2.67-4-8-4z" fill="white" />
-                </svg>
-              </div>
-              <div className="max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap" style={{ background: "#f1f3f6", border: "1px solid #e2e5ea", color: "#0f172a", borderTopLeftRadius: 4 }}>
-                {partial}
-                <span className="cursor" />
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Input — matches ChatPanel */}
-      <div className="px-4 py-3 shrink-0" style={{ borderTop: "1px solid #e2e5ea" }}>
-        <div className="flex items-end gap-2">
-          <div className="flex-1 rounded-md px-3 py-2 text-[13px]" style={{ background: "#fff", border: "1px solid #e2e5ea", color: "#94a3b8" }}>
-            Bir soru sorun veya komut verin…
-          </div>
-          <button className="shrink-0 h-[38px] w-[38px] rounded-lg grid place-items-center" style={{ background: "#1d4ed8" }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-              <path d="m5 12 14-7-3.5 19L12 13 5 12Z" stroke="white" strokeWidth="1.8" strokeLinejoin="round" />
-            </svg>
-          </button>
-        </div>
-        <div className="text-[10px] mt-1.5 text-right" style={{ color: "#94a3b8" }}>
-          Enter ile gönder · Shift+Enter yeni satır
+      <div className="px-4 py-3" style={{ borderTop: "1px solid rgba(255,255,255,.12)" }}>
+        <div className="flex items-center gap-2">
+          <div className="flex-1 rounded-lg px-3 py-2 text-[12.5px] mono" style={{ background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.14)", color: "#9a96c9" }}>komut verin…</div>
+          <button className="h-9 w-9 rounded-lg grid place-items-center shrink-0" style={{ background: "var(--gold-2)" }} aria-label="Gönder"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="m5 12 14-7-3.5 19L12 13 5 12Z" stroke="#3b2606" strokeWidth="1.8" strokeLinejoin="round" /></svg></button>
         </div>
       </div>
     </div>
   );
 }
 
-function ChatBubble({ msg }: { msg: Msg }) {
-  if (msg.role === "user") {
-    return (
-      <div className="flex justify-end w-full">
-        <div className="max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap" style={{ background: "#1d4ed8", color: "#fff", borderTopRightRadius: 4 }}>
-          {msg.text}
-        </div>
-      </div>
-    );
-  }
-  return (
-    <div className="flex justify-start w-full">
-      <div className="flex items-start gap-0 min-w-0 w-full">
-        <div className="h-6 w-6 rounded-full grid place-items-center shrink-0 mt-0.5 mr-2" style={{ background: "#1d4ed8" }}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-            <path d="M12 2a5 5 0 1 1 0 10A5 5 0 0 1 12 2zm0 13c-5.33 0-8 2.67-8 4v1h16v-1c0-1.33-2.67-4-8-4z" fill="white" />
-          </svg>
-        </div>
-        <div className="max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap" style={{ background: "#f1f3f6", border: "1px solid #e2e5ea", color: "#0f172a", borderTopLeftRadius: 4 }}>
-          {msg.text}
-        </div>
-      </div>
-    </div>
-  );
+function Bubble({ m }: { m: Msg }) {
+  if (m.role === "user") return <div className="flex justify-end"><div className="bub-u max-w-[85%] rounded-2xl px-4 py-2.5 text-[13.5px] leading-relaxed whitespace-pre-wrap" style={{ borderTopRightRadius: 4 }}>{m.text}</div></div>;
+  return <div className="flex justify-start"><div className="flex items-start w-full"><div className="h-6 w-6 rounded-full grid place-items-center shrink-0 mt-0.5 mr-2" style={{ background: "var(--gold-2)" }}><AgentGlyph s={12} c="#3b2606" /></div><div className="bub-a max-w-[85%] rounded-2xl px-4 py-2.5 text-[13.5px] leading-relaxed whitespace-pre-wrap" style={{ borderTopLeftRadius: 4 }}>{m.text}</div></div></div>;
 }
 
 // ─── Security ─────────────────────────────────────────────────────────────────
 
 function Security() {
-  const items = [
-    { icon: <LockBigIcon />, t: "Şifreli depolama", d: "Veriler Cloudflare D1 üzerinde şifreli olarak saklanır. Bağlantılar TLS 1.3 ile korunur." },
-    { icon: <ShieldIcon />, t: "Firebase Authentication", d: "Endüstri standardı kimlik doğrulama. Google ile giriş ve şifre tabanlı seçenekler." },
-    { icon: <EyeOffIcon />, t: "Ham veri LLM'e gitmez", d: "AI Agent yalnızca agrega sonuçlara (LDF, CDF, IBNR) erişir. Ham üçgen verisi dış servise iletilmez." },
-    { icon: <ServerIcon />, t: "Veri izolasyonu", d: "Her kullanıcının verisi izole edilir. Enterprise plana özel on-premise kurulum mevcuttur." },
-  ];
+  const items = [[<LockIcon key="l" />, "Şifreli depolama", "Cloudflare D1 üzerinde şifreli; bağlantılar TLS 1.3."], [<ShieldIcon key="s" />, "Firebase Auth", "Endüstri standardı kimlik doğrulama — Google veya şifre."], [<EyeIcon key="e" />, "Ham veri LLM'e gitmez", "Agent yalnızca agrega sonuçları (LDF, CDF, IBNR) görür."], [<ServerIcon key="v" />, "Veri izolasyonu", "Her kullanıcı izole; Enterprise'da on-premise kurulum."]] as [ReactNode, string, string][];
   return (
-    <section id="security" className="py-24 md:py-28" style={{ background: "#f6f7f9", borderTop: "1px solid #e2e5ea", borderBottom: "1px solid #e2e5ea" }}>
-      <div className="max-w-6xl mx-auto px-6 md:px-8">
-        <div className="text-center max-w-2xl mx-auto mb-12" data-rv>
-          <div className="eyebrow">Güvenlik</div>
-          <h2 className="text-[32px] md:text-[40px] font-bold tracking-tight mb-4" style={{ color: "#0f172a", letterSpacing: "-0.025em" }}>
-            Verileriniz güvende
-          </h2>
-          <p className="text-[16px] leading-relaxed" style={{ color: "#475569" }}>
-            Aktüeryal veri hassastır. Actuarius&apos;ı güvenliği önceleyerek inşa ettik —
-            şifreleme, kimlik doğrulama ve veri izolasyonu temel mimaride.
-          </p>
+    <section id="security" className="py-20 md:py-28" style={{ background: "var(--paper)" }}>
+      <div className="mx-auto max-w-[1180px] px-6 md:px-8 grid lg:grid-cols-[0.8fr_1.2fr] gap-10 lg:gap-16 items-start">
+        <div data-rv>
+          <div className="kick" style={{ color: "var(--violet-2)" }}>GÜVENLİK</div>
+          <h2 className="h2 mt-3">Aktüeryal veri hassastır.<br />Mimari buna göre.</h2>
+          <p className="lede mt-5 text-[16px]" style={{ maxWidth: "44ch" }}>Şifreleme, kimlik doğrulama ve veri izolasyonu sonradan eklenmiş değil — temel mimarinin parçası.</p>
         </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          {items.map((it, i) => (
-            <div key={it.t} data-rv data-rvd={i * 0.06} className="lcard lcard-h p-6 flex items-start gap-4">
-              <div className="w-11 h-11 rounded-lg flex items-center justify-center shrink-0" style={{ background: "#eaf0ff" }}>
-                {it.icon}
-              </div>
-              <div>
-                <div className="text-[15px] font-semibold mb-1.5" style={{ color: "#0f172a" }}>{it.t}</div>
-                <div className="text-[13.5px] leading-relaxed" style={{ color: "#475569" }}>{it.d}</div>
-              </div>
-            </div>
-          ))}
+        <div className="grid sm:grid-cols-2 gap-x-10 gap-y-8" data-rv data-rvd={0.06}>
+          {items.map(([ic, t, d]) => <div key={t} className="flex items-start gap-3.5"><div className="w-10 h-10 rounded-[11px] grid place-items-center shrink-0" style={{ background: "#eee9ff" }}>{ic}</div><div><div className="text-[15px] font-extrabold mb-1">{t}</div><div className="text-[13.5px] leading-relaxed" style={{ color: "var(--ink-2)" }}>{d}</div></div></div>)}
         </div>
       </div>
     </section>
@@ -1282,132 +602,41 @@ function Security() {
 // ─── Pricing ──────────────────────────────────────────────────────────────────
 
 const PLANS = [
-  {
-    name: "Free",
-    price: "₺0",
-    sub: "Kalıcı ücretsiz",
-    desc: "Küçük portföyler ve platformu keşfetmek için.",
-    cta: "Ücretsiz Başla",
-    href: "/reserve",
-    featured: false,
-    features: [
-      { v: "Rezerv modülü", n: "1 dönem · 1 branş" },
-      { v: "Chain-Ladder & BF", n: "İki temel yöntem" },
-      { v: "AI Aktüer Agent", n: "Sınırsız mesaj" },
-      { v: "Excel export", n: "Temel format" },
-    ],
-    missing: ["Parametrik tail fitting", "Nakit akışı modülü", "Sınırsız dönem & branş"],
-  },
-  {
-    name: "Pro",
-    price: "₺100",
-    sub: "/ ay",
-    desc: "Profesyonel aktüerler için tam kapsamlı.",
-    cta: "Pro'ya Geç",
-    href: "/onboarding/plan",
-    featured: true,
-    features: [
-      { v: "Sınırsız dönem & branş", n: "Limit yok" },
-      { v: "Parametrik tail fitting", n: "4 model" },
-      { v: "Nakit akışı modülü", n: "CDF tabanlı CF" },
-      { v: "AI Aktüer Agent", n: "Sınırsız" },
-      { v: "Erken erişim", n: "IFRS 17 & İskonto" },
-      { v: "Gelişmiş Excel export", n: "Çok sayfalı rapor" },
-      { v: "Öncelikli destek", n: "" },
-    ],
-    missing: [],
-  },
-  {
-    name: "Enterprise",
-    price: "Özel",
-    sub: "Talebe göre",
-    desc: "Ekip kullanımı, özel entegrasyon ve SLA.",
-    cta: "İletişime Geç",
-    href: "mailto:demireleren877@gmail.com",
-    featured: false,
-    features: [
-      { v: "Pro'nun tüm özellikleri", n: "Tam erişim" },
-      { v: "Çoklu kullanıcı & roller", n: "Sınırsız" },
-      { v: "SSO / SAML", n: "Kurumsal kimlik" },
-      { v: "On-premise / özel cloud", n: "İsteğe bağlı" },
-      { v: "API erişimi", n: "REST & webhook" },
-      { v: "Özel SLA", n: "" },
-    ],
-    missing: [],
-  },
-];
+  { name: "Free", price: "₺0", sub: "kalıcı ücretsiz", desc: "Küçük portföyler ve keşif için.", cta: "Ücretsiz başla", href: "/reserve", feat: false, f: [["Rezerv modülü", "1 dönem · 1 branş"], ["Chain-Ladder & BF", "İki yöntem"], ["AI Agent", "Sınırsız mesaj"], ["Excel export", "Temel"]], miss: ["Parametrik tail fitting", "Nakit akışı modülü", "Sınırsız dönem & branş"] },
+  { name: "Pro", price: "₺100", sub: "/ ay", desc: "Profesyonel aktüerler için tam kapsam.", cta: "Pro'ya geç", href: "/onboarding/plan", feat: true, f: [["Sınırsız dönem & branş", "Limit yok"], ["Parametrik tail fitting", "4 model"], ["Nakit akışı modülü", "CDF tabanlı"], ["AI Agent", "Sınırsız"], ["Erken erişim", "IFRS 17 & İskonto"], ["Gelişmiş export", "Çok sayfalı"], ["Öncelikli destek", ""]], miss: [] },
+  { name: "Enterprise", price: "Özel", sub: "talebe göre", desc: "Ekip, entegrasyon ve SLA.", cta: "İletişime geç", href: "mailto:demireleren877@gmail.com", feat: false, f: [["Pro'nun tümü", "Tam erişim"], ["Çoklu kullanıcı & roller", "Sınırsız"], ["SSO / SAML", "Kurumsal"], ["On-premise", "İsteğe bağlı"], ["API erişimi", "REST & webhook"], ["Özel SLA", ""]], miss: [] },
+] as const;
 
 function Pricing() {
   return (
-    <section id="pricing" className="py-24 md:py-28">
-      <div className="max-w-6xl mx-auto px-6 md:px-8">
-        <div className="text-center max-w-2xl mx-auto mb-14" data-rv>
-          <div className="eyebrow">Fiyatlandırma</div>
-          <h2 className="text-[36px] md:text-[44px] font-bold tracking-tight mb-4" style={{ color: "#0f172a", letterSpacing: "-0.025em" }}>
-            Şeffaf ve esnek fiyatlandırma
-          </h2>
-          <p className="text-[17px] leading-relaxed" style={{ color: "#475569" }}>
-            Free planla ücretsiz başlayın. İhtiyacınız arttığında Pro&apos;ya geçin, dilediğiniz
-            zaman değiştirin. Aylık abonelik, gizli ücret yok.
-          </p>
+    <section id="pricing" className="py-20 md:py-28" style={{ background: "var(--paper-2)" }}>
+      <div className="mx-auto max-w-[1180px] px-6 md:px-8">
+        <div className="max-w-2xl mb-12" data-rv>
+          <div className="kick" style={{ color: "var(--violet-2)" }}>FİYAT</div>
+          <h2 className="h2 mt-3">Şeffaf, esnek</h2>
+          <p className="lede mt-4 text-[16.5px]" style={{ maxWidth: "52ch" }}>Free planla ücretsiz başlayın; ihtiyaç arttığında Pro&apos;ya geçin. Aylık abonelik, gizli ücret yok.</p>
         </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
-          {PLANS.map((p, i) => (
-            <div key={p.name} data-rv data-rvd={i * 0.08}>
-              <PlanCard {...p} />
-            </div>
-          ))}
-        </div>
+        <div className="grid lg:grid-cols-3 gap-5 items-stretch">{PLANS.map((p, i) => <div key={p.name} data-rv data-rvd={i * 0.06}><Plan p={p} /></div>)}</div>
       </div>
     </section>
   );
 }
 
-function PlanCard({ name, price, sub, desc, cta, href, featured, features, missing }: (typeof PLANS)[number]) {
+function Plan({ p }: { p: (typeof PLANS)[number] }) {
+  const { name, price, sub, desc, cta, href, feat, f, miss } = p;
   return (
-    <div className={"lcard p-7 flex flex-col h-full " + (featured ? "plan-featured" : "")} style={{ background: "#fff" }}>
-      <div className="mb-5">
-        <div className="text-[14px] font-semibold mb-3" style={{ color: featured ? "#1d4ed8" : "#475569" }}>
-          {name}
-        </div>
-        <div className="flex items-baseline gap-2 mb-2">
-          <span className="text-[40px] font-bold tabular-nums" style={{ color: "#0f172a", letterSpacing: "-0.03em" }}>{price}</span>
-          {sub && <span className="text-[13px]" style={{ color: "#64748b" }}>{sub}</span>}
-        </div>
-        <p className="text-[13.5px] leading-relaxed" style={{ color: "#475569" }}>{desc}</p>
+    <div className="rounded-[16px] p-7 flex flex-col h-full relative drench" style={feat ? {} : { background: "var(--card)", border: "1px solid var(--line)" }}>
+      {feat && <><span className="blob b1" style={{ width: 360, height: 360, top: -120, left: -60 }} /><span className="grain" /></>}
+      {feat && <span className="absolute -top-3 left-7 mono text-[10.5px] font-extrabold tracking-wider px-2.5 py-1 rounded" style={{ background: "var(--gold-2)", color: "#3b2606", zIndex: 1 }}>ÖNERİLEN</span>}
+      <div className="relative mb-5">
+        <div className="text-[14px] font-extrabold mb-3" style={{ color: feat ? "var(--gold-2)" : "var(--ink-2)" }}>{name}</div>
+        <div className="flex items-baseline gap-2 mb-2"><span className="mono text-[36px] font-extrabold" style={{ letterSpacing: "-0.02em", color: feat ? "#fff" : "var(--ink)" }}>{price}</span>{sub && <span className="text-[13px]" style={{ color: feat ? "var(--on-color-2)" : "var(--muted)" }}>{sub}</span>}</div>
+        <p className="text-[13.5px] leading-relaxed" style={{ color: feat ? "var(--on-color-2)" : "var(--ink-2)" }}>{desc}</p>
       </div>
-
-      <Link
-        href={href}
-        className="block text-center py-2.5 rounded-md text-[14px] font-semibold mb-6"
-        style={{
-          background: featured ? "#1d4ed8" : "#fff",
-          color: featured ? "#fff" : "#0f172a",
-          border: featured ? "1px solid #1d4ed8" : "1px solid #cbd1d9",
-        }}
-      >
-        {cta}
-      </Link>
-
-      <div className="space-y-3 flex-1">
-        {features.map((f) => (
-          <div key={f.v} className="flex items-start gap-2.5">
-            <CheckIcon color="#1d4ed8" size={14} />
-            <div>
-              <div className="text-[13.5px] font-medium" style={{ color: "#0f172a" }}>{f.v}</div>
-              {f.n && <div className="text-[12px]" style={{ color: "#64748b" }}>{f.n}</div>}
-            </div>
-          </div>
-        ))}
-        {missing.map((f) => (
-          <div key={f} className="flex items-start gap-2.5" style={{ color: "#9ca3af" }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="mt-0.5 shrink-0">
-              <path d="M6 12h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-            </svg>
-            <div className="text-[13.5px]">{f}</div>
-          </div>
-        ))}
+      <Link href={href} className={"btn justify-center mb-6 relative " + (feat ? "btn-gold" : "btn-outline")} style={{ width: "100%" }}>{cta}</Link>
+      <div className="relative space-y-3 flex-1">
+        {f.map(([v, n]) => <div key={v} className="flex items-start gap-2.5"><Check color={feat ? "var(--gold-2)" : "var(--violet-2)"} /><div><div className="text-[13.5px] font-bold" style={{ color: feat ? "#fff" : "var(--ink)" }}>{v}</div>{n && <div className="text-[12px]" style={{ color: feat ? "#a59fd6" : "var(--muted)" }}>{n}</div>}</div></div>)}
+        {miss.map((m) => <div key={m} className="flex items-start gap-2.5" style={{ color: "#9aa3b2" }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="mt-0.5 shrink-0"><path d="M6 12h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg><div className="text-[13.5px]">{m}</div></div>)}
       </div>
     </div>
   );
@@ -1415,78 +644,58 @@ function PlanCard({ name, price, sub, desc, cta, href, featured, features, missi
 
 // ─── FAQ ──────────────────────────────────────────────────────────────────────
 
-const FAQ_ITEMS = [
-  {
-    q: "Actuarius nedir ve kimler için tasarlandı?",
-    a: "Actuarius, sigorta aktüerlerinin günlük iş akışını tek platforma taşıyan bir SaaS ürünüdür. Hasar rezervi hesaplayan aktüerlerden IFRS 17 raporlaması yapan ekiplere kadar — Excel'den ve sayfalar arası manuel veri taşımaktan kurtulmak isteyen profesyonel aktüerler için.",
-  },
-  {
-    q: "Şu anda hangi modüller kullanılabilir?",
-    a: "Rezerv Analizi ve Nakit Akışı modülleri tam aktiftir. Rezerv modülünde Chain-Ladder, Bornhuetter–Ferguson, 4 parametrik tail modeli (Exponential, Inverse Power, Power, Weibull), ILR ısı haritası ve AI Agent yer alır. Nakit Akışı modülü rezerv sonuçlarınızdan CDF tabanlı CF pattern üretir ve çeyreklik/aylık projeksiyon verir.",
-  },
-  {
-    q: "IFRS 17 ve İskonto modülleri ne zaman hazır olacak?",
-    a: "Her iki modül de aktif geliştirme aşamasındadır. IFRS 17 modülü GMM, PAA ve VFA yaklaşımlarını, CSM amortismanını ve risk düzeltmesini destekleyecek. İskonto modülü risk-free eğri, yield curve uygulaması ve IFRS 17 ile entegre iskonto sunacak. Pro plan kullanıcılarımız her iki modüle erken erişim kazanır.",
-  },
-  {
-    q: "Verilerim güvende mi? Yapay zeka verilere erişiyor mu?",
-    a: "Verileriniz Cloudflare D1 üzerinde şifreli olarak saklanır ve bağlantılar TLS 1.3 ile korunur. AI Agent ham üçgen verisine erişemez; yalnızca LDF, CDF ve IBNR gibi agrega sonuçları görür. Ham veriniz hiçbir zaman LLM'e iletilmez. Kimlik doğrulama Firebase Auth ile yapılır.",
-  },
-  {
-    q: "Free planda hangi özellikler var?",
-    a: "Free planda rezerv modülünde 1 dönem ve 1 branş oluşturabilirsiniz. Chain-Ladder, Bornhuetter–Ferguson ve AI Agent ücretsiz olarak sunulur, temel Excel export dahildir. Parametrik tail fitting, nakit akışı modülü ve sınırsız dönem/branş yalnızca Pro planda yer alır.",
-  },
-  {
-    q: "Pro plana geçtikten sonra değiştirebilir miyim?",
-    a: "Evet, istediğiniz zaman planınızı değiştirebilirsiniz. Pro plan aylık abonelik modelidir; iptal ettiğinizde mevcut dönem sonuna kadar Pro özellikleri kullanmaya devam edersiniz, ardından otomatik olarak Free plana dönersiniz. Verileriniz korunur.",
-  },
-  {
-    q: "Enterprise planı kimler için uygundur?",
-    a: "Çoklu aktüer ekibi, kurumsal SSO/SAML entegrasyonu, on-premise kurulum, API erişimi veya özel SLA ihtiyacı olan sigorta şirketleri için. Demo ve özel teklif için demireleren877@gmail.com adresine yazabilirsiniz.",
-  },
-  {
-    q: "Hangi veri formatlarını destekliyorsunuz?",
-    a: "Excel (.xlsx) ve CSV formatları desteklenir. Hem kümülatif hem artımsal üçgenleri, hem ödeme hem gerçekleşen verileri kabul ederiz; format otomatik algılanır. Yıllık ve çeyreklik granülariteler desteklenir.",
-  },
+const FAQS = [
+  ["Actuarius kimler için?", "Hasar rezervi hesaplayan aktüerlerden IFRS 17 raporlaması yapan ekiplere — Excel'den ve sayfalar arası manuel veri taşımaktan kurtulmak isteyen profesyonel sigorta aktüerleri için."],
+  ["Şu anda hangi modüller var?", "Rezerv Analizi ve Nakit Akışı tam aktiftir. Rezerv'de Chain-Ladder, Bornhuetter–Ferguson, 4 parametrik tail modeli, ILR ısı haritası ve AI Agent yer alır. Nakit Akışı, rezerv sonuçlarınızdan CDF tabanlı CF pattern üretir."],
+  ["IFRS 17 ve İskonto ne zaman?", "İkisi de aktif geliştirmede. İskonto Q4 2026, IFRS 17 Q1 2027 için planlı. Pro kullanıcıları her ikisine erken erişir."],
+  ["Verilerim güvende mi?", "Veriler Cloudflare D1'de şifreli saklanır, bağlantılar TLS 1.3 ile korunur. AI Agent ham üçgene erişemez; yalnızca LDF, CDF, IBNR gibi agrega sonuçları görür. Ham veri hiçbir zaman LLM'e iletilmez."],
+  ["Free planda neler var?", "Rezerv'de 1 dönem ve 1 branş, Chain-Ladder, BF, AI Agent ve temel Excel export. Parametrik tail fitting, nakit akışı ve sınırsız dönem/branş Pro'dadır."],
+  ["Plan değiştirebilir miyim?", "Evet. Pro aylık aboneliktir; iptal ettiğinizde dönem sonuna kadar Pro sürer, ardından Free'ye dönersiniz. Verileriniz korunur."],
+  ["Hangi veri formatları?", "Excel (.xlsx) ve CSV. Kümülatif/artımsal üçgenler, ödeme/gerçekleşen veriler — format otomatik algılanır. Yıllık ve çeyreklik granülarite desteklenir."],
 ];
 
 function FAQ() {
   const [open, setOpen] = useState<number | null>(0);
   return (
-    <section className="py-24 md:py-28" style={{ background: "#f6f7f9", borderTop: "1px solid #e2e5ea" }}>
-      <div className="max-w-3xl mx-auto px-6 md:px-8">
-        <div className="text-center mb-14" data-rv>
-          <div className="eyebrow">SSS</div>
-          <h2 className="text-[32px] md:text-[40px] font-bold tracking-tight" style={{ color: "#0f172a", letterSpacing: "-0.025em" }}>
-            Sık sorulan sorular
-          </h2>
-        </div>
-
-        <div className="space-y-3">
-          {FAQ_ITEMS.map((item, i) => (
-            <div key={i} data-rv data-rvd={i * 0.03} className="lcard" style={{ background: open === i ? "#fff" : "#fff" }}>
-              <button onClick={() => setOpen(open === i ? null : i)} className="w-full px-6 py-5 flex items-center justify-between gap-4 text-left">
-                <span className="text-[15px] font-semibold" style={{ color: "#0f172a" }}>{item.q}</span>
-                <span
-                  className="w-7 h-7 rounded-md flex items-center justify-center shrink-0 transition-transform"
-                  style={{
-                    background: open === i ? "#1d4ed8" : "#f1f3f6",
-                    color: open === i ? "#fff" : "#64748b",
-                    transform: open === i ? "rotate(180deg)" : "none",
-                  }}
-                >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-                    <path d="m6 9 6 6 6-6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </span>
-              </button>
-              <div className={"q-body " + (open === i ? "open" : "")}>
-                <div className="px-6 pb-5 text-[14px] leading-[1.7]" style={{ color: "#475569" }}>
-                  {item.a}
-                </div>
+    <section className="py-20 md:py-28" style={{ background: "var(--paper)" }}>
+      <div className="mx-auto max-w-3xl px-6 md:px-8">
+        <div className="kick" style={{ color: "var(--violet-2)" }} data-rv>SSS</div>
+        <h2 className="h2 mt-3 mb-9" data-rv>Sık sorulan sorular</h2>
+        <div style={{ borderTop: "1px solid var(--line)" }}>
+          {FAQS.map(([q, a], i) => {
+            const o = open === i;
+            return (
+              <div key={i} data-rv data-rvd={i * 0.02} style={{ borderBottom: "1px solid var(--line)" }}>
+                <button onClick={() => setOpen(o ? null : i)} className="w-full py-5 flex items-center justify-between gap-4 text-left" aria-expanded={o}>
+                  <span className="text-[15.5px] font-bold">{q}</span>
+                  <span className="w-6 h-6 grid place-items-center shrink-0" style={{ color: "var(--violet-2)", transform: o ? "rotate(45deg)" : "none", transition: "transform .35s cubic-bezier(.16,1,.3,1)" }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg></span>
+                </button>
+                <div className={"faq " + (o ? "open" : "")}><div><p className="pb-5 text-[14px] leading-[1.7]" style={{ color: "var(--ink-2)", maxWidth: "66ch" }}>{a}</p></div></div>
               </div>
+            );
+          })}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ─── Final CTA (drench) ───────────────────────────────────────────────────────
+
+function CTABand() {
+  return (
+    <section className="py-20 md:py-28" style={{ background: "var(--paper)" }}>
+      <div className="mx-auto max-w-[1180px] px-6 md:px-8">
+        <div className="drench rounded-[22px] px-8 md:px-16 py-16 md:py-20" data-rv>
+          <span className="blob b1" style={{ top: -140, left: "10%" }} /><span className="blob b2" style={{ bottom: -160, right: "8%", top: "auto" }} /><span className="blob b-gold" /><span className="grain" />
+          <div className="relative max-w-2xl">
+            <h2 className="display" style={{ color: "#fff", fontSize: "clamp(2.1rem,1.2rem+3.2vw,3.5rem)" }}>Sonraki çeyrek kapanışını Actuarius ile yapın</h2>
+            <p className="mt-5 text-[16px]" style={{ color: "var(--on-color-2)", maxWidth: "50ch", lineHeight: 1.6 }}>Free plan kalıcı ücretsiz. Kart gerekmez — beş dakikada ilk üçgeninizi yükleyin.</p>
+            <div className="mt-9 flex flex-wrap gap-3">
+              <Link href="/reserve" className="btn btn-gold">Ücretsiz başla <Arrow /></Link>
+              <a href="mailto:demireleren877@gmail.com" className="btn btn-glass">Enterprise ile konuş</a>
             </div>
-          ))}
+          </div>
         </div>
       </div>
     </section>
@@ -1497,43 +706,21 @@ function FAQ() {
 
 function Footer() {
   return (
-    <footer className="py-14 md:py-16" style={{ background: "#ffffff", borderTop: "1px solid #e2e5ea" }}>
-      <div className="max-w-6xl mx-auto px-6 md:px-8">
+    <footer className="py-14 md:py-16" style={{ background: "var(--paper-2)", borderTop: "1px solid var(--line)" }}>
+      <div className="mx-auto max-w-[1180px] px-6 md:px-8">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-10">
           <div className="col-span-2">
-            <Link href="/" className="flex items-center gap-2 mb-4">
-              <img src="/favicon.png" alt="Actuarius" className="h-6 w-6" />
-              <span className="text-[15px] font-semibold tracking-tight" style={{ color: "#0f172a" }}>Actuarius</span>
-            </Link>
-            <p className="text-[13.5px] leading-relaxed max-w-sm" style={{ color: "#64748b" }}>
-              Sigorta aktüerleri için modern hesaplama platformu. Rezerv, nakit akışı, IFRS 17 ve
-              iskonto — tek arayüzde.
-            </p>
+            <Link href="/" className="flex items-center gap-2 mb-4"><img src="/favicon.png" alt="Actuarius" className="h-6 w-6" /><span className="text-[15px] font-extrabold tracking-tight">Actuarius</span></Link>
+            <p className="text-[13.5px] leading-relaxed max-w-sm" style={{ color: "var(--muted)" }}>Sigorta aktüerleri için modern hesaplama platformu. Rezerv, nakit akışı, IFRS 17 ve iskonto — tek arayüzde.</p>
           </div>
-          <div>
-            <div className="text-[10.5px] font-bold uppercase tracking-widest mb-3" style={{ color: "#94a3b8" }}>Platform</div>
-            <ul className="space-y-2 text-[13.5px]">
-              <li><a href="#modules" className="hover:underline" style={{ color: "#475569" }}>Modüller</a></li>
-              <li><a href="#agent" className="hover:underline" style={{ color: "#475569" }}>AI Agent</a></li>
-              <li><a href="#security" className="hover:underline" style={{ color: "#475569" }}>Güvenlik</a></li>
-              <li><a href="#pricing" className="hover:underline" style={{ color: "#475569" }}>Fiyatlandırma</a></li>
-            </ul>
-          </div>
-          <div>
-            <div className="text-[10.5px] font-bold uppercase tracking-widest mb-3" style={{ color: "#94a3b8" }}>Şirket</div>
-            <ul className="space-y-2 text-[13.5px]">
-              <li><a href="mailto:demireleren877@gmail.com" className="hover:underline" style={{ color: "#475569" }}>E-posta</a></li>
-              <li><a href="mailto:demireleren877@gmail.com" className="hover:underline" style={{ color: "#475569" }}>Enterprise satış</a></li>
-              <li><Link href="/terms" className="hover:underline" style={{ color: "#475569" }}>Kullanım şartları</Link></li>
-              <li><Link href="/privacy" className="hover:underline" style={{ color: "#475569" }}>Gizlilik</Link></li>
-              <li><Link href="/refund" className="hover:underline" style={{ color: "#475569" }}>İade politikası</Link></li>
-            </ul>
-          </div>
+          {[["Platform", [["#modules", "Modüller"], ["#agent", "AI Agent"], ["#security", "Güvenlik"], ["#pricing", "Fiyat"]]], ["Şirket", [["mailto:demireleren877@gmail.com", "E-posta"], ["/terms", "Kullanım şartları"], ["/privacy", "Gizlilik"], ["/refund", "İade politikası"]]]].map(([title, links]) => (
+            <div key={title as string}>
+              <div className="kick mb-3" style={{ fontSize: 10.5, color: "var(--muted)" }}>{title as string}</div>
+              <ul className="space-y-2 text-[13.5px]">{(links as [string, string][]).map(([h, l]) => <li key={l}>{h.startsWith("/") ? <Link href={h} className="hover:underline" style={{ color: "var(--ink-2)" }}>{l}</Link> : <a href={h} className="hover:underline" style={{ color: "var(--ink-2)" }}>{l}</a>}</li>)}</ul>
+            </div>
+          ))}
         </div>
-        <div className="pt-6 flex flex-col md:flex-row items-center justify-between gap-3 text-[12.5px]" style={{ borderTop: "1px solid #e2e5ea", color: "#94a3b8" }}>
-          <span>© 2026 Actuarius. Tüm hakları saklıdır.</span>
-          <span>İstanbul, Türkiye</span>
-        </div>
+        <div className="pt-6 flex flex-col md:flex-row items-center justify-between gap-3 mono text-[12px]" style={{ borderTop: "1px solid var(--line)", color: "#9aa3b2" }}><span>© 2026 Actuarius</span><span>İstanbul, Türkiye</span></div>
       </div>
     </footer>
   );
@@ -1541,133 +728,25 @@ function Footer() {
 
 // ─── Atoms ────────────────────────────────────────────────────────────────────
 
-function Arrow() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-      <path d="M5 12h14m-6-6 6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function CheckIcon({ color = "#15803d", size = 14 }: { color?: string; size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className="shrink-0">
-      <path d="M5 12l4 4L20 6" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-// Real-app sidebar icons (copied stroke style from AppSidebar.tsx)
-function HomeIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 9.5 12 3l9 6.5V21a1 1 0 0 1-1 1h-5v-7h-6v7H4a1 1 0 0 1-1-1z" />
-    </svg>
-  );
-}
-function StackIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 3 2 8l10 5 10-5z" />
-      <path d="M2 13l10 5 10-5" />
-      <path d="M2 18l10 5 10-5" />
-    </svg>
-  );
-}
-function DatabaseIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <ellipse cx="12" cy="5" rx="9" ry="3" />
-      <path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5" />
-      <path d="M3 12c0 1.66 4.03 3 9 3s9-1.34 9-3" />
-    </svg>
-  );
-}
-function CashflowIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M2 7h20M2 12h20M2 17h20" />
-      <path d="M6 3v18M18 3v18" />
-    </svg>
-  );
-}
-
-function LockIcon({ color = "#64748b", size = 12 }: { color?: string; size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <rect x="5" y="11" width="14" height="10" rx="2" stroke={color} strokeWidth="1.8" />
-      <path d="M8 11V8a4 4 0 1 1 8 0v3" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function LockBigIcon() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-      <rect x="5" y="11" width="14" height="10" rx="2" stroke="#1d4ed8" strokeWidth="2" />
-      <path d="M8 11V8a4 4 0 1 1 8 0v3" stroke="#1d4ed8" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function ShieldIcon() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-      <path d="M12 2 4 6v6c0 5 3.5 9 8 10 4.5-1 8-5 8-10V6l-8-4z" stroke="#1d4ed8" strokeWidth="2" strokeLinejoin="round" />
-      <path d="m9 12 2 2 4-4" stroke="#1d4ed8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function EyeOffIcon() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-      <path d="M3 3l18 18 M10.5 6.2A10 10 0 0 1 22 12s-1.5 3-4 5 M14 17.8A10 10 0 0 1 2 12s2-4 6-5.5" stroke="#1d4ed8" strokeWidth="2" strokeLinecap="round" />
-      <path d="M9 9.5a3 3 0 0 0 5.5 2" stroke="#1d4ed8" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function ServerIcon() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-      <rect x="3" y="4" width="18" height="6" rx="1.5" stroke="#1d4ed8" strokeWidth="2" />
-      <rect x="3" y="14" width="18" height="6" rx="1.5" stroke="#1d4ed8" strokeWidth="2" />
-      <circle cx="7" cy="7" r="0.8" fill="#1d4ed8" />
-      <circle cx="7" cy="17" r="0.8" fill="#1d4ed8" />
-    </svg>
-  );
-}
+function Arrow() { return <svg className="arr" width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M5 12h14m-6-6 6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>; }
+function Check({ color = "var(--violet-2)" }: { color?: string }) { return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" className="shrink-0 mt-0.5"><path d="M5 12l4 4L20 6" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" /></svg>; }
+function AgentGlyph({ s = 14, c = "#fff" }: { s?: number; c?: string }) { return <svg width={s} height={s} viewBox="0 0 24 24" fill="none"><path d="M12 2a5 5 0 1 1 0 10A5 5 0 0 1 12 2zm0 13c-5.33 0-8 2.67-8 4v1h16v-1c0-1.33-2.67-4-8-4z" fill={c} /></svg>; }
+function LockIcon() { return <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="5" y="11" width="14" height="10" rx="2" stroke="var(--violet)" strokeWidth="2" /><path d="M8 11V8a4 4 0 1 1 8 0v3" stroke="var(--violet)" strokeWidth="2" strokeLinecap="round" /></svg>; }
+function ShieldIcon() { return <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 2 4 6v6c0 5 3.5 9 8 10 4.5-1 8-5 8-10V6l-8-4z" stroke="var(--violet)" strokeWidth="2" strokeLinejoin="round" /><path d="m9 12 2 2 4-4" stroke="var(--violet)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>; }
+function EyeIcon() { return <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M3 3l18 18 M10.5 6.2A10 10 0 0 1 22 12s-1.5 3-4 5 M14 17.8A10 10 0 0 1 2 12s2-4 6-5.5" stroke="var(--violet)" strokeWidth="2" strokeLinecap="round" /><path d="M9 9.5a3 3 0 0 0 5.5 2" stroke="var(--violet)" strokeWidth="2" strokeLinecap="round" /></svg>; }
+function ServerIcon() { return <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="6" rx="1.5" stroke="var(--violet)" strokeWidth="2" /><rect x="3" y="14" width="18" height="6" rx="1.5" stroke="var(--violet)" strokeWidth="2" /><circle cx="7" cy="7" r=".8" fill="var(--violet)" /><circle cx="7" cy="17" r=".8" fill="var(--violet)" /></svg>; }
 
 function CountUp({ to }: { to: number }) {
   const [v, setV] = useState(0);
   const ref = useRef<HTMLSpanElement>(null);
   useEffect(() => {
-    let start: number | null = null;
-    const dur = 1400;
-    let raf: number;
-    const tick = (t: number) => {
-      if (!start) start = t;
-      const p = Math.min((t - start) / dur, 1);
-      const eased = 1 - Math.pow(1 - p, 3);
-      setV(Math.floor(eased * to));
-      if (p < 1) raf = requestAnimationFrame(tick);
-    };
-    const obs = new IntersectionObserver(
-      (es) => {
-        if (es[0].isIntersecting) raf = requestAnimationFrame(tick);
-      },
-      { threshold: 0.1 },
-    );
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduce) { setV(to); return; }
+    let start: number | null = null, raf = 0;
+    const tick = (t: number) => { if (!start) start = t; const p = Math.min((t - start) / 1500, 1); setV(Math.floor((1 - Math.pow(1 - p, 3)) * to)); if (p < 1) raf = requestAnimationFrame(tick); };
+    const obs = new IntersectionObserver((es) => { if (es[0].isIntersecting) raf = requestAnimationFrame(tick); }, { threshold: 0.1 });
     if (ref.current) obs.observe(ref.current);
-    return () => {
-      cancelAnimationFrame(raf);
-      obs.disconnect();
-    };
+    return () => { cancelAnimationFrame(raf); obs.disconnect(); };
   }, [to]);
-  return (
-    <span ref={ref} className="tabular-nums">
-      {v.toLocaleString("tr-TR")}
-    </span>
-  );
+  return <span ref={ref}>{v.toLocaleString("tr-TR")}</span>;
 }

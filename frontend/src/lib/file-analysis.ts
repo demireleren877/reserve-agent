@@ -68,6 +68,25 @@ export function lastDiagTotals(
   return result;
 }
 
+/**
+ * Roll-forward yeni diagonalinin dosya kırılımını ({origin: {dosya: tutar}})
+ * FileData şekline ({origin: {devLabel: {dosya: tutar}}}) çevirir. devLabel,
+ * yeni üçgende o origin'in son gözlem dönemidir (lastDate). Böylece Dosya
+ * sekmesi bu dönemin hareketini doğru diagonalde gösterir.
+ */
+export function newDiagonalToFileData(
+  triangle: Triangle,
+  newDiagonalFiles: Record<string, Record<string, number>>,
+): FileData {
+  const fd: FileData = {};
+  for (const [origin, files] of Object.entries(newDiagonalFiles)) {
+    if (!files || Object.keys(files).length === 0) continue;
+    const d = lastDate(origin, triangle);
+    if (d) fd[origin] = { [d]: { ...files } };
+  }
+  return fd;
+}
+
 export interface FileSummaryOriginRow {
   origin: string;
   n_files: number;

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Archivo, Fira_Code } from "next/font/google";
 import { AuthProvider } from "@/lib/auth/auth-context";
 import "./globals.css";
 
@@ -11,6 +11,19 @@ const geistSans = Geist({
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+});
+
+// Landing-only display + data faces. The app keeps using Geist.
+const archivo = Archivo({
+  variable: "--font-archivo",
+  subsets: ["latin", "latin-ext"],
+  weight: ["400", "500", "600", "700", "800"],
+});
+
+const firaCode = Fira_Code({
+  variable: "--font-fira",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
 });
 
 export const metadata: Metadata = {
@@ -52,7 +65,7 @@ export default function RootLayout({
   return (
     <html
       lang="tr"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${archivo.variable} ${firaCode.variable} h-full antialiased`}
     >
       <body className="min-h-full">
         <AuthProvider>{children}</AuthProvider>

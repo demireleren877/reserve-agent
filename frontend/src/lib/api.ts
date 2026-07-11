@@ -478,6 +478,49 @@ export async function buildTriangleFromRecords(
   };
 }
 
+/**
+ * Roll-forward: mevcut üçgeni güncel dönem ARTIMSAL dosya-bazlı veriyle bir
+ * gelişim dönemi ileri taşır. prior_paid zorunlu (artışlar ona eklenir).
+ * new_diagonal_files: {origin: {dosya_no: artımsal_ödeme}} — çağıran taraf
+ * bunu yeni diagonalin dev etiketiyle eşleyip fileData'ya çevirir.
+ */
+export async function rollForwardTriangle(
+  priorPaid: Triangle,
+  priorIncurred: Triangle | null,
+  records: ClaimRecord[],
+  brans: string,
+  originGranularity: "yearly" | "quarterly",
+  developmentGranularity: "yearly" | "quarterly",
+): Promise<{
+  paidTriangle: Triangle;
+  incurredTriangle: Triangle | null;
+  newDiagonalFiles: Record<string, Record<string, number>> | null;
+}> {
+  const authHeaders = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/v1/data/roll-forward`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders },
+    body: JSON.stringify({
+      prior_paid: priorPaid,
+      prior_incurred: priorIncurred,
+      records,
+      brans,
+      origin_granularity: originGranularity,
+      development_granularity: developmentGranularity,
+    }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ detail: "Roll-forward hatası" }));
+    throw new Error(body.detail || `HTTP ${res.status}`);
+  }
+  const data = await res.json();
+  return {
+    paidTriangle: data.paid_triangle as Triangle,
+    incurredTriangle: (data.incurred_triangle as Triangle | null) ?? null,
+    newDiagonalFiles: data.new_diagonal_files ?? null,
+  };
+}
+
 export async function listModels(): Promise<ModelsResponse> {
   const res = await fetch(`${API_BASE}/v1/models`);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);

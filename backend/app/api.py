@@ -595,6 +595,49 @@ def data_build_triangle(
     )
 
 
+class RollForwardRequest(BaseModel):
+    prior_paid: TriangleSchema
+    prior_incurred: TriangleSchema | None = None
+    records: list[dict]  # güncel dönem ARTIMSAL dosya-bazlı kayıtlar
+    brans: str
+    origin_granularity: str = "yearly"
+    development_granularity: str = "yearly"
+
+
+class RollForwardResponse(BaseModel):
+    paid_triangle: TriangleSchema
+    incurred_triangle: TriangleSchema | None = None
+    # {origin_label: {dosya_no: artımsal_ödeme}} — yeni diagonalin dosya kırılımı
+    new_diagonal_files: dict | None = None
+
+
+@router.post("/data/roll-forward", response_model=RollForwardResponse)
+def data_roll_forward(
+    body: RollForwardRequest,
+    _auth: dict = Depends(verify_firebase_token),
+) -> RollForwardResponse:
+    from app.data.triangle_builder import roll_forward
+
+    try:
+        prior_paid = body.prior_paid.to_domain()
+        prior_incurred = body.prior_incurred.to_domain() if body.prior_incurred else None
+        paid, incurred, new_files = roll_forward(
+            prior_paid=prior_paid,
+            prior_incurred=prior_incurred,
+            records=body.records,
+            brans=body.brans,
+            origin_granularity=body.origin_granularity,  # type: ignore[arg-type]
+            development_granularity=body.development_granularity,  # type: ignore[arg-type]
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    return RollForwardResponse(
+        paid_triangle=TriangleSchema.from_domain(paid),
+        incurred_triangle=TriangleSchema.from_domain(incurred) if incurred else None,
+        new_diagonal_files=new_files,
+    )
+
+
 # ─── Prim verisi inspect + import ────────────────────────────────────────────
 
 class PrimInspectRequest(BaseModel):

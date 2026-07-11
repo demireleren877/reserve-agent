@@ -112,11 +112,16 @@ def build_triangles(
 
         inc_odeme[(o_seq, d_seq)] += odeme_val
 
-        # Her dosya_no için aggregated hücredeki en son kaydın muallağını sakla
+        # Her dosya_no için aggregated hücredeki en son kaydın muallağını sakla.
+        # Aynı dosya AYNI gelişim tarihinde birden çok satırsa (örn. currency
+        # kırılımı: TRY/USD) muallak TOPLANIR; daha YENİ tarih gelirse (stok)
+        # değiştirilir; daha eski tarih yok sayılır.
         cell_key = (o_seq, d_seq)
         existing = _latest_muallak[cell_key].get(dosya_no)
         if existing is None or d_seq_exact > existing[0]:
             _latest_muallak[cell_key][dosya_no] = (d_seq_exact, muallak_val)
+        elif d_seq_exact == existing[0]:
+            _latest_muallak[cell_key][dosya_no] = (d_seq_exact, existing[1] + muallak_val)
 
         # Frekans-Şiddet: dosya'nın bu origin'de ilk göründüğü (aggregated) d_seq
         if dosya_no:
@@ -365,9 +370,12 @@ def roll_forward(
         delta_paid[o_lbl] += odeme
         if dosya:
             ex = latest_mual[o_lbl].get(dosya)
-            # dönem sonu bakiyesi = stok; aynı dönem içi tekrar → son kayıt kazanır
-            if ex is None or d_exact >= ex[0]:
+            # dönem sonu bakiyesi = stok. Aynı gelişim tarihinde tekrar (currency
+            # kırılımı) → TOPLA; daha yeni tarih → değiştir; daha eski → yok say.
+            if ex is None or d_exact > ex[0]:
                 latest_mual[o_lbl][dosya] = (d_exact, mual)
+            elif d_exact == ex[0]:
+                latest_mual[o_lbl][dosya] = (d_exact, ex[1] + mual)
             file_new[o_lbl][dosya] = file_new[o_lbl].get(dosya, 0.0) + odeme
 
     if new_val_seq < 0:

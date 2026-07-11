@@ -93,18 +93,19 @@ class TestRollForward:
         # üst üçgen incurred korunur
         assert incurred.values[0][1] == pytest.approx(1650.0)
 
-    def test_outstanding_is_stock_latest_per_dosya(self, prior):
-        # Aynı dosya iki kez (aynı dönem içi düzeltme) → muallak stok: son bakiye
+    def test_outstanding_sums_same_date_currency_split(self, prior):
+        # Aynı dosya AYNI gelişim tarihinde iki satır (currency kırılımı: TRY/USD)
+        # → muallak TOPLANIR (200+90=290), ödeme de toplanır (50+70=120).
         _, incurred, _ = roll_forward(
             prior_paid=prior[0], prior_incurred=prior[1],
             records=[
                 _rec("B", "2022", "2024", 50, 200),
-                _rec("B", "2022", "2024", 70, 90),   # aynı dosya, güncel bakiye 90
+                _rec("B", "2022", "2024", 70, 90),
             ],
             brans="Yangın", origin_granularity="yearly", development_granularity="yearly",
         )
-        # paid artışı toplanır: 50+70=120 → new_paid 1720; muallak son = 90 → 1810
-        assert incurred.values[1][2] == pytest.approx(1810.0)
+        # new_paid = 1600(prior son) + 120 = 1720; muallak = 200+90 = 290 → 2010
+        assert incurred.values[1][2] == pytest.approx(2010.0)
 
     def test_new_diagonal_files_returned(self, prior):
         _, _, files = roll_forward(

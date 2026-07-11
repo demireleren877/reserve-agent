@@ -1,7 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useDataStore, type PrimRecord } from "@/lib/data-store";
+import { useDataStore, type PrimRecord, type Dataset } from "@/lib/data-store";
+
+// Prim dataset'i typeId ile bulunur (datasetId rastgeledir; sabit "prim" anahtarı yanlış).
+function findPrim(datasets?: Record<string, Dataset>): Dataset | undefined {
+  return datasets ? Object.values(datasets).find((d) => d.typeId === "prim") : undefined;
+}
 
 interface Props {
   /** Mevcut triangle'ın origin period'ları — eşleştirme için */
@@ -26,13 +31,14 @@ export function LoadPrimsFromDataStore({ originPeriods, onLoad, onClose }: Props
   useEffect(() => {
     if (!periodId) return;
     const period = store.periods.find((p) => p.id === periodId);
-    const meta = period?.datasets["prim"]?.meta;
+    const primDs = findPrim(period?.datasets);
+    const meta = primDs?.meta;
     if (meta?.brans_list?.length) {
       setBransList(meta.brans_list);
       setBrans((b) => (meta.brans_list!.includes(b) ? b : meta.brans_list![0]));
-    } else if (period) {
+    } else if (period && primDs) {
       setLoadingRecords(true);
-      store.loadDatasetRecords(periodId, "prim")
+      store.loadDatasetRecords(periodId, primDs.datasetId)
         .then((ds) => {
           const list = ds?.meta.brans_list ?? [];
           setBransList(list);
@@ -50,11 +56,12 @@ export function LoadPrimsFromDataStore({ originPeriods, onLoad, onClose }: Props
 
     async function buildPreview() {
       const period = store.periods.find((p) => p.id === periodId);
-      let records = (period?.datasets["prim"]?.records ?? []) as PrimRecord[];
+      const primDs = findPrim(period?.datasets);
+      let records = (primDs?.records ?? []) as PrimRecord[];
 
-      if (!records.length) {
+      if (!records.length && primDs) {
         try {
-          const ds = await store.loadDatasetRecords(periodId, "prim");
+          const ds = await store.loadDatasetRecords(periodId, primDs.datasetId);
           records = (ds?.records ?? []) as PrimRecord[];
         } catch {
           records = [];
@@ -77,12 +84,13 @@ export function LoadPrimsFromDataStore({ originPeriods, onLoad, onClose }: Props
   async function handleLoad() {
     setError(null);
     const period = store.periods.find((p) => p.id === periodId);
-    let records = (period?.datasets["prim"]?.records ?? []) as PrimRecord[];
+    const primDs = findPrim(period?.datasets);
+    let records = (primDs?.records ?? []) as PrimRecord[];
 
-    if (!records.length) {
+    if (!records.length && primDs) {
       setLoadingRecords(true);
       try {
-        const ds = await store.loadDatasetRecords(periodId, "prim");
+        const ds = await store.loadDatasetRecords(periodId, primDs.datasetId);
         records = (ds?.records ?? []) as PrimRecord[];
       } catch {
         setError("Kayıtlar yüklenemedi");
@@ -122,7 +130,7 @@ export function LoadPrimsFromDataStore({ originPeriods, onLoad, onClose }: Props
           {/* Dönem */}
           <div>
             <label className="block text-xs font-medium text-[color:var(--muted-strong)] mb-1">Dönem</label>
-            {store.periods.filter((p) => p.datasets["prim"]).length === 0 ? (
+            {store.periods.filter((p) => findPrim(p.datasets)).length === 0 ? (
               <p className="text-xs text-[color:var(--muted)]">
                 Prim verisi yüklü dönem bulunamadı. Veri modülünden yükleyin.
               </p>
@@ -132,7 +140,7 @@ export function LoadPrimsFromDataStore({ originPeriods, onLoad, onClose }: Props
                 onChange={(e) => setPeriodId(e.target.value)}
                 className="w-full text-sm border border-[color:var(--border)] rounded-md px-3 py-2 bg-[color:var(--surface)] text-[color:var(--foreground)]"
               >
-                {store.periods.filter((p) => p.datasets["prim"]).map((p) => (
+                {store.periods.filter((p) => findPrim(p.datasets)).map((p) => (
                   <option key={p.id} value={p.id}>{p.label}</option>
                 ))}
               </select>

@@ -2,8 +2,13 @@
 
 import { useState, useEffect } from "react";
 import { useDataStore } from "@/lib/data-store";
-import type { ClaimRecord } from "@/lib/data-store";
+import type { ClaimRecord, Dataset } from "@/lib/data-store";
 import type { CashflowRecord } from "@/lib/api";
+
+// Hasar dataset'i typeId ile bulunur (datasetId rastgeledir; sabit "hasar" anahtarı yanlış).
+function findHasar(datasets?: Record<string, Dataset>): Dataset | undefined {
+  return datasets ? Object.values(datasets).find((d) => d.typeId === "hasar") : undefined;
+}
 
 interface Props {
   onLoad: (records: CashflowRecord[], meta: { periodLabel: string; brans: string; recordCount: number }) => void;
@@ -13,7 +18,7 @@ interface Props {
 export function LoadCashflowFromDataStore({ onLoad, onClose }: Props) {
   const store = useDataStore();
 
-  const periodsWithHasar = store.periods.filter((p) => p.datasets["hasar"]);
+  const periodsWithHasar = store.periods.filter((p) => findHasar(p.datasets));
 
   const [periodId, setPeriodId] = useState<string>(
     periodsWithHasar.find((p) => p.id === store.activePeriodId)?.id ?? periodsWithHasar[0]?.id ?? ""
@@ -27,13 +32,14 @@ export function LoadCashflowFromDataStore({ onLoad, onClose }: Props) {
   useEffect(() => {
     if (!periodId) return;
     const period = store.periods.find((p) => p.id === periodId);
-    const meta = period?.datasets["hasar"]?.meta;
+    const hasarDs = findHasar(period?.datasets);
+    const meta = hasarDs?.meta;
     if (meta?.brans_list?.length) {
       setBransList(meta.brans_list);
       setBrans((b) => (meta.brans_list!.includes(b) ? b : meta.brans_list![0]));
-    } else if (period) {
+    } else if (period && hasarDs) {
       setLoading(true);
-      store.loadDatasetRecords(periodId, "hasar")
+      store.loadDatasetRecords(periodId, hasarDs.datasetId)
         .then((ds) => {
           const list = ds?.meta.brans_list ?? [];
           setBransList(list);
@@ -50,9 +56,9 @@ export function LoadCashflowFromDataStore({ onLoad, onClose }: Props) {
     setLoading(true);
     try {
       const period = store.periods.find((p) => p.id === periodId);
-      let ds = period?.datasets["hasar"];
-      if (!ds?.records?.length) {
-        ds = await store.loadDatasetRecords(periodId, "hasar") ?? undefined;
+      let ds = findHasar(period?.datasets);
+      if (ds && !ds.records?.length) {
+        ds = await store.loadDatasetRecords(periodId, ds.datasetId) ?? undefined;
       }
       if (!ds?.records?.length) throw new Error("Kayıt bulunamadı");
 

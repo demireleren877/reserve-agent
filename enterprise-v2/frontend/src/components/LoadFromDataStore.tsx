@@ -4,8 +4,7 @@ import { useState, useEffect } from "react";
 import { useDataStore, type TriangleRecord } from "@/lib/data-store";
 import { buildTriangleFromRecords, rollForwardTriangle, type ClaimRecord } from "@/lib/api";
 import { newDiagonalToFileData } from "@/lib/roll-forward-util";
-import { useBranchSetters } from "@/lib/project-store";
-import type { Triangle } from "@/types/triangle";
+import { useBranchSetters, useProject } from "@/lib/project-store";
 
 interface Props {
   onClose: () => void;
@@ -18,6 +17,7 @@ type Source = "hasar" | "ucgen" | "rollforward";
 export function LoadFromDataStore({ onClose, onLoaded }: Props) {
   const store = useDataStore();
   const setters = useBranchSetters("user");
+  const { project, activeBranch } = useProject();
 
   const [source, setSource] = useState<Source>("hasar");
   const [periodId, setPeriodId] = useState<string>(store.activePeriodId ?? "");
@@ -30,10 +30,8 @@ export function LoadFromDataStore({ onClose, onLoaded }: Props) {
   const [loadingRecords, setLoadingRecords] = useState(false);
   const [bransList, setBransList] = useState<string[]>([]);
 
-  // Roll-forward: önceki dönem temel üçgeni (ucgen dataset'lerinden)
+  // Roll-forward: yeni verinin ÜZERİNE geleceği, sistemde zaten üçgeni olan dönem
   const [priorPeriodId, setPriorPeriodId] = useState<string>("");
-  const [priorPaidId, setPriorPaidId] = useState<string>("");
-  const [priorIncurredId, setPriorIncurredId] = useState<string>("");
 
   const selectedPeriod = store.periods.find((p) => p.id === periodId);
   const hasarDatasets = selectedPeriod
@@ -45,11 +43,23 @@ export function LoadFromDataStore({ onClose, onLoaded }: Props) {
   // hasar ve rollforward güncel dönem hasar dataset'ini kullanır; ucgen → üçgen dataset'i
   const activeDatasets = source === "ucgen" ? ucgenDatasets : hasarDatasets;
 
-  // Roll-forward temel üçgeni: seçilen önceki dönemin ucgen (üçgen) dataset'leri
-  const priorPeriod = store.periods.find((p) => p.id === priorPeriodId);
-  const priorUcgenDatasets = priorPeriod
-    ? Object.values(priorPeriod.datasets).filter((d) => d.typeId === "ucgen")
-    : [];
+  // Roll-forward temeli: sistemde (projede) üçgeni olan dönemler. Yeni artımsal
+  // veri bunlardan seçilenin üzerine "ileri taşınır".
+  function baseBranchOf(prjPeriodId: string) {
+    const p = project.periods.find((x) => x.id === prjPeriodId);
+    if (!p) return null;
+    const withTri = p.branches.filter((b) => b.paidTriangle || b.triangle);
+    // Güncel branşla aynı frekans/ad tercih edilir, yoksa ilk üçgenli branş
+    return (
+      withTri.find((b) => activeBranch && b.frequency === activeBranch.frequency && b.name === activeBranch.name) ??
+      withTri.find((b) => activeBranch && b.frequency === activeBranch.frequency) ??
+      withTri[0] ??
+      null
+    );
+  }
+  const priorPeriodOptions = project.periods.filter(
+    (p) => p.id !== project.activePeriodId && p.branches.some((b) => b.paidTriangle || b.triangle),
+  );
 
   // Seçili dönem/kaynak değişince dataset seçimini sıfırla
   useEffect(() => {
@@ -151,33 +161,15 @@ export function LoadFromDataStore({ onClose, onLoaded }: Props) {
     }
   }
 
-  async function loadUcgenTriangle(pId: string, dsId: string): Promise<Triangle | null> {
-    if (!pId || !dsId) return null;
-    const period = store.periods.find((p) => p.id === pId);
-    let ds = period?.datasets[dsId] ?? null;
-    if (!ds?.records?.length) ds = await store.loadDatasetRecords(pId, dsId);
-    const rec = (ds?.records as TriangleRecord[] | undefined)?.[0];
-    if (!rec) return null;
-    return {
-      origin_periods: rec.origin_periods,
-      development_periods: rec.development_periods,
-      values: rec.values,
-      triangle_type: rec.triangle_type,
-      origin_granularity: rec.origin_granularity,
-      development_granularity: rec.development_granularity,
-    };
-  }
-
   async function handleRollForward() {
-    if (!periodId || !selectedDatasetId || !brans || !priorPaidId) return;
+    if (!periodId || !selectedDatasetId || !brans || !priorPeriodId) return;
     setError(null);
     setLoading(true);
     try {
-      const priorPaid = await loadUcgenTriangle(priorPeriodId, priorPaidId);
-      if (!priorPaid) throw new Error("Temel (ödeme) üçgeni yüklenemedi");
-      const priorIncurred = priorIncurredId
-        ? await loadUcgenTriangle(priorPeriodId, priorIncurredId)
-        : null;
+      const base = baseBranchOf(priorPeriodId);
+      const priorPaid = base?.paidTriangle ?? base?.triangle ?? null;
+      if (!priorPaid) throw new Error("Seçilen dönemde üçgen bulunamadı");
+      const priorIncurred = base?.incurredTriangle ?? null;
 
       // Güncel dönem artımsal hasar kayıtları
       let ds = selectedPeriod?.datasets[selectedDatasetId] ?? null;
@@ -248,59 +240,36 @@ export function LoadFromDataStore({ onClose, onLoaded }: Props) {
             ))}
           </div>
 
-          {/* Roll-forward: önceki dönem temel üçgeni */}
+          {/* Roll-forward: yeni verinin üzerine geleceği mevcut dönem */}
           {source === "rollforward" && (
-            <div className="rounded-lg p-3 space-y-3" style={{ background: "var(--surface-alt)", border: "1px solid var(--border)" }}>
-              <p className="text-[11px] font-semibold" style={{ color: "var(--muted-strong)" }}>
-                Temel üçgen (önceki dönem)
-              </p>
-              <div>
-                <label className="block text-[11px] font-medium text-[color:var(--muted-strong)] mb-1">Önceki dönem</label>
+            <div className="rounded-lg p-3 space-y-2" style={{ background: "var(--surface-alt)", border: "1px solid var(--border)" }}>
+              <label className="block text-[11px] font-semibold" style={{ color: "var(--muted-strong)" }}>
+                Hangi dönemin üzerine? (temel)
+              </label>
+              {priorPeriodOptions.length === 0 ? (
+                <p className="text-[11px]" style={{ color: "var(--muted)" }}>
+                  Sistemde üçgeni olan başka bir dönem yok. Önce bir döneme üçgen yükleyin.
+                </p>
+              ) : (
                 <select
                   value={priorPeriodId}
-                  onChange={(e) => { setPriorPeriodId(e.target.value); setPriorPaidId(""); setPriorIncurredId(""); }}
+                  onChange={(e) => setPriorPeriodId(e.target.value)}
                   className="w-full text-sm border border-[color:var(--border)] rounded-md px-3 py-2 bg-[color:var(--surface)] text-[color:var(--foreground)]"
                 >
-                  <option value="">— seçin —</option>
-                  {store.periods.filter((p) => p.id !== periodId).map((p) => (
-                    <option key={p.id} value={p.id}>{p.label}</option>
-                  ))}
+                  <option value="">— dönem seçin —</option>
+                  {priorPeriodOptions.map((p) => {
+                    const b = baseBranchOf(p.id);
+                    return (
+                      <option key={p.id} value={p.id}>
+                        {p.label}{b ? ` — ${b.name}` : ""}
+                      </option>
+                    );
+                  })}
                 </select>
-              </div>
-              <div>
-                <label className="block text-[11px] font-medium text-[color:var(--muted-strong)] mb-1">Temel ödeme (paid) üçgeni</label>
-                <select
-                  value={priorPaidId}
-                  onChange={(e) => setPriorPaidId(e.target.value)}
-                  disabled={!priorPeriodId}
-                  className="w-full text-sm border border-[color:var(--border)] rounded-md px-3 py-2 bg-[color:var(--surface)] text-[color:var(--foreground)] disabled:opacity-50"
-                >
-                  <option value="">— seçin —</option>
-                  {priorUcgenDatasets.map((ds) => (
-                    <option key={ds.datasetId} value={ds.datasetId}>
-                      {ds.meta.brans_list?.[0] ?? ds.meta.filename}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-[11px] font-medium text-[color:var(--muted-strong)] mb-1">
-                  Temel muallak (incurred) üçgeni <span style={{ color: "var(--muted)" }}>(opsiyonel)</span>
-                </label>
-                <select
-                  value={priorIncurredId}
-                  onChange={(e) => setPriorIncurredId(e.target.value)}
-                  disabled={!priorPeriodId}
-                  className="w-full text-sm border border-[color:var(--border)] rounded-md px-3 py-2 bg-[color:var(--surface)] text-[color:var(--foreground)] disabled:opacity-50"
-                >
-                  <option value="">— yok —</option>
-                  {priorUcgenDatasets.map((ds) => (
-                    <option key={ds.datasetId} value={ds.datasetId}>
-                      {ds.meta.brans_list?.[0] ?? ds.meta.filename}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              )}
+              <p className="text-[10px]" style={{ color: "var(--muted)" }}>
+                Bu dönemin üçgeni temel alınır; güncel dönemin artımsal hareketi onun üzerine eklenir.
+              </p>
             </div>
           )}
 
@@ -467,7 +436,7 @@ export function LoadFromDataStore({ onClose, onLoaded }: Props) {
               !periodId ||
               !selectedDatasetId ||
               ((source === "hasar" || source === "rollforward") && (!brans || bransList.length === 0)) ||
-              (source === "rollforward" && !priorPaidId) ||
+              (source === "rollforward" && !priorPeriodId) ||
               (source === "ucgen" && ucgenDatasets.length === 0)
             }
             className="px-4 py-2 text-sm rounded-md bg-[color:var(--primary)] text-white font-medium hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"

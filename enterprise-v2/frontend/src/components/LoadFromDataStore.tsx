@@ -49,17 +49,23 @@ export function LoadFromDataStore({ onClose, onLoaded }: Props) {
     const p = project.periods.find((x) => x.id === prjPeriodId);
     if (!p) return null;
     const withTri = p.branches.filter((b) => b.paidTriangle || b.triangle);
-    // Güncel branşla aynı frekans/ad tercih edilir, yoksa ilk üçgenli branş
+    // Roll-forward incurred üçgeni için hem paid hem incurred olan branch tercih edilir.
+    const bothFirst = [...withTri].sort(
+      (a, b) => (b.paidTriangle && b.incurredTriangle ? 1 : 0) - (a.paidTriangle && a.incurredTriangle ? 1 : 0),
+    );
+    // Güncel branşla aynı ad+frekans, sonra aynı frekans, sonra ilk (her ikisi olan öne alınmış)
     return (
-      withTri.find((b) => activeBranch && b.frequency === activeBranch.frequency && b.name === activeBranch.name) ??
-      withTri.find((b) => activeBranch && b.frequency === activeBranch.frequency) ??
-      withTri[0] ??
+      bothFirst.find((b) => activeBranch && b.frequency === activeBranch.frequency && b.name === activeBranch.name) ??
+      bothFirst.find((b) => activeBranch && b.frequency === activeBranch.frequency) ??
+      bothFirst[0] ??
       null
     );
   }
   const priorPeriodOptions = project.periods.filter(
     (p) => p.id !== project.activePeriodId && p.branches.some((b) => b.paidTriangle || b.triangle),
   );
+  const baseBranch = priorPeriodId ? baseBranchOf(priorPeriodId) : null;
+  const baseMissingIncurred = !!baseBranch && !baseBranch.incurredTriangle;
 
   // Seçili dönem/kaynak değişince dataset seçimini sıfırla
   useEffect(() => {
@@ -270,6 +276,13 @@ export function LoadFromDataStore({ onClose, onLoaded }: Props) {
               <p className="text-[10px]" style={{ color: "var(--muted)" }}>
                 Bu dönemin üçgeni temel alınır; güncel dönemin artımsal hareketi onun üzerine eklenir.
               </p>
+              {baseMissingIncurred && (
+                <p className="text-[10px] rounded px-2 py-1.5" style={{ background: "var(--danger-soft)", color: "var(--danger)" }}>
+                  Uyarı: seçilen dönemde <b>muallak (incurred)</b> üçgeni yok — yalnızca ödeme (paid)
+                  üçgeni ileri taşınır, incurred üçgeni üretilmez. Doğru muallak için temel dönemi
+                  hem paid hem incurred üçgeni olacak şekilde (hasar verisinden) yükleyin.
+                </p>
+              )}
             </div>
           )}
 

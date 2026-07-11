@@ -36,6 +36,10 @@ export interface Branch {
   /** Gerçekleşen (incurred) üçgeni — DataTab görünümü ve Muallak hesabı için */
   incurredTriangle?: Triangle | null;
 
+  /** Kümülatif ihbar adedi üçgeni — Frekans-Şiddet için. Yalnızca DOSYA_NO'lu
+   *  hasar verisinden yüklenen branşlarda dolu olur. */
+  countTriangle?: Triangle | null;
+
   method: LDFMethod;
   window: Window;
   excludedCells: string[];

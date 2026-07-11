@@ -7,23 +7,27 @@ import {
   ReferenceLine,
 } from "recharts";
 import { useProject } from "@/lib/project-store";
-import { useModelLock } from "@/lib/use-model-lock";
-import { ModelLockBanner } from "@/components/ModelLockBanner";
 import { computeBranchSummary } from "@/lib/reserve-pipeline";
 import {
-  buildFlatRateFn,
-  buildCurveFn,
-  discountBranch,
+  defaultDiscountConfig,
+  discountWithStandard,
+  SEDDK_FLAT_RATE_2025,
   type CurveNode,
+  type DiscountConfig,
   type DiscountResult,
+  type RaMethod,
+  type RateMode,
+  type ReportingStandard,
+  type StandardDiscountResult,
 } from "@/lib/discount-engine";
 import { formatNumber } from "@/lib/api";
+import { useModelLock } from "@/lib/use-model-lock";
+import { ModelLockBanner } from "@/components/ModelLockBanner";
 import type { Branch, Period } from "@/types/project";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type RateMode = "flat" | "curve";
-type MainTab = "summary" | "cashflow" | "sensitivity";
+type MainTab = "summary" | "cashflow" | "sensitivity" | "comparison";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -342,55 +346,53 @@ function CashflowPanel({ result }: { result: DiscountResult }) {
 
 // ─── Sensitivity Panel ─────────────────────────────────────────────────────────
 
+function shockedConfig(config: DiscountConfig, shock: number): DiscountConfig {
+  if (config.rateMode === "flat") {
+    return { ...config, flatRate: Math.max(0.001, config.flatRate + shock) };
+  }
+  return {
+    ...config,
+    curveNodes: config.curveNodes.map((n) => ({
+      ...n,
+      rate: Math.max(0.001, n.rate + shock),
+    })),
+  };
+}
+
 function SensitivityPanel({
   rows,
-  rateMode,
-  baseRate,
-  curveNodes,
+  config,
   monthlyPattern,
 }: {
   rows: { origin: string; unpaid: number }[];
-  rateMode: RateMode;
-  baseRate: number;
-  curveNodes: CurveNode[];
+  config: DiscountConfig;
   monthlyPattern: Record<string, { month: number; weight: number }[]>;
 }) {
-  // 11 nokta: baseRate ± %5, 1'er bp adım
+  const isIfrs17 = config.standard === "ifrs17";
+  const baseRate = config.flatRate;
+  const rateMode = config.rateMode;
+
+  // 11 nokta: baz ± 500bp, 100bp adım
   const lineData = useMemo(() => {
     const points: { rate: string; "İskontolu Unpaid": number; "İskonto Tutarı": number }[] = [];
     for (let bps = -500; bps <= 500; bps += 100) {
-      const shock = bps / 10000;
-      let getRateFn: (month: number) => number;
-      if (rateMode === "flat") {
-        getRateFn = buildFlatRateFn(Math.max(0.001, baseRate + shock));
-      } else {
-        const shifted = curveNodes.map((n) => ({ ...n, rate: Math.max(0.001, n.rate + shock) }));
-        getRateFn = buildCurveFn(shifted);
-      }
-      const r = discountBranch(rows, monthlyPattern, getRateFn);
+      const r = discountWithStandard(rows, monthlyPattern, shockedConfig(config, bps / 10000));
       points.push({
         rate: bps === 0 ? "Baz" : `${bps > 0 ? "+" : ""}${bps}bp`,
-        "İskontolu Unpaid": Math.round(r.totals.bel),
-        "İskonto Tutarı": Math.round(r.totals.unpaid - r.totals.bel),
+        "İskontolu Unpaid": Math.round(r.base.totals.bel),
+        "İskonto Tutarı": Math.round(r.base.totals.unpaid - r.base.totals.bel),
       });
     }
     return points;
-  }, [rateMode, baseRate, curveNodes, rows, monthlyPattern]);
+  }, [config, rows, monthlyPattern]);
 
   // Tablo için 5 senaryo
   const tableScenarios = useMemo(() => {
-    return [-0.02, -0.01, 0, 0.01, 0.02].map((shock) => {
-      let getRateFn: (month: number) => number;
-      if (rateMode === "flat") {
-        getRateFn = buildFlatRateFn(Math.max(0.001, baseRate + shock));
-      } else {
-        const shifted = curveNodes.map((n) => ({ ...n, rate: Math.max(0.001, n.rate + shock) }));
-        getRateFn = buildCurveFn(shifted);
-      }
-      const r = discountBranch(rows, monthlyPattern, getRateFn);
-      return { shock, result: r };
-    });
-  }, [rateMode, baseRate, curveNodes, rows, monthlyPattern]);
+    return [-0.02, -0.01, 0, 0.01, 0.02].map((shock) => ({
+      shock,
+      result: discountWithStandard(rows, monthlyPattern, shockedConfig(config, shock)),
+    }));
+  }, [config, rows, monthlyPattern]);
 
   const baseResult = tableScenarios.find((s) => s.shock === 0)?.result;
 
@@ -442,16 +444,21 @@ function SensitivityPanel({
               <th className="px-4 py-2.5 text-left font-medium text-[color:var(--muted-strong)]">Senaryo</th>
               <th className="px-4 py-2.5 text-right font-medium text-[color:var(--muted-strong)]">Faiz</th>
               <th className="px-4 py-2.5 text-right font-medium text-[color:var(--muted-strong)]">Unpaid Liability</th>
-              <th className="px-4 py-2.5 text-right font-medium text-[color:var(--muted-strong)]">İskontolu Unpaid</th>
+              <th className="px-4 py-2.5 text-right font-medium text-[color:var(--muted-strong)]">{isIfrs17 ? "BEL" : "İskontolu Unpaid"}</th>
               <th className="px-4 py-2.5 text-right font-medium text-[color:var(--muted-strong)]">İskonto Tutarı</th>
+              {isIfrs17 && <th className="px-4 py-2.5 text-right font-medium text-[color:var(--muted-strong)]">LIC</th>}
               <th className="px-4 py-2.5 text-right font-medium text-[color:var(--muted-strong)]">İskonto %</th>
-              <th className="px-4 py-2.5 text-right font-medium text-[color:var(--muted-strong)]">Δ İsk. Unpaid</th>
+              <th className="px-4 py-2.5 text-right font-medium text-[color:var(--muted-strong)]">{isIfrs17 ? "Δ LIC" : "Δ İsk. Unpaid"}</th>
             </tr>
           </thead>
           <tbody>
             {tableScenarios.map(({ shock, result: r }, i) => {
               const isBase = shock === 0;
-              const delta = baseResult ? r.totals.bel - baseResult.totals.bel : 0;
+              const delta = baseResult
+                ? isIfrs17
+                  ? r.lic - baseResult.lic
+                  : r.base.totals.bel - baseResult.base.totals.bel
+                : 0;
               const effectiveRate = rateMode === "flat" ? baseRate + shock : null;
               return (
                 <tr
@@ -469,11 +476,12 @@ function SensitivityPanel({
                   <td className="px-4 py-2 text-right font-mono">
                     {effectiveRate !== null ? pct(effectiveRate, 1) : "—"}
                   </td>
-                  <td className="px-4 py-2 text-right font-mono">{fmt(r.totals.unpaid)}</td>
-                  <td className="px-4 py-2 text-right font-mono">{fmt(r.totals.bel)}</td>
-                  <td className="px-4 py-2 text-right font-mono">{fmt(r.totals.unpaid - r.totals.bel)}</td>
-                  <td className="px-4 py-2 text-right font-mono" style={{ color: discountColor(r.totals.discountPct) }}>
-                    {pct(r.totals.discountPct)}
+                  <td className="px-4 py-2 text-right font-mono">{fmt(r.base.totals.unpaid)}</td>
+                  <td className="px-4 py-2 text-right font-mono">{fmt(r.base.totals.bel)}</td>
+                  <td className="px-4 py-2 text-right font-mono">{fmt(r.base.totals.unpaid - r.base.totals.bel)}</td>
+                  {isIfrs17 && <td className="px-4 py-2 text-right font-mono">{fmt(r.lic)}</td>}
+                  <td className="px-4 py-2 text-right font-mono" style={{ color: discountColor(r.base.totals.discountPct) }}>
+                    {pct(r.base.totals.discountPct)}
                   </td>
                   <td
                     className="px-4 py-2 text-right font-mono"
@@ -487,6 +495,94 @@ function SensitivityPanel({
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+// ─── Comparison Panel (IFRS 4 vs IFRS 17) ─────────────────────────────────────
+
+function ComparisonPanel({
+  comparison,
+  configs,
+}: {
+  comparison: Record<ReportingStandard, StandardDiscountResult>;
+  configs: Record<ReportingStandard, DiscountConfig>;
+}) {
+  const r4 = comparison.ifrs4;
+  const r17 = comparison.ifrs17;
+  const raLabel =
+    configs.ifrs17.riskAdjustment.method === "pct_of_bel"
+      ? `BEL × %${(configs.ifrs17.riskAdjustment.pctOfBel * 100).toFixed(1)}`
+      : configs.ifrs17.riskAdjustment.method === "cost_of_capital"
+      ? `CoC %${(configs.ifrs17.riskAdjustment.cocRate * 100).toFixed(1)}`
+      : "Yok";
+  const rate4 =
+    configs.ifrs4.rateMode === "none"
+      ? "Nominal (iskontosuz)"
+      : configs.ifrs4.rateMode === "flat"
+      ? `Sabit %${(configs.ifrs4.flatRate * 100).toFixed(1)}`
+      : `Eğri (${configs.ifrs4.curveNodes.length} nokta)`;
+  const rate17 =
+    (configs.ifrs17.rateMode === "flat"
+      ? `Sabit %${(configs.ifrs17.flatRate * 100).toFixed(1)}`
+      : `Eğri (${configs.ifrs17.curveNodes.length} nokta)`) +
+    ` + ${configs.ifrs17.illiquidityPremiumBps}bp illikidite`;
+
+  const carried4 = r4.base.totals.bel; // IFRS 4 bilanço karşılığı
+  const carried17 = r17.lic; // IFRS 17 LIC
+  const delta = carried17 - carried4;
+
+  const rows: { label: string; v4: string; v17: string }[] = [
+    { label: "İskonto yaklaşımı", v4: rate4, v17: rate17 },
+    { label: "Unpaid Liability (nominal)", v4: fmt(r4.base.totals.unpaid), v17: fmt(r17.base.totals.unpaid) },
+    { label: "İskontolu rezerv / BEL", v4: fmt(r4.base.totals.bel), v17: fmt(r17.base.totals.bel) },
+    { label: "İskonto tutarı", v4: fmt(r4.base.totals.unpaid - r4.base.totals.bel), v17: fmt(r17.base.totals.unpaid - r17.base.totals.bel) },
+    { label: `Risk Adjustment (${raLabel})`, v4: "—", v17: fmt(r17.riskAdjustment.total) },
+    { label: "Bilanço karşılığı", v4: fmt(carried4), v17: `${fmt(carried17)} (LIC)` },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--border)" }}>
+        <table className="w-full text-xs">
+          <thead>
+            <tr style={{ background: "var(--surface-alt)" }}>
+              <th className="px-4 py-2.5 text-left font-medium text-[color:var(--muted-strong)]" />
+              <th className="px-4 py-2.5 text-right font-medium text-[color:var(--muted-strong)]">IFRS 4</th>
+              <th className="px-4 py-2.5 text-right font-medium text-[color:var(--muted-strong)]">IFRS 17</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, i) => (
+              <tr
+                key={row.label}
+                className="border-t"
+                style={{ borderColor: "var(--border)", background: i % 2 === 0 ? "var(--surface)" : "var(--surface-alt)" }}
+              >
+                <td className="px-4 py-2.5 font-medium text-[color:var(--muted-strong)]">{row.label}</td>
+                <td className="px-4 py-2.5 text-right font-mono">{row.v4}</td>
+                <td className="px-4 py-2.5 text-right font-mono">{row.v17}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr className="border-t-2 font-semibold" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
+              <td className="px-4 py-3">Fark (IFRS 17 − IFRS 4)</td>
+              <td className="px-4 py-3" />
+              <td className="px-4 py-3 text-right font-mono" style={{ color: delta > 0 ? "#ef4444" : "#22c55e" }}>
+                {delta > 0 ? "+" : ""}{fmt(delta)}
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <p className="text-xs text-[color:var(--muted)] leading-relaxed">
+        IFRS 4 karşılığı düzenleyici iskonto sonrası rezervdir; IFRS 17 LIC ise
+        bottom-up eğriyle iskontolanmış BEL üzerine finansal olmayan risk için
+        Risk Adjustment ekler. Parametreler sol paneldeki ilgili standart
+        seçiliyken düzenlenebilir — bu tablo iki konfigürasyonun güncel halini
+        karşılaştırır.
+      </p>
     </div>
   );
 }
@@ -543,15 +639,20 @@ export default function DiscountPage() {
   const { project } = useProject();
 
   const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
-  const [rateMode, setRateMode] = useState<RateMode>("flat");
-  const [flatRate, setFlatRate] = useState<number>(0.3);
-  const [curveNodes, setCurveNodes] = useState<CurveNode[]>([
-    { month: 12, rate: 0.28 },
-    { month: 36, rate: 0.25 },
-    { month: 60, rate: 0.22 },
-    { month: 120, rate: 0.20 },
-  ]);
+  const [standard, setStandard] = useState<ReportingStandard>("ifrs4");
+  // Her standardın konfigürasyonu ayrı tutulur — toggle ile kullanıcı
+  // düzenlemeleri kaybolmaz.
+  const [configs, setConfigs] = useState<Record<ReportingStandard, DiscountConfig>>({
+    ifrs4: defaultDiscountConfig("ifrs4"),
+    ifrs17: defaultDiscountConfig("ifrs17"),
+  });
+  const config = configs[standard];
+  const patchConfig = (patch: Partial<DiscountConfig>) =>
+    setConfigs((prev) => ({ ...prev, [standard]: { ...prev[standard], ...patch } }));
   const [mainTab, setMainTab] = useState<MainTab>("summary");
+  // Nominal modda sensitivite anlamsız — sekme gizlenir, açıksa özete dön
+  const effectiveTab: MainTab =
+    mainTab === "sensitivity" && config.rateMode === "none" ? "summary" : mainTab;
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const allBranches = useMemo(() => {
@@ -574,14 +675,7 @@ export default function DiscountPage() {
 
   const reserveRows = useMemo<{ origin: string; unpaid: number }[]>(() => {
     if (!activeBranch) return [];
-    // Hasar üçgeni yoksa paid üçgenini fallback olarak kullan
-    const branchForSummary =
-      activeBranch.triangle
-        ? activeBranch
-        : activeBranch.paidTriangle
-        ? { ...activeBranch, triangle: activeBranch.paidTriangle }
-        : activeBranch;
-    return computeBranchSummary(branchForSummary).rows.map((r) => ({
+    return computeBranchSummary(activeBranch).rows.map((r) => ({
       origin: r.origin,
       unpaid: r.latest + r.ibnr,
     }));
@@ -590,15 +684,20 @@ export default function DiscountPage() {
   const monthlyPattern = (activeBranch?.cashflowMonthlyPattern ?? {}) as Record<string, { month: number; weight: number }[]>;
   const hasPattern = Object.keys(monthlyPattern).length > 0;
 
-  const getRateFn = useMemo(() => {
-    if (rateMode === "flat") return buildFlatRateFn(flatRate);
-    return buildCurveFn(curveNodes);
-  }, [rateMode, flatRate, curveNodes]);
-
-  const discountResult = useMemo<DiscountResult | null>(() => {
+  const standardResult = useMemo<StandardDiscountResult | null>(() => {
     if (!hasPattern || reserveRows.length === 0) return null;
-    return discountBranch(reserveRows, monthlyPattern, getRateFn);
-  }, [reserveRows, monthlyPattern, getRateFn, hasPattern]);
+    return discountWithStandard(reserveRows, monthlyPattern, config);
+  }, [reserveRows, monthlyPattern, config, hasPattern]);
+  const discountResult: DiscountResult | null = standardResult?.base ?? null;
+
+  // Karşılaştırma sekmesi: her iki standardın güncel konfigürasyonu ile hesap
+  const comparison = useMemo<Record<ReportingStandard, StandardDiscountResult> | null>(() => {
+    if (!hasPattern || reserveRows.length === 0) return null;
+    return {
+      ifrs4: discountWithStandard(reserveRows, monthlyPattern, configs.ifrs4),
+      ifrs17: discountWithStandard(reserveRows, monthlyPattern, configs.ifrs17),
+    };
+  }, [reserveRows, monthlyPattern, configs, hasPattern]);
 
   return (
     <div className="flex flex-col h-screen overflow-hidden">
@@ -653,32 +752,143 @@ export default function DiscountPage() {
               </div>
             )}
 
+            {/* Standart seçimi */}
+            <div>
+              <label className="block text-[10px] font-medium text-[color:var(--muted-strong)] mb-1.5">Raporlama Standardı</label>
+              <div className="flex rounded-lg overflow-hidden border" style={{ borderColor: "var(--border)" }}>
+                {(["ifrs4", "ifrs17"] as ReportingStandard[]).map((s) => (
+                  <button key={s} onClick={() => setStandard(s)} className="flex-1 py-1.5 text-[10px] font-semibold transition"
+                    style={{ background: standard === s ? "var(--primary)" : "var(--surface)", color: standard === s ? "#fff" : "var(--muted-strong)" }}>
+                    {s === "ifrs4" ? "IFRS 4" : "IFRS 17"}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[10px] text-[color:var(--muted)] mt-1 leading-relaxed">
+                {standard === "ifrs4"
+                  ? "Düzenleyici iskonto (SEDDK) veya nominal. Risk Adjustment yok."
+                  : "Bottom-up eğri (risk-free + illikidite primi) + Risk Adjustment → LIC."}
+              </p>
+            </div>
+
             <div>
               <label className="block text-[10px] font-medium text-[color:var(--muted-strong)] mb-1.5">İskonto Yöntemi</label>
               <div className="flex rounded-lg overflow-hidden border" style={{ borderColor: "var(--border)" }}>
-                {(["flat", "curve"] as RateMode[]).map((m) => (
-                  <button key={m} onClick={() => setRateMode(m)} className="flex-1 py-1.5 text-[10px] font-medium transition"
-                    style={{ background: rateMode === m ? "var(--primary)" : "var(--surface)", color: rateMode === m ? "#fff" : "var(--muted-strong)" }}>
-                    {m === "flat" ? "Sabit" : "Eğri"}
+                {(standard === "ifrs4"
+                  ? (["none", "flat", "curve"] as RateMode[])
+                  : (["flat", "curve"] as RateMode[])
+                ).map((m) => (
+                  <button key={m} onClick={() => patchConfig({ rateMode: m })} className="flex-1 py-1.5 text-[10px] font-medium transition"
+                    style={{ background: config.rateMode === m ? "var(--primary)" : "var(--surface)", color: config.rateMode === m ? "#fff" : "var(--muted-strong)" }}>
+                    {m === "none" ? "Nominal" : m === "flat" ? "Sabit" : "Eğri"}
                   </button>
                 ))}
               </div>
             </div>
 
-            {rateMode === "flat" && (
+            {config.rateMode === "flat" && (
               <div>
-                <label className="block text-[10px] font-medium text-[color:var(--muted-strong)] mb-1">Yıllık Faiz (%)</label>
+                <label className="block text-[10px] font-medium text-[color:var(--muted-strong)] mb-1">
+                  {standard === "ifrs17" ? "Risk-Free Faiz (%)" : "Yıllık Faiz (%)"}
+                </label>
                 <input
                   type="number" min={0} max={200} step={0.1}
-                  value={(flatRate * 100).toFixed(1)}
-                  onChange={(e) => setFlatRate(Number(e.target.value) / 100)}
+                  value={(config.flatRate * 100).toFixed(1)}
+                  onChange={(e) => patchConfig({ flatRate: Number(e.target.value) / 100 })}
                   className="w-full text-xs border border-[color:var(--border)] rounded-md px-2 py-1.5 bg-[color:var(--surface)] text-[color:var(--foreground)]"
                 />
-                <p className="text-[10px] text-[color:var(--muted)] mt-1">SEDDK 2025: %30</p>
+                {standard === "ifrs4" && (
+                  <p className="text-[10px] text-[color:var(--muted)] mt-1">SEDDK 2025: %{(SEDDK_FLAT_RATE_2025 * 100).toFixed(0)}</p>
+                )}
               </div>
             )}
 
-            {rateMode === "curve" && <CurveEditor nodes={curveNodes} onChange={setCurveNodes} />}
+            {config.rateMode === "curve" && (
+              <CurveEditor
+                nodes={config.curveNodes}
+                onChange={(nodes: CurveNode[]) => patchConfig({ curveNodes: nodes })}
+              />
+            )}
+
+            {/* IFRS 17 parametreleri */}
+            {standard === "ifrs17" && (
+              <>
+                <div>
+                  <label className="block text-[10px] font-medium text-[color:var(--muted-strong)] mb-1">İllikidite Primi (bps)</label>
+                  <input
+                    type="number" min={0} max={1000} step={5}
+                    value={config.illiquidityPremiumBps}
+                    onChange={(e) => patchConfig({ illiquidityPremiumBps: Number(e.target.value) })}
+                    className="w-full text-xs border border-[color:var(--border)] rounded-md px-2 py-1.5 bg-[color:var(--surface)] text-[color:var(--foreground)]"
+                  />
+                  <p className="text-[10px] text-[color:var(--muted)] mt-1">Risk-free eğrinin üzerine eklenir (bottom-up).</p>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-medium text-[color:var(--muted-strong)] mb-1">Risk Adjustment</label>
+                  <select
+                    value={config.riskAdjustment.method}
+                    onChange={(e) =>
+                      patchConfig({
+                        riskAdjustment: { ...config.riskAdjustment, method: e.target.value as RaMethod },
+                      })
+                    }
+                    className="w-full text-xs border border-[color:var(--border)] rounded-md px-2 py-1.5 bg-[color:var(--surface)] text-[color:var(--foreground)]"
+                  >
+                    <option value="pct_of_bel">BEL yüzdesi</option>
+                    <option value="cost_of_capital">Cost of Capital</option>
+                    <option value="none">Yok</option>
+                  </select>
+                </div>
+
+                {config.riskAdjustment.method === "pct_of_bel" && (
+                  <div>
+                    <label className="block text-[10px] font-medium text-[color:var(--muted-strong)] mb-1">RA — BEL Yüzdesi (%)</label>
+                    <input
+                      type="number" min={0} max={100} step={0.5}
+                      value={(config.riskAdjustment.pctOfBel * 100).toFixed(1)}
+                      onChange={(e) =>
+                        patchConfig({
+                          riskAdjustment: { ...config.riskAdjustment, pctOfBel: Number(e.target.value) / 100 },
+                        })
+                      }
+                      className="w-full text-xs border border-[color:var(--border)] rounded-md px-2 py-1.5 bg-[color:var(--surface)] text-[color:var(--foreground)]"
+                    />
+                  </div>
+                )}
+
+                {config.riskAdjustment.method === "cost_of_capital" && (
+                  <div className="space-y-2">
+                    <div>
+                      <label className="block text-[10px] font-medium text-[color:var(--muted-strong)] mb-1">CoC Oranı (%)</label>
+                      <input
+                        type="number" min={0} max={50} step={0.5}
+                        value={(config.riskAdjustment.cocRate * 100).toFixed(1)}
+                        onChange={(e) =>
+                          patchConfig({
+                            riskAdjustment: { ...config.riskAdjustment, cocRate: Number(e.target.value) / 100 },
+                          })
+                        }
+                        className="w-full text-xs border border-[color:var(--border)] rounded-md px-2 py-1.5 bg-[color:var(--surface)] text-[color:var(--foreground)]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-medium text-[color:var(--muted-strong)] mb-1">Sermaye Oranı (%)</label>
+                      <input
+                        type="number" min={0} max={100} step={1}
+                        value={(config.riskAdjustment.capitalRatio * 100).toFixed(0)}
+                        onChange={(e) =>
+                          patchConfig({
+                            riskAdjustment: { ...config.riskAdjustment, capitalRatio: Number(e.target.value) / 100 },
+                          })
+                        }
+                        className="w-full text-xs border border-[color:var(--border)] rounded-md px-2 py-1.5 bg-[color:var(--surface)] text-[color:var(--foreground)]"
+                      />
+                      <p className="text-[10px] text-[color:var(--muted)] mt-1">SCR proxy = kalan yükümlülük × bu oran.</p>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
           </div>
         )}
       </div>
@@ -690,11 +900,14 @@ export default function DiscountPage() {
           {([
             { key: "summary", label: "Özet" },
             { key: "cashflow", label: "Nakit Akışı" },
-            { key: "sensitivity", label: "Sensitivite" },
+            ...(config.rateMode !== "none"
+              ? [{ key: "sensitivity" as MainTab, label: "Sensitivite" }]
+              : []),
+            { key: "comparison", label: "IFRS 4 / IFRS 17" },
           ] as { key: MainTab; label: string }[]).map((t) => (
             <button key={t.key} onClick={() => setMainTab(t.key)}
               className={"px-4 py-2.5 text-xs font-medium border-b-2 transition " +
-                (mainTab === t.key ? "border-[color:var(--primary)] text-[color:var(--primary)]" : "border-transparent text-[color:var(--muted-strong)] hover:text-[color:var(--foreground)]")}>
+                (effectiveTab === t.key ? "border-[color:var(--primary)] text-[color:var(--primary)]" : "border-transparent text-[color:var(--muted-strong)] hover:text-[color:var(--foreground)]")}>
               {t.label}
             </button>
           ))}
@@ -714,22 +927,28 @@ export default function DiscountPage() {
               </div>
             </div>
           ) : !discountResult ? (
-            <div className="h-full flex items-center justify-center text-center">
-              <div className="space-y-2">
-                <p className="text-sm text-[color:var(--muted)]">Rezerv verisi hesaplanamadı.</p>
-                <p className="text-xs text-[color:var(--muted)]">Branşa bir üçgen yüklendiğinden emin olun.</p>
-              </div>
+            <div className="h-full flex items-center justify-center">
+              <p className="text-sm text-[color:var(--muted)]">Hesaplanıyor…</p>
             </div>
           ) : (
             <>
               {/* KPI strip */}
-              <div className="grid grid-cols-4 gap-3 mb-6">
-                {[
-                  { label: "Unpaid Liability", value: fmt(discountResult.totals.unpaid), color: "#6366f1" },
-                  { label: "İskontolu Unpaid", value: fmt(discountResult.totals.bel), color: "#3b82f6" },
-                  { label: "İskonto Tutarı", value: fmt(discountResult.totals.unpaid - discountResult.totals.bel), color: "#f97316" },
-                  { label: "İskonto %", value: pct(discountResult.totals.discountPct), color: discountColor(discountResult.totals.discountPct) },
-                ].map((kpi) => (
+              <div className={`grid gap-3 mb-6 ${standard === "ifrs17" ? "grid-cols-5" : "grid-cols-4"}`}>
+                {(standard === "ifrs17" && standardResult
+                  ? [
+                      { label: "Unpaid Liability", value: fmt(discountResult.totals.unpaid), color: "#6366f1" },
+                      { label: "BEL", value: fmt(discountResult.totals.bel), color: "#3b82f6" },
+                      { label: "Risk Adjustment", value: fmt(standardResult.riskAdjustment.total), color: "#a855f7" },
+                      { label: "LIC", value: fmt(standardResult.lic), color: "#0ea5e9" },
+                      { label: "İskonto %", value: pct(discountResult.totals.discountPct), color: discountColor(discountResult.totals.discountPct) },
+                    ]
+                  : [
+                      { label: "Unpaid Liability", value: fmt(discountResult.totals.unpaid), color: "#6366f1" },
+                      { label: "İskontolu Unpaid", value: fmt(discountResult.totals.bel), color: "#3b82f6" },
+                      { label: "İskonto Tutarı", value: fmt(discountResult.totals.unpaid - discountResult.totals.bel), color: "#f97316" },
+                      { label: "İskonto %", value: pct(discountResult.totals.discountPct), color: discountColor(discountResult.totals.discountPct) },
+                    ]
+                ).map((kpi) => (
                   <div key={kpi.label} className="rounded-xl px-4 py-3" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
                     <div className="text-[10px] uppercase tracking-wide text-[color:var(--muted)] mb-1">{kpi.label}</div>
                     <div className="text-xl font-bold font-mono" style={{ color: kpi.color }}>{kpi.value}</div>
@@ -737,16 +956,17 @@ export default function DiscountPage() {
                 ))}
               </div>
 
-              {mainTab === "summary" && <SummaryPanel result={discountResult} />}
-              {mainTab === "cashflow" && <CashflowPanel result={discountResult} />}
-              {mainTab === "sensitivity" && (
+              {effectiveTab === "summary" && <SummaryPanel result={discountResult} />}
+              {effectiveTab === "cashflow" && <CashflowPanel result={discountResult} />}
+              {effectiveTab === "sensitivity" && config.rateMode !== "none" && (
                 <SensitivityPanel
                   rows={reserveRows}
-                  rateMode={rateMode}
-                  baseRate={flatRate}
-                  curveNodes={curveNodes}
+                  config={config}
                   monthlyPattern={monthlyPattern}
                 />
+              )}
+              {effectiveTab === "comparison" && comparison && (
+                <ComparisonPanel comparison={comparison} configs={configs} />
               )}
             </>
           )}

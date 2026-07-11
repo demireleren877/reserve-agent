@@ -145,19 +145,23 @@ export function LoadFromDataStore({ onClose, onLoaded }: Props) {
       }
       if (!ds?.records?.length) throw new Error("Üçgen verisi bulunamadı");
 
-      const rec = (ds.records as TriangleRecord[])[0];
-      const triangle = {
+      const recs = ds.records as TriangleRecord[];
+      const toTri = (rec: TriangleRecord) => ({
         origin_periods: rec.origin_periods,
         development_periods: rec.development_periods,
         values: rec.values,
         triangle_type: rec.triangle_type,
         origin_granularity: rec.origin_granularity,
         development_granularity: rec.development_granularity,
-      };
-      const fileName = `${selectedPeriod?.label ?? ""} – ${rec.brans}`;
-      const paid = rec.triangle_type === "paid" ? triangle : null;
-      const incurred = rec.triangle_type === "incurred" ? triangle : null;
-      setters.setBothTriangles(paid, incurred, fileName);
+      });
+      // Yeni import: iki kayıt (paid + incurred). Eski dataset: tek kayıt.
+      const paidRec = recs.find((r) => r.triangle_type === "paid");
+      const incRec = recs.find((r) => r.triangle_type === "incurred");
+      const paid = paidRec ? toTri(paidRec) : null;
+      const incurred = incRec ? toTri(incRec) : null;
+      const fileName = `${selectedPeriod?.label ?? ""} – ${recs[0]?.brans ?? ""}`;
+      // Ana çalışma üçgeni incurred; yoksa paid'e düşer (eski tek-üçgen dataset)
+      setters.setBothTriangles(paid, incurred ?? paid, fileName);
       onLoaded();
       onClose();
     } catch (e) {

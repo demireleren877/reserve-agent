@@ -488,17 +488,17 @@ function PeriodDetail({ period }: { period: DataPeriod }) {
 
   // Üçgen wizard tamamlandığında
   async function handleTriangleImportDone(result: TriangleWizardResult) {
-    const rec = result.record;
+    const recs = result.records; // [paid, incurred]
     const ds: Dataset = {
       datasetId: newId(),
       typeId: "ucgen",
       meta: {
         filename: result.filename,
         uploadedAt: new Date().toISOString(),
-        record_count: rec.origin_periods.length,
-        brans_list: [rec.brans],
+        record_count: recs[0]?.origin_periods.length ?? 0,
+        brans_list: recs[0] ? [recs[0].brans] : [],
       },
-      records: [rec],
+      records: recs,
     };
     setDataset(period.id, ds).catch(() => {});
     setShowTriangleWizard(false);

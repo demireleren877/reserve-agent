@@ -21,7 +21,7 @@ router = APIRouter(prefix="/v1/locks", tags=["locks"])
 
 CurrentUser = Annotated[dict, Depends(get_current_user)]
 
-LOCK_TTL_SECONDS = 300  # 5 dakika; frontend 60sn'de bir yeniler
+LOCK_TTL_SECONDS = 180  # 3 dakika; frontend 60sn'de bir yeniler (sert kapatmada backstop)
 
 
 class LockStatus(BaseModel):

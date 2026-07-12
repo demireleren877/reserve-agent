@@ -73,31 +73,43 @@ export function useModelLock(lockKey: string | null) {
       heartbeatRef.current = null;
     }
 
-    const prevKey = lockKeyRef.current;
     lockKeyRef.current = lockKey;
-
-    if (prevKey && prevKey !== lockKey) {
-      release(prevKey);
-    }
 
     if (!lockKey) {
       setState({ status: "idle" });
       return;
     }
 
+    let cancelled = false;
     acquire(lockKey).then((ok) => {
+      // Bu arada unmount/lockKey değişimi olduysa heartbeat kurma (zombie kilit önle)
+      if (cancelled) return;
       if (ok) {
         heartbeatRef.current = setInterval(() => acquire(lockKey), HEARTBEAT_MS);
       }
     });
 
+    // Temizlik unmount'ta VE lockKey değişince çalışır → kilidi HER durumda bırak
+    // (logout, başka sayfaya geçiş, branch değiştirme). Aksi halde kilit TTL'e
+    // kadar kalır ve diğer kullanıcı "başkası düzenliyor" görür.
     return () => {
+      cancelled = true;
       if (heartbeatRef.current) {
         clearInterval(heartbeatRef.current);
         heartbeatRef.current = null;
       }
+      release(lockKey);
     };
   }, [lockKey, acquire, release]);
+
+  // Logout: token temizlenmeden hemen önce kilidi bırak (geçerli token'la DELETE)
+  useEffect(() => {
+    const onLogout = () => {
+      if (lockKeyRef.current) release(lockKeyRef.current);
+    };
+    window.addEventListener("app-logout", onLogout);
+    return () => window.removeEventListener("app-logout", onLogout);
+  }, [release]);
 
   // Sayfa kapanınca kilidi bırak
   useEffect(() => {

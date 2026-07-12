@@ -55,6 +55,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   function logout() {
+    // Token temizlenmeden ÖNCE: açık model kilidini bırak (release DELETE hâlâ
+    // geçerli token'la gider). Aksi halde kilit TTL'e kadar kalır.
+    window.dispatchEvent(new Event("app-logout"));
     clearSession();
     setUser(null);
   }

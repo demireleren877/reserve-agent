@@ -708,12 +708,12 @@ export default function DiscountPage() {
   }, [reserveRows, monthlyPattern, configs, hasPattern]);
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden">
+    <div className="flex flex-col min-h-screen">
       <ModelLockBanner state={lockState} onForceAcquire={forceAcquire} />
-      <div className="flex flex-1 overflow-hidden">
-      {/* Left panel */}
+      <div className="flex flex-1 items-start">
+      {/* Left panel — sayfa kayarken görünür kalsın */}
       <div
-        className="shrink-0 border-r bg-[color:var(--surface)] flex flex-col overflow-y-auto transition-[width] duration-150"
+        className="shrink-0 border-r bg-[color:var(--surface)] flex flex-col sticky top-0 self-start max-h-screen overflow-y-auto transition-[width] duration-150"
         style={{ borderColor: "var(--border)", width: sidebarOpen ? 220 : 40 }}
       >
         {/* Header + toggle */}
@@ -902,9 +902,9 @@ export default function DiscountPage() {
       </div>
 
       {/* Main content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Tab bar */}
-        <div className="shrink-0 border-b px-6 flex items-end gap-1" style={{ borderColor: "var(--border)" }}>
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Tab bar — sayfa kayarken üstte sabit */}
+        <div className="sticky top-0 z-10 bg-[color:var(--background)] border-b px-6 flex items-end gap-1" style={{ borderColor: "var(--border)" }}>
           {([
             { key: "summary", label: "Özet" },
             { key: "cashflow", label: "Nakit Akışı" },
@@ -921,10 +921,10 @@ export default function DiscountPage() {
           ))}
         </div>
 
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6">
+        {/* Content — dikey scroll sayfada */}
+        <div className="flex-1 p-6">
           {!activeBranch ? (
-            <div className="h-full flex items-center justify-center">
+            <div className="min-h-[60vh] flex items-center justify-center">
               <p className="text-sm text-[color:var(--muted)]">Sol panelden bir branş seçin.</p>
             </div>
           ) : !hasPattern ? (

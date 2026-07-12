@@ -506,7 +506,7 @@ function PatternTable({ result, mode }: { result: CashflowComputeResult; mode: "
   const source = mode === "quarterly" ? result.quarterly_pattern : result.monthly_pattern;
   const periodLabel = mode === "quarterly" ? "Period (Çeyrek)" : "Ay";
   return (
-    <div className="overflow-auto">
+    <div className="overflow-x-auto">
       <table className="text-[12px] border-collapse w-full">
         <thead className="sticky top-0" style={{ background: "var(--surface)", zIndex: 1 }}>
           <tr>

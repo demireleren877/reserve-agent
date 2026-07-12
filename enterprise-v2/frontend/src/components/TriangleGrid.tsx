@@ -58,13 +58,16 @@ export function TriangleGrid({ triangle }: Props) {
   }, [triangle]);
 
   return (
-    <div className="ag-theme-quartz" style={{ height: 440, width: "100%" }}>
+    // autoHeight: grid tüm kaza yıllarını gösterir (kendi dikey scroll'u yok),
+    // dikey kaydırma SAYFADA olur. Yatay (dev sütunları) grid'de kalır.
+    <div className="ag-theme-quartz" style={{ width: "100%" }}>
       <AgGridReact
         columnDefs={columnDefs}
         rowData={rowData}
         defaultColDef={{ resizable: true, sortable: false }}
         headerHeight={32}
         rowHeight={30}
+        domLayout="autoHeight"
       />
     </div>
   );

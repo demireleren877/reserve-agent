@@ -50,7 +50,7 @@ const TABS: { id: Tab; label: string; sub: string }[] = [
 ];
 
 export default function Home() {
-  const { navLevel, activePeriod, activeBranch } = useProject();
+  const { navLevel, activePeriod, activeBranch, setReadOnly } = useProject();
   const setters = useBranchSetters("user");
 
   const [tab, setTab] = useState<Tab>("data");
@@ -59,8 +59,14 @@ export default function Home() {
     navLevel === "branch" && activePeriod && activeBranch
       ? `branch:${activePeriod.id}/${activeBranch.id}`
       : null;
-  const { state: lockState } = useModelLock(lockKey);
+  const { state: lockState, forceAcquire } = useModelLock(lockKey);
   const isReadOnly = lockState.status === "locked_by_other";
+
+  // Merkezi kilit: başkası düzenliyorken store yazımları da bloklanır
+  useEffect(() => {
+    setReadOnly(isReadOnly);
+    return () => setReadOnly(false);
+  }, [isReadOnly, setReadOnly]);
 
   // Kilitliyken tüm setter'lar no-op — tek merkezden blok
   const guardedSetters = useMemo(
@@ -705,7 +711,7 @@ export default function Home() {
 
   return (
     <Shell onUploaded={() => setTab("data")}>
-      <ModelLockBanner state={lockState} />
+      <ModelLockBanner state={lockState} onForceAcquire={forceAcquire} />
       <div className="border-b bg-[color:var(--surface)] sticky top-[calc(3.5rem+var(--nav-h,0px))] z-20">
         <div className="flex items-stretch">
           <nav className="flex px-4 overflow-x-auto flex-1" role="tablist">

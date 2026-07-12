@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   AreaChart, Area, LineChart, Line, CartesianGrid, Legend,
@@ -636,7 +636,7 @@ function CurveEditor({ nodes, onChange }: { nodes: CurveNode[]; onChange: (nodes
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function DiscountPage() {
-  const { project } = useProject();
+  const { project, setReadOnly } = useProject();
 
   const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
   const [standard, setStandard] = useState<ReportingStandard>("ifrs4");
@@ -671,7 +671,14 @@ export default function DiscountPage() {
   const lockKey = selectedEntry
     ? `discount:${selectedEntry.period.id}/${activeBranch!.id}`
     : null;
-  const { state: lockState } = useModelLock(lockKey);
+  const { state: lockState, forceAcquire } = useModelLock(lockKey);
+
+  // Başkası düzenliyorken store yazımlarını bloke et (salt okunur)
+  useEffect(() => {
+    const ro = lockState.status === "locked_by_other";
+    setReadOnly(ro);
+    return () => setReadOnly(false);
+  }, [lockState.status, setReadOnly]);
 
   const reserveRows = useMemo<{ origin: string; unpaid: number }[]>(() => {
     if (!activeBranch) return [];
@@ -701,7 +708,7 @@ export default function DiscountPage() {
 
   return (
     <div className="flex flex-col h-screen overflow-hidden">
-      <ModelLockBanner state={lockState} />
+      <ModelLockBanner state={lockState} onForceAcquire={forceAcquire} />
       <div className="flex flex-1 overflow-hidden">
       {/* Left panel */}
       <div

@@ -120,6 +120,34 @@ async def acquire_lock(body: AcquireRequest, user: CurrentUser) -> LockStatus:
     )
 
 
+@router.post("/force-acquire", response_model=LockStatus)
+async def force_acquire_lock(body: AcquireRequest, user: CurrentUser) -> LockStatus:
+    """Kilidi zorla devral — mevcut (başkasının/bayat) kilidi silip kendine al."""
+    uid = int(user["sub"])
+    uname = user["username"]
+    now = datetime.now(timezone.utc)
+    expires = now + timedelta(seconds=LOCK_TTL_SECONDS)
+
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        with conn.cursor() as cur:
+            await cur.execute(
+                "DELETE FROM model_locks WHERE lock_key = :1", [body.lock_key]
+            )
+            await cur.execute(
+                "INSERT INTO model_locks (lock_key, locked_by_id, locked_by_name, locked_at, expires_at) "
+                "VALUES (:1, :2, :3, :4, :5)",
+                [body.lock_key, uid, uname, now, expires],
+            )
+        await conn.commit()
+
+    return LockStatus(
+        locked=True, lock_key=body.lock_key, locked_by_id=uid,
+        locked_by_name=uname, locked_at=now.isoformat(),
+        expires_at=expires.isoformat(), is_mine=True,
+    )
+
+
 @router.delete("/{lock_key:path}", status_code=204)
 async def release_lock(lock_key: str, user: CurrentUser) -> None:
     uid = int(user["sub"])

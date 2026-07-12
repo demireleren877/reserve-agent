@@ -2,6 +2,7 @@
 
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -29,6 +30,7 @@ import {
   putState,
   ApiError as WorkerError,
 } from "@/lib/sync/worker-client";
+import { mergeProjects } from "@/lib/project-merge";
 import { CHAT_CHANGED_EVENT } from "@/lib/chat-storage";
 
 const STORAGE_KEY_PREFIX = "reserve-agent-project-v2";
@@ -94,6 +96,8 @@ interface Ctx {
   branchesForActiveFrequency: Branch[];
   actions: ProjectActions;
   canUndo: boolean;
+  /** Aktif model başkasınca kilitliyken yazmayı engelle (salt okunur) */
+  setReadOnly: (v: boolean) => void;
 }
 
 const ProjectCtx = createContext<Ctx | null>(null);
@@ -117,6 +121,13 @@ export function ProjectProvider({ children, userId }: ProjectProviderProps) {
   // Refs for the debounced worker sync. We don't want stale closures.
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSerializedRef = useRef<string>("");
+  // Çok kullanıcı senkron: son sunucu durumu (3-yollu merge tabanı) + versiyon + push kilidi
+  const baseRef = useRef<Project | null>(null);
+  const versionRef = useRef<number>(0);
+  const pushingRef = useRef<boolean>(false);
+  // Model kilidi başkasındaysa aktif branch'e yazma engellenir (salt okunur)
+  const readOnlyRef = useRef<boolean>(false);
+  const setReadOnly = useCallback((v: boolean) => { readOnlyRef.current = v; }, []);
 
   // Wrap setProject to push undo snapshots for destructive ops
   function setProjectWithUndo(updater: (prev: Project) => Project) {
@@ -142,6 +153,8 @@ export function ProjectProvider({ children, userId }: ProjectProviderProps) {
         if (remote.project && Array.isArray((remote.project as Project).periods)) {
           serverProject = remote.project as Project;
         }
+        baseRef.current = serverProject;      // 3-yollu merge tabanı
+        versionRef.current = remote.version;  // optimistic versiyon
       } catch (e) {
         if (!(e instanceof WorkerError)) console.error("worker fetch failed", e);
       }
@@ -205,7 +218,7 @@ export function ProjectProvider({ children, userId }: ProjectProviderProps) {
   }
 
   async function pushNow() {
-    if (!userId) return;
+    if (!userId || pushingRef.current) return;
     let projectStr = "";
     try {
       projectStr = localStorage.getItem(projectKey) ?? "";
@@ -215,16 +228,68 @@ export function ProjectProvider({ children, userId }: ProjectProviderProps) {
     if (projectStr === lastSerializedRef.current) {
       return; // nothing actually changed
     }
+    if (!projectStr) return;
+    pushingRef.current = true;
     try {
-      const projectVal = projectStr ? JSON.parse(projectStr) : null;
-      await putState({ project: projectVal });
-      lastSerializedRef.current = projectStr;
-    } catch (e) {
-      // Best-effort. The next change will retry. Don't surface an error toast
-      // for transient failures — log and move on.
-      console.error("worker push failed", e);
+      const mine = JSON.parse(projectStr) as Project;
+      try {
+        const res = await putState({ project: mine, expectedVersion: versionRef.current });
+        versionRef.current = res.version;
+        baseRef.current = mine;
+        lastSerializedRef.current = projectStr;
+      } catch (e) {
+        if (e instanceof WorkerError && e.status === 409) {
+          // Başkası bu arada yazmış → sunucuyu çek, branch-düzeyi birleştir, tekrar dene
+          const remote = await fetchState<Project, null>();
+          const theirs = (remote.project as Project) ?? EMPTY;
+          const merged = mergeProjects(baseRef.current, mine, theirs);
+          baseRef.current = theirs;
+          versionRef.current = remote.version;
+          try {
+            const res2 = await putState({ project: merged, expectedVersion: versionRef.current });
+            versionRef.current = res2.version;
+            baseRef.current = merged;
+          } catch {
+            /* ikinci çakışma — bir sonraki değişiklikte tekrar denenir */
+          }
+          const mergedStr = JSON.stringify(merged);
+          lastSerializedRef.current = mergedStr;
+          setProject(merged); // başkasının değişikliklerini de ekranıma getir
+        } else {
+          console.error("worker push failed", e);
+        }
+      }
+    } finally {
+      pushingRef.current = false;
     }
   }
+
+  // Canlı senkron: 15 sn'de bir sunucuyu yokla; başkası yazdıysa branch-düzeyi
+  // birleştirip ekrana getir (bayat sekme + farklı-model çakışması çözülür).
+  useEffect(() => {
+    if (!hydrated || !userId) return;
+    const id = setInterval(async () => {
+      if (pushingRef.current) return;
+      try {
+        const remote = await fetchState<Project, null>();
+        if (remote.version === versionRef.current) return; // değişiklik yok
+        const theirs = (remote.project as Project) ?? EMPTY;
+        let localStr = "";
+        try { localStr = localStorage.getItem(projectKey) ?? ""; } catch { return; }
+        const mine = localStr ? (JSON.parse(localStr) as Project) : EMPTY;
+        const merged = mergeProjects(baseRef.current, mine, theirs);
+        baseRef.current = theirs;
+        versionRef.current = remote.version;
+        if (JSON.stringify(merged) !== localStr) {
+          setProject(merged); // yerelde değişiklik varsa persist efekti geri push'lar
+        }
+      } catch {
+        /* geçici hata — sonraki tur */
+      }
+    }, 15_000);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated, userId, projectKey]);
 
   // Flush on tab close so we don't lose the last edit.
   useEffect(() => {
@@ -497,6 +562,8 @@ export function ProjectProvider({ children, userId }: ProjectProviderProps) {
         });
       },
       updateActiveBranch(updater, action, details, source) {
+        // Başka kullanıcı bu modeli kilitlediyse yazma yok (salt okunur)
+        if (readOnlyRef.current) return;
         setProject((prev) => {
           if (!prev.activePeriodId || !prev.activeBranchId) return prev;
           return {
@@ -671,6 +738,7 @@ export function ProjectProvider({ children, userId }: ProjectProviderProps) {
         branchesForActiveFrequency,
         actions,
         canUndo,
+        setReadOnly,
       }}
     >
       {children}

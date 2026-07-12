@@ -556,7 +556,7 @@ export default function CashflowPage() {
     navLevel === "branch" && activePeriodId && activeBranchId
       ? `cashflow:${activePeriodId}/${activeBranchId}`
       : null;
-  const { state: lockState } = useModelLock(lockKey);
+  const { state: lockState, forceAcquire } = useModelLock(lockKey);
   const isReadOnly = lockState.status === "locked_by_other";
 
   const [result, setResult] = useState<CashflowComputeResult | null>(null);
@@ -906,7 +906,7 @@ export default function CashflowPage() {
 
   return (
     <div className="min-h-screen">
-      <ModelLockBanner state={lockState} />
+      <ModelLockBanner state={lockState} onForceAcquire={forceAcquire} />
       {/* Header */}
       <header className="border-b bg-[color:var(--surface)] px-6 h-14 flex items-center justify-between sticky top-0 z-40">
         <div className="flex items-center gap-3">

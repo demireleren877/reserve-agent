@@ -124,5 +124,22 @@ export function useModelLock(lockKey: string | null) {
     if (lockKeyRef.current) release(lockKeyRef.current);
   }, [release]);
 
-  return { state, forceRelease };
+  // Kilidi zorla devral (bayat/başkasının kilidini sil, kendine al)
+  const forceAcquire = useCallback(async () => {
+    const key = lockKeyRef.current;
+    if (!key) return;
+    try {
+      const res = await apiFetch("/v1/locks/force-acquire", {
+        method: "POST",
+        body: JSON.stringify({ lock_key: key }),
+      });
+      if (res.ok) {
+        setState({ status: "mine" });
+        if (heartbeatRef.current) clearInterval(heartbeatRef.current);
+        heartbeatRef.current = setInterval(() => acquire(key), HEARTBEAT_MS);
+      }
+    } catch { /* ignore */ }
+  }, [acquire]);
+
+  return { state, forceRelease, forceAcquire };
 }

@@ -2,7 +2,13 @@
 
 import type { LockState } from "@/lib/use-model-lock";
 
-export function ModelLockBanner({ state }: { state: LockState }) {
+export function ModelLockBanner({
+  state,
+  onForceAcquire,
+}: {
+  state: LockState;
+  onForceAcquire?: () => void;
+}) {
   if (state.status !== "locked_by_other") return null;
 
   return (
@@ -18,9 +24,19 @@ export function ModelLockBanner({ state }: { state: LockState }) {
         <rect x="3" y="11" width="18" height="11" rx="2" />
         <path d="M7 11V7a5 5 0 0 1 10 0v4" />
       </svg>
-      <span>
-        <strong>{state.lockedByName ?? "Başka bir kullanıcı"}</strong> bu modeli düzenliyor — şu an salt okunur moddesiniz.
+      <span className="flex-1">
+        <strong>{state.lockedByName ?? "Başka bir kullanıcı"}</strong> bu modeli düzenliyor — şu an salt okunur moddasınız.
       </span>
+      {onForceAcquire && (
+        <button
+          onClick={onForceAcquire}
+          className="shrink-0 px-2.5 py-1 rounded-md font-semibold transition"
+          style={{ background: "#92400e", color: "#fffbeb" }}
+          title="Kilidi devral (dikkat: diğer kullanıcının kaydedilmemiş değişikliği kaybolabilir)"
+        >
+          Devral
+        </button>
+      )}
     </div>
   );
 }

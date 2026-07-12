@@ -28,6 +28,7 @@ class MockCursor:
         self.execute = AsyncMock()
         self.fetchone = AsyncMock(return_value=None)
         self.fetchall = AsyncMock(return_value=[])
+        self.rowcount = 1  # koşullu UPDATE varsayılan: 1 satır etkilendi
         self._var_val = MagicMock()
         self._var_val.getvalue = MagicMock(return_value=[1])
 

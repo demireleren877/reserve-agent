@@ -79,6 +79,38 @@ async def test_put_state_version_conflict(client, user_headers):
 
 
 @pytest.mark.asyncio
+async def test_put_state_atomic_race_no_rows_updated(client, user_headers):
+    """SELECT versiyonu eşleşse bile koşullu UPDATE 0 satır etkilerse (eş zamanlı
+    yazım yarışı) → 409. Bu, hiçbir yazımın sessizce kaybolmamasını garantiler."""
+    c, cur = client
+    cur.fetchone.return_value = (3,)   # SELECT: versiyon 3 (beklenenle eşleşir)
+    cur.rowcount = 0                   # UPDATE ... WHERE version=3 → 0 satır (başkası araya girdi)
+
+    res = await c.put(
+        "/v1/state",
+        json={"project": {"x": 1}, "expectedVersion": 3},
+        headers=user_headers,
+    )
+    assert res.status_code == 409
+    assert res.json()["detail"] == "version_conflict"
+
+
+@pytest.mark.asyncio
+async def test_put_state_with_matching_version_succeeds(client, user_headers):
+    c, cur = client
+    cur.fetchone.return_value = (3,)
+    cur.rowcount = 1  # koşullu UPDATE başarılı
+
+    res = await c.put(
+        "/v1/state",
+        json={"project": {"x": 1}, "expectedVersion": 3},
+        headers=user_headers,
+    )
+    assert res.status_code == 200
+    assert res.json()["version"] == 4
+
+
+@pytest.mark.asyncio
 async def test_delete_state(client, user_headers):
     c, _ = client
     res = await c.delete("/v1/state", headers=user_headers)

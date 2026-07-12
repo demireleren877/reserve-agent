@@ -89,17 +89,29 @@ async def put_state(body: PutStateRequest, user: CurrentUser) -> PutStateRespons
                 current_version = existing[0]
                 if body.expectedVersion is not None and body.expectedVersion != current_version:
                     raise HTTPException(status_code=409, detail="version_conflict")
-                new_version = current_version + 1
-                await cur.execute(
-                    "UPDATE team_state SET version=:1, updated_at=:2, "
-                    "updated_by_id=:3, updated_by_name=:4, "
-                    "project_json=:5, chat_json=:6 WHERE id=1",
-                    [
-                        new_version, now, uid, uname,
-                        json.dumps(body.project) if body.project is not None else None,
-                        json.dumps(body.chat) if body.chat is not None else None,
-                    ],
-                )
+                proj_val = json.dumps(body.project) if body.project is not None else None
+                chat_val = json.dumps(body.chat) if body.chat is not None else None
+                if body.expectedVersion is not None:
+                    # ATOMİK: yalnız versiyon hâlâ beklenen ise yaz. Eş zamanlı iki
+                    # yazımdan biri Oracle satır kilidiyle bekler, sonra WHERE
+                    # version=:expected 0 satır eşler → 409 (kayıp imkânsız).
+                    new_version = body.expectedVersion + 1
+                    await cur.execute(
+                        "UPDATE team_state SET version=:1, updated_at=:2, "
+                        "updated_by_id=:3, updated_by_name=:4, "
+                        "project_json=:5, chat_json=:6 WHERE id=1 AND version=:7",
+                        [new_version, now, uid, uname, proj_val, chat_val, body.expectedVersion],
+                    )
+                    if cur.rowcount == 0:
+                        raise HTTPException(status_code=409, detail="version_conflict")
+                else:
+                    new_version = current_version + 1
+                    await cur.execute(
+                        "UPDATE team_state SET version=:1, updated_at=:2, "
+                        "updated_by_id=:3, updated_by_name=:4, "
+                        "project_json=:5, chat_json=:6 WHERE id=1",
+                        [new_version, now, uid, uname, proj_val, chat_val],
+                    )
             else:
                 new_version = 1
                 await cur.execute(

@@ -46,6 +46,7 @@ class MockConn:
     def __init__(self, cursor: MockCursor):
         self._cursor = cursor
         self.commit = AsyncMock()
+        self.rollback = AsyncMock()
 
     def cursor(self):
         return self._cursor

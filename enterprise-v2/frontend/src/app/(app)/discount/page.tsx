@@ -673,12 +673,13 @@ export default function DiscountPage() {
     : null;
   const { state: lockState, forceAcquire } = useModelLock(lockKey);
 
-  // Başkası düzenliyorken store yazımlarını bloke et (salt okunur)
+  // Kilit "mine" olana kadar store yazımlarını bloke et (acquire penceresi dahil);
+  // backend hatasında bloklamayız.
   useEffect(() => {
-    const ro = lockState.status === "locked_by_other";
+    const ro = !!lockKey && lockState.status !== "mine" && lockState.status !== "error";
     setReadOnly(ro);
     return () => setReadOnly(false);
-  }, [lockState.status, setReadOnly]);
+  }, [lockKey, lockState.status, setReadOnly]);
 
   const reserveRows = useMemo<{ origin: string; unpaid: number }[]>(() => {
     if (!activeBranch) return [];

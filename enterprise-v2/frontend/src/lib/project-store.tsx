@@ -264,32 +264,39 @@ export function ProjectProvider({ children, userId }: ProjectProviderProps) {
     }
   }
 
-  // Canlı senkron: 15 sn'de bir sunucuyu yokla; başkası yazdıysa branch-düzeyi
-  // birleştirip ekrana getir (bayat sekme + farklı-model çakışması çözülür).
+  // Sunucudan tazele + branch-düzeyi birleştir (poll ve kilit-alındı olayı kullanır).
+  const syncFromServer = useCallback(async () => {
+    if (pushingRef.current) return;
+    try {
+      const remote = await fetchState<Project, null>();
+      if (remote.version === versionRef.current) return; // değişiklik yok
+      const theirs = (remote.project as Project) ?? EMPTY;
+      let localStr = "";
+      try { localStr = localStorage.getItem(projectKey) ?? ""; } catch { return; }
+      const mine = localStr ? (JSON.parse(localStr) as Project) : EMPTY;
+      const merged = mergeProjects(baseRef.current, mine, theirs);
+      baseRef.current = theirs;
+      versionRef.current = remote.version;
+      if (JSON.stringify(merged) !== localStr) {
+        setProject(merged); // yerelde değişiklik varsa persist efekti geri push'lar
+      }
+    } catch {
+      /* geçici hata — sonraki tur */
+    }
+  }, [projectKey]);
+
+  // Canlı senkron: 15 sn'de bir + kilit alındığında hemen (kilit sahibi hep en
+  // güncel veriyi düzenlesin → donmuş sekme kaynaklı aynı-branş kaybını da kapatır).
   useEffect(() => {
     if (!hydrated || !userId) return;
-    const id = setInterval(async () => {
-      if (pushingRef.current) return;
-      try {
-        const remote = await fetchState<Project, null>();
-        if (remote.version === versionRef.current) return; // değişiklik yok
-        const theirs = (remote.project as Project) ?? EMPTY;
-        let localStr = "";
-        try { localStr = localStorage.getItem(projectKey) ?? ""; } catch { return; }
-        const mine = localStr ? (JSON.parse(localStr) as Project) : EMPTY;
-        const merged = mergeProjects(baseRef.current, mine, theirs);
-        baseRef.current = theirs;
-        versionRef.current = remote.version;
-        if (JSON.stringify(merged) !== localStr) {
-          setProject(merged); // yerelde değişiklik varsa persist efekti geri push'lar
-        }
-      } catch {
-        /* geçici hata — sonraki tur */
-      }
-    }, 15_000);
-    return () => clearInterval(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hydrated, userId, projectKey]);
+    const id = setInterval(syncFromServer, 15_000);
+    const onLockAcquired = () => { void syncFromServer(); };
+    window.addEventListener("model-lock-acquired", onLockAcquired);
+    return () => {
+      clearInterval(id);
+      window.removeEventListener("model-lock-acquired", onLockAcquired);
+    };
+  }, [hydrated, userId, syncFromServer]);
 
   // Flush on tab close so we don't lose the last edit.
   useEffect(() => {

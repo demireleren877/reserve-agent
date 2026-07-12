@@ -557,7 +557,8 @@ export default function CashflowPage() {
       ? `cashflow:${activePeriodId}/${activeBranchId}`
       : null;
   const { state: lockState, forceAcquire } = useModelLock(lockKey);
-  const isReadOnly = lockState.status === "locked_by_other";
+  // Kilit "mine" olana kadar salt-okunur (acquire penceresi dahil); backend hatasında bloklamayız.
+  const isReadOnly = !!lockKey && lockState.status !== "mine" && lockState.status !== "error";
 
   const [result, setResult] = useState<CashflowComputeResult | null>(null);
   const [loading, setLoading] = useState(false);

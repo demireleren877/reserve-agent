@@ -38,6 +38,8 @@ export function useModelLock(lockKey: string | null) {
       });
       if (res.ok) {
         setState({ status: "mine" });
+        // Kilit sahibi en güncel veriyi düzenlesin diye senkronu tetikle
+        window.dispatchEvent(new Event("model-lock-acquired"));
         return true;
       }
       if (res.status === 423) {
@@ -135,6 +137,7 @@ export function useModelLock(lockKey: string | null) {
       });
       if (res.ok) {
         setState({ status: "mine" });
+        window.dispatchEvent(new Event("model-lock-acquired"));
         if (heartbeatRef.current) clearInterval(heartbeatRef.current);
         heartbeatRef.current = setInterval(() => acquire(key), HEARTBEAT_MS);
       }

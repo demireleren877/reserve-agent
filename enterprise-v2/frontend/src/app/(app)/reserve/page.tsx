@@ -60,7 +60,9 @@ export default function Home() {
       ? `branch:${activePeriod.id}/${activeBranch.id}`
       : null;
   const { state: lockState, forceAcquire } = useModelLock(lockKey);
-  const isReadOnly = lockState.status === "locked_by_other";
+  // Kilit "mine" olana kadar salt-okunur (acquire penceresinde de yazma yok);
+  // backend hatasında bloklamayız (çalışmaya devam).
+  const isReadOnly = !!lockKey && lockState.status !== "mine" && lockState.status !== "error";
 
   // Merkezi kilit: başkası düzenliyorken store yazımları da bloklanır
   useEffect(() => {

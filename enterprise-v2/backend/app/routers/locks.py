@@ -5,11 +5,17 @@ from __future__ import annotations
 from datetime import datetime, timezone, timedelta
 from typing import Annotated
 
+import oracledb
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from app.auth import get_current_user
 from app.db import get_pool
+
+
+def _is_unique_violation(e: oracledb.DatabaseError) -> bool:
+    arg = e.args[0]
+    return getattr(arg, "code", None) == 1  # ORA-00001
 
 router = APIRouter(prefix="/v1/locks", tags=["locks"])
 
@@ -102,11 +108,38 @@ async def acquire_lock(body: AcquireRequest, user: CurrentUser) -> LockStatus:
                     [expires, body.lock_key],
                 )
             else:
-                await cur.execute(
-                    "INSERT INTO model_locks (lock_key, locked_by_id, locked_by_name, locked_at, expires_at) "
-                    "VALUES (:1, :2, :3, :4, :5)",
-                    [body.lock_key, uid, uname, now, expires],
-                )
+                try:
+                    await cur.execute(
+                        "INSERT INTO model_locks (lock_key, locked_by_id, locked_by_name, locked_at, expires_at) "
+                        "VALUES (:1, :2, :3, :4, :5)",
+                        [body.lock_key, uid, uname, now, expires],
+                    )
+                except oracledb.DatabaseError as e:
+                    if not _is_unique_violation(e):
+                        raise
+                    # YARIŞ: başka istek tam aynı anda ekledi. Sahibi oku:
+                    # benimse yenile, değilse 423 (temiz salt-okunur, kayıp yok).
+                    await cur.execute(
+                        "SELECT locked_by_id, locked_by_name, locked_at, expires_at "
+                        "FROM model_locks WHERE lock_key = :1",
+                        [body.lock_key],
+                    )
+                    row = await cur.fetchone()
+                    if row and row[0] == uid:
+                        await cur.execute(
+                            "UPDATE model_locks SET expires_at = :1 WHERE lock_key = :2",
+                            [expires, body.lock_key],
+                        )
+                    else:
+                        await conn.rollback()
+                        raise HTTPException(
+                            status_code=423,
+                            detail={
+                                "code": "locked",
+                                "locked_by_name": row[1] if row else "?",
+                                "expires_at": row[3].isoformat() if row and row[3] else None,
+                            },
+                        )
         await conn.commit()
 
     return LockStatus(

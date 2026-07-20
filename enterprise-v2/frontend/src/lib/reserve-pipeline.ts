@@ -12,6 +12,12 @@ import {
   cumulativeFactors,
   developmentRatios,
 } from "@/lib/ldf";
+import {
+  fitExponential,
+  fitInversePower,
+  fitPower,
+  fitWeibull,
+} from "@/lib/tail-fit";
 import { evalFormula, type FormulaContext } from "@/lib/formula";
 
 export interface BranchOriginRow {
@@ -86,13 +92,28 @@ export function computeBranchSummary(branch: Branch): BranchSummary {
 
   const excluded = new Set(branch.excludedCells ?? []);
   const r = developmentRatios(triangle, excluded);
-  // Method sabit: hacim ağırlıklı (volume_weighted). Branch.method legacy alan.
-  const ldfs = aggregateLDFs(triangle, r, branch.window, "volume_weighted");
+  // Reserve sayfasıyla aynı method kullanılmalı (aksi halde Ultimate/IBNR ile tutmaz).
+  const ldfs = aggregateLDFs(triangle, r, branch.window, branch.method ?? "volume_weighted");
+  // Curve sekmesindeki eğri modeli (exp/inverse-power/power/weibull) ve CDF
+  // override'ları Özet'te de uygulanmalı — aksi halde Ultimate/IBNR ile tutmaz.
+  const curveInclude = branch.curveIncludePerPeriod ?? {};
+  const include = triangle.development_periods.map(
+    (d, i) => (i >= ldfs.length || ldfs[i] > 1) && curveInclude[String(d)] !== false,
+  );
   const cas = cascadeCDFs(
     triangle.development_periods,
     ldfs,
     branch.cdfChoicePerPeriod ?? {},
     branch.cdfInitial ?? {},
+    {
+      model: branch.cdfModelPerPeriod ?? {},
+      fitCDFs: {
+        exp: fitExponential(ldfs, include).cdfs,
+        invPower: fitInversePower(ldfs, include).cdfs,
+        power: fitPower(ldfs, include).cdfs,
+        weibull: fitWeibull(ldfs, include).cdfs,
+      },
+    },
   );
   const effLDFs = cas.effLDFs.length ? cas.effLDFs : ldfs;
   const cdfs = cumulativeFactors(effLDFs);

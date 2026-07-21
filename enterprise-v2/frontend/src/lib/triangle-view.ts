@@ -199,10 +199,16 @@ export function buildDisplayMatrix(base: Triangle, opts: ViewOptions): DisplayMa
   const origins = groupedOriginLabels(base.origin_periods, rowK);
   // her gruplanmış satırın başlangıcı (stored-dev birimi): i * originLenMonths/devStored
   const ratio = Math.max(1, Math.round(opts.originLenMonths / devStored));
+  // Son takvim sütunu = RAPOR DÖNEMİ: sadece DOLU hücrelere göre (boş gelecek
+  // dönemler eklenmez). En son köşegen değerlendirme tarihini verir.
   let maxCal = 0;
   rowAgg.forEach((row, i) => {
-    const last = i * ratio + (row.length - 1);
-    if (last > maxCal) maxCal = last;
+    row.forEach((v, j) => {
+      if (v != null) {
+        const idx = i * ratio + j;
+        if (idx > maxCal) maxCal = idx;
+      }
+    });
   });
   // stored-dev biriminde takvim matrisi (artımsal)
   const calStored: (number | null)[][] = rowAgg.map((row, i) => {

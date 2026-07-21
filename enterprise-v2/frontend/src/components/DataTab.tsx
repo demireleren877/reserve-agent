@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, type ReactNode } from "react";
 import type { Triangle } from "@/types/triangle";
 import { TriangleGrid } from "@/components/TriangleGrid";
 import { formatNumber } from "@/lib/api";
@@ -193,7 +193,7 @@ export function DataTab({ paidTriangle, incurredTriangle }: Props) {
         </div>
 
         {/* Kontrol şeridi */}
-        <div className="flex flex-wrap items-end gap-x-5 gap-y-3 px-3 py-2.5 border-b bg-[color:var(--surface)]">
+        <div className="flex flex-wrap items-end gap-x-5 gap-y-3 px-3 py-2.5 border-b bg-[color:var(--surface-alt)]/40">
           <Toggle
             label="Kümülatif"
             checked={cumulative}
@@ -263,7 +263,19 @@ export function DataTab({ paidTriangle, incurredTriangle }: Props) {
 
         {/* İçerik */}
         {matrix ? (
-          <div className="p-2">
+          <div className="p-3">
+            <div className="flex items-center flex-wrap gap-x-2 gap-y-1 mb-2 px-0.5 text-[11px]">
+              <span className="font-semibold text-[color:var(--muted-strong)]">
+                {TYPE_TABS.find((t) => t.id === type)?.label}
+              </span>
+              <ViewChip>{cumulative ? "Kümülatif" : "Artımsal"}</ViewChip>
+              <ViewChip>
+                {view === "development" ? "Gelişim" : "Takvim"}
+              </ViewChip>
+              <ViewChip>Kaza {lenLabel(safeOriginLen)}</ViewChip>
+              <ViewChip>Gelişim {lenLabel(safeDevLen)}</ViewChip>
+              {transposed && <ViewChip>Transpoze</ViewChip>}
+            </div>
             <TriangleGrid matrix={matrix} decimals={decimals} />
           </div>
         ) : (
@@ -278,6 +290,14 @@ export function DataTab({ paidTriangle, incurredTriangle }: Props) {
 
 function Divider() {
   return <div className="w-px h-8 bg-[color:var(--border)] self-center" />;
+}
+
+function ViewChip({ children }: { children: ReactNode }) {
+  return (
+    <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-[color:var(--surface-alt)] text-[color:var(--muted-strong)] font-medium tabular">
+      {children}
+    </span>
+  );
 }
 
 function Toggle({

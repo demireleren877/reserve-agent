@@ -75,11 +75,12 @@ describe("buildDisplayMatrix — calendar", () => {
       view: "calendar",
       cumulative: false,
     });
-    expect(m.columns).toEqual(["2000", "2001", "2002", "2003", "2004"]);
+    // Son sütun = rapor dönemi (2002); boş gelecek dönemler (2003, 2004) YOK
+    expect(m.columns).toEqual(["2000", "2001", "2002"]);
     // 2000 satırı: cal2000=100, cal2001=50, cal2002=15
-    expect(m.rows[0].cells).toEqual([100, 50, 15, null, null]);
+    expect(m.rows[0].cells).toEqual([100, 50, 15]);
     // 2001 satırı: cal2001=120, cal2002=60
-    expect(m.rows[1].cells).toEqual([null, 120, 60, null, null]);
+    expect(m.rows[1].cells).toEqual([null, 120, 60]);
     // takvim sütun toplamı (köşegen): 2001 = 50+120 = 170
     expect(m.totals[1]).toBe(170);
   });

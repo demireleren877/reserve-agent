@@ -43,13 +43,31 @@ export function TriangleGrid(props: Props) {
     [decimals],
   );
 
+  // Sütun genişliğini içeriğe göre hesapla — tutarlar KESİLMESİN (ellipsis yok).
+  const colWidth = (idx: number): number => {
+    let maxChars = matrix.columns[idx]?.length ?? 2;
+    for (const r of matrix.rows) {
+      const v = r.cells[idx];
+      if (v != null) maxChars = Math.max(maxChars, fmt.format(v).length);
+    }
+    const t = matrix.totals[idx];
+    if (t != null) maxChars = Math.max(maxChars, fmt.format(t).length);
+    return Math.min(200, Math.max(78, Math.round(maxChars * 8.2) + 26));
+  };
+
+  const headerWidth = useMemo(() => {
+    let maxChars = matrix.corner.length;
+    for (const r of matrix.rows) maxChars = Math.max(maxChars, r.header.length);
+    return Math.min(180, Math.max(96, Math.round(maxChars * 8) + 28));
+  }, [matrix.corner, matrix.rows]);
+
   const columnDefs = useMemo<ColDef[]>(() => {
     const cols: ColDef[] = [
       {
         headerName: matrix.corner,
         field: "header",
         pinned: "left",
-        width: 120,
+        width: headerWidth,
         cellStyle: { fontWeight: 500, backgroundColor: "var(--surface-alt)" },
       },
     ];
@@ -57,20 +75,21 @@ export function TriangleGrid(props: Props) {
       cols.push({
         headerName: label,
         field: `c${idx}`,
-        flex: 1,
-        minWidth: 82,
+        width: colWidth(idx),
         valueFormatter: (p) =>
           p.value == null || p.value === "" ? "" : fmt.format(p.value as number),
         cellStyle: (p) => ({
           color: p.value == null ? "var(--muted)" : "",
           textAlign: "right" as const,
           fontVariantNumeric: "tabular-nums",
+          textOverflow: "clip",
         }),
         type: "numericColumn",
       });
     });
     return cols;
-  }, [matrix.corner, matrix.columns, fmt]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matrix, fmt, headerWidth]);
 
   const rowData = useMemo(() => {
     return matrix.rows.map((r) => {

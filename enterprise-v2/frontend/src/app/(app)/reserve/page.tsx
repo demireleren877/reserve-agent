@@ -402,22 +402,22 @@ export default function Home() {
       const r = developmentRatios(triangle, excluded);
       const ldfs = aggregateLDFs(triangle, r, window, method);
       const devs = triangle.development_periods;
-      const baseCDFs = cumulativeFactors(ldfs);
-      const selExt = [...baseCDFs, 1];
-      const eff: number[] = new Array(devs.length).fill(1);
-      const initFor = new Array(devs.length).fill(1);
-      for (let i = devs.length - 1; i >= 0; i--) {
-        const key = String(devs[i]);
-        if (i === devs.length - 1) initFor[i] = 1;
-        else {
-          const next = selExt[i + 1] || 1;
-          const step = next !== 0 ? selExt[i] / next : 1;
-          initFor[i] = step * eff[i + 1];
-        }
-        const choice = cdfChoicePerPeriod[key] ?? "initial";
-        eff[i] = choice === "user" ? cdfInitial[key] ?? 1 : initFor[i];
-      }
-      const cdfs = eff;
+      // Ultimate/IBNR ile AYNI hesap: curve modeli (exp/inverse-power/power/weibull)
+      // + CDF override'ları uygulanır. Aksi halde Özet ile Ultimate sapar.
+      const include = devs.map(
+        (d, i) => (i >= ldfs.length || ldfs[i] > 1) && curveIncludePerPeriod[String(d)] !== false,
+      );
+      const cascade = cascadeCDFs(devs, ldfs, cdfChoicePerPeriod, cdfInitial, {
+        model: cdfModelPerPeriod,
+        fitCDFs: {
+          exp: fitExponential(ldfs, include).cdfs,
+          invPower: fitInversePower(ldfs, include).cdfs,
+          power: fitPower(ldfs, include).cdfs,
+          weibull: fitWeibull(ldfs, include).cdfs,
+        },
+      });
+      const effLDFs = cascade.effLDFs.length ? cascade.effLDFs : ldfs;
+      const cdfs = cumulativeFactors(effLDFs);
 
       const pattern = new Map<string, number>();
       const clUltMap = new Map<string, number>();
@@ -542,8 +542,8 @@ export default function Home() {
           selectedUltimate: totalSelectedUlt,
           ibnr: totalSelectedUlt - totalLatest,
         },
-        effLDFs: ldfs,
-        effCDFs: eff,
+        effLDFs,
+        effCDFs: cdfs,
       };
     },
     [
@@ -552,6 +552,8 @@ export default function Home() {
       method,
       cdfChoicePerPeriod,
       cdfInitial,
+      cdfModelPerPeriod,
+      curveIncludePerPeriod,
       correctionPerOrigin,
       premiums,
       lrInputPerOrigin,

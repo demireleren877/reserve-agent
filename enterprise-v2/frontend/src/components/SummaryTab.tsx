@@ -157,27 +157,17 @@ export function SummaryTab(props: Props) {
     <div className="space-y-4">
       {/* Başlık */}
       <div className="card p-4">
-        <div className="flex items-start justify-between flex-wrap gap-3">
-          <div>
-            <h2 className="text-base font-semibold">{branchName}</h2>
-            <p className="text-xs text-[color:var(--muted-strong)] mt-0.5">
-              {periodLabel} ·{" "}
-              {frequency === "yearly" ? "Yıllık" : "Çeyreklik"} model ·{" "}
-              {triangleLabel} üçgeni · {originRange} ({triangle.origin_periods.length}{" "}
-              origin × {triangle.development_periods.length} dev period)
-            </p>
-          </div>
-          <div className="text-right text-[11px] text-[color:var(--muted)]">
-            Selected ULR
-            <div className="text-base font-semibold text-[color:var(--foreground)] tabular">
-              {totalULR != null ? `${(totalULR * 100).toFixed(1)}%` : "—"}
-            </div>
-          </div>
-        </div>
+        <h2 className="text-base font-semibold">{branchName}</h2>
+        <p className="text-xs text-[color:var(--muted-strong)] mt-0.5">
+          {periodLabel} ·{" "}
+          {frequency === "yearly" ? "Yıllık" : "Çeyreklik"} model ·{" "}
+          {triangleLabel} üçgeni · {originRange} ({triangle.origin_periods.length}{" "}
+          origin × {triangle.development_periods.length} dev period)
+        </p>
       </div>
 
       {/* Final rakamlar */}
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-5 gap-3">
         <Stat label={`Toplam ${triangleLabel}`} value={formatNumber(totals.latest)} />
         <Stat label="Toplam Exposure (yıllık)" value={formatNumber(totals.exposure)} />
         <Stat
@@ -185,6 +175,10 @@ export function SummaryTab(props: Props) {
           value={formatNumber(totals.selectedUltimate)}
         />
         <Stat label="Seçili IBNR" value={formatNumber(totals.ibnr)} accent />
+        <Stat
+          label="Selected ULR"
+          value={totalULR != null ? `${(totalULR * 100).toFixed(1)}%` : "—"}
+        />
       </div>
 
       {/* Aktüer müdahaleleri (default'tan sapan ne varsa) */}
@@ -211,10 +205,10 @@ export function SummaryTab(props: Props) {
                 <span className="text-[color:var(--muted-strong)]">{it.label}</span>
                 <span
                   className={
-                    "tabular font-medium " +
+                    "tabular font-semibold text-[11px] px-2 py-0.5 rounded " +
                     (it.tone === "accent"
-                      ? "text-[color:var(--primary)]"
-                      : "")
+                      ? "bg-[color:var(--primary-soft)] text-[color:var(--primary)]"
+                      : "bg-[color:var(--surface-alt)] text-[color:var(--muted-strong)]")
                   }
                 >
                   {it.value}
@@ -254,10 +248,13 @@ export function SummaryTab(props: Props) {
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => (
+              {rows.map((r, idx) => (
                 <tr
                   key={r.origin}
-                  className="border-t hover:bg-[color:var(--surface-alt)]/40"
+                  className={
+                    "border-t hover:bg-[color:var(--surface-alt)]/40 " +
+                    (idx % 2 === 1 ? "bg-[color:var(--surface-alt)]/20" : "")
+                  }
                 >
                   <td className="px-3 py-1.5 font-medium">{r.origin}</td>
                   <td className="text-right px-3 py-1.5">
@@ -399,10 +396,13 @@ export function SummaryTab(props: Props) {
                 </tr>
               </thead>
               <tbody>
-                {exclusionImpacts.map((e) => (
+                {exclusionImpacts.map((e, idx) => (
                   <tr
                     key={`${e.origin}|${e.step}`}
-                    className="border-t hover:bg-[color:var(--surface-alt)]/50"
+                    className={
+                      "border-t hover:bg-[color:var(--surface-alt)]/50 " +
+                      (idx % 2 === 1 ? "bg-[color:var(--surface-alt)]/20" : "")
+                    }
                   >
                     <td className="px-3 py-1.5 font-medium">{e.origin}</td>
                     <td className="px-3 py-1.5 text-[color:var(--muted)]">
@@ -470,7 +470,13 @@ export function SummaryTab(props: Props) {
             </thead>
             <tbody>
               {selectedLDFs.map((ldf, i) => (
-                <tr key={i} className="border-t">
+                <tr
+                  key={i}
+                  className={
+                    "border-t " +
+                    (i % 2 === 1 ? "bg-[color:var(--surface-alt)]/20" : "")
+                  }
+                >
                   <td className="px-3 py-1.5 text-[color:var(--muted-strong)]">
                     {i + 1}→{i + 2}
                   </td>

@@ -21,6 +21,12 @@ import { formatNumber, type SessionState } from "@/lib/api";
 import { exportToExcel } from "@/lib/export";
 import { computeBranchSummary } from "@/lib/reserve-pipeline";
 import {
+  hasLarge,
+  deriveAttritional,
+  attritionalWorkingTriangle,
+  computeLargeSummary,
+} from "@/lib/large-split";
+import {
   aggregateLDFs,
   cascadeCDFs,
   cumulativeFactors,
@@ -104,7 +110,37 @@ export default function Home() {
     [isReadOnly, setters],
   );
 
-  const triangle = activeBranch?.triangle ?? null;
+  // ── LARGE-LOSS ayrımı ──
+  // Large yüklüyse ana model ATTRITIONAL = GROSS − LARGE üzerinde çalışır.
+  // Large yoksa her şey bugünkü gibi (gross tek segment) — geriye tam uyumlu.
+  const largeOn = hasLarge(activeBranch);
+  const attr = useMemo(
+    () => (activeBranch && largeOn ? deriveAttritional(activeBranch) : null),
+    [activeBranch, largeOn],
+  );
+  const largeSummary = useMemo(
+    () => (activeBranch ? computeLargeSummary(activeBranch) : null),
+    [activeBranch],
+  );
+
+  const grossTriangle = activeBranch?.triangle ?? null;
+  const triangle =
+    (largeOn ? attritionalWorkingTriangle(activeBranch!) : grossTriangle) ?? null;
+  const effPaid =
+    (largeOn ? attr?.paid : activeBranch?.paidTriangle) ??
+    (grossTriangle?.triangle_type === "paid" ? triangle : null);
+  const effIncurred =
+    (largeOn ? attr?.incurred : activeBranch?.incurredTriangle) ??
+    (grossTriangle?.triangle_type === "incurred" ? triangle : null);
+  // computeBranchSummary / export için attritional çalışma branch'i
+  const modelBranch = useMemo(
+    () =>
+      activeBranch && largeOn
+        ? { ...activeBranch, triangle, paidTriangle: effPaid, incurredTriangle: effIncurred }
+        : activeBranch,
+    [activeBranch, largeOn, triangle, effPaid, effIncurred],
+  );
+
   const method = (activeBranch?.method ?? "volume_weighted") as LDFMethod;
   const window: Window = activeBranch?.window ?? "all";
   const premiums = activeBranch?.premiums ?? {};
@@ -786,14 +822,14 @@ export default function Home() {
             {triangle && (
               <button
                 onClick={() => {
-                  const bs = computeBranchSummary(activeBranch);
+                  const bs = computeBranchSummary(modelBranch!);
                   exportToExcel({
                     branchName: activeBranch.name,
                     periodLabel: activePeriod?.label ?? "",
                     frequency: activeBranch.frequency,
                     triangle,
-                    paidTriangle: activeBranch.paidTriangle ?? (triangle?.triangle_type === "paid" ? triangle : null),
-                    incurredTriangle: activeBranch.incurredTriangle ?? (triangle?.triangle_type === "incurred" ? triangle : null),
+                    paidTriangle: effPaid,
+                    incurredTriangle: effIncurred,
                     rows: bs.rows,
                     totals: bs.totals,
                     selectedLDFs: bs.selected_ldfs,
@@ -826,8 +862,8 @@ export default function Home() {
       <main className="p-5 max-w-[1600px] w-full mx-auto">
         {tab === "data" && (
           <DataTab
-            paidTriangle={activeBranch.paidTriangle ?? (triangle?.triangle_type === "paid" ? triangle : null)}
-            incurredTriangle={activeBranch.incurredTriangle ?? (triangle?.triangle_type === "incurred" ? triangle : null)}
+            paidTriangle={effPaid}
+            incurredTriangle={effIncurred}
           />
         )}
         {tab === "ldf" && (
@@ -912,6 +948,15 @@ export default function Home() {
             manualLRCount={manualLRCount}
             bfBasisCount={bfBasisCount}
             exclusionImpacts={exclusionImpacts}
+            largeTotals={
+              largeOn && largeSummary
+                ? {
+                    latest: largeSummary.totals.latest,
+                    selectedUltimate: largeSummary.totals.selected_ultimate,
+                    ibnr: largeSummary.totals.ibnr,
+                  }
+                : null
+            }
           />
         )}
         {tab === "ilr" && (
@@ -924,7 +969,7 @@ export default function Home() {
         )}
         {tab === "freq" && (
           <FrequencySeverityTab
-            amountTriangle={activeBranch?.incurredTriangle ?? triangle}
+            amountTriangle={effIncurred ?? triangle}
             countTriangle={activeBranch?.countTriangle}
             window={window}
             clIbnr={summary?.totals.ibnr ?? null}

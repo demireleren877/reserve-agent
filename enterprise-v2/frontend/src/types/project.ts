@@ -40,6 +40,15 @@ export interface Branch {
    *  hasar verisinden yüklenen branşlarda dolu olur. */
   countTriangle?: Triangle | null;
 
+  /** LARGE-LOSS ayrımı (opsiyonel). Yüklenirse ana model ATTRITIONAL =
+   *  GROSS − LARGE üzerinde çalışır; LARGE ayrıca modellenir. Yoksa bugünkü
+   *  davranış (tek segment) aynen sürer — geriye tam uyumlu. */
+  largePaidTriangle?: Triangle | null;
+  largeIncurredTriangle?: Triangle | null;
+  largeFileData?: FileData;
+  /** LARGE segment chain-ladder window'u (varsayılan "all"). */
+  largeWindow?: Window;
+
   method: LDFMethod;
   window: Window;
   excludedCells: string[];

@@ -762,6 +762,10 @@ export function useProject(): Ctx {
 export interface BranchSetters {
   setTriangle: (t: Branch["triangle"], fileName?: string | null, fileData?: FileData) => void;
   setBothTriangles: (paid: Branch["triangle"], incurred: Branch["triangle"], fileName?: string, fileData?: FileData | null, count?: Branch["triangle"]) => void;
+  /** LARGE-LOSS üçgenlerini yükle (ödeme + gerçekleşen). */
+  setLargeTriangles: (paid: Branch["triangle"], incurred: Branch["triangle"], fileData?: FileData | null) => void;
+  clearLarge: () => void;
+  setLargeWindow: (w: Window) => void;
   setMethod: (m: LDFMethod) => void;
   setWindow: (w: Window) => void;
   setExcludedCells: (next: Set<string>) => void;
@@ -840,6 +844,35 @@ export function useBranchSetters(source: ChangeSource = "user"): BranchSetters {
           }),
           "triangle_loaded",
           fileName ? { fileName } : {},
+          source,
+        ),
+      setLargeTriangles: (paid, incurred, fileData) =>
+        actions.updateActiveBranch(
+          () => ({
+            largePaidTriangle: paid,
+            largeIncurredTriangle: incurred,
+            largeFileData: fileData ?? undefined,
+          }),
+          "large_loaded",
+          {},
+          source,
+        ),
+      clearLarge: () =>
+        actions.updateActiveBranch(
+          () => ({
+            largePaidTriangle: null,
+            largeIncurredTriangle: null,
+            largeFileData: undefined,
+          }),
+          "large_cleared",
+          {},
+          source,
+        ),
+      setLargeWindow: (w) =>
+        actions.updateActiveBranch(
+          () => ({ largeWindow: w }),
+          "large_window",
+          { window: w },
           source,
         ),
       setMethod: (m) =>

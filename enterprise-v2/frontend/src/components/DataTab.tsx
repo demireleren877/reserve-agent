@@ -2,9 +2,13 @@
 
 import { useState, useMemo, useEffect, type ReactNode } from "react";
 import type { Triangle } from "@/types/triangle";
+import type { TriangleRecord } from "@/lib/data-store";
 import { TriangleGrid } from "@/components/TriangleGrid";
 import { formatNumber } from "@/lib/api";
 import { LoadFromDataStore } from "@/components/LoadFromDataStore";
+import { TriangleImportWizard } from "@/components/TriangleImportWizard";
+import { useBranchSetters, useProject } from "@/lib/project-store";
+import { hasLarge, deriveAttritional } from "@/lib/large-split";
 import {
   buildDisplayMatrix,
   originLengthOptions,
@@ -52,9 +56,36 @@ function granLabel(g: "yearly" | "quarterly"): string {
   return g === "quarterly" ? "Çeyreklik" : "Yıllık";
 }
 
+function recToTri(r: TriangleRecord): Triangle {
+  return {
+    origin_periods: r.origin_periods,
+    development_periods: r.development_periods,
+    values: r.values,
+    triangle_type: r.triangle_type,
+    origin_granularity: r.origin_granularity,
+    development_granularity: r.development_granularity,
+  };
+}
+
 export function DataTab({ paidTriangle, incurredTriangle }: Props) {
   const [type, setType] = useState<TriType>("paid");
   const [showLoadDialog, setShowLoadDialog] = useState(false);
+  const [showLargeWizard, setShowLargeWizard] = useState(false);
+
+  const { activeBranch } = useProject();
+  const setters = useBranchSetters("user");
+  const largeOn = hasLarge(activeBranch);
+
+  // Guard'lar: large>gross (negatif) ve large gross ile aynı değerlemede değil (bayat).
+  const largeWarnings = useMemo(() => {
+    if (!largeOn || !activeBranch) return { negative: 0, staleDev: false };
+    const neg = deriveAttritional(activeBranch).negativeCells.length;
+    const gi = activeBranch.incurredTriangle ?? activeBranch.paidTriangle ?? null;
+    const li = activeBranch.largeIncurredTriangle ?? activeBranch.largePaidTriangle ?? null;
+    const staleDev =
+      !!gi && !!li && li.development_periods.length < gi.development_periods.length;
+    return { negative: neg, staleDev };
+  }, [largeOn, activeBranch]);
 
   // Görünüm seçenekleri
   const [cumulative, setCumulative] = useState(true);
@@ -185,12 +216,57 @@ export function DataTab({ paidTriangle, incurredTriangle }: Props) {
               );
             })}
           </div>
-          <span className="text-xs text-[color:var(--muted)] tabular">
-            {matrix
-              ? `${matrix.rows.length}×${matrix.columns.length}`
-              : "—"}
-          </span>
+          <div className="flex items-center gap-2">
+            {largeOn ? (
+              <span className="inline-flex items-center gap-1.5 text-[11px] px-2 py-1 rounded bg-[color:var(--primary-soft)] text-[color:var(--primary)] font-medium">
+                Large yüklü
+                <button
+                  onClick={() => {
+                    if (confirm("Large üçgeni kaldırılsın mı? Ana model tekrar gross olur.")) {
+                      setters.clearLarge();
+                    }
+                  }}
+                  className="hover:underline"
+                  title="Large'ı kaldır"
+                >
+                  ✕
+                </button>
+              </span>
+            ) : (
+              <button
+                onClick={() => setShowLargeWizard(true)}
+                className="text-[11px] px-2 py-1 rounded border border-[color:var(--border)] text-[color:var(--muted-strong)] hover:border-[color:var(--border-strong)] hover:bg-[color:var(--surface)] transition"
+                title="Large-loss üçgeni yükle (ödeme + muallak). Ana model Attritional = Gross − Large olur."
+              >
+                + Large üçgeni
+              </button>
+            )}
+            <span className="text-xs text-[color:var(--muted)] tabular">
+              {matrix ? `${matrix.rows.length}×${matrix.columns.length}` : "—"}
+            </span>
+          </div>
         </div>
+
+        {largeOn && (
+          <div className="px-3.5 py-1.5 border-b bg-[color:var(--primary-soft)]/40 text-[11px] text-[color:var(--primary)]">
+            Görünen ve modellenen: <b>Attritional (Gross − Large)</b>. Large ayrıca
+            modelleniyor · Toplam Özet sekmesinde.
+          </div>
+        )}
+        {largeOn && largeWarnings.staleDev && (
+          <div className="px-3.5 py-1.5 border-b bg-[color:var(--danger-soft)] text-[11px] text-[color:var(--danger)]">
+            ⚠ Large üçgeni gross&apos;tan daha az gelişim dönemi içeriyor — güncel
+            değerlemeye ait <b>değil</b> gibi. Bu dönemin large&apos;ını yeniden yükleyin,
+            yoksa yeni köşegendeki büyük hasarlar attritional&apos;a sızar.
+          </div>
+        )}
+        {largeOn && largeWarnings.negative > 0 && (
+          <div className="px-3.5 py-1.5 border-b bg-[color:var(--danger-soft)] text-[11px] text-[color:var(--danger)]">
+            ⚠ {largeWarnings.negative} hücrede Large &gt; Gross — attritional 0&apos;a
+            kırpıldı. Gross ve Large aynı yöntemle (ör. ikisi de aynı dönem) yüklendi mi
+            kontrol edin.
+          </div>
+        )}
 
         {/* Kontrol şeridi */}
         <div className="flex flex-wrap items-start gap-x-4 gap-y-3 px-3.5 py-3 border-b bg-[color:var(--surface-alt)]/40">
@@ -294,6 +370,58 @@ export function DataTab({ paidTriangle, incurredTriangle }: Props) {
           </div>
         )}
       </div>
+
+      {showLargeWizard && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: "rgba(15,23,42,0.45)", backdropFilter: "blur(4px)" }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowLargeWizard(false);
+          }}
+        >
+          <div
+            className="rounded-xl shadow-2xl overflow-auto"
+            style={{
+              background: "var(--surface)",
+              border: "1px solid var(--border)",
+              width: "min(880px, 96vw)",
+              maxHeight: "92vh",
+            }}
+          >
+            <div
+              className="px-5 py-3 flex items-center justify-between sticky top-0"
+              style={{ background: "var(--surface-alt)", borderBottom: "1px solid var(--border)" }}
+            >
+              <div>
+                <h3 className="text-sm font-semibold">Large-loss üçgeni yükle</h3>
+                <p className="text-[11px] text-[color:var(--muted)] mt-0.5">
+                  Large ödeme + muallak. Ana model Attritional = Gross − Large olur.
+                </p>
+              </div>
+              <button
+                onClick={() => setShowLargeWizard(false)}
+                className="w-7 h-7 rounded-md text-[18px] flex items-center justify-center hover:bg-[color:var(--surface)]"
+                style={{ color: "var(--muted)" }}
+              >
+                ×
+              </button>
+            </div>
+            <div className="p-4">
+              <TriangleImportWizard
+                onCancel={() => setShowLargeWizard(false)}
+                onDone={(res) => {
+                  const paidRec = res.records.find((r) => r.triangle_type === "paid");
+                  const incRec = res.records.find((r) => r.triangle_type === "incurred");
+                  const lp = paidRec ? recToTri(paidRec) : null;
+                  const li = incRec ? recToTri(incRec) : null;
+                  setters.setLargeTriangles(lp, li ?? lp);
+                  setShowLargeWizard(false);
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

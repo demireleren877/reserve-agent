@@ -58,6 +58,12 @@ interface Props {
   manualLRCount: number;
   bfBasisCount: number;
   exclusionImpacts: ExclusionImpact[];
+  /** LARGE segment toplamları (yüklüyse). Bu sayfanın kendi totals'ı = Attritional. */
+  largeTotals?: {
+    latest: number;
+    selectedUltimate: number;
+    ibnr: number;
+  } | null;
 }
 
 const DEFAULT_WINDOW: Window = "all";
@@ -77,6 +83,7 @@ export function SummaryTab(props: Props) {
     manualLRCount,
     bfBasisCount,
     exclusionImpacts,
+    largeTotals,
   } = props;
 
   const [showExclusionModal, setShowExclusionModal] = useState(false);
@@ -276,6 +283,65 @@ export function SummaryTab(props: Props) {
           </div>
         </div>
       </div>
+
+      {/* ── Segment kırılımı (Large yüklüyse) ── */}
+      {largeTotals && (
+        <section>
+          <SectionHeader
+            title="Segment Kırılımı"
+            hint="Attritional (ana model) + Large = Toplam"
+          />
+          <div className="card overflow-hidden">
+            <table className="text-sm w-full tabular">
+              <thead>
+                <tr className="text-[color:var(--muted)] text-[10.5px] uppercase tracking-wide">
+                  <th className="text-left font-medium px-4 py-2.5">Segment</th>
+                  <th className="text-right font-medium px-4 py-2.5">Latest</th>
+                  <th className="text-right font-medium px-4 py-2.5">Seçili Ultimate</th>
+                  <th className="text-right font-medium px-4 py-2.5">IBNR</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="border-t border-[color:var(--border)]">
+                  <td className="px-4 py-2 font-medium">Attritional</td>
+                  <td className="text-right px-4 py-2">{formatNumber(totals.latest)}</td>
+                  <td className="text-right px-4 py-2">{formatNumber(totals.selectedUltimate)}</td>
+                  <td className="text-right px-4 py-2 font-medium text-[color:var(--primary)]">
+                    {formatNumber(totals.ibnr)}
+                  </td>
+                </tr>
+                <tr className="border-t border-[color:var(--border)] bg-[color:var(--surface-alt)]/30">
+                  <td className="px-4 py-2 font-medium">
+                    Large
+                    <span className="ml-1.5 text-[10px] font-normal text-[color:var(--muted)]">
+                      (ayrı CL)
+                    </span>
+                  </td>
+                  <td className="text-right px-4 py-2">{formatNumber(largeTotals.latest)}</td>
+                  <td className="text-right px-4 py-2">{formatNumber(largeTotals.selectedUltimate)}</td>
+                  <td className="text-right px-4 py-2 font-medium text-[color:var(--primary)]">
+                    {formatNumber(largeTotals.ibnr)}
+                  </td>
+                </tr>
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-[color:var(--border-strong)] font-semibold bg-[color:var(--surface-alt)]/60">
+                  <td className="px-4 py-2.5">Toplam</td>
+                  <td className="text-right px-4 py-2.5">
+                    {formatNumber(totals.latest + largeTotals.latest)}
+                  </td>
+                  <td className="text-right px-4 py-2.5">
+                    {formatNumber(totals.selectedUltimate + largeTotals.selectedUltimate)}
+                  </td>
+                  <td className="text-right px-4 py-2.5 text-[color:var(--primary)]">
+                    {formatNumber(totals.ibnr + largeTotals.ibnr)}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </section>
+      )}
 
       {/* ── Origin Bazında Final ── */}
       <section>

@@ -8,11 +8,13 @@ import re
 import unicodedata
 from dataclasses import dataclass
 
-try:
-    import openpyxl
-    _HAS_OPENPYXL = True
-except ImportError:
-    _HAS_OPENPYXL = False
+# openpyxl LAZY: startup'ta yüklenmesin (~130ms). Sadece Excel parse edilince yüklenir.
+def _has_openpyxl() -> bool:
+    try:
+        import openpyxl  # noqa: F401
+        return True
+    except ImportError:
+        return False
 
 
 @dataclass
@@ -116,7 +118,7 @@ def inspect_prim_file(content: bytes, filename: str) -> dict:
     """
     is_xlsx = content[:4] == _XLSX_MAGIC[:4] or filename.lower().endswith((".xlsx", ".xls"))
 
-    if is_xlsx and _HAS_OPENPYXL:
+    if is_xlsx and _has_openpyxl():
         import openpyxl
         wb = openpyxl.load_workbook(io.BytesIO(content), data_only=True, read_only=True)
         sheets: list[str | None] = wb.sheetnames if len(wb.sheetnames) > 1 else [None]
@@ -159,7 +161,7 @@ def parse_prim_with_mapping(
         raise ValueError(f"Eksik sütun eşleştirme: {missing}")
 
     is_xlsx = content[:4] == _XLSX_MAGIC[:4] or filename.lower().endswith((".xlsx", ".xls"))
-    if is_xlsx and _HAS_OPENPYXL:
+    if is_xlsx and _has_openpyxl():
         headers, rows = _read_rows_xlsx(content, sheet_name)
     else:
         headers, rows = _read_rows_csv(content)

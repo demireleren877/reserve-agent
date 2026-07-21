@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-import oracledb
+# oracledb LAZY (startup'ı yavaşlatmasın) — kullanan fonksiyon içinde import edilir.
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
@@ -49,6 +49,8 @@ async def list_users(_: Admin) -> list[UserOut]:
 
 @router.post("", response_model=UserOut, status_code=201)
 async def create_user(body: CreateUserRequest, _: Admin) -> UserOut:
+    import oracledb
+
     pool = await get_pool()
     async with pool.acquire() as conn:
         with conn.cursor() as cur:

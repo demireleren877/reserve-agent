@@ -37,9 +37,11 @@ async def test_list_empty(client):
 
 
 async def test_create_first_selects_and_bootstraps(client, monkeypatch):
-    import app.routers.connections as mod
+    import app.bootstrap as bmod
     boot = []
-    monkeypatch.setattr(mod, "bootstrap_database",
+    # bootstrap_database artık connections.create içinde lazy import edilir;
+    # doğru patch hedefi kaynak modül (app.bootstrap).
+    monkeypatch.setattr(bmod, "bootstrap_database",
                         lambda *a, **k: boot.append(a) or {"admin_created": True})
     r = await client.post("/v1/connections", json=_body(admin_username="ErenD", admin_password="pw"))
     assert r.status_code == 200

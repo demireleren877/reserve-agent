@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone, timedelta
 from typing import Annotated
 
-import oracledb
+# oracledb LAZY (startup'ı yavaşlatmasın) — acquire_lock içinde import edilir.
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
@@ -68,6 +68,8 @@ async def get_lock(lock_key: str, user: CurrentUser) -> LockStatus:
 
 @router.post("/acquire", response_model=LockStatus)
 async def acquire_lock(body: AcquireRequest, user: CurrentUser) -> LockStatus:
+    import oracledb  # noqa: F401  (except oracledb.DatabaseError için)
+
     uid = int(user["sub"])
     uname = user["username"]
     now = datetime.now(timezone.utc)

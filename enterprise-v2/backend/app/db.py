@@ -9,7 +9,8 @@
 
 from __future__ import annotations
 
-import oracledb
+# oracledb LAZY: startup'ta yüklenmesin (Windows'ta DLL yükleme maliyeti yüksek).
+# Havuz ilk oluşturulunca (_create_pool) import edilir.
 from fastapi import HTTPException
 
 from app import desktop_config
@@ -17,7 +18,9 @@ from app import desktop_config
 _pool: oracledb.AsyncConnectionPool | None = None
 
 
-def _create_pool(conn: desktop_config.Connection) -> oracledb.AsyncConnectionPool:
+def _create_pool(conn: desktop_config.Connection) -> "oracledb.AsyncConnectionPool":
+    import oracledb
+
     return oracledb.create_pool_async(
         user=conn.user,
         password=conn.password,

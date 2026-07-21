@@ -18,8 +18,8 @@ from datetime import date, datetime
 from io import BytesIO
 from typing import Any
 
-from openpyxl import load_workbook
-from openpyxl.utils.exceptions import InvalidFileException
+# openpyxl LAZY import edilir (startup'ı yavaşlatmasın; sadece Excel parse edilince
+# yüklenir — kullanıcı giriş yaptıktan sonra veri yüklerken).
 
 from app.core.triangle import Granularity, Triangle, TriangleType
 
@@ -65,6 +65,9 @@ def parse_premiums_from_excel(
     sheet_name: str | None = None,
 ) -> dict[str, float]:
     """Parse (origin, premium) long-format Excel → {origin_label: premium}."""
+    from openpyxl import load_workbook
+    from openpyxl.utils.exceptions import InvalidFileException
+
     try:
         wb = load_workbook(filename=BytesIO(content), data_only=True, read_only=True)
     except (InvalidFileException, Exception) as e:
@@ -128,6 +131,9 @@ def parse_triangle_from_excel(
     options: ParseOptions | None = None,
 ) -> tuple[Triangle, dict | None]:
     opts = options or ParseOptions()
+    from openpyxl import load_workbook
+    from openpyxl.utils.exceptions import InvalidFileException
+
     try:
         wb = load_workbook(filename=BytesIO(content), data_only=True, read_only=True)
     except (InvalidFileException, Exception) as e:

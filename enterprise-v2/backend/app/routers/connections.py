@@ -17,7 +17,7 @@ from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 
 from app import db, desktop_config
-from app.bootstrap import bootstrap_database
+# bootstrap LAZY import edilir (oracledb çeker; startup'ı yavaşlatmasın) — create() içinde.
 from app.desktop_config import Connection
 
 router = APIRouter(prefix="/v1/connections", tags=["connections"])
@@ -110,6 +110,7 @@ async def test(body: ConnectionInput) -> dict:
 async def create(body: ConnectionCreate) -> dict:
     _guard_env()
     import oracledb
+    from app.bootstrap import bootstrap_database
     conn = _conn(body)
 
     # Bağlantıyı test et; admin verildiyse şema + ilk admini kur.

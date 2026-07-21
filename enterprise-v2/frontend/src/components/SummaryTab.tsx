@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import type { Triangle } from "@/types/triangle";
 import { formatFactor, formatNumber } from "@/lib/api";
 import { type Window } from "@/lib/ldf";
+import { ExclusionDetailModal } from "@/components/ExclusionDetailModal";
 
 interface PerOriginRow {
   origin: string;
@@ -77,6 +78,8 @@ export function SummaryTab(props: Props) {
     bfBasisCount,
     exclusionImpacts,
   } = props;
+
+  const [showExclusionModal, setShowExclusionModal] = useState(false);
 
   const totalRawPremium = rows.reduce((s, r) => s + r.premium, 0);
   const totalULR =
@@ -279,6 +282,16 @@ export function SummaryTab(props: Props) {
         <SectionHeader
           title="Origin Bazında Final"
           hint="Seçili temel (CL/BF) başına ultimate & IBNR"
+          action={
+            hasExclusionCol ? (
+              <button
+                onClick={() => setShowExclusionModal(true)}
+                className="btn text-[11px] py-1 px-2.5"
+              >
+                Eleme detayı · {exclusionImpacts.length}
+              </button>
+            ) : undefined
+          }
         />
         <div className="card overflow-hidden">
           <div className="overflow-x-auto">
@@ -451,24 +464,50 @@ export function SummaryTab(props: Props) {
         {hasExclusionCol && (
           <p className="text-[11px] text-[color:var(--muted)] mt-2 px-0.5">
             <span className="font-medium">Eleme</span> sütunu: o origin&apos;deki
-            elemelerin net IBNR etkisi — pozitif (+) eleme rezervi düşürmüş,
-            negatif (−) yükseltmiş.
+            elemelerin net IBNR etkisi (pozitif + düşürmüş, negatif − yükseltmiş).
+            Adım bazlı döküm için{" "}
+            <button
+              onClick={() => setShowExclusionModal(true)}
+              className="text-[color:var(--primary)] font-medium hover:underline"
+            >
+              Eleme detayı
+            </button>
+            .
           </p>
         )}
       </section>
+
+      {showExclusionModal && (
+        <ExclusionDetailModal
+          impacts={exclusionImpacts}
+          excludedCount={excludedCells.size}
+          onClose={() => setShowExclusionModal(false)}
+        />
+      )}
     </div>
   );
 }
 
-function SectionHeader({ title, hint }: { title: string; hint?: string }) {
+function SectionHeader({
+  title,
+  hint,
+  action,
+}: {
+  title: string;
+  hint?: string;
+  action?: ReactNode;
+}) {
   return (
     <div className="flex items-baseline justify-between gap-3 mb-2.5 px-0.5">
-      <h3 className="text-sm font-semibold tracking-tight">{title}</h3>
-      {hint && (
-        <span className="text-[11px] text-[color:var(--muted)] truncate">
-          {hint}
-        </span>
-      )}
+      <h3 className="text-sm font-semibold tracking-tight shrink-0">{title}</h3>
+      <div className="flex items-baseline gap-3 min-w-0">
+        {hint && (
+          <span className="text-[11px] text-[color:var(--muted)] truncate hidden sm:inline">
+            {hint}
+          </span>
+        )}
+        {action}
+      </div>
     </div>
   );
 }

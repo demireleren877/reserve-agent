@@ -9,35 +9,60 @@ import {
 } from "ag-grid-community";
 import { useMemo } from "react";
 import type { Triangle } from "@/types/triangle";
-import { formatNumber } from "@/lib/api";
+import { buildDisplayMatrix, type DisplayMatrix } from "@/lib/triangle-view";
 
 ModuleRegistry.registerModules([ClientSideRowModelModule, CellStyleModule]);
 
-interface Props {
-  triangle: Triangle;
-}
+type Props =
+  | { matrix: DisplayMatrix; decimals?: number; triangle?: never }
+  | { triangle: Triangle; decimals?: number; matrix?: never };
 
-export function TriangleGrid({ triangle }: Props) {
+export function TriangleGrid(props: Props) {
+  const decimals = props.decimals ?? 0;
+  const matrix: DisplayMatrix = useMemo(
+    () =>
+      props.matrix ??
+      buildDisplayMatrix(props.triangle, {
+        cumulative: true,
+        transposed: false,
+        view: "development",
+        originLenMonths: props.triangle.origin_granularity === "quarterly" ? 3 : 12,
+        devLenMonths:
+          props.triangle.development_granularity === "quarterly" ? 3 : 12,
+        decimals,
+      }),
+    [props.matrix, props.triangle, decimals],
+  );
+
+  const fmt = useMemo(
+    () =>
+      new Intl.NumberFormat("tr-TR", {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals,
+      }),
+    [decimals],
+  );
+
   const columnDefs = useMemo<ColDef[]>(() => {
     const cols: ColDef[] = [
       {
-        headerName: "Kaza",
-        field: "origin",
+        headerName: matrix.corner,
+        field: "header",
         pinned: "left",
-        width: 95,
+        width: 120,
         cellStyle: { fontWeight: 500, backgroundColor: "var(--surface-alt)" },
       },
     ];
-    triangle.development_periods.forEach((dev, idx) => {
+    matrix.columns.forEach((label, idx) => {
       cols.push({
-        headerName: `${idx + 1}`,
-        field: `dev_${dev}`,
+        headerName: label,
+        field: `c${idx}`,
         flex: 1,
-        minWidth: 85,
-        valueFormatter: (p) => formatNumber(p.value),
+        minWidth: 82,
+        valueFormatter: (p) =>
+          p.value == null || p.value === "" ? "" : fmt.format(p.value as number),
         cellStyle: (p) => ({
           color: p.value == null ? "var(--muted)" : "",
-          background: p.value == null ? "transparent" : "",
           textAlign: "right" as const,
           fontVariantNumeric: "tabular-nums",
         }),
@@ -45,29 +70,45 @@ export function TriangleGrid({ triangle }: Props) {
       });
     });
     return cols;
-  }, [triangle.development_periods]);
+  }, [matrix.corner, matrix.columns, fmt]);
 
   const rowData = useMemo(() => {
-    return triangle.origin_periods.map((origin, i) => {
-      const row: Record<string, number | string | null> = { origin };
-      triangle.development_periods.forEach((dev, j) => {
-        row[`dev_${dev}`] = triangle.values[i][j] ?? null;
+    return matrix.rows.map((r) => {
+      const row: Record<string, number | string | null> = { header: r.header };
+      r.cells.forEach((v, j) => {
+        row[`c${j}`] = v ?? null;
       });
       return row;
     });
-  }, [triangle]);
+  }, [matrix.rows]);
+
+  const pinnedBottom = useMemo(() => {
+    const row: Record<string, number | string | null> = { header: "Toplam" };
+    matrix.totals.forEach((v, j) => {
+      row[`c${j}`] = v ?? null;
+    });
+    return [row];
+  }, [matrix.totals]);
 
   return (
-    // autoHeight: grid tüm kaza yıllarını gösterir (kendi dikey scroll'u yok),
-    // dikey kaydırma SAYFADA olur. Yatay (dev sütunları) grid'de kalır.
     <div className="ag-theme-quartz" style={{ width: "100%" }}>
       <AgGridReact
         columnDefs={columnDefs}
         rowData={rowData}
+        pinnedBottomRowData={pinnedBottom}
         defaultColDef={{ resizable: true, sortable: false }}
         headerHeight={32}
         rowHeight={30}
         domLayout="autoHeight"
+        getRowStyle={(p) =>
+          p.node.rowPinned === "bottom"
+            ? {
+                fontWeight: 600,
+                background: "var(--surface-alt)",
+                borderTop: "2px solid var(--border-strong)",
+              }
+            : undefined
+        }
       />
     </div>
   );

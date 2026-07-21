@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import type { Triangle } from "@/types/triangle";
 import { formatFactor, formatNumber } from "@/lib/api";
 import { type Window } from "@/lib/ldf";
@@ -80,6 +80,8 @@ export function SummaryTab(props: Props) {
     exclusionImpacts,
   } = props;
 
+  const [showExclusionDetail, setShowExclusionDetail] = useState(false);
+
   const totalRawPremium = rows.reduce((s, r) => s + r.premium, 0);
   const totalULR =
     totalRawPremium > 0 ? totals.selectedUltimate / totalRawPremium : null;
@@ -153,6 +155,11 @@ export function SummaryTab(props: Props) {
     0,
   );
 
+  // LDF/CDF zincirini yatay (adımlar sütun) göstermek için hazırlık.
+  const chainSteps = selectedLDFs.map((_, i) => `${i + 1}→${i + 2}`);
+  const hasTail = effectiveCDFs.length > selectedLDFs.length;
+  if (hasTail) chainSteps.push(`${selectedLDFs.length + 1} (tail)`);
+
   return (
     <div className="space-y-4">
       {/* Başlık */}
@@ -167,7 +174,7 @@ export function SummaryTab(props: Props) {
       </div>
 
       {/* Final rakamlar */}
-      <div className="grid grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         <Stat label={`Toplam ${triangleLabel}`} value={formatNumber(totals.latest)} />
         <Stat label="Toplam Exposure (yıllık)" value={formatNumber(totals.exposure)} />
         <Stat
@@ -181,324 +188,326 @@ export function SummaryTab(props: Props) {
         />
       </div>
 
-      {/* Aktüer müdahaleleri (default'tan sapan ne varsa) */}
-      <div className="card p-0 overflow-hidden">
-        <div className="px-4 py-3 border-b bg-[color:var(--surface-alt)]">
-          <h3 className="text-sm font-semibold">Aktüer Müdahaleleri</h3>
-          <p className="text-[11px] text-[color:var(--muted)] mt-0.5">
-            Default ayarlardan sapan tüm seçimler — ikinci hat inceleme için
-            kapsama listesi.
-          </p>
+      {/* Aktüer müdahaleleri — kompakt chip şeridi */}
+      <div className="card p-3.5">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <h3 className="text-[11px] font-semibold uppercase tracking-wide text-[color:var(--muted-strong)]">
+            Aktüer Müdahaleleri
+          </h3>
+          {interventions.length === 0 && (
+            <span className="text-[11px] text-[color:var(--muted)]">
+              Model tüm varsayılan ayarlarda.
+            </span>
+          )}
         </div>
-        {interventions.length === 0 ? (
-          <div className="p-4 text-sm text-[color:var(--muted-strong)]">
-            Model tüm varsayılan ayarlarda. Hücre eleme, curve override, BF
-            correction, manuel LR veya BF basis seçimi yok.
-          </div>
-        ) : (
-          <ul className="divide-y">
+        {interventions.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mt-2">
             {interventions.map((it, i) => (
-              <li
+              <span
                 key={i}
-                className="px-4 py-2 flex items-center justify-between text-sm"
+                className={
+                  "inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium tabular " +
+                  (it.tone === "accent"
+                    ? "bg-[color:var(--primary-soft)] text-[color:var(--primary)]"
+                    : "bg-[color:var(--surface-alt)] text-[color:var(--muted-strong)]")
+                }
               >
-                <span className="text-[color:var(--muted-strong)]">{it.label}</span>
-                <span
-                  className={
-                    "tabular font-semibold text-[11px] px-2 py-0.5 rounded " +
-                    (it.tone === "accent"
-                      ? "bg-[color:var(--primary-soft)] text-[color:var(--primary)]"
-                      : "bg-[color:var(--surface-alt)] text-[color:var(--muted-strong)]")
-                  }
-                >
-                  {it.value}
-                </span>
-              </li>
+                <span className="opacity-70 font-normal">{it.label}</span>
+                {it.value}
+              </span>
             ))}
-          </ul>
+          </div>
         )}
       </div>
 
-      {/* Per-origin final */}
-      <div className="card p-0 overflow-hidden">
-        <div className="px-4 py-3 border-b bg-[color:var(--surface-alt)]">
-          <h3 className="text-sm font-semibold">Origin Bazında Final</h3>
-          <p className="text-[11px] text-[color:var(--muted)] mt-0.5">
-            Seçili Ultimate = origin başına seçilen temel (CL/BF). Correction
-            yıllık exposure'a tamamlama katsayısı; IBNR kısmi dönem üzerinden.
-          </p>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="text-sm w-full tabular">
-            <thead>
-              <tr className="text-[color:var(--muted-strong)] text-[11px] uppercase tracking-wide bg-[color:var(--background)]">
-                <th className="text-left px-3 py-2 font-semibold">Kaza</th>
-                <th className="text-right px-3 py-2 font-semibold">Latest</th>
-                <th className="text-right px-3 py-2 font-semibold">Exposure</th>
-                <th className="text-right px-3 py-2 font-semibold">k</th>
-                <th className="text-right px-3 py-2 font-semibold">CDF</th>
-                <th className="text-right px-3 py-2 font-semibold">% Dev</th>
-                <th className="text-left px-3 py-2 font-semibold">Temel</th>
-                <th className="text-right px-3 py-2 font-semibold">Sel. LR</th>
-                <th className="text-right px-3 py-2 font-semibold">
-                  Seçili Ult
-                </th>
-                <th className="text-right px-3 py-2 font-semibold">IBNR</th>
-                <th className="text-right px-3 py-2 font-semibold">ULR</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r, idx) => (
-                <tr
-                  key={r.origin}
-                  className={
-                    "border-t hover:bg-[color:var(--surface-alt)]/40 " +
-                    (idx % 2 === 1 ? "bg-[color:var(--surface-alt)]/20" : "")
-                  }
-                >
-                  <td className="px-3 py-1.5 font-medium">{r.origin}</td>
-                  <td className="text-right px-3 py-1.5">
-                    {formatNumber(r.latest)}
-                  </td>
-                  <td className="text-right px-3 py-1.5">
-                    {r.premium > 0 ? formatNumber(r.premium) : "—"}
-                  </td>
-                  <td
-                    className={
-                      "text-right px-3 py-1.5 " +
-                      (r.correction !== 1
-                        ? "text-[color:var(--primary)] font-medium"
-                        : "text-[color:var(--muted)]")
-                    }
-                  >
-                    {r.correction !== 1 ? `×${r.correction}` : "—"}
-                  </td>
-                  <td className="text-right px-3 py-1.5 text-[color:var(--muted-strong)]">
-                    {formatFactor(r.cdf)}
-                  </td>
-                  <td className="text-right px-3 py-1.5 text-[color:var(--muted-strong)]">
-                    {r.pctDeveloped != null
-                      ? `${(r.pctDeveloped * 100).toFixed(1)}%`
-                      : "—"}
-                  </td>
-                  <td className="px-3 py-1.5">
-                    <span
-                      className={
-                        "inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide " +
-                        (r.basis === "bf"
-                          ? "bg-[color:var(--primary-soft)] text-[color:var(--primary)]"
-                          : "bg-[color:var(--surface-alt)] text-[color:var(--muted-strong)]")
-                      }
-                    >
-                      {r.basis}
-                    </span>
-                  </td>
-                  <td
-                    className="text-right px-3 py-1.5 text-[color:var(--muted-strong)]"
-                    title={r.selectedLRInput ?? undefined}
-                  >
-                    {`${(r.selectedLR * 100).toFixed(1)}%`}
-                    {r.selectedLRInput && (
-                      <span className="ml-1 text-[9px] font-semibold text-[color:var(--primary)]">
-                        ƒ
-                      </span>
-                    )}
-                  </td>
-                  <td className="text-right px-3 py-1.5 font-semibold">
-                    {formatNumber(r.selectedUltimate)}
-                  </td>
-                  <td className="text-right px-3 py-1.5 font-semibold text-[color:var(--primary)]">
-                    {formatNumber(r.ibnr)}
-                  </td>
-                  <td className="text-right px-3 py-1.5 text-[color:var(--muted-strong)]">
-                    {r.ulr != null ? `${(r.ulr * 100).toFixed(1)}%` : "—"}
-                  </td>
-                </tr>
-              ))}
-              <tr className="border-t-2 border-[color:var(--border-strong)] font-semibold bg-[color:var(--surface-alt)]">
-                <td className="px-3 py-2">Toplam</td>
-                <td className="text-right px-3 py-2">
-                  {formatNumber(totals.latest)}
-                </td>
-                <td className="text-right px-3 py-2">
-                  {formatNumber(totals.exposure)}
-                </td>
-                <td colSpan={5} />
-                <td className="text-right px-3 py-2">
-                  {formatNumber(totals.selectedUltimate)}
-                </td>
-                <td className="text-right px-3 py-2 text-[color:var(--primary)]">
-                  {formatNumber(totals.ibnr)}
-                </td>
-                <td className="text-right px-3 py-2">
-                  {totalULR != null ? `${(totalULR * 100).toFixed(1)}%` : "—"}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Eleme etkisi tablosu */}
-      <div className="card p-0 overflow-hidden">
-        <div className="px-4 py-3 border-b bg-[color:var(--surface-alt)]">
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <div>
-              <h3 className="text-sm font-semibold">
-                Eleme Etkisi {excludedCells.size > 0 && `(${excludedCells.size})`}
-              </h3>
-              <p className="text-[11px] text-[color:var(--muted)] mt-0.5">
-                Her satır: o eleme uygulanmasaydı toplam IBNR ne kadar değişirdi
-                (pozitif = eleme rezervi düşürmüş; negatif = yükseltmiş).
-              </p>
-            </div>
-            {exclusionImpacts.length > 0 && (
-              <div className="text-right">
-                <div className="text-[10px] uppercase text-[color:var(--muted)]">
-                  Elemelerin net IBNR etkisi
-                </div>
-                <div
-                  className={
-                    "text-base font-semibold tabular " +
-                    (ibnrSavedByExclusions > 0
-                      ? "text-[color:var(--success)]"
-                      : ibnrSavedByExclusions < 0
-                      ? "text-[color:var(--danger)]"
-                      : "")
-                  }
-                >
-                  {ibnrSavedByExclusions > 0 ? "+" : ""}
-                  {formatNumber(ibnrSavedByExclusions)}
-                </div>
-              </div>
-            )}
+      {/* Ana içerik: solda origin tablosu (geniş), sağda kompakt paneller */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 items-start">
+        {/* Per-origin final */}
+        <div className="xl:col-span-2 card p-0 overflow-hidden">
+          <div className="px-4 py-3 border-b bg-[color:var(--surface-alt)]">
+            <h3 className="text-sm font-semibold">Origin Bazında Final</h3>
+            <p className="text-[11px] text-[color:var(--muted)] mt-0.5">
+              Seçili Ultimate = origin başına seçilen temel (CL/BF). Correction
+              yıllık exposure&apos;a tamamlama katsayısı; IBNR kısmi dönem üzerinden.
+            </p>
           </div>
-        </div>
-        {exclusionImpacts.length === 0 ? (
-          <div className="p-6 text-center text-sm text-[color:var(--muted)]">
-            Hiç hücre elenmemiş.
-          </div>
-        ) : (
           <div className="overflow-x-auto">
             <table className="text-sm w-full tabular">
               <thead>
                 <tr className="text-[color:var(--muted-strong)] text-[11px] uppercase tracking-wide bg-[color:var(--background)]">
                   <th className="text-left px-3 py-2 font-semibold">Kaza</th>
-                  <th className="text-left px-3 py-2 font-semibold">Adım</th>
-                  <th className="text-right px-3 py-2 font-semibold">LDF</th>
+                  <th className="text-right px-3 py-2 font-semibold">Latest</th>
+                  <th className="text-right px-3 py-2 font-semibold">Exposure</th>
+                  <th className="text-right px-3 py-2 font-semibold">k</th>
+                  <th className="text-right px-3 py-2 font-semibold">CDF</th>
+                  <th className="text-right px-3 py-2 font-semibold">% Dev</th>
+                  <th className="text-left px-3 py-2 font-semibold">Temel</th>
+                  <th className="text-right px-3 py-2 font-semibold">Sel. LR</th>
                   <th className="text-right px-3 py-2 font-semibold">
-                    Kolon medyanı
+                    Seçili Ult
                   </th>
-                  <th className="text-right px-3 py-2 font-semibold">Sapma</th>
-                  <th className="text-right px-3 py-2 font-semibold">
-                    IBNR'a etkisi
-                  </th>
+                  <th className="text-right px-3 py-2 font-semibold">IBNR</th>
+                  <th className="text-right px-3 py-2 font-semibold">ULR</th>
                 </tr>
               </thead>
               <tbody>
-                {exclusionImpacts.map((e, idx) => (
+                {rows.map((r, idx) => (
                   <tr
-                    key={`${e.origin}|${e.step}`}
+                    key={r.origin}
                     className={
-                      "border-t hover:bg-[color:var(--surface-alt)]/50 " +
+                      "border-t hover:bg-[color:var(--surface-alt)]/40 " +
                       (idx % 2 === 1 ? "bg-[color:var(--surface-alt)]/20" : "")
                     }
                   >
-                    <td className="px-3 py-1.5 font-medium">{e.origin}</td>
-                    <td className="px-3 py-1.5 text-[color:var(--muted)]">
-                      {e.step + 1}→{e.step + 2}
+                    <td className="px-3 py-1.5 font-medium">{r.origin}</td>
+                    <td className="text-right px-3 py-1.5">
+                      {formatNumber(r.latest)}
                     </td>
                     <td className="text-right px-3 py-1.5">
-                      {e.ldfValue != null ? formatFactor(e.ldfValue) : "—"}
-                    </td>
-                    <td className="text-right px-3 py-1.5 text-[color:var(--muted-strong)]">
-                      {e.median != null ? formatFactor(e.median) : "—"}
+                      {r.premium > 0 ? formatNumber(r.premium) : "—"}
                     </td>
                     <td
                       className={
-                        "text-right px-3 py-1.5 font-medium " +
-                        (e.deviationPct == null
-                          ? ""
-                          : e.deviationPct > 0
-                          ? "text-[color:var(--danger)]"
-                          : "text-[color:var(--primary)]")
-                      }
-                    >
-                      {e.deviationPct == null
-                        ? "—"
-                        : `${e.deviationPct > 0 ? "+" : ""}${e.deviationPct.toFixed(1)}%`}
-                    </td>
-                    <td
-                      className={
-                        "text-right px-3 py-1.5 font-semibold " +
-                        (e.ibnrImpact > 0
-                          ? "text-[color:var(--success)]"
-                          : e.ibnrImpact < 0
-                          ? "text-[color:var(--danger)]"
+                        "text-right px-3 py-1.5 " +
+                        (r.correction !== 1
+                          ? "text-[color:var(--primary)] font-medium"
                           : "text-[color:var(--muted)]")
                       }
                     >
-                      {e.ibnrImpact > 0 ? "+" : ""}
-                      {formatNumber(e.ibnrImpact)}
+                      {r.correction !== 1 ? `×${r.correction}` : "—"}
+                    </td>
+                    <td className="text-right px-3 py-1.5 text-[color:var(--muted-strong)]">
+                      {formatFactor(r.cdf)}
+                    </td>
+                    <td className="text-right px-3 py-1.5 text-[color:var(--muted-strong)]">
+                      {r.pctDeveloped != null
+                        ? `${(r.pctDeveloped * 100).toFixed(1)}%`
+                        : "—"}
+                    </td>
+                    <td className="px-3 py-1.5">
+                      <span
+                        className={
+                          "inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide " +
+                          (r.basis === "bf"
+                            ? "bg-[color:var(--primary-soft)] text-[color:var(--primary)]"
+                            : "bg-[color:var(--surface-alt)] text-[color:var(--muted-strong)]")
+                        }
+                      >
+                        {r.basis}
+                      </span>
+                    </td>
+                    <td
+                      className="text-right px-3 py-1.5 text-[color:var(--muted-strong)]"
+                      title={r.selectedLRInput ?? undefined}
+                    >
+                      {`${(r.selectedLR * 100).toFixed(1)}%`}
+                      {r.selectedLRInput && (
+                        <span className="ml-1 text-[9px] font-semibold text-[color:var(--primary)]">
+                          ƒ
+                        </span>
+                      )}
+                    </td>
+                    <td className="text-right px-3 py-1.5 font-semibold">
+                      {formatNumber(r.selectedUltimate)}
+                    </td>
+                    <td className="text-right px-3 py-1.5 font-semibold text-[color:var(--primary)]">
+                      {formatNumber(r.ibnr)}
+                    </td>
+                    <td className="text-right px-3 py-1.5 text-[color:var(--muted-strong)]">
+                      {r.ulr != null ? `${(r.ulr * 100).toFixed(1)}%` : "—"}
                     </td>
                   </tr>
                 ))}
+                <tr className="border-t-2 border-[color:var(--border-strong)] font-semibold bg-[color:var(--surface-alt)]">
+                  <td className="px-3 py-2">Toplam</td>
+                  <td className="text-right px-3 py-2">
+                    {formatNumber(totals.latest)}
+                  </td>
+                  <td className="text-right px-3 py-2">
+                    {formatNumber(totals.exposure)}
+                  </td>
+                  <td colSpan={5} />
+                  <td className="text-right px-3 py-2">
+                    {formatNumber(totals.selectedUltimate)}
+                  </td>
+                  <td className="text-right px-3 py-2 text-[color:var(--primary)]">
+                    {formatNumber(totals.ibnr)}
+                  </td>
+                  <td className="text-right px-3 py-2">
+                    {totalULR != null ? `${(totalULR * 100).toFixed(1)}%` : "—"}
+                  </td>
+                </tr>
               </tbody>
             </table>
           </div>
-        )}
-      </div>
-
-      {/* LDF / CDF zinciri */}
-      <div className="card p-0 overflow-hidden">
-        <div className="px-4 py-3 border-b bg-[color:var(--surface-alt)]">
-          <h3 className="text-sm font-semibold">LDF & CDF Zinciri</h3>
-          <p className="text-[11px] text-[color:var(--muted)] mt-0.5">
-            Effective CDF, Curve sekmesindeki override'ları yansıtır.
-          </p>
         </div>
-        <div className="overflow-x-auto">
-          <table className="text-sm w-full tabular">
-            <thead>
-              <tr className="text-[color:var(--muted-strong)] text-[11px] uppercase tracking-wide bg-[color:var(--background)]">
-                <th className="text-left px-3 py-2 font-semibold">Adım</th>
-                <th className="text-right px-3 py-2 font-semibold">Selected LDF</th>
-                <th className="text-right px-3 py-2 font-semibold">
-                  Effective CDF (→ Ult)
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {selectedLDFs.map((ldf, i) => (
-                <tr
-                  key={i}
-                  className={
-                    "border-t " +
-                    (i % 2 === 1 ? "bg-[color:var(--surface-alt)]/20" : "")
-                  }
-                >
-                  <td className="px-3 py-1.5 text-[color:var(--muted-strong)]">
-                    {i + 1}→{i + 2}
-                  </td>
-                  <td className="text-right px-3 py-1.5">{formatFactor(ldf)}</td>
-                  <td className="text-right px-3 py-1.5 font-medium">
-                    {formatFactor(effectiveCDFs[i] ?? 1)}
-                  </td>
-                </tr>
-              ))}
-              {effectiveCDFs.length > selectedLDFs.length && (
-                <tr className="border-t">
-                  <td className="px-3 py-1.5 text-[color:var(--muted-strong)]">
-                    {selectedLDFs.length + 1} (tail)
-                  </td>
-                  <td className="text-right px-3 py-1.5 text-[color:var(--muted)]">—</td>
-                  <td className="text-right px-3 py-1.5 font-medium">
-                    {formatFactor(effectiveCDFs[selectedLDFs.length] ?? 1)}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+
+        {/* Sağ panel: LDF/CDF (yatay) + Eleme Etkisi (özet + detay) */}
+        <div className="space-y-4">
+          {/* LDF / CDF zinciri — yatay tablo */}
+          <div className="card p-0 overflow-hidden">
+            <div className="px-4 py-3 border-b bg-[color:var(--surface-alt)]">
+              <h3 className="text-sm font-semibold">LDF & CDF Zinciri</h3>
+              <p className="text-[11px] text-[color:var(--muted)] mt-0.5">
+                Effective CDF, Curve sekmesindeki override&apos;ları yansıtır.
+              </p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="text-[12px] w-full tabular">
+                <thead>
+                  <tr className="text-[color:var(--muted-strong)] text-[10px] uppercase tracking-wide bg-[color:var(--background)]">
+                    <th className="text-left px-3 py-1.5 font-semibold sticky left-0 bg-[color:var(--background)]">
+                      Adım
+                    </th>
+                    {chainSteps.map((s) => (
+                      <th
+                        key={s}
+                        className="text-right px-2.5 py-1.5 font-semibold whitespace-nowrap"
+                      >
+                        {s}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="border-t">
+                    <td className="text-left px-3 py-1.5 font-medium text-[color:var(--muted-strong)] sticky left-0 bg-[color:var(--surface)]">
+                      Selected LDF
+                    </td>
+                    {selectedLDFs.map((ldf, i) => (
+                      <td key={i} className="text-right px-2.5 py-1.5">
+                        {formatFactor(ldf)}
+                      </td>
+                    ))}
+                    {hasTail && (
+                      <td className="text-right px-2.5 py-1.5 text-[color:var(--muted)]">—</td>
+                    )}
+                  </tr>
+                  <tr className="border-t bg-[color:var(--surface-alt)]/20">
+                    <td className="text-left px-3 py-1.5 font-medium text-[color:var(--muted-strong)] sticky left-0 bg-[color:var(--surface-alt)]/40">
+                      Effective CDF (→ Ult)
+                    </td>
+                    {effectiveCDFs.map((c, i) => (
+                      <td key={i} className="text-right px-2.5 py-1.5 font-semibold">
+                        {formatFactor(c)}
+                      </td>
+                    ))}
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Eleme etkisi — özet kart + detay toggle */}
+          <div className="card p-0 overflow-hidden">
+            <div className="px-4 py-3 border-b bg-[color:var(--surface-alt)]">
+              <h3 className="text-sm font-semibold">
+                Eleme Etkisi {excludedCells.size > 0 && `(${excludedCells.size})`}
+              </h3>
+              <p className="text-[11px] text-[color:var(--muted)] mt-0.5">
+                Elemeler olmasaydı toplam IBNR ne kadar değişirdi.
+              </p>
+            </div>
+            {exclusionImpacts.length === 0 ? (
+              <div className="p-4 text-sm text-[color:var(--muted)]">
+                Hiç hücre elenmemiş.
+              </div>
+            ) : (
+              <>
+                <div className="px-4 py-3 flex items-center justify-between">
+                  <div>
+                    <div className="text-[10px] uppercase text-[color:var(--muted)]">
+                      Net IBNR etkisi
+                    </div>
+                    <div
+                      className={
+                        "text-lg font-semibold tabular " +
+                        (ibnrSavedByExclusions > 0
+                          ? "text-[color:var(--success)]"
+                          : ibnrSavedByExclusions < 0
+                          ? "text-[color:var(--danger)]"
+                          : "")
+                      }
+                    >
+                      {ibnrSavedByExclusions > 0 ? "+" : ""}
+                      {formatNumber(ibnrSavedByExclusions)}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setShowExclusionDetail((v) => !v)}
+                    className="btn text-[11px] py-1 px-2.5"
+                  >
+                    {showExclusionDetail ? "Detayı gizle" : `Detay (${exclusionImpacts.length})`}
+                  </button>
+                </div>
+                {showExclusionDetail && (
+                  <div className="overflow-x-auto border-t">
+                    <table className="text-[12px] w-full tabular">
+                      <thead>
+                        <tr className="text-[color:var(--muted-strong)] text-[10px] uppercase tracking-wide bg-[color:var(--background)]">
+                          <th className="text-left px-3 py-1.5 font-semibold">Kaza</th>
+                          <th className="text-left px-3 py-1.5 font-semibold">Adım</th>
+                          <th className="text-right px-3 py-1.5 font-semibold">LDF</th>
+                          <th className="text-right px-3 py-1.5 font-semibold">Medyan</th>
+                          <th className="text-right px-3 py-1.5 font-semibold">Sapma</th>
+                          <th className="text-right px-3 py-1.5 font-semibold">IBNR</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {exclusionImpacts.map((e, idx) => (
+                          <tr
+                            key={`${e.origin}|${e.step}`}
+                            className={
+                              "border-t hover:bg-[color:var(--surface-alt)]/50 " +
+                              (idx % 2 === 1 ? "bg-[color:var(--surface-alt)]/20" : "")
+                            }
+                          >
+                            <td className="px-3 py-1.5 font-medium">{e.origin}</td>
+                            <td className="px-3 py-1.5 text-[color:var(--muted)]">
+                              {e.step + 1}→{e.step + 2}
+                            </td>
+                            <td className="text-right px-3 py-1.5">
+                              {e.ldfValue != null ? formatFactor(e.ldfValue) : "—"}
+                            </td>
+                            <td className="text-right px-3 py-1.5 text-[color:var(--muted-strong)]">
+                              {e.median != null ? formatFactor(e.median) : "—"}
+                            </td>
+                            <td
+                              className={
+                                "text-right px-3 py-1.5 font-medium " +
+                                (e.deviationPct == null
+                                  ? ""
+                                  : e.deviationPct > 0
+                                  ? "text-[color:var(--danger)]"
+                                  : "text-[color:var(--primary)]")
+                              }
+                            >
+                              {e.deviationPct == null
+                                ? "—"
+                                : `${e.deviationPct > 0 ? "+" : ""}${e.deviationPct.toFixed(1)}%`}
+                            </td>
+                            <td
+                              className={
+                                "text-right px-3 py-1.5 font-semibold " +
+                                (e.ibnrImpact > 0
+                                  ? "text-[color:var(--success)]"
+                                  : e.ibnrImpact < 0
+                                  ? "text-[color:var(--danger)]"
+                                  : "text-[color:var(--muted)]")
+                              }
+                            >
+                              {e.ibnrImpact > 0 ? "+" : ""}
+                              {formatNumber(e.ibnrImpact)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         </div>
       </div>
     </div>

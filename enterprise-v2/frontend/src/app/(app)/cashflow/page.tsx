@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import Link from "next/link";
+import { downloadFile } from "@/lib/download";
 import { useUserPlan } from "@/lib/auth/user-plan-context";
 import { useProject } from "@/lib/project-store";
 import { useModelLock } from "@/lib/use-model-lock";
@@ -101,14 +102,11 @@ function Spinner() {
 // ─── Excel export helpers ──────────────────────────────────────────────────────
 
 function _xlsxDownload(wb: XLSX.WorkBook, filename: string) {
-  const buf = XLSX.write(wb, { bookType: "xlsx", type: "array" });
-  const blob = new Blob([buf], { type: "application/octet-stream" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
+  // Masaüstü (pywebview) native kaydet köprüsü + tarayıcı fallback için ortak helper.
+  const buf = XLSX.write(wb, { bookType: "xlsx", type: "array" }) as ArrayBuffer;
+  downloadFile(buf, filename).catch((e) => {
+    alert("İndirme hatası: " + (e instanceof Error ? e.message : String(e)));
+  });
 }
 
 function exportTriangleXlsx(triangle: Triangle, branchLabel: string) {

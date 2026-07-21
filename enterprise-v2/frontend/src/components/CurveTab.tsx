@@ -231,17 +231,24 @@ export function CurveTab({
                     <button
                       onClick={() => !r.autoExcluded && onToggleInclude(r.key, !r.included)}
                       disabled={r.autoExcluded}
-                      title={r.autoExcluded ? "LDF ≤ 1: otomatik hariç" : undefined}
-                      className={
-                        "text-[10px] font-semibold px-1.5 py-0.5 rounded transition " +
-                        (r.autoExcluded
-                          ? "bg-[color:var(--surface-alt)] text-[color:var(--muted)] opacity-40 cursor-not-allowed"
+                      title={
+                        r.autoExcluded
+                          ? "LDF ≤ 1: otomatik hariç"
                           : r.included
-                          ? "bg-[color:var(--success-soft)] text-[color:var(--success)]"
-                          : "bg-[color:var(--surface-alt)] text-[color:var(--muted)]")
+                          ? "Tıkla → hariç tut"
+                          : "Tıkla → dahil et"
                       }
+                      className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full text-white transition disabled:cursor-not-allowed"
+                      style={{
+                        background: r.autoExcluded
+                          ? "var(--muted)"
+                          : r.included
+                          ? "var(--success)"
+                          : "#64748b",
+                        opacity: r.autoExcluded ? 0.55 : 1,
+                      }}
                     >
-                      {r.included ? "Yes" : "No"}
+                      {r.included ? "✓ Dahil" : "✕ Hariç"}
                     </button>
                   </td>
 
@@ -265,7 +272,7 @@ export function CurveTab({
                   />
 
                   {/* Selected */}
-                  <td className="text-right px-2 py-0.5 font-semibold text-[color:var(--success)] text-[12px]">
+                  <td className={"text-right px-2 py-0.5 font-semibold text-[12px] " + (r.included ? "text-[color:var(--success)]" : "text-[color:var(--muted)] line-through")}>
                     {r.selectedLdf != null ? formatFactor(r.selectedLdf) : "—"}
                   </td>
 

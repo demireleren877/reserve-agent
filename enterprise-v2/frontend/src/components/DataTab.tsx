@@ -193,72 +193,82 @@ export function DataTab({ paidTriangle, incurredTriangle }: Props) {
         </div>
 
         {/* Kontrol şeridi */}
-        <div className="flex flex-wrap items-end gap-x-5 gap-y-3 px-3 py-2.5 border-b bg-[color:var(--surface-alt)]/40">
-          <Toggle
-            label="Kümülatif"
-            checked={cumulative}
-            onChange={setCumulative}
-          />
-          <Toggle
-            label="Transpoze"
-            checked={transposed}
-            onChange={setTransposed}
-          />
+        <div className="flex flex-wrap items-start gap-x-4 gap-y-3 px-3.5 py-3 border-b bg-[color:var(--surface-alt)]/40">
+          <Field label="Değer">
+            <Segmented
+              value={cumulative ? "cum" : "inc"}
+              options={[
+                { value: "cum", label: "Kümülatif" },
+                { value: "inc", label: "Artımsal" },
+              ]}
+              onChange={(v) => setCumulative(v === "cum")}
+            />
+          </Field>
 
-          <Divider />
+          <Field label="Ondalık">
+            <Stepper
+              value={decimals}
+              options={[0, 1, 2, 3, 4]}
+              display={(v) => `${v}`}
+              onChange={setDecimals}
+              width="min-w-[34px]"
+            />
+          </Field>
 
-          <Segmented
-            label="Sütun"
-            value={view}
-            options={[
-              { value: "development", label: "Gelişim" },
-              { value: "calendar", label: "Takvim" },
-            ]}
-            onChange={(v) => setView(v as ViewMode)}
-          />
+          <VDivider />
 
-          <Divider />
+          <Field label="Sütun">
+            <Segmented
+              value={view}
+              options={[
+                { value: "development", label: "Gelişim" },
+                { value: "calendar", label: "Takvim" },
+              ]}
+              onChange={(v) => setView(v as ViewMode)}
+            />
+          </Field>
 
-          <Stepper
-            label="Kaza uzunluğu"
-            hint={`kayıt: ${originStored}`}
-            value={safeOriginLen}
-            options={originOpts}
-            disabled={!canAggOrigin}
-            display={lenLabel}
-            onChange={setOriginLen}
-          />
-          <Stepper
-            label="Gelişim uzunluğu"
-            hint={`kayıt: ${devStored}`}
-            value={safeDevLen}
-            options={devOpts}
-            disabled={!canAggDev}
-            display={lenLabel}
-            onChange={setDevLen}
-          />
+          <Field label="Düzen">
+            <TransposeToggle
+              active={transposed}
+              onClick={() => setTransposed((v) => !v)}
+            />
+          </Field>
+
+          <VDivider />
+
+          <Field label="Kaza dönemi" hint={`kayıt: ${originStored}`}>
+            <Stepper
+              value={safeOriginLen}
+              options={originOpts}
+              disabled={!canAggOrigin}
+              display={lenLabel}
+              onChange={setOriginLen}
+            />
+          </Field>
+          <Field label="Gelişim dönemi" hint={`kayıt: ${devStored}`}>
+            <Stepper
+              value={safeDevLen}
+              options={devOpts}
+              disabled={!canAggDev}
+              display={lenLabel}
+              onChange={setDevLen}
+            />
+          </Field>
           {(canAggOrigin || canAggDev) && (
-            <button
-              onClick={() => {
-                setOriginLen(originOpts[originOpts.length - 1]);
-                setDevLen(devOpts[devOpts.length - 1]);
-              }}
-              className="btn text-[11px] py-1 px-2.5"
-              title="En kaba (tam toplanmış) görünüme geç"
-            >
-              Max
-            </button>
+            <div className="self-start pt-[14px]">
+              <button
+                onClick={() => {
+                  setOriginLen(originOpts[originOpts.length - 1]);
+                  setDevLen(devOpts[devOpts.length - 1]);
+                }}
+                className="h-8 px-3 rounded-lg border border-[color:var(--border)] bg-[color:var(--surface)] text-[11px] font-semibold text-[color:var(--muted-strong)] hover:border-[color:var(--border-strong)] hover:bg-[color:var(--surface-alt)] transition"
+                title="En kaba (tam toplanmış) görünüme geç"
+              >
+                Max
+              </button>
+            </div>
           )}
-
-          <Divider />
-
-          <Stepper
-            label="Ondalık"
-            value={decimals}
-            options={[0, 1, 2, 3, 4]}
-            display={(v) => `${v}`}
-            onChange={setDecimals}
-          />
         </div>
 
         {/* İçerik */}
@@ -288,8 +298,10 @@ export function DataTab({ paidTriangle, incurredTriangle }: Props) {
   );
 }
 
-function Divider() {
-  return <div className="w-px h-8 bg-[color:var(--border)] self-center" />;
+function VDivider() {
+  return (
+    <div className="self-start mt-[14px] w-px h-8 bg-[color:var(--border)] mx-1" />
+  );
 }
 
 function ViewChip({ children }: { children: ReactNode }) {
@@ -300,134 +312,141 @@ function ViewChip({ children }: { children: ReactNode }) {
   );
 }
 
-function Toggle({
+/** Etiketli alan sarmalayıcı — tüm kontroller aynı dikey ritimde. */
+function Field({
   label,
-  checked,
-  onChange,
+  hint,
+  children,
 }: {
   label: string;
-  checked: boolean;
-  onChange: (v: boolean) => void;
+  hint?: string;
+  children: ReactNode;
 }) {
   return (
-    <label className="flex flex-col gap-1 cursor-pointer select-none">
-      <span className="text-[10px] uppercase tracking-wide font-semibold text-[color:var(--muted)]">
+    <div className="flex flex-col gap-1">
+      <span className="text-[10px] uppercase tracking-wide font-semibold text-[color:var(--muted)] leading-none">
         {label}
       </span>
-      <button
-        type="button"
-        onClick={() => onChange(!checked)}
-        className={
-          "relative w-9 h-5 rounded-full transition " +
-          (checked
-            ? "bg-[color:var(--primary)]"
-            : "bg-[color:var(--border-strong)]")
-        }
-        aria-pressed={checked}
-      >
-        <span
-          className={
-            "absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform " +
-            (checked ? "translate-x-4" : "")
-          }
-        />
-      </button>
-    </label>
+      {children}
+      {hint ? (
+        <span className="text-[9px] text-[color:var(--muted)] leading-none">
+          {hint}
+        </span>
+      ) : (
+        <span className="text-[9px] leading-none">&nbsp;</span>
+      )}
+    </div>
   );
 }
 
 function Segmented<T extends string>({
-  label,
   value,
   options,
   onChange,
 }: {
-  label: string;
   value: T;
   options: { value: T; label: string }[];
   onChange: (v: T) => void;
 }) {
   return (
-    <div className="flex flex-col gap-1">
-      <span className="text-[10px] uppercase tracking-wide font-semibold text-[color:var(--muted)]">
-        {label}
-      </span>
-      <div className="flex rounded-md border border-[color:var(--border)] overflow-hidden">
-        {options.map((o) => (
+    <div className="inline-flex h-8 p-0.5 rounded-lg bg-[color:var(--surface-alt)] border border-[color:var(--border)]">
+      {options.map((o) => {
+        const active = value === o.value;
+        return (
           <button
             key={o.value}
             onClick={() => onChange(o.value)}
             className={
-              "px-2.5 py-1 text-[11px] font-medium transition " +
-              (value === o.value
-                ? "bg-[color:var(--primary)] text-white"
-                : "bg-[color:var(--surface)] text-[color:var(--muted-strong)] hover:bg-[color:var(--surface-alt)]")
+              "px-3 rounded-md text-[12px] font-medium transition " +
+              (active
+                ? "bg-[color:var(--surface)] text-[color:var(--primary)] shadow-sm"
+                : "text-[color:var(--muted-strong)] hover:text-[color:var(--foreground)]")
             }
           >
             {o.label}
           </button>
-        ))}
-      </div>
+        );
+      })}
     </div>
   );
 }
 
+function TransposeToggle({
+  active,
+  onClick,
+}: {
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      aria-pressed={active}
+      title="Eksenleri takas et"
+      className={
+        "inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] font-medium border transition " +
+        (active
+          ? "bg-[color:var(--primary-soft)] text-[color:var(--primary)] border-[color:var(--primary-border)]"
+          : "bg-[color:var(--surface)] text-[color:var(--muted-strong)] border-[color:var(--border)] hover:border-[color:var(--border-strong)] hover:bg-[color:var(--surface-alt)]")
+      }
+    >
+      <span className="text-[13px] leading-none">⇄</span>
+      Transpoze
+    </button>
+  );
+}
+
 function Stepper<T extends number>({
-  label,
-  hint,
   value,
   options,
   disabled,
   display,
   onChange,
+  width = "min-w-[70px]",
 }: {
-  label: string;
-  hint?: string;
   value: T;
   options: T[];
   disabled?: boolean;
   display: (v: T) => string;
   onChange: (v: T) => void;
+  width?: string;
 }) {
   const idx = options.indexOf(value);
   const canDown = !disabled && idx > 0;
   const canUp = !disabled && idx >= 0 && idx < options.length - 1;
+  const chevron =
+    "flex items-center justify-center w-7 h-full text-[15px] text-[color:var(--muted-strong)] hover:bg-[color:var(--surface-alt)] hover:text-[color:var(--foreground)] disabled:opacity-25 disabled:cursor-not-allowed disabled:hover:bg-transparent transition";
   return (
-    <div className="flex flex-col gap-1">
-      <span className="text-[10px] uppercase tracking-wide font-semibold text-[color:var(--muted)]">
-        {label}
-      </span>
-      <div
+    <div
+      className={
+        "inline-flex items-stretch h-8 rounded-lg border border-[color:var(--border)] bg-[color:var(--surface)] overflow-hidden " +
+        (disabled ? "opacity-60" : "")
+      }
+    >
+      <button
+        onClick={() => canDown && onChange(options[idx - 1])}
+        disabled={!canDown}
+        className={chevron}
+        aria-label="azalt"
+      >
+        −
+      </button>
+      <span
         className={
-          "flex items-center border border-[color:var(--border)] rounded-md overflow-hidden " +
-          (disabled ? "opacity-50" : "")
+          "flex items-center justify-center px-2 text-[12px] font-semibold tabular text-center border-x border-[color:var(--border)] " +
+          width
         }
       >
-        <button
-          onClick={() => canDown && onChange(options[idx - 1])}
-          disabled={!canDown}
-          className="px-1.5 py-1 text-[color:var(--muted-strong)] hover:bg-[color:var(--surface-alt)] disabled:opacity-30 disabled:cursor-not-allowed"
-          aria-label="azalt"
-        >
-          ‹
-        </button>
-        <span className="px-2 py-1 text-[11px] font-medium tabular min-w-[62px] text-center border-x border-[color:var(--border)]">
-          {display(value)}
-        </span>
-        <button
-          onClick={() => canUp && onChange(options[idx + 1])}
-          disabled={!canUp}
-          className="px-1.5 py-1 text-[color:var(--muted-strong)] hover:bg-[color:var(--surface-alt)] disabled:opacity-30 disabled:cursor-not-allowed"
-          aria-label="artır"
-        >
-          ›
-        </button>
-      </div>
-      {hint && (
-        <span className="text-[9px] text-[color:var(--muted)] leading-none">
-          {hint}
-        </span>
-      )}
+        {display(value)}
+      </span>
+      <button
+        onClick={() => canUp && onChange(options[idx + 1])}
+        disabled={!canUp}
+        className={chevron}
+        aria-label="artır"
+      >
+        +
+      </button>
     </div>
   );
 }

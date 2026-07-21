@@ -46,8 +46,11 @@ export interface Branch {
   largePaidTriangle?: Triangle | null;
   largeIncurredTriangle?: Triangle | null;
   largeFileData?: FileData;
-  /** LARGE segment chain-ladder window'u (varsayılan "all"). */
+  /** @deprecated largeModel.window kullanılıyor. */
   largeWindow?: Window;
+  /** LARGE segmentinin BAĞIMSIZ model parametreleri (Faz 2). Attritional ana
+   *  parametreleri Branch'in kendi alanlarında; Large kendi setini burada tutar. */
+  largeModel?: LargeModel;
 
   method: LDFMethod;
   window: Window;
@@ -97,6 +100,22 @@ export interface Branch {
   /** Cashflow'dan hesaplanan aylık dağılım — iskonto için kullanılır.
    *  Key: origin period string. Value: { month (1-based offset), weight }[] sums to 1. */
   cashflowMonthlyPattern?: Record<string, { month: number; weight: number }[]>;
+}
+
+/** LARGE segmentinin bağımsız model parametre seti (Branch param alt-kümesi). */
+export interface LargeModel {
+  method?: LDFMethod;
+  window?: Window;
+  excludedCells?: string[];
+  karmaWindowPerStep?: Record<string, Window>;
+  premiums?: Record<string, number>;
+  lrInputPerOrigin?: Record<string, string>;
+  basisPerOrigin?: Record<string, "cl" | "bf">;
+  correctionPerOrigin?: Record<string, number>;
+  cdfInitial?: Record<string, number>;
+  cdfChoicePerPeriod?: Record<string, "initial" | "user">;
+  cdfModelPerPeriod?: Record<string, 1 | 2 | 3 | 4 | 5 | 6>;
+  curveIncludePerPeriod?: Record<string, boolean>;
 }
 
 export interface Period {

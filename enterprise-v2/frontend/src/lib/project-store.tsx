@@ -16,6 +16,7 @@ import {
   type ChangeSource,
   type Frequency,
   type HistoryEntry,
+  type LargeModel,
   type NavLevel,
   type Period,
   type Project,
@@ -797,13 +798,54 @@ export interface BranchSetters {
   setUploadSettings: (s: UploadSettings) => void;
 }
 
-export function useBranchSetters(source: ChangeSource = "user"): BranchSetters {
+const LARGE_MODEL_DEFAULT: LargeModel = {
+  method: "volume_weighted",
+  window: "all",
+  excludedCells: [],
+  karmaWindowPerStep: {},
+  premiums: {},
+  lrInputPerOrigin: {},
+  basisPerOrigin: {},
+  correctionPerOrigin: {},
+  cdfInitial: {},
+  cdfChoicePerPeriod: {},
+  cdfModelPerPeriod: {},
+  curveIncludePerPeriod: {},
+};
+
+export function useBranchSetters(
+  source: ChangeSource = "user",
+  segment?: "large",
+): BranchSetters {
   const { actions, activeBranch } = useProject();
+  const forLarge = segment === "large";
 
   return useMemo<BranchSetters>(
-    () => ({
+    () => {
+      // Veri setter'ları (üçgen yükleme vs.) her zaman top-level yazar.
+      const updData = actions.updateActiveBranch;
+      // Model-param setter'ları Large segmentinde largeModel'e yönlendirilir.
+      const updModel = (
+        mut: (prev: Branch) => Partial<Branch>,
+        label: string,
+        details?: Record<string, unknown>,
+        _src?: ChangeSource,
+      ) =>
+        forLarge
+          ? actions.updateActiveBranch(
+              (prev) => {
+                const lm = { ...LARGE_MODEL_DEFAULT, ...(prev.largeModel ?? {}) };
+                const patch = mut({ ...prev, ...lm } as Branch);
+                return { largeModel: { ...lm, ...patch } as LargeModel };
+              },
+              label,
+              details,
+              source,
+            )
+          : actions.updateActiveBranch(mut, label, details, source);
+      return {
       setTriangle: (t, fileName, fileData) =>
-        actions.updateActiveBranch(
+        updData(
           () => ({
             triangle: t,
             triangleFileName: fileName ?? null,
@@ -827,7 +869,7 @@ export function useBranchSetters(source: ChangeSource = "user"): BranchSetters {
           source,
         ),
       setBothTriangles: (paid, incurred, fileName, fileData, count) =>
-        actions.updateActiveBranch(
+        updData(
           () => ({
             triangle: incurred,
             triangleFileName: fileName ?? null,
@@ -847,7 +889,7 @@ export function useBranchSetters(source: ChangeSource = "user"): BranchSetters {
           source,
         ),
       setLargeTriangles: (paid, incurred, fileData) =>
-        actions.updateActiveBranch(
+        updData(
           () => ({
             largePaidTriangle: paid,
             largeIncurredTriangle: incurred,
@@ -858,7 +900,7 @@ export function useBranchSetters(source: ChangeSource = "user"): BranchSetters {
           source,
         ),
       clearLarge: () =>
-        actions.updateActiveBranch(
+        updData(
           () => ({
             largePaidTriangle: null,
             largeIncurredTriangle: null,
@@ -869,28 +911,28 @@ export function useBranchSetters(source: ChangeSource = "user"): BranchSetters {
           source,
         ),
       setLargeWindow: (w) =>
-        actions.updateActiveBranch(
+        updData(
           () => ({ largeWindow: w }),
           "large_window",
           { window: w },
           source,
         ),
       setMethod: (m) =>
-        actions.updateActiveBranch(
+        updModel(
           () => ({ method: m }),
           "set_method",
           { method: m },
           source,
         ),
       setWindow: (w) =>
-        actions.updateActiveBranch(
+        updModel(
           () => ({ window: w }),
           "set_window",
           { window: w },
           source,
         ),
       setExcludedCells: (next) =>
-        actions.updateActiveBranch(
+        updModel(
           () => ({ excludedCells: Array.from(next) }),
           "exclusions_replaced",
           { count: next.size },
@@ -898,10 +940,12 @@ export function useBranchSetters(source: ChangeSource = "user"): BranchSetters {
         ),
       toggleCell: (origin, step) => {
         const key = `${origin}|${step}`;
-        const wasExcluded =
-          activeBranch?.excludedCells?.includes(key) ?? false;
+        const srcCells = forLarge
+          ? activeBranch?.largeModel?.excludedCells
+          : activeBranch?.excludedCells;
+        const wasExcluded = srcCells?.includes(key) ?? false;
         const actionLabel = wasExcluded ? "cell_included" : "cell_excluded";
-        actions.updateActiveBranch(
+        updModel(
           (prev) => {
             const set = new Set(prev.excludedCells);
             if (set.has(key)) set.delete(key);
@@ -914,14 +958,14 @@ export function useBranchSetters(source: ChangeSource = "user"): BranchSetters {
         );
       },
       clearExclusions: () =>
-        actions.updateActiveBranch(
+        updModel(
           () => ({ excludedCells: [] }),
           "exclusions_cleared",
           undefined,
           source,
         ),
       setKarmaWindow: (step, w) =>
-        actions.updateActiveBranch(
+        updModel(
           (prev) => ({
             karmaWindowPerStep: { ...(prev.karmaWindowPerStep ?? {}), [step]: w },
           }),
@@ -932,7 +976,7 @@ export function useBranchSetters(source: ChangeSource = "user"): BranchSetters {
       initKarma: (stepCount, globalWindow) => {
         const initial: Record<string, Window> = {};
         for (let j = 0; j < stepCount; j++) initial[String(j)] = globalWindow;
-        actions.updateActiveBranch(
+        updModel(
           () => ({ karmaWindowPerStep: initial }),
           "karma_initialized",
           { stepCount, globalWindow },
@@ -940,21 +984,21 @@ export function useBranchSetters(source: ChangeSource = "user"): BranchSetters {
         );
       },
       clearKarma: () =>
-        actions.updateActiveBranch(
+        updModel(
           () => ({ karmaWindowPerStep: {} }),
           "karma_cleared",
           undefined,
           source,
         ),
       setPremiums: (fn, actionLabel, details) =>
-        actions.updateActiveBranch(
+        updModel(
           (prev) => ({ premiums: fn(prev.premiums) }),
           actionLabel ?? "premiums_updated",
           details,
           source,
         ),
       setLrInput: (origin, formula) =>
-        actions.updateActiveBranch(
+        updModel(
           (prev) => {
             const next = { ...prev.lrInputPerOrigin };
             if (!formula || !formula.trim()) delete next[origin];
@@ -966,7 +1010,7 @@ export function useBranchSetters(source: ChangeSource = "user"): BranchSetters {
           source,
         ),
       setLrInputsBulk: (items) =>
-        actions.updateActiveBranch(
+        updModel(
           (prev) => {
             const next = { ...prev.lrInputPerOrigin };
             for (const it of items) {
@@ -980,7 +1024,7 @@ export function useBranchSetters(source: ChangeSource = "user"): BranchSetters {
           source,
         ),
       setBasis: (origin, basis) =>
-        actions.updateActiveBranch(
+        updModel(
           (prev) => ({
             basisPerOrigin: { ...prev.basisPerOrigin, [origin]: basis },
           }),
@@ -989,7 +1033,7 @@ export function useBranchSetters(source: ChangeSource = "user"): BranchSetters {
           source,
         ),
       setBasisBulk: (items) =>
-        actions.updateActiveBranch(
+        updModel(
           (prev) => {
             const next = { ...prev.basisPerOrigin };
             for (const it of items) next[it.origin] = it.basis;
@@ -1000,7 +1044,7 @@ export function useBranchSetters(source: ChangeSource = "user"): BranchSetters {
           source,
         ),
       setCorrection: (origin, value) =>
-        actions.updateActiveBranch(
+        updModel(
           (prev) => {
             const next = { ...(prev.correctionPerOrigin ?? {}) };
             if (value == null || !Number.isFinite(value) || value === 1)
@@ -1013,7 +1057,7 @@ export function useBranchSetters(source: ChangeSource = "user"): BranchSetters {
           source,
         ),
       setCorrectionsBulk: (items) =>
-        actions.updateActiveBranch(
+        updModel(
           (prev) => {
             const next = { ...(prev.correctionPerOrigin ?? {}) };
             for (const it of items) {
@@ -1028,7 +1072,7 @@ export function useBranchSetters(source: ChangeSource = "user"): BranchSetters {
           source,
         ),
       setCdfInitial: (devPeriod, value) =>
-        actions.updateActiveBranch(
+        updModel(
           (prev) => ({
             cdfInitial: { ...(prev.cdfInitial ?? {}), [devPeriod]: value },
           }),
@@ -1037,14 +1081,14 @@ export function useBranchSetters(source: ChangeSource = "user"): BranchSetters {
           source,
         ),
       seedCdfInitial: (map) =>
-        actions.updateActiveBranch(
+        updModel(
           () => ({ cdfInitial: { ...map } }),
           "curve_seeded",
           { count: Object.keys(map).length },
           source,
         ),
       resetCdfInitial: () =>
-        actions.updateActiveBranch(
+        updModel(
           () => ({
             cdfInitial: {},
             cdfChoicePerPeriod: {},
@@ -1056,7 +1100,7 @@ export function useBranchSetters(source: ChangeSource = "user"): BranchSetters {
           source,
         ),
       setCdfChoice: (devPeriod, choice) =>
-        actions.updateActiveBranch(
+        updModel(
           (prev) => ({
             cdfChoicePerPeriod: {
               ...(prev.cdfChoicePerPeriod ?? {}),
@@ -1068,7 +1112,7 @@ export function useBranchSetters(source: ChangeSource = "user"): BranchSetters {
           source,
         ),
       setCdfChoiceBulk: (items) =>
-        actions.updateActiveBranch(
+        updModel(
           (prev) => {
             const next = { ...(prev.cdfChoicePerPeriod ?? {}) };
             for (const it of items) next[it.devPeriod] = it.choice;
@@ -1079,7 +1123,7 @@ export function useBranchSetters(source: ChangeSource = "user"): BranchSetters {
           source,
         ),
       setCdfModel: (devPeriod, model) =>
-        actions.updateActiveBranch(
+        updModel(
           (prev) => ({
             cdfModelPerPeriod: {
               ...(prev.cdfModelPerPeriod ?? {}),
@@ -1091,7 +1135,7 @@ export function useBranchSetters(source: ChangeSource = "user"): BranchSetters {
           source,
         ),
       setCurveInclude: (devPeriod, include) =>
-        actions.updateActiveBranch(
+        updModel(
           (prev) => ({
             curveIncludePerPeriod: {
               ...(prev.curveIncludePerPeriod ?? {}),
@@ -1103,13 +1147,14 @@ export function useBranchSetters(source: ChangeSource = "user"): BranchSetters {
           source,
         ),
       setUploadSettings: (s) =>
-        actions.updateActiveBranch(
+        updData(
           () => ({ uploadSettings: s }),
           "upload_settings_changed",
           s as unknown as Record<string, unknown>,
           source,
         ),
-    }),
-    [actions, source, activeBranch?.excludedCells],
+      };
+    },
+    [actions, source, forLarge, activeBranch?.excludedCells, activeBranch?.largeModel?.excludedCells],
   );
 }

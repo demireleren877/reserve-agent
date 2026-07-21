@@ -4,6 +4,7 @@ import {
   deriveAttritional,
   hasLarge,
   computeLargeSummary,
+  computeAttritionalSummary,
   combineTotals,
 } from "@/lib/large-split";
 import type { Triangle } from "@/types/triangle";
@@ -129,6 +130,61 @@ describe("computeLargeSummary (düz CL)", () => {
 
   it("large yoksa null", () => {
     expect(computeLargeSummary(branch())).toBeNull();
+  });
+});
+
+describe("computeAttritionalSummary", () => {
+  it("attritional = gross − large CL (ana parametrelerle)", () => {
+    const b = branch({
+      triangle: tri([
+        [100, 160, 182],
+        [120, 192, null],
+        [130, null, null],
+      ], "incurred"),
+      incurredTriangle: tri([
+        [100, 160, 182],
+        [120, 192, null],
+        [130, null, null],
+      ], "incurred"),
+      largeIncurredTriangle: tri([
+        [20, 40, 50],
+        [24, 48, null],
+        [26, null, null],
+      ], "incurred"),
+    });
+    // Attritional: 80,120,132 / 96,144 / 104 → LDF0=1.5, LDF1=1.1
+    // 2023:104*1.65=171.6 (ibnr67.6); 2022:144*1.1=158.4 (14.4); 2021:132 (0)
+    const s = computeAttritionalSummary(b)!;
+    expect(s.totals.ibnr).toBeCloseTo(82.0, 4);
+    expect(s.totals.selected_ultimate).toBeCloseTo(462.0, 4);
+  });
+});
+
+describe("computeLargeSummary largeModel", () => {
+  it("largeModel.window son 1 → yalnız son link kullanılır", () => {
+    // 4 gelişim large incurred; window=1 sadece son diyagonal LDF'ini alır.
+    const b = branch({
+      triangle: tri([[0]], "incurred"),
+      largeIncurredTriangle: {
+        origin_periods: ["2020", "2021", "2022", "2023"],
+        development_periods: [0, 1, 2, 3],
+        values: [
+          [100, 200, 240, 252],
+          [100, 200, 240, null],
+          [100, 210, null, null],
+          [100, null, null, null],
+        ],
+        triangle_type: "incurred",
+        origin_granularity: "yearly",
+        development_granularity: "yearly",
+      },
+      largeModel: { window: "all" },
+    });
+    const all = computeLargeSummary(b)!;
+    const win1 = computeLargeSummary({ ...b, largeModel: { window: 1 } })!;
+    // İlk LDF farkı: all → (200+200+210)/(100+100+100)=2.033; win1 → 210/100=2.1
+    // Bu yüzden toplam IBNR farklı olmalı (window largeModel'den okunuyor kanıtı).
+    expect(win1.totals.ibnr).not.toBeCloseTo(all.totals.ibnr, 1);
   });
 });
 

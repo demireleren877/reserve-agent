@@ -28,6 +28,8 @@ const TYPE_TABS: { id: TriType; label: string }[] = [
 interface Props {
   paidTriangle: Triangle | null;
   incurredTriangle: Triangle | null;
+  /** Reserve sayfasında Large segmenti mi görüntüleniyor (not metni için). */
+  viewingLarge?: boolean;
 }
 
 function toMuallak(paid: Triangle, incurred: Triangle): Triangle | null {
@@ -67,7 +69,7 @@ function recToTri(r: TriangleRecord): Triangle {
   };
 }
 
-export function DataTab({ paidTriangle, incurredTriangle }: Props) {
+export function DataTab({ paidTriangle, incurredTriangle, viewingLarge }: Props) {
   const [type, setType] = useState<TriType>("paid");
   const [showLoadDialog, setShowLoadDialog] = useState(false);
   const [showLargeWizard, setShowLargeWizard] = useState(false);
@@ -249,8 +251,12 @@ export function DataTab({ paidTriangle, incurredTriangle }: Props) {
 
         {largeOn && (
           <div className="px-3.5 py-1.5 border-b bg-[color:var(--primary-soft)]/40 text-[11px] text-[color:var(--primary)]">
-            Görünen ve modellenen: <b>Attritional (Gross − Large)</b>. Large ayrıca
-            modelleniyor · Toplam Özet sekmesinde.
+            {viewingLarge ? (
+              <>Görünen: <b>Large</b> segmenti (ham large üçgeni).</>
+            ) : (
+              <>Görünen ve modellenen: <b>Attritional (Gross − Large)</b>. Segment
+                seçiciden Large&apos;a geçebilirsin · Toplam Özet&apos;te.</>
+            )}
           </div>
         )}
         {largeOn && largeWarnings.staleDev && (

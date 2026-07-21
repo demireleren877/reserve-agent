@@ -58,8 +58,14 @@ interface Props {
   manualLRCount: number;
   bfBasisCount: number;
   exclusionImpacts: ExclusionImpact[];
-  /** LARGE segment toplamları (yüklüyse). Bu sayfanın kendi totals'ı = Attritional. */
+  /** LARGE segment toplamları (yüklüyse). */
   largeTotals?: {
+    latest: number;
+    selectedUltimate: number;
+    ibnr: number;
+  } | null;
+  /** ATTRITIONAL toplamları (Large yüklüyse) — kırılım her segmentte doğru olsun. */
+  attritionalTotals?: {
     latest: number;
     selectedUltimate: number;
     ibnr: number;
@@ -84,7 +90,16 @@ export function SummaryTab(props: Props) {
     bfBasisCount,
     exclusionImpacts,
     largeTotals,
+    attritionalTotals,
   } = props;
+
+  // Kırılımda "Attritional" satırı: açıkça verildiyse onu kullan, yoksa bu
+  // sayfanın totals'ı (Large segmenti görüntülenmiyorsa totals = attritional).
+  const attrBreak = attritionalTotals ?? {
+    latest: totals.latest,
+    selectedUltimate: totals.selectedUltimate,
+    ibnr: totals.ibnr,
+  };
 
   const [showExclusionModal, setShowExclusionModal] = useState(false);
 
@@ -304,10 +319,10 @@ export function SummaryTab(props: Props) {
               <tbody>
                 <tr className="border-t border-[color:var(--border)]">
                   <td className="px-4 py-2 font-medium">Attritional</td>
-                  <td className="text-right px-4 py-2">{formatNumber(totals.latest)}</td>
-                  <td className="text-right px-4 py-2">{formatNumber(totals.selectedUltimate)}</td>
+                  <td className="text-right px-4 py-2">{formatNumber(attrBreak.latest)}</td>
+                  <td className="text-right px-4 py-2">{formatNumber(attrBreak.selectedUltimate)}</td>
                   <td className="text-right px-4 py-2 font-medium text-[color:var(--primary)]">
-                    {formatNumber(totals.ibnr)}
+                    {formatNumber(attrBreak.ibnr)}
                   </td>
                 </tr>
                 <tr className="border-t border-[color:var(--border)] bg-[color:var(--surface-alt)]/30">
@@ -328,13 +343,13 @@ export function SummaryTab(props: Props) {
                 <tr className="border-t-2 border-[color:var(--border-strong)] font-semibold bg-[color:var(--surface-alt)]/60">
                   <td className="px-4 py-2.5">Toplam</td>
                   <td className="text-right px-4 py-2.5">
-                    {formatNumber(totals.latest + largeTotals.latest)}
+                    {formatNumber(attrBreak.latest + largeTotals.latest)}
                   </td>
                   <td className="text-right px-4 py-2.5">
-                    {formatNumber(totals.selectedUltimate + largeTotals.selectedUltimate)}
+                    {formatNumber(attrBreak.selectedUltimate + largeTotals.selectedUltimate)}
                   </td>
                   <td className="text-right px-4 py-2.5 text-[color:var(--primary)]">
-                    {formatNumber(totals.ibnr + largeTotals.ibnr)}
+                    {formatNumber(attrBreak.ibnr + largeTotals.ibnr)}
                   </td>
                 </tr>
               </tfoot>

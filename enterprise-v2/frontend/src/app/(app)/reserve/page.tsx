@@ -25,6 +25,7 @@ import {
   deriveAttritional,
   attritionalWorkingTriangle,
   computeLargeSummary,
+  computeAttritionalSummary,
 } from "@/lib/large-split";
 import {
   aggregateLDFs,
@@ -80,7 +81,19 @@ export default function Home() {
     }
     return null;
   }, [project.periods, activePeriod, activeBranch]);
-  const setters = useBranchSetters("user");
+  // ── Segment (Attritional / Large) ──
+  const largeOn = hasLarge(activeBranch);
+  const [segment, setSegment] = useState<"attritional" | "large">("attritional");
+  const isLargeSeg = largeOn && segment === "large";
+  // Branch değişince ya da large kalkınca attritional'a dön.
+  useEffect(() => {
+    setSegment("attritional");
+  }, [activeBranch?.id]);
+  useEffect(() => {
+    if (!largeOn) setSegment("attritional");
+  }, [largeOn]);
+
+  const setters = useBranchSetters("user", isLargeSeg ? "large" : undefined);
 
   const [tab, setTab] = useState<Tab>("data");
 
@@ -111,9 +124,9 @@ export default function Home() {
   );
 
   // ── LARGE-LOSS ayrımı ──
-  // Large yüklüyse ana model ATTRITIONAL = GROSS − LARGE üzerinde çalışır.
-  // Large yoksa her şey bugünkü gibi (gross tek segment) — geriye tam uyumlu.
-  const largeOn = hasLarge(activeBranch);
+  // Large yüklüyse ana model ATTRITIONAL = GROSS − LARGE; Large kendi BAĞIMSIZ
+  // modeliyle (largeModel) ayrıca modellenir. Segment seçiciyle geçilir.
+  // Large yoksa her şey bugünkü gibi (tek segment) — geriye tam uyumlu.
   const attr = useMemo(
     () => (activeBranch && largeOn ? deriveAttritional(activeBranch) : null),
     [activeBranch, largeOn],
@@ -122,42 +135,75 @@ export default function Home() {
     () => (activeBranch ? computeLargeSummary(activeBranch) : null),
     [activeBranch],
   );
-
-  const grossTriangle = activeBranch?.triangle ?? null;
-  const triangle =
-    (largeOn ? attritionalWorkingTriangle(activeBranch!) : grossTriangle) ?? null;
-  const effPaid =
-    (largeOn ? attr?.paid : activeBranch?.paidTriangle) ??
-    (grossTriangle?.triangle_type === "paid" ? triangle : null);
-  const effIncurred =
-    (largeOn ? attr?.incurred : activeBranch?.incurredTriangle) ??
-    (grossTriangle?.triangle_type === "incurred" ? triangle : null);
-  // computeBranchSummary / export için attritional çalışma branch'i
-  const modelBranch = useMemo(
-    () =>
-      activeBranch && largeOn
-        ? { ...activeBranch, triangle, paidTriangle: effPaid, incurredTriangle: effIncurred }
-        : activeBranch,
-    [activeBranch, largeOn, triangle, effPaid, effIncurred],
+  const attritionalSummary = useMemo(
+    () => (activeBranch && largeOn ? computeAttritionalSummary(activeBranch) : null),
+    [activeBranch, largeOn],
   );
 
-  const method = (activeBranch?.method ?? "volume_weighted") as LDFMethod;
-  const window: Window = activeBranch?.window ?? "all";
-  const premiums = activeBranch?.premiums ?? {};
-  const lrInputPerOrigin = activeBranch?.lrInputPerOrigin ?? {};
-  const basisPerOrigin = activeBranch?.basisPerOrigin ?? {};
-  const cdfInitial = activeBranch?.cdfInitial ?? {};
+  const grossTriangle = activeBranch?.triangle ?? null;
+  const isPaidType = grossTriangle?.triangle_type === "paid";
+  const triangle = useMemo(() => {
+    if (!activeBranch) return null;
+    if (isLargeSeg) {
+      const lp = activeBranch.largePaidTriangle ?? activeBranch.largeIncurredTriangle ?? null;
+      const li = activeBranch.largeIncurredTriangle ?? activeBranch.largePaidTriangle ?? null;
+      return (isPaidType ? lp : li) ?? null;
+    }
+    return (largeOn ? attritionalWorkingTriangle(activeBranch) : grossTriangle) ?? null;
+  }, [activeBranch, isLargeSeg, largeOn, grossTriangle, isPaidType]);
+
+  const effPaid = isLargeSeg
+    ? activeBranch?.largePaidTriangle ?? (isPaidType ? triangle : null)
+    : (largeOn ? attr?.paid : activeBranch?.paidTriangle) ?? (isPaidType ? triangle : null);
+  const effIncurred = isLargeSeg
+    ? activeBranch?.largeIncurredTriangle ?? (!isPaidType ? triangle : null)
+    : (largeOn ? attr?.incurred : activeBranch?.incurredTriangle) ?? (!isPaidType ? triangle : null);
+
+  // Param kaynağı: Large segmentinde nötr defaults + kaydedilmiş largeModel.
+  const pb =
+    isLargeSeg && activeBranch
+      ? {
+          ...activeBranch,
+          method: "volume_weighted" as LDFMethod,
+          window: "all" as Window,
+          excludedCells: [] as string[],
+          karmaWindowPerStep: {},
+          premiums: {},
+          lrInputPerOrigin: {},
+          basisPerOrigin: {},
+          correctionPerOrigin: {},
+          cdfInitial: {},
+          cdfChoicePerPeriod: {},
+          cdfModelPerPeriod: {},
+          curveIncludePerPeriod: {},
+          ...(activeBranch.largeModel ?? {}),
+        }
+      : activeBranch;
+
+  // export/computeBranchSummary için mevcut segmentin model branch'i
+  const modelBranch = useMemo(
+    () => (pb ? { ...pb, triangle, paidTriangle: effPaid, incurredTriangle: effIncurred } : pb),
+    [pb, triangle, effPaid, effIncurred],
+  );
+
+  const method = (pb?.method ?? "volume_weighted") as LDFMethod;
+  const window: Window = pb?.window ?? "all";
+  const premiums = pb?.premiums ?? {};
+  const lrInputPerOrigin = pb?.lrInputPerOrigin ?? {};
+  const basisPerOrigin = pb?.basisPerOrigin ?? {};
+  const cdfInitial = pb?.cdfInitial ?? {};
   const cdfChoicePerPeriod =
-    (activeBranch?.cdfChoicePerPeriod ?? {}) as Record<string, "initial" | "user">;
-  const cdfModelPerPeriod = (activeBranch?.cdfModelPerPeriod ?? {}) as Record<string, 1 | 2 | 3 | 4 | 5 | 6>;
-  const curveIncludePerPeriod = activeBranch?.curveIncludePerPeriod ?? {};
-  const correctionPerOrigin = activeBranch?.correctionPerOrigin ?? {};
+    (pb?.cdfChoicePerPeriod ?? {}) as Record<string, "initial" | "user">;
+  const cdfModelPerPeriod = (pb?.cdfModelPerPeriod ?? {}) as Record<string, 1 | 2 | 3 | 4 | 5 | 6>;
+  const curveIncludePerPeriod = pb?.curveIncludePerPeriod ?? {};
+  const correctionPerOrigin = pb?.correctionPerOrigin ?? {};
 
   // Sadece gerçek LDF verisi olan hücreleri sayan filtreli set.
   // Eski "phantom" elemeler (data null olduğu hücreler) burada düşer; UI ile
   // tutarlı olur ve kullanıcı geri alabilir.
+  const rawExcluded = pb?.excludedCells;
   const excludedCells = useMemo(() => {
-    const raw = activeBranch?.excludedCells ?? [];
+    const raw = rawExcluded ?? [];
     if (!triangle) return new Set(raw);
     const idx = new Map(triangle.origin_periods.map((o, i) => [o, i]));
     const out = new Set<string>();
@@ -171,15 +217,15 @@ export default function Home() {
       if (a != null && b != null) out.add(k);
     }
     return out;
-  }, [activeBranch?.excludedCells, triangle]);
+  }, [rawExcluded, triangle]);
 
   // Phantom elemeleri kalıcı olarak temizle (bir kez, branch/triangle değişince).
   useEffect(() => {
     if (!triangle || !activeBranch) return;
-    const raw = activeBranch.excludedCells ?? [];
+    const raw = rawExcluded ?? [];
     if (raw.length === excludedCells.size) return;
     guardedSetters.setExcludedCells(excludedCells);
-  }, [triangle, activeBranch, excludedCells, guardedSetters]);
+  }, [triangle, activeBranch, rawExcluded, excludedCells, guardedSetters]);
 
   const ratios = useMemo(
     () => (triangle ? developmentRatios(triangle, excludedCells) : []),
@@ -775,6 +821,39 @@ export default function Home() {
   return (
     <Shell onUploaded={() => setTab("data")}>
       <ModelLockBanner state={lockState} onForceAcquire={forceAcquire} />
+      {largeOn && (
+        <div className="border-b bg-[color:var(--surface-alt)]/50 px-4 py-2 flex items-center gap-2">
+          <span className="text-[10px] uppercase tracking-wide font-semibold text-[color:var(--muted)]">
+            Segment
+          </span>
+          <div className="inline-flex h-7 p-0.5 rounded-lg bg-[color:var(--surface-alt)] border border-[color:var(--border)]">
+            {([["attritional", "Attritional"], ["large", "Large"]] as const).map(
+              ([val, lbl]) => {
+                const on = segment === val;
+                return (
+                  <button
+                    key={val}
+                    onClick={() => setSegment(val)}
+                    className={
+                      "px-3 rounded-md text-[12px] font-medium transition " +
+                      (on
+                        ? "bg-[color:var(--surface)] text-[color:var(--primary)] shadow-sm"
+                        : "text-[color:var(--muted-strong)] hover:text-[color:var(--foreground)]")
+                    }
+                  >
+                    {lbl}
+                  </button>
+                );
+              },
+            )}
+          </div>
+          <span className="text-[11px] text-[color:var(--muted)]">
+            {isLargeSeg
+              ? "Large segmentini modelliyorsun (bağımsız parametreler)."
+              : "Attritional = Gross − Large. Toplam Özet'te."}
+          </span>
+        </div>
+      )}
       <div className="border-b bg-[color:var(--surface)] sticky top-[calc(3.5rem+var(--nav-h,0px))] z-20">
         <div className="flex items-stretch">
           <nav className="flex px-4 overflow-x-auto flex-1" role="tablist">
@@ -864,6 +943,7 @@ export default function Home() {
           <DataTab
             paidTriangle={effPaid}
             incurredTriangle={effIncurred}
+            viewingLarge={isLargeSeg}
           />
         )}
         {tab === "ldf" && (
@@ -872,7 +952,7 @@ export default function Home() {
             window={window}
             excludedCells={excludedCells}
             cdfsOverride={initialCDFs}
-            karmaWindowPerStep={activeBranch?.karmaWindowPerStep ?? {}}
+            karmaWindowPerStep={pb?.karmaWindowPerStep ?? {}}
             fileData={activeBranch?.fileData}
             prior={priorLDFRef}
             onWindowChange={guardedSetters.setWindow}
@@ -954,6 +1034,15 @@ export default function Home() {
                     latest: largeSummary.totals.latest,
                     selectedUltimate: largeSummary.totals.selected_ultimate,
                     ibnr: largeSummary.totals.ibnr,
+                  }
+                : null
+            }
+            attritionalTotals={
+              largeOn && attritionalSummary
+                ? {
+                    latest: attritionalSummary.totals.latest,
+                    selectedUltimate: attritionalSummary.totals.selected_ultimate,
+                    ibnr: attritionalSummary.totals.ibnr,
                   }
                 : null
             }

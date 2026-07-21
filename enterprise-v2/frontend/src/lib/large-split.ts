@@ -83,28 +83,7 @@ export function attritionalWorkingTriangle(branch: Branch): Triangle | null {
   return a.incurred ?? a.paid;
 }
 
-/** Nötr parametrelerle bir üçgen için düz chain-ladder özeti (large için). */
-function plainSummary(base: Branch, tri: Triangle | null, window: Window): BranchSummary | null {
-  if (!tri) return null;
-  const synthetic: Branch = {
-    ...base,
-    triangle: tri,
-    method: "volume_weighted",
-    window,
-    excludedCells: [],
-    premiums: {},
-    lrInputPerOrigin: {},
-    basisPerOrigin: {},
-    correctionPerOrigin: {},
-    cdfInitial: {},
-    cdfChoicePerPeriod: {},
-    cdfModelPerPeriod: {},
-    curveIncludePerPeriod: {},
-  };
-  return computeBranchSummary(synthetic);
-}
-
-/** LARGE üçgeni için düz CL özeti (kendi window'u ile). */
+/** LARGE üçgeni + largeModel parametreleriyle özet (kendi bağımsız modeli). */
 export function computeLargeSummary(branch: Branch): BranchSummary | null {
   if (!hasLarge(branch)) return null;
   const t = branch.triangle?.triangle_type;
@@ -112,7 +91,32 @@ export function computeLargeSummary(branch: Branch): BranchSummary | null {
     t === "paid"
       ? branch.largePaidTriangle ?? branch.largeIncurredTriangle ?? null
       : branch.largeIncurredTriangle ?? branch.largePaidTriangle ?? null;
-  return plainSummary(branch, tri, branch.largeWindow ?? "all");
+  if (!tri) return null;
+  const lm = branch.largeModel ?? {};
+  const synthetic: Branch = {
+    ...branch,
+    triangle: tri,
+    method: lm.method ?? "volume_weighted",
+    window: lm.window ?? branch.largeWindow ?? "all",
+    excludedCells: lm.excludedCells ?? [],
+    karmaWindowPerStep: lm.karmaWindowPerStep ?? {},
+    premiums: lm.premiums ?? {},
+    lrInputPerOrigin: lm.lrInputPerOrigin ?? {},
+    basisPerOrigin: lm.basisPerOrigin ?? {},
+    correctionPerOrigin: lm.correctionPerOrigin ?? {},
+    cdfInitial: lm.cdfInitial ?? {},
+    cdfChoicePerPeriod: lm.cdfChoicePerPeriod ?? {},
+    cdfModelPerPeriod: lm.cdfModelPerPeriod ?? {},
+    curveIncludePerPeriod: lm.curveIncludePerPeriod ?? {},
+  };
+  return computeBranchSummary(synthetic);
+}
+
+/** ATTRITIONAL (Gross − Large) + ana parametrelerle özet — Toplam kırılımı için. */
+export function computeAttritionalSummary(branch: Branch): BranchSummary | null {
+  if (!hasLarge(branch)) return computeBranchSummary(branch);
+  const tri = attritionalWorkingTriangle(branch);
+  return computeBranchSummary({ ...branch, triangle: tri });
 }
 
 export interface SegmentTotals {

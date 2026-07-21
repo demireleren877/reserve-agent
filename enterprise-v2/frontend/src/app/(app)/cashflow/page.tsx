@@ -501,42 +501,142 @@ function CashflowDataTab({ triangle }: { triangle: Triangle }) {
 
 // ─── Pattern table ────────────────────────────────────────────────────────────
 
+function entryPeriod(e: { period?: number; month?: number }): number {
+  return e.period ?? e.month ?? 0;
+}
+
 function PatternTable({ result, mode }: { result: CashflowComputeResult; mode: "quarterly" | "monthly" }) {
   const years = result.origin_years;
   const source = mode === "quarterly" ? result.quarterly_pattern : result.monthly_pattern;
   const periodLabel = mode === "quarterly" ? "Period (Çeyrek)" : "Ay";
+  const [transposed, setTransposed] = useState(true);
+
+  // Matris: kaza yılı satır, period sütun. Tüm period'ların birleşimi (sıralı).
+  const periods = useMemo(() => {
+    const set = new Set<number>();
+    for (const y of years) for (const e of source[String(y)] ?? []) set.add(entryPeriod(e));
+    return [...set].sort((a, b) => a - b);
+  }, [years, source]);
+
+  const wmap = useMemo(() => {
+    const m: Record<string, Record<number, number>> = {};
+    for (const y of years) {
+      m[String(y)] = {};
+      for (const e of source[String(y)] ?? []) m[String(y)][entryPeriod(e)] = e.weight;
+    }
+    return m;
+  }, [years, source]);
+
+  const thBase = {
+    borderBottom: "2px solid var(--border)",
+    color: "var(--muted-strong)",
+    background: "var(--surface)",
+  } as const;
+
   return (
-    <div className="overflow-auto">
-      <table className="text-[12px] border-collapse w-full">
-        <thead className="sticky top-0" style={{ background: "var(--surface)", zIndex: 1 }}>
-          <tr>
-            {["Kaza Yılı", periodLabel, "Normalize Ağırlık"].map((h) => (
-              <th key={h} className="px-4 py-2 text-left font-semibold whitespace-nowrap"
-                style={{ borderBottom: "2px solid var(--border)", color: "var(--muted-strong)" }}>
-                {h}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {years.flatMap((year) =>
-            (source[String(year)] ?? []).map((entry) => {
-              const w = entry.weight;
-              const period = (entry as { period?: number; month?: number }).period
-                ?? (entry as { period?: number; month?: number }).month ?? 0;
-              return (
-                <tr key={`${year}-${period}`} className="hover:bg-[color:var(--surface-alt)]">
-                  <td className="px-4 py-1 tabular-nums" style={{ borderBottom: "1px solid var(--border)", color: "var(--foreground)" }}>{year}</td>
-                  <td className="px-4 py-1 tabular-nums" style={{ borderBottom: "1px solid var(--border)", color: "var(--foreground)" }}>{period}</td>
-                  <td className="px-4 py-1 tabular-nums" style={{ borderBottom: "1px solid var(--border)", color: w === 0 ? "var(--muted)" : "var(--foreground)" }}>
-                    {w === 0 ? 0 : fmt6(w)}
-                  </td>
-                </tr>
-              );
-            })
-          )}
-        </tbody>
-      </table>
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <span className="text-[10px] uppercase tracking-wide font-semibold" style={{ color: "var(--muted)" }}>
+          Görünüm
+        </span>
+        <div className="inline-flex h-7 p-0.5 rounded-lg" style={{ background: "var(--surface-alt)", border: "1px solid var(--border)" }}>
+          {([["matrix", "Matris"], ["list", "Liste"]] as const).map(([val, lbl]) => {
+            const active = (val === "matrix") === transposed;
+            return (
+              <button
+                key={val}
+                onClick={() => setTransposed(val === "matrix")}
+                className="px-2.5 rounded-md text-[11px] font-medium transition"
+                style={
+                  active
+                    ? { background: "var(--surface)", color: "var(--primary)", boxShadow: "0 1px 2px rgba(0,0,0,0.06)" }
+                    : { color: "var(--muted-strong)" }
+                }
+              >
+                {lbl}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {transposed ? (
+        <div className="overflow-auto">
+          <table className="text-[12px] border-collapse">
+            <thead className="sticky top-0" style={{ zIndex: 2 }}>
+              <tr>
+                <th className="px-3 py-2 text-left font-semibold whitespace-nowrap sticky left-0"
+                  style={{ ...thBase, zIndex: 3 }}>
+                  Kaza Yılı
+                </th>
+                {periods.map((p) => (
+                  <th key={p} className="px-3 py-2 text-right font-semibold tabular-nums whitespace-nowrap" style={thBase}>
+                    {p}
+                  </th>
+                ))}
+                <th className="px-3 py-2 text-right font-semibold whitespace-nowrap" style={thBase}>Σ</th>
+              </tr>
+            </thead>
+            <tbody>
+              {years.map((year) => {
+                const rowSum = periods.reduce((s, p) => s + (wmap[String(year)]?.[p] ?? 0), 0);
+                return (
+                  <tr key={year} className="hover:bg-[color:var(--surface-alt)]">
+                    <td className="px-3 py-1 font-medium tabular-nums whitespace-nowrap sticky left-0"
+                      style={{ borderBottom: "1px solid var(--border)", color: "var(--foreground)", background: "var(--surface)" }}>
+                      {year}
+                    </td>
+                    {periods.map((p) => {
+                      const w = wmap[String(year)]?.[p];
+                      return (
+                        <td key={p} className="px-3 py-1 text-right tabular-nums"
+                          style={{ borderBottom: "1px solid var(--border)", color: w == null || w === 0 ? "var(--muted)" : "var(--foreground)" }}>
+                          {w == null || w === 0 ? "—" : fmt6(w)}
+                        </td>
+                      );
+                    })}
+                    <td className="px-3 py-1 text-right tabular-nums font-medium"
+                      style={{ borderBottom: "1px solid var(--border)", color: "var(--muted-strong)" }}>
+                      {fmt6(rowSum)}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="overflow-auto">
+          <table className="text-[12px] border-collapse w-full">
+            <thead className="sticky top-0" style={{ background: "var(--surface)", zIndex: 1 }}>
+              <tr>
+                {["Kaza Yılı", periodLabel, "Normalize Ağırlık"].map((h) => (
+                  <th key={h} className="px-4 py-2 text-left font-semibold whitespace-nowrap" style={thBase}>
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {years.flatMap((year) =>
+                (source[String(year)] ?? []).map((entry) => {
+                  const w = entry.weight;
+                  const period = entryPeriod(entry);
+                  return (
+                    <tr key={`${year}-${period}`} className="hover:bg-[color:var(--surface-alt)]">
+                      <td className="px-4 py-1 tabular-nums" style={{ borderBottom: "1px solid var(--border)", color: "var(--foreground)" }}>{year}</td>
+                      <td className="px-4 py-1 tabular-nums" style={{ borderBottom: "1px solid var(--border)", color: "var(--foreground)" }}>{period}</td>
+                      <td className="px-4 py-1 tabular-nums" style={{ borderBottom: "1px solid var(--border)", color: w === 0 ? "var(--muted)" : "var(--foreground)" }}>
+                        {w === 0 ? 0 : fmt6(w)}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

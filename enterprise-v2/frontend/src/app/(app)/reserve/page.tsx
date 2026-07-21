@@ -858,12 +858,7 @@ export default function Home() {
         )}
         {tab === "ultimate" && (
           <UltimateTab
-            triangle={triangle}
-            selectedLDFs={effectiveLDFs}
-            premiums={premiums}
-            elrPerOrigin={elrPerOrigin}
-            basisPerOrigin={basisPerOrigin}
-            correctionPerOrigin={correctionPerOrigin}
+            summary={summary}
             onBasisChange={guardedSetters.setBasis}
           />
         )}

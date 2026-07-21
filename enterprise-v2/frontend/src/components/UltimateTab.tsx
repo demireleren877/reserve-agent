@@ -1,35 +1,32 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import type { Triangle } from "@/types/triangle";
+import { useEffect, useState } from "react";
 import { formatNumber } from "@/lib/api";
-import { cumulativeFactors } from "@/lib/ldf";
-
-const DEFAULT_LR = 0.7;
 
 type Basis = "cl" | "bf";
 
+/** SummaryTab ile TEK KAYNAK: reserve sayfasının runPipeline çıktısı (yapısal). */
+interface UltimateSummary {
+  rows: {
+    origin: string;
+    latest: number;
+    premium: number;
+    clUltimate: number;
+    bfUltimate: number;
+    selectedUltimate: number;
+    ibnr: number;
+    ulr: number | null;
+    basis: Basis;
+  }[];
+}
+
 interface Props {
-  triangle: Triangle | null;
-  selectedLDFs: number[];
-  premiums: Record<string, number>;
-  elrPerOrigin: Record<string, number>;
-  basisPerOrigin: Record<string, Basis>;
-  correctionPerOrigin: Record<string, number>;
+  /** Özet (SummaryTab) ile aynı summary — birebir tutması garanti. */
+  summary: UltimateSummary | null;
   onBasisChange: (origin: string, basis: Basis) => void;
 }
 
-export function UltimateTab(props: Props) {
-  const {
-    triangle,
-    selectedLDFs,
-    premiums,
-    elrPerOrigin,
-    basisPerOrigin,
-    correctionPerOrigin,
-    onBasisChange,
-  } = props;
-
+export function UltimateTab({ summary, onBasisChange }: Props) {
   const [dragBasis, setDragBasis] = useState<Basis | null>(null);
 
   useEffect(() => {
@@ -43,87 +40,7 @@ export function UltimateTab(props: Props) {
     };
   }, [dragBasis]);
 
-  const rows = useMemo(() => {
-    if (!triangle) return [];
-    const cdfs = cumulativeFactors(selectedLDFs);
-    return triangle.origin_periods.map((o, i) => {
-      let latest: number | null = null;
-      let latestIdx = -1;
-      for (let j = 0; j < triangle.values[i].length; j++) {
-        const v = triangle.values[i][j];
-        if (v != null) {
-          latest = v;
-          latestIdx = j;
-        }
-      }
-      const cdf =
-        latestIdx >= 0 && latestIdx < cdfs.length ? cdfs[latestIdx] : 1;
-      const latestVal = latest ?? 0;
-      const premium = premiums[o] ?? 0;
-      const correction =
-        correctionPerOrigin[o] && correctionPerOrigin[o] > 0
-          ? correctionPerOrigin[o]
-          : 1;
-      const premiumAnnual = premium * correction;
-      const clUlt = latestVal * cdf;
-      const patternRatio = premiumAnnual > 0 ? clUlt / premiumAnnual : null;
-      const userSelectedLR = elrPerOrigin[o];
-      const selectedLR =
-        userSelectedLR !== undefined
-          ? userSelectedLR
-          : patternRatio !== null
-          ? patternRatio
-          : DEFAULT_LR;
-      const pctDeveloped = clUlt > 0 ? latestVal / clUlt : 1;
-      // Annual BF ult → kısmi ulta bölerek indir
-      const bfUltAnnual =
-        latestVal + selectedLR * premiumAnnual * (1 - pctDeveloped);
-      const bfUlt = bfUltAnnual / correction;
-      const basis = basisPerOrigin[o] ?? "cl";
-      const selectedUlt = basis === "cl" ? clUlt : bfUlt;
-      const ibnr = selectedUlt - latestVal;
-      // ULR partial dönem bazında: hem clUlt hem bfUlt zaten partial period
-      // (bfUlt = bfUltAnnual/k). Bu yüzden ham premium ile bölmek doğru.
-      // (Eski versiyonda bfUlt/premiumAnnual k'ya iki kez bölüyordu.)
-      const ulr = premium > 0 ? selectedUlt / premium : null;
-      return {
-        origin: o,
-        latest: latestVal,
-        premium,
-        premiumAnnual,
-        correction,
-        clUlt,
-        bfUlt,
-        basis,
-        selectedUlt,
-        ibnr,
-        ulr,
-      };
-    });
-  }, [triangle, selectedLDFs, premiums, elrPerOrigin, basisPerOrigin, correctionPerOrigin]);
-
-  const totals = rows.reduce(
-    (a, r) => ({
-      latest: a.latest + r.latest,
-      premium: a.premium + r.premium,
-      premiumAnnual: a.premiumAnnual + r.premiumAnnual,
-      clUlt: a.clUlt + r.clUlt,
-      bfUlt: a.bfUlt + r.bfUlt,
-      selectedUlt: a.selectedUlt + r.selectedUlt,
-      ibnr: a.ibnr + r.ibnr,
-    }),
-    {
-      latest: 0,
-      premium: 0,
-      premiumAnnual: 0,
-      clUlt: 0,
-      bfUlt: 0,
-      selectedUlt: 0,
-      ibnr: 0,
-    },
-  );
-
-  if (!triangle) {
+  if (!summary || summary.rows.length === 0) {
     return (
       <div className="card p-10 text-center text-sm text-[color:var(--muted)]">
         Önce Veri sekmesinden bir üçgen yükleyin.
@@ -131,6 +48,29 @@ export function UltimateTab(props: Props) {
     );
   }
 
+  // TEK KAYNAK: Özet sayfasıyla birebir aynı satırlar (runPipeline).
+  const rows = summary.rows.map((r) => ({
+    origin: r.origin,
+    latest: r.latest,
+    premium: r.premium,
+    clUlt: r.clUltimate,
+    bfUlt: r.bfUltimate,
+    selectedUlt: r.selectedUltimate,
+    basis: r.basis,
+    ibnr: r.ibnr,
+    ulr: r.ulr,
+  }));
+  const totals = rows.reduce(
+    (a, r) => ({
+      latest: a.latest + r.latest,
+      premium: a.premium + r.premium,
+      clUlt: a.clUlt + r.clUlt,
+      bfUlt: a.bfUlt + r.bfUlt,
+      selectedUlt: a.selectedUlt + r.selectedUlt,
+      ibnr: a.ibnr + r.ibnr,
+    }),
+    { latest: 0, premium: 0, clUlt: 0, bfUlt: 0, selectedUlt: 0, ibnr: 0 },
+  );
   const totalULR =
     totals.premium > 0 ? totals.selectedUlt / totals.premium : null;
 

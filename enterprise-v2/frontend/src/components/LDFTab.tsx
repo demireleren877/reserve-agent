@@ -109,6 +109,7 @@ export function LDFTab(props: Props) {
 
   const [heatmap, setHeatmap] = useState(false);
   const [decimals, setDecimals] = useState(4);
+  const [customWindow, setCustomWindow] = useState(10); // kullanıcı-input volume
   const ff = useMemo(() => {
     const nf = new Intl.NumberFormat("tr-TR", {
       minimumFractionDigits: decimals,
@@ -182,6 +183,11 @@ export function LDFTab(props: Props) {
     }
     return map;
   }, [triangle, ratios]);
+
+  const customLDFs = useMemo(
+    () => (triangle ? aggregateLDFs(triangle, ratios, customWindow, FIXED_METHOD) : []),
+    [triangle, ratios, customWindow],
+  );
 
   const isKarmaActive = !!karmaWindowPerStep && Object.keys(karmaWindowPerStep).length > 0;
 
@@ -481,6 +487,83 @@ export function LDFTab(props: Props) {
                   </tr>
                 );
               })}
+
+              {/* Kullanıcı-input volume satırı — "Son N" (N serbest) */}
+              {(() => {
+                const rowActive = !isKarmaActive && window === customWindow;
+                return (
+                  <tr
+                    className={
+                      "border-t transition " +
+                      (rowActive
+                        ? "bg-[color:var(--primary-soft)] font-semibold"
+                        : "hover:bg-[color:var(--surface-alt)]/60")
+                    }
+                  >
+                    <td
+                      className={
+                        "px-2 py-0.5 sticky left-0 z-[1] leading-tight cursor-pointer " +
+                        (rowActive ? "bg-[color:var(--primary-soft)]" : "bg-[color:var(--surface)]")
+                      }
+                      onClick={() => {
+                        onClearKarma?.();
+                        onWindowChange(customWindow);
+                      }}
+                    >
+                      <span className="inline-flex items-center gap-1.5">
+                        <span
+                          className={
+                            "inline-block h-2 w-2 rounded-full border " +
+                            (rowActive
+                              ? "bg-[color:var(--primary)] border-[color:var(--primary)]"
+                              : "border-[color:var(--border-strong)]")
+                          }
+                        />
+                        Son
+                        <input
+                          type="number"
+                          min={1}
+                          value={customWindow}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={(e) => {
+                            const n = Math.max(1, Math.floor(Number(e.target.value) || 1));
+                            const wasActive = window === customWindow;
+                            setCustomWindow(n);
+                            if (wasActive) onWindowChange(n);
+                          }}
+                          className="w-12 text-[11px] tabular border border-[color:var(--border)] rounded px-1 py-0.5 text-right"
+                          title="Kullanıcı tanımlı volume (son N kaza dönemi)"
+                        />
+                      </span>
+                    </td>
+                    {customLDFs.map((v, j) => {
+                      const stepWin = karmaWindowPerStep?.[String(j)] ?? window;
+                      const cellActive = stepWin === customWindow;
+                      return (
+                        <td
+                          key={j}
+                          className="px-0.5 py-0 cursor-pointer"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onSetKarmaWindow?.(String(j), customWindow);
+                          }}
+                        >
+                          <span
+                            className={
+                              "flex justify-end px-1.5 py-0.5 rounded transition " +
+                              (cellActive
+                                ? "bg-[color:var(--primary-soft)] text-[color:var(--primary)] font-semibold ring-1 ring-[color:var(--primary-border)]"
+                                : "hover:bg-[color:var(--surface-alt)]")
+                            }
+                          >
+                            {ff(v)}
+                          </span>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              })()}
             </tbody>
 
             {/* CDF row */}

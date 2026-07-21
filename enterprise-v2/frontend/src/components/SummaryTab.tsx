@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
 import type { Triangle } from "@/types/triangle";
 import { formatFactor, formatNumber } from "@/lib/api";
 import { type Window } from "@/lib/ldf";
@@ -68,8 +68,6 @@ export function SummaryTab(props: Props) {
     frequency,
     periodLabel,
     window,
-    selectedLDFs,
-    effectiveCDFs,
     excludedCells,
     rows,
     totals,
@@ -80,14 +78,21 @@ export function SummaryTab(props: Props) {
     exclusionImpacts,
   } = props;
 
-  const [showExclusionDetail, setShowExclusionDetail] = useState(false);
-
   const totalRawPremium = rows.reduce((s, r) => s + r.premium, 0);
   const totalULR =
     totalRawPremium > 0 ? totals.selectedUltimate / totalRawPremium : null;
 
   const triangleLabel =
     triangle?.triangle_type === "incurred" ? "Incurred" : "Paid";
+
+  // Origin başına elemelerin net IBNR etkisi (satırdaki tüm adımların toplamı)
+  const exclusionByOrigin = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const e of exclusionImpacts) {
+      m.set(e.origin, (m.get(e.origin) ?? 0) + e.ibnrImpact);
+    }
+    return m;
+  }, [exclusionImpacts]);
 
   const interventions = useMemo(() => {
     const items: { label: string; value: string; tone?: "muted" | "accent" }[] = [];
@@ -148,6 +153,7 @@ export function SummaryTab(props: Props) {
     (s, e) => s + e.ibnrImpact,
     0,
   );
+  const hasExclusionCol = exclusionImpacts.length > 0;
 
   // Kompozisyon: Latest (gelişmiş) + IBNR (rezerv) = Ultimate
   const ult = totals.selectedUltimate;
@@ -155,14 +161,6 @@ export function SummaryTab(props: Props) {
   const ibnrFrac = ult > 0 ? totals.ibnr / ult : 0;
   const devPct = devFrac * 100;
   const ibnrPct = ibnrFrac * 100;
-
-  // Origin tablosunda IBNR mini-bar için ölçek
-  const maxIbnr = rows.reduce((m, r) => Math.max(m, Math.abs(r.ibnr)), 0);
-
-  // LDF/CDF yatay tablo başlıkları
-  const chainSteps = selectedLDFs.map((_, i) => `${i + 1}→${i + 2}`);
-  const hasTail = effectiveCDFs.length > selectedLDFs.length;
-  if (hasTail) chainSteps.push(`${selectedLDFs.length + 1} · tail`);
 
   return (
     <div className="space-y-6">
@@ -297,105 +295,121 @@ export function SummaryTab(props: Props) {
                   <th className="text-right font-medium px-3 py-2.5">Sel. LR</th>
                   <th className="text-right font-medium px-3 py-2.5">Seçili Ult</th>
                   <th className="text-right font-medium px-4 py-2.5">IBNR</th>
+                  {hasExclusionCol && (
+                    <th
+                      className="text-right font-medium px-3 py-2.5"
+                      title="Bu origin'deki elemelerin net IBNR etkisi"
+                    >
+                      Eleme
+                    </th>
+                  )}
                   <th className="text-right font-medium px-4 py-2.5">ULR</th>
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => (
-                  <tr
-                    key={r.origin}
-                    className="border-t border-[color:var(--border)] hover:bg-[color:var(--surface-alt)]/50 transition-colors"
-                  >
-                    <td className="px-4 py-2 font-medium">{r.origin}</td>
-                    <td className="text-right px-3 py-2">
-                      {formatNumber(r.latest)}
-                    </td>
-                    <td className="text-right px-3 py-2 text-[color:var(--muted-strong)]">
-                      {r.premium > 0 ? formatNumber(r.premium) : "—"}
-                    </td>
-                    <td
-                      className={
-                        "text-right px-3 py-2 " +
-                        (r.correction !== 1
-                          ? "text-[color:var(--primary)] font-medium"
-                          : "text-[color:var(--muted)]")
-                      }
+                {rows.map((r) => {
+                  const exc = exclusionByOrigin.get(r.origin);
+                  return (
+                    <tr
+                      key={r.origin}
+                      className="border-t border-[color:var(--border)] hover:bg-[color:var(--surface-alt)]/50 transition-colors"
                     >
-                      {r.correction !== 1 ? `×${r.correction}` : "—"}
-                    </td>
-                    <td className="text-right px-3 py-2 text-[color:var(--muted-strong)]">
-                      {formatFactor(r.cdf)}
-                    </td>
-                    <td className="px-3 py-2">
-                      {r.pctDeveloped != null ? (
-                        <div className="flex items-center justify-end gap-2">
-                          <div className="w-11 h-1.5 rounded-full bg-[color:var(--surface-alt)] overflow-hidden hidden sm:block">
-                            <div
-                              className="h-full rounded-full"
-                              style={{
-                                width: `${Math.min(100, r.pctDeveloped * 100)}%`,
-                                background: "var(--border-strong)",
-                              }}
-                            />
-                          </div>
-                          <span className="text-[color:var(--muted-strong)] tabular w-11 text-right">
-                            {(r.pctDeveloped * 100).toFixed(1)}%
-                          </span>
-                        </div>
-                      ) : (
-                        <div className="text-right text-[color:var(--muted)]">—</div>
-                      )}
-                    </td>
-                    <td className="px-3 py-2 text-center">
-                      <span
+                      <td className="px-4 py-2 font-medium">{r.origin}</td>
+                      <td className="text-right px-3 py-2">
+                        {formatNumber(r.latest)}
+                      </td>
+                      <td className="text-right px-3 py-2 text-[color:var(--muted-strong)]">
+                        {r.premium > 0 ? formatNumber(r.premium) : "—"}
+                      </td>
+                      <td
                         className={
-                          "inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide " +
-                          (r.basis === "bf"
-                            ? "bg-[color:var(--primary-soft)] text-[color:var(--primary)]"
-                            : "bg-[color:var(--surface-alt)] text-[color:var(--muted-strong)]")
+                          "text-right px-3 py-2 " +
+                          (r.correction !== 1
+                            ? "text-[color:var(--primary)] font-medium"
+                            : "text-[color:var(--muted)]")
                         }
                       >
-                        {r.basis}
-                      </span>
-                    </td>
-                    <td
-                      className="text-right px-3 py-2 text-[color:var(--muted-strong)]"
-                      title={r.selectedLRInput ?? undefined}
-                    >
-                      {`${(r.selectedLR * 100).toFixed(1)}%`}
-                      {r.selectedLRInput && (
-                        <span className="ml-1 text-[9px] font-semibold text-[color:var(--primary)]">
-                          ƒ
+                        {r.correction !== 1 ? `×${r.correction}` : "—"}
+                      </td>
+                      <td className="text-right px-3 py-2 text-[color:var(--muted-strong)]">
+                        {formatFactor(r.cdf)}
+                      </td>
+                      <td className="px-3 py-2">
+                        {r.pctDeveloped != null ? (
+                          <div className="flex items-center justify-end gap-2">
+                            <div className="w-11 h-1.5 rounded-full bg-[color:var(--surface-alt)] overflow-hidden hidden sm:block">
+                              <div
+                                className="h-full rounded-full"
+                                style={{
+                                  width: `${Math.min(100, r.pctDeveloped * 100)}%`,
+                                  background: "var(--border-strong)",
+                                }}
+                              />
+                            </div>
+                            <span className="text-[color:var(--muted-strong)] tabular w-11 text-right">
+                              {(r.pctDeveloped * 100).toFixed(1)}%
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="text-right text-[color:var(--muted)]">
+                            —
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        <span
+                          className={
+                            "inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide " +
+                            (r.basis === "bf"
+                              ? "bg-[color:var(--primary-soft)] text-[color:var(--primary)]"
+                              : "bg-[color:var(--surface-alt)] text-[color:var(--muted-strong)]")
+                          }
+                        >
+                          {r.basis}
                         </span>
+                      </td>
+                      <td
+                        className="text-right px-3 py-2 text-[color:var(--muted-strong)]"
+                        title={r.selectedLRInput ?? undefined}
+                      >
+                        {`${(r.selectedLR * 100).toFixed(1)}%`}
+                        {r.selectedLRInput && (
+                          <span className="ml-1 text-[9px] font-semibold text-[color:var(--primary)]">
+                            ƒ
+                          </span>
+                        )}
+                      </td>
+                      <td className="text-right px-3 py-2 font-medium">
+                        {formatNumber(r.selectedUltimate)}
+                      </td>
+                      <td className="text-right px-4 py-2 font-semibold text-[color:var(--primary)]">
+                        {formatNumber(r.ibnr)}
+                      </td>
+                      {hasExclusionCol && (
+                        <td className="text-right px-3 py-2">
+                          {exc == null || exc === 0 ? (
+                            <span className="text-[color:var(--muted)]">—</span>
+                          ) : (
+                            <span
+                              className={
+                                "tabular font-medium " +
+                                (exc > 0
+                                  ? "text-[color:var(--success)]"
+                                  : "text-[color:var(--danger)]")
+                              }
+                            >
+                              {exc > 0 ? "+" : ""}
+                              {formatNumber(exc)}
+                            </span>
+                          )}
+                        </td>
                       )}
-                    </td>
-                    <td className="text-right px-3 py-2 font-medium">
-                      {formatNumber(r.selectedUltimate)}
-                    </td>
-                    <td className="px-4 py-2">
-                      <div className="flex items-center justify-end gap-2">
-                        <div className="w-10 h-1 rounded-full bg-[color:var(--surface-alt)] overflow-hidden hidden md:block">
-                          <div
-                            className="h-full rounded-full"
-                            style={{
-                              width:
-                                maxIbnr > 0
-                                  ? `${(Math.abs(r.ibnr) / maxIbnr) * 100}%`
-                                  : "0%",
-                              background: "var(--primary)",
-                            }}
-                          />
-                        </div>
-                        <span className="tabular font-semibold text-[color:var(--primary)] w-16 text-right">
-                          {formatNumber(r.ibnr)}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="text-right px-4 py-2 text-[color:var(--muted-strong)]">
-                      {r.ulr != null ? `${(r.ulr * 100).toFixed(1)}%` : "—"}
-                    </td>
-                  </tr>
-                ))}
+                      <td className="text-right px-4 py-2 text-[color:var(--muted-strong)]">
+                        {r.ulr != null ? `${(r.ulr * 100).toFixed(1)}%` : "—"}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
               <tfoot>
                 <tr className="border-t-2 border-[color:var(--border-strong)] font-semibold bg-[color:var(--surface-alt)]/60">
@@ -407,104 +421,14 @@ export function SummaryTab(props: Props) {
                     {formatNumber(totals.exposure)}
                   </td>
                   <td colSpan={5} />
-                  <td className="text-right px-3 py-2.5">
-                    {formatNumber(ult)}
-                  </td>
+                  <td className="text-right px-3 py-2.5">{formatNumber(ult)}</td>
                   <td className="text-right px-4 py-2.5 text-[color:var(--primary)]">
                     {formatNumber(totals.ibnr)}
                   </td>
-                  <td className="text-right px-4 py-2.5">
-                    {totalULR != null ? `${(totalULR * 100).toFixed(1)}%` : "—"}
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        </div>
-      </section>
-
-      {/* ── Alt: LDF/CDF (yatay) + Eleme Etkisi ── */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
-        {/* LDF / CDF zinciri — yatay */}
-        <section>
-          <SectionHeader
-            title="LDF & CDF Zinciri"
-            hint="Effective CDF, Curve override'larını yansıtır"
-          />
-          <div className="card overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="text-[12px] w-full tabular">
-                <thead>
-                  <tr className="text-[color:var(--muted)] text-[10px] uppercase tracking-wide">
-                    <th className="text-left font-medium px-4 py-2 sticky left-0 bg-[color:var(--surface)]">
-                      Adım
-                    </th>
-                    {chainSteps.map((s) => (
-                      <th
-                        key={s}
-                        className="text-right font-medium px-2.5 py-2 whitespace-nowrap"
-                      >
-                        {s}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr className="border-t border-[color:var(--border)]">
-                    <td className="text-left px-4 py-2 font-medium text-[color:var(--muted-strong)] sticky left-0 bg-[color:var(--surface)]">
-                      Selected LDF
-                    </td>
-                    {selectedLDFs.map((ldf, i) => (
-                      <td key={i} className="text-right px-2.5 py-2">
-                        {formatFactor(ldf)}
-                      </td>
-                    ))}
-                    {hasTail && (
-                      <td className="text-right px-2.5 py-2 text-[color:var(--muted)]">
-                        —
-                      </td>
-                    )}
-                  </tr>
-                  <tr className="border-t border-[color:var(--border)] bg-[color:var(--surface-alt)]/40">
-                    <td className="text-left px-4 py-2 font-medium text-[color:var(--muted-strong)] sticky left-0 bg-[color:var(--surface-alt)]/40">
-                      Effective CDF
-                    </td>
-                    {effectiveCDFs.map((c, i) => (
-                      <td
-                        key={i}
-                        className="text-right px-2.5 py-2 font-semibold"
-                      >
-                        {formatFactor(c)}
-                      </td>
-                    ))}
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </section>
-
-        {/* Eleme Etkisi — özet + katlanır detay */}
-        <section>
-          <SectionHeader
-            title={`Eleme Etkisi${excludedCells.size > 0 ? ` · ${excludedCells.size}` : ""}`}
-            hint="Elemeler olmasaydı IBNR ne kadar değişirdi"
-          />
-          <div className="card overflow-hidden">
-            {exclusionImpacts.length === 0 ? (
-              <div className="p-5 text-sm text-[color:var(--muted)] text-center">
-                Hiç hücre elenmemiş.
-              </div>
-            ) : (
-              <>
-                <div className="px-5 py-4 flex items-center justify-between gap-3">
-                  <div>
-                    <div className="text-[10px] uppercase tracking-wide text-[color:var(--muted)]">
-                      Net IBNR etkisi
-                    </div>
-                    <div
+                  {hasExclusionCol && (
+                    <td
                       className={
-                        "text-2xl font-semibold tabular mt-0.5 " +
+                        "text-right px-3 py-2.5 " +
                         (ibnrSavedByExclusions > 0
                           ? "text-[color:var(--success)]"
                           : ibnrSavedByExclusions < 0
@@ -514,89 +438,24 @@ export function SummaryTab(props: Props) {
                     >
                       {ibnrSavedByExclusions > 0 ? "+" : ""}
                       {formatNumber(ibnrSavedByExclusions)}
-                    </div>
-                    <div className="text-[11px] text-[color:var(--muted)] mt-0.5">
-                      {ibnrSavedByExclusions >= 0
-                        ? "Elemeler rezervi düşürmüş"
-                        : "Elemeler rezervi yükseltmiş"}
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setShowExclusionDetail((v) => !v)}
-                    className="btn text-[12px] py-1.5 px-3"
-                  >
-                    {showExclusionDetail
-                      ? "Gizle"
-                      : `Detay · ${exclusionImpacts.length}`}
-                  </button>
-                </div>
-                {showExclusionDetail && (
-                  <div className="overflow-x-auto border-t border-[color:var(--border)]">
-                    <table className="text-[12px] w-full tabular">
-                      <thead>
-                        <tr className="text-[color:var(--muted)] text-[10px] uppercase tracking-wide">
-                          <th className="text-left font-medium px-4 py-2">Kaza</th>
-                          <th className="text-left font-medium px-3 py-2">Adım</th>
-                          <th className="text-right font-medium px-3 py-2">LDF</th>
-                          <th className="text-right font-medium px-3 py-2">Medyan</th>
-                          <th className="text-right font-medium px-3 py-2">Sapma</th>
-                          <th className="text-right font-medium px-4 py-2">IBNR</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {exclusionImpacts.map((e) => (
-                          <tr
-                            key={`${e.origin}|${e.step}`}
-                            className="border-t border-[color:var(--border)] hover:bg-[color:var(--surface-alt)]/50"
-                          >
-                            <td className="px-4 py-2 font-medium">{e.origin}</td>
-                            <td className="px-3 py-2 text-[color:var(--muted)]">
-                              {e.step + 1}→{e.step + 2}
-                            </td>
-                            <td className="text-right px-3 py-2">
-                              {e.ldfValue != null ? formatFactor(e.ldfValue) : "—"}
-                            </td>
-                            <td className="text-right px-3 py-2 text-[color:var(--muted-strong)]">
-                              {e.median != null ? formatFactor(e.median) : "—"}
-                            </td>
-                            <td
-                              className={
-                                "text-right px-3 py-2 font-medium " +
-                                (e.deviationPct == null
-                                  ? ""
-                                  : e.deviationPct > 0
-                                  ? "text-[color:var(--danger)]"
-                                  : "text-[color:var(--primary)]")
-                              }
-                            >
-                              {e.deviationPct == null
-                                ? "—"
-                                : `${e.deviationPct > 0 ? "+" : ""}${e.deviationPct.toFixed(1)}%`}
-                            </td>
-                            <td
-                              className={
-                                "text-right px-4 py-2 font-semibold " +
-                                (e.ibnrImpact > 0
-                                  ? "text-[color:var(--success)]"
-                                  : e.ibnrImpact < 0
-                                  ? "text-[color:var(--danger)]"
-                                  : "text-[color:var(--muted)]")
-                              }
-                            >
-                              {e.ibnrImpact > 0 ? "+" : ""}
-                              {formatNumber(e.ibnrImpact)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </>
-            )}
+                    </td>
+                  )}
+                  <td className="text-right px-4 py-2.5">
+                    {totalULR != null ? `${(totalULR * 100).toFixed(1)}%` : "—"}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
           </div>
-        </section>
-      </div>
+        </div>
+        {hasExclusionCol && (
+          <p className="text-[11px] text-[color:var(--muted)] mt-2 px-0.5">
+            <span className="font-medium">Eleme</span> sütunu: o origin&apos;deki
+            elemelerin net IBNR etkisi — pozitif (+) eleme rezervi düşürmüş,
+            negatif (−) yükseltmiş.
+          </p>
+        )}
+      </section>
     </div>
   );
 }

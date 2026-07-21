@@ -107,7 +107,7 @@ export function LDFTab(props: Props) {
     prior,
   } = props;
 
-  const [heatmap, setHeatmap] = useState(true);
+  const [heatmap, setHeatmap] = useState(false);
   const [hover, setHover] = useState<
     { o: string; i: number; j: number; x: number; y: number } | null
   >(null);
@@ -201,6 +201,15 @@ export function LDFTab(props: Props) {
     <div className="space-y-4">
       {/* Controls strip */}
       <div className="card p-3 flex flex-wrap items-center gap-4">
+        {prior && (
+          <span className="inline-flex items-center gap-1.5 text-[11px] text-[color:var(--muted)]">
+            <span
+              className="inline-block h-3 w-3 rounded-sm ring-1 ring-[color:var(--warning)]"
+              style={{ background: "var(--accent-cell)" }}
+            />
+            Geçen döneme ({prior.label}) göre değişen oran · hücreye gel: detay
+          </span>
+        )}
         <div className="flex items-center gap-3 ml-auto text-[11px] text-[color:var(--muted)]">
           <button
             onClick={() => setHeatmap((v) => !v)}
@@ -317,6 +326,14 @@ export function LDFTab(props: Props) {
                       cell.excluded || !heatmap
                         ? {}
                         : heatmapStyle(cell.value, columnStats[j]);
+                    // Geçen döneme göre değişti mi? (uyarı vurgusu)
+                    const pIdx = priorIdxByLabel.get(o);
+                    const priorVal =
+                      prior && pIdx != null ? priorRatios[pIdx]?.[j]?.value ?? null : null;
+                    const changed =
+                      priorVal != null &&
+                      cell.value != null &&
+                      Math.abs(cell.value - priorVal) >= 0.001;
                     return (
                       <td key={j} className="px-0.5 py-0" style={cellHeat}>
                         <button
@@ -333,10 +350,17 @@ export function LDFTab(props: Props) {
                           }
                           onMouseLeave={() => setHover(null)}
                           className={
-                            "w-full text-right px-1.5 py-0.5 rounded text-[11px] transition leading-tight " +
+                            "relative w-full text-right px-1.5 py-0.5 rounded text-[11px] transition leading-tight " +
                             (cell.excluded
                               ? "bg-[color:var(--danger-soft)] text-[color:var(--danger)] line-through"
+                              : changed
+                              ? "font-semibold ring-1 ring-[color:var(--warning)] text-[color:var(--warning)]"
                               : "hover:ring-1 hover:ring-[color:var(--primary)]/40")
+                          }
+                          style={
+                            changed && !cell.excluded
+                              ? { background: "var(--accent-cell)" }
+                              : undefined
                           }
                           data-key={key}
                         >

@@ -208,7 +208,7 @@ export function DataTab({ paidTriangle, incurredTriangle }: Props) {
           <Field label="Ondalık">
             <Stepper
               value={decimals}
-              options={[0, 1, 2, 3, 4]}
+              options={[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]}
               display={(v) => `${v}`}
               onChange={setDecimals}
               width="min-w-[34px]"

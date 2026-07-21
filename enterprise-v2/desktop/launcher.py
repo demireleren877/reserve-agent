@@ -155,12 +155,35 @@ def main() -> None:
 
     import webview  # noqa: E402
 
+    class _Bridge:
+        """Frontend ↔ Python köprüsü. Tarayıcı download'u pywebview'da çalışmaz;
+        dosyayı base64 alıp native 'Farklı Kaydet' diyaloğuyla diske yazar."""
+
+        def save_file(self, filename: str, b64: str) -> dict:
+            import base64
+
+            try:
+                win = webview.windows[0]
+                result = win.create_file_dialog(
+                    webview.SAVE_DIALOG, save_filename=filename or "dosya"
+                )
+                if not result:
+                    return {"ok": False, "cancelled": True}
+                path = result[0] if isinstance(result, (list, tuple)) else result
+                data = base64.b64decode(b64.split(",")[-1])
+                with open(path, "wb") as f:
+                    f.write(data)
+                return {"ok": True, "path": str(path)}
+            except Exception as e:  # pragma: no cover
+                return {"ok": False, "error": str(e)}
+
     webview.create_window(
         APP_TITLE,
         base_url,
         width=1440,
         height=900,
         min_size=(1120, 720),
+        js_api=_Bridge(),
     )
     webview.start()  # pencere kapanana kadar bloklar
 

@@ -357,12 +357,43 @@ export async function exportToExcel(data: ExportData): Promise<void> {
     addTriangleSheet(wb, muallakTri, "Muallak");
   }
 
-  // ── İndir (blob + anchor — pywebview/browser uyumlu) ──
+  // ── İndir ──
   const filename = `${data.periodLabel}_${data.branchName}_rezerv.xlsx`.replace(
     /[/\\:*?"<>|]/g,
     "_",
   );
   const buf = await wb.xlsx.writeBuffer();
+  await downloadFile(buf as ArrayBuffer, filename);
+}
+
+type PyBridge = {
+  pywebview?: {
+    api?: { save_file?: (filename: string, b64: string) => Promise<unknown> };
+  };
+};
+
+function bufToBase64(buf: ArrayBuffer): string {
+  const bytes = new Uint8Array(buf);
+  let binary = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
+/** Masaüstü (pywebview) → native kaydet diyaloğu; tarayıcı → blob + anchor. */
+async function downloadFile(buf: ArrayBuffer, filename: string): Promise<void> {
+  const bridge = (window as unknown as PyBridge).pywebview;
+  if (bridge?.api?.save_file) {
+    const res = (await bridge.api.save_file(filename, bufToBase64(buf))) as
+      | { ok?: boolean; cancelled?: boolean; error?: string }
+      | undefined;
+    if (res && res.ok === false && !res.cancelled) {
+      throw new Error(res.error || "Dosya kaydedilemedi");
+    }
+    return;
+  }
   const blob = new Blob([buf], {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   });

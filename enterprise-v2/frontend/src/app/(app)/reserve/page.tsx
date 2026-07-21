@@ -58,29 +58,6 @@ const TABS: { id: Tab; label: string; sub: string }[] = [
 
 export default function Home() {
   const { project, navLevel, activePeriod, activeBranch, setReadOnly } = useProject();
-
-  // LDF hover karşılaştırması için önceki dönemin eşleşen branch'i (aynı frekans+ad).
-  const priorLDFRef = useMemo(() => {
-    if (!activePeriod || !activeBranch) return null;
-    const order = (label: string): number => {
-      const m = label.match(/^(\d{4})(?:[Qq](\d))?/);
-      return m ? parseInt(m[1], 10) * 4 + (m[2] ? parseInt(m[2], 10) : 0) : 0;
-    };
-    const sorted = [...project.periods].sort((a, b) => order(a.label) - order(b.label));
-    const idx = sorted.findIndex((p) => p.id === activePeriod.id);
-    for (let k = idx - 1; k >= 0; k--) {
-      const b = sorted[k].branches.find(
-        (br) =>
-          br.frequency === activeBranch.frequency &&
-          br.name === activeBranch.name &&
-          br.triangle,
-      );
-      if (b?.triangle) {
-        return { label: sorted[k].label, triangle: b.triangle, fileData: b.fileData ?? null };
-      }
-    }
-    return null;
-  }, [project.periods, activePeriod, activeBranch]);
   // ── Segment (Attritional / Large) ──
   const largeOn = hasLarge(activeBranch);
   const [segment, setSegment] = useState<"attritional" | "large">("attritional");
@@ -185,6 +162,48 @@ export default function Home() {
     () => (pb ? { ...pb, triangle, paidTriangle: effPaid, incurredTriangle: effIncurred } : pb),
     [pb, triangle, effPaid, effIncurred],
   );
+
+  // LDF hover'ında gösterilen dosya kırılımı — mevcut segmente göre.
+  const effFileData = isLargeSeg ? activeBranch?.largeFileData : activeBranch?.fileData;
+
+  // LDF hover karşılaştırması için önceki dönemin aynı SEGMENT üçgeni (segment
+  // uyuşmazlığı olmasın: attritional↔attritional, large↔large).
+  const priorLDFRef = useMemo(() => {
+    if (!activePeriod || !activeBranch) return null;
+    const order = (label: string): number => {
+      const m = label.match(/^(\d{4})(?:[Qq](\d))?/);
+      return m ? parseInt(m[1], 10) * 4 + (m[2] ? parseInt(m[2], 10) : 0) : 0;
+    };
+    const sorted = [...project.periods].sort((a, b) => order(a.label) - order(b.label));
+    const idx = sorted.findIndex((p) => p.id === activePeriod.id);
+    for (let k = idx - 1; k >= 0; k--) {
+      const b = sorted[k].branches.find(
+        (br) =>
+          br.frequency === activeBranch.frequency &&
+          br.name === activeBranch.name &&
+          br.triangle,
+      );
+      if (!b?.triangle) continue;
+      const paidType = b.triangle.triangle_type === "paid";
+      let priorTri: typeof b.triangle | null = null;
+      let priorFd = b.fileData ?? null;
+      if (isLargeSeg) {
+        priorTri =
+          (paidType
+            ? b.largePaidTriangle ?? b.largeIncurredTriangle
+            : b.largeIncurredTriangle ?? b.largePaidTriangle) ?? null;
+        priorFd = b.largeFileData ?? null;
+      } else if (largeOn && hasLarge(b)) {
+        const pa = deriveAttritional(b);
+        priorTri = (paidType ? pa.paid : pa.incurred) ?? null;
+        priorFd = b.fileData ?? null;
+      } else {
+        priorTri = b.triangle;
+      }
+      if (priorTri) return { label: sorted[k].label, triangle: priorTri, fileData: priorFd };
+    }
+    return null;
+  }, [project.periods, activePeriod, activeBranch, isLargeSeg, largeOn]);
 
   const method = (pb?.method ?? "volume_weighted") as LDFMethod;
   const window: Window = pb?.window ?? "all";
@@ -953,7 +972,7 @@ export default function Home() {
             excludedCells={excludedCells}
             cdfsOverride={initialCDFs}
             karmaWindowPerStep={pb?.karmaWindowPerStep ?? {}}
-            fileData={activeBranch?.fileData}
+            fileData={effFileData}
             prior={priorLDFRef}
             onWindowChange={guardedSetters.setWindow}
             onToggleCell={toggleCellHandler}
@@ -1067,7 +1086,7 @@ export default function Home() {
         {tab === "file" && (
           <FileAnalysisTab
             triangle={triangle}
-            fileData={activeBranch?.fileData}
+            fileData={effFileData}
             excludedCells={excludedCells}
           />
         )}

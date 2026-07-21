@@ -221,9 +221,55 @@ export function LoadFromDataStore({ onClose, onLoaded, target = "gross" }: Props
         ? newDiagonalToFileData(paidTriangle, newDiagonalFiles)
         : null;
       const fileData = mergeFileData(base.fileData, newDiagFd);
+
+      // ── LARGE de birlikte ileri taşınır (base'de large varsa) ──
+      // Gross ilerlerken large geride kalırsa uyumsuz olur ("Large > Gross",
+      // stale uyarısı). Bu yüzden aynı dönemin large hasar verisiyle large da roll edilir.
+      let newLargePaid: import("@/types/triangle").Triangle | null | undefined;
+      let newLargeInc: import("@/types/triangle").Triangle | null | undefined;
+      let newLargeFd: import("@/types/triangle").FileData | undefined;
+      const hasLargeBase = !!(base.largePaidTriangle || base.largeIncurredTriangle);
+      if (hasLargeBase) {
+        // Bu döneme ait "Büyük Hasar (Large)" hasar dataset'ini bul.
+        const largeMetas = selectedPeriod
+          ? Object.values(selectedPeriod.datasets).filter((d) => d.typeId === "large")
+          : [];
+        let largeMeta =
+          largeMetas.find((d) => d.meta.brans_list?.includes(brans)) ?? largeMetas[0] ?? null;
+        if (!largeMeta) {
+          throw new Error(
+            "Bu branşta LARGE var; roll-forward için bu döneme ait 'Büyük Hasar (Large)' " +
+              "verisini de Veri Modülünden yükleyin (yoksa large gross ile uyumsuz kalır).",
+          );
+        }
+        let lds = largeMeta;
+        if (!lds.records?.length) lds = (await store.loadDatasetRecords(periodId, lds.datasetId)) ?? lds;
+        if (!lds.records?.length) throw new Error("Güncel dönem large hasar kaydı bulunamadı");
+
+        const priorLargePaid = base.largePaidTriangle ?? base.largeIncurredTriangle!;
+        const priorLargeInc = base.largeIncurredTriangle ?? null;
+        const rf = await rollForwardTriangle(
+          priorLargePaid,
+          priorLargeInc,
+          lds.records as ClaimRecord[],
+          brans,
+          og,
+          dg,
+        );
+        newLargePaid = rf.paidTriangle;
+        newLargeInc = rf.incurredTriangle ?? rf.paidTriangle;
+        const lDiagFd = rf.newDiagonalFiles
+          ? newDiagonalToFileData(rf.paidTriangle, rf.newDiagonalFiles)
+          : null;
+        newLargeFd = mergeFileData(base.largeFileData, lDiagFd);
+      }
+
       const fileName = `${selectedPeriod?.label ?? ""} – ${brans} (roll-forward)`;
       // incurred temel verilmediyse çalışma üçgeni olarak paid kullanılır
       commit(paidTriangle, incurredTriangle ?? paidTriangle, fileName, fileData);
+      if (hasLargeBase) {
+        setters.setLargeTriangles(newLargePaid ?? null, newLargeInc ?? null, newLargeFd ?? null);
+      }
       onLoaded();
       onClose();
     } catch (e) {

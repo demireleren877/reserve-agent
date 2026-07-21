@@ -9,15 +9,33 @@ import { useBranchSetters, useProject } from "@/lib/project-store";
 interface Props {
   onClose: () => void;
   onLoaded: () => void;
+  /** "large" → yüklenen üçgenler LARGE segmentine yazılır (setLargeTriangles). */
+  target?: "gross" | "large";
 }
 
 type Granularity = "yearly" | "quarterly";
 type Source = "hasar" | "ucgen" | "rollforward";
 
-export function LoadFromDataStore({ onClose, onLoaded }: Props) {
+export function LoadFromDataStore({ onClose, onLoaded, target = "gross" }: Props) {
   const store = useDataStore();
   const setters = useBranchSetters("user");
   const { project, activeBranch } = useProject();
+  const isLarge = target === "large";
+
+  // Hedefe göre üçgenleri doğru segmente yaz.
+  function commit(
+    paid: import("@/types/triangle").Triangle | null,
+    incurred: import("@/types/triangle").Triangle | null,
+    fileName: string,
+    fileData?: import("@/types/triangle").FileData | null,
+    count?: import("@/types/triangle").Triangle | null,
+  ) {
+    if (isLarge) {
+      setters.setLargeTriangles(paid, incurred, fileData ?? null);
+    } else {
+      setters.setBothTriangles(paid, incurred, fileName, fileData, count);
+    }
+  }
 
   const [source, setSource] = useState<Source>("hasar");
   const [periodId, setPeriodId] = useState<string>(store.activePeriodId ?? "");
@@ -118,7 +136,7 @@ export function LoadFromDataStore({ onClose, onLoaded }: Props) {
       );
 
       const fileName = `${selectedPeriod?.label ?? ""} – ${brans}`;
-      setters.setBothTriangles(paidTriangle, incurredTriangle, fileName, fileData, countTriangle);
+      commit(paidTriangle, incurredTriangle, fileName, fileData, countTriangle);
       onLoaded();
       onClose();
     } catch (e) {
@@ -155,7 +173,7 @@ export function LoadFromDataStore({ onClose, onLoaded }: Props) {
       const incurred = incRec ? toTri(incRec) : null;
       const fileName = `${selectedPeriod?.label ?? ""} – ${recs[0]?.brans ?? ""}`;
       // Ana çalışma üçgeni incurred; yoksa paid'e düşer (eski tek-üçgen dataset)
-      setters.setBothTriangles(paid, incurred ?? paid, fileName);
+      commit(paid, incurred ?? paid, fileName);
       onLoaded();
       onClose();
     } catch (e) {
@@ -202,7 +220,7 @@ export function LoadFromDataStore({ onClose, onLoaded }: Props) {
       const fileData = mergeFileData(base.fileData, newDiagFd);
       const fileName = `${selectedPeriod?.label ?? ""} – ${brans} (roll-forward)`;
       // incurred temel verilmediyse çalışma üçgeni olarak paid kullanılır
-      setters.setBothTriangles(paidTriangle, incurredTriangle ?? paidTriangle, fileName, fileData);
+      commit(paidTriangle, incurredTriangle ?? paidTriangle, fileName, fileData);
       onLoaded();
       onClose();
     } catch (e) {
@@ -222,7 +240,14 @@ export function LoadFromDataStore({ onClose, onLoaded }: Props) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
       <div className="card w-full max-w-md shadow-xl border border-[color:var(--border)]">
         <div className="p-5 border-b border-[color:var(--border)] flex items-center justify-between">
-          <h2 className="text-sm font-semibold">Veri Modülünden Yükle</h2>
+          <h2 className="text-sm font-semibold">
+            Veri Modülünden Yükle
+            {isLarge && (
+              <span className="ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[color:var(--primary-soft)] text-[color:var(--primary)] align-middle">
+                LARGE
+              </span>
+            )}
+          </h2>
           <button
             onClick={onClose}
             className="text-[color:var(--muted)] hover:text-[color:var(--foreground)] text-lg leading-none px-1"
@@ -232,9 +257,9 @@ export function LoadFromDataStore({ onClose, onLoaded }: Props) {
         </div>
 
         <div className="p-5 space-y-4">
-          {/* Kaynak seçimi */}
+          {/* Kaynak seçimi — Large hedefinde roll-forward yok (önceki large temeli gerekir) */}
           <div className="flex rounded-lg overflow-hidden border border-[color:var(--border)]">
-            {(["hasar", "ucgen", "rollforward"] as Source[]).map((s) => (
+            {((isLarge ? ["hasar", "ucgen"] : ["hasar", "ucgen", "rollforward"]) as Source[]).map((s) => (
               <button
                 key={s}
                 onClick={() => setSource(s)}

@@ -2,11 +2,9 @@
 
 import { useState, useMemo, useEffect, type ReactNode } from "react";
 import type { Triangle } from "@/types/triangle";
-import type { TriangleRecord } from "@/lib/data-store";
 import { TriangleGrid } from "@/components/TriangleGrid";
 import { formatNumber } from "@/lib/api";
 import { LoadFromDataStore } from "@/components/LoadFromDataStore";
-import { TriangleImportWizard } from "@/components/TriangleImportWizard";
 import { useBranchSetters, useProject } from "@/lib/project-store";
 import { hasLarge, deriveAttritional } from "@/lib/large-split";
 import {
@@ -58,21 +56,10 @@ function granLabel(g: "yearly" | "quarterly"): string {
   return g === "quarterly" ? "Çeyreklik" : "Yıllık";
 }
 
-function recToTri(r: TriangleRecord): Triangle {
-  return {
-    origin_periods: r.origin_periods,
-    development_periods: r.development_periods,
-    values: r.values,
-    triangle_type: r.triangle_type,
-    origin_granularity: r.origin_granularity,
-    development_granularity: r.development_granularity,
-  };
-}
-
 export function DataTab({ paidTriangle, incurredTriangle, viewingLarge }: Props) {
   const [type, setType] = useState<TriType>("paid");
   const [showLoadDialog, setShowLoadDialog] = useState(false);
-  const [showLargeWizard, setShowLargeWizard] = useState(false);
+  const [showLargeLoad, setShowLargeLoad] = useState(false);
 
   const { activeBranch } = useProject();
   const setters = useBranchSetters("user");
@@ -236,9 +223,9 @@ export function DataTab({ paidTriangle, incurredTriangle, viewingLarge }: Props)
               </span>
             ) : (
               <button
-                onClick={() => setShowLargeWizard(true)}
+                onClick={() => setShowLargeLoad(true)}
                 className="text-[11px] px-2 py-1 rounded border border-[color:var(--border)] text-[color:var(--muted-strong)] hover:border-[color:var(--border-strong)] hover:bg-[color:var(--surface)] transition"
-                title="Large-loss üçgeni yükle (ödeme + muallak). Ana model Attritional = Gross − Large olur."
+                title="Large-loss üçgenini Veri Modülünden yükle. Ana model Attritional = Gross − Large olur."
               >
                 + Large üçgeni
               </button>
@@ -377,56 +364,12 @@ export function DataTab({ paidTriangle, incurredTriangle, viewingLarge }: Props)
         )}
       </div>
 
-      {showLargeWizard && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ background: "rgba(15,23,42,0.45)", backdropFilter: "blur(4px)" }}
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setShowLargeWizard(false);
-          }}
-        >
-          <div
-            className="rounded-xl shadow-2xl overflow-auto"
-            style={{
-              background: "var(--surface)",
-              border: "1px solid var(--border)",
-              width: "min(880px, 96vw)",
-              maxHeight: "92vh",
-            }}
-          >
-            <div
-              className="px-5 py-3 flex items-center justify-between sticky top-0"
-              style={{ background: "var(--surface-alt)", borderBottom: "1px solid var(--border)" }}
-            >
-              <div>
-                <h3 className="text-sm font-semibold">Large-loss üçgeni yükle</h3>
-                <p className="text-[11px] text-[color:var(--muted)] mt-0.5">
-                  Large ödeme + muallak. Ana model Attritional = Gross − Large olur.
-                </p>
-              </div>
-              <button
-                onClick={() => setShowLargeWizard(false)}
-                className="w-7 h-7 rounded-md text-[18px] flex items-center justify-center hover:bg-[color:var(--surface)]"
-                style={{ color: "var(--muted)" }}
-              >
-                ×
-              </button>
-            </div>
-            <div className="p-4">
-              <TriangleImportWizard
-                onCancel={() => setShowLargeWizard(false)}
-                onDone={(res) => {
-                  const paidRec = res.records.find((r) => r.triangle_type === "paid");
-                  const incRec = res.records.find((r) => r.triangle_type === "incurred");
-                  const lp = paidRec ? recToTri(paidRec) : null;
-                  const li = incRec ? recToTri(incRec) : null;
-                  setters.setLargeTriangles(lp, li ?? lp);
-                  setShowLargeWizard(false);
-                }}
-              />
-            </div>
-          </div>
-        </div>
+      {showLargeLoad && (
+        <LoadFromDataStore
+          target="large"
+          onClose={() => setShowLargeLoad(false)}
+          onLoaded={() => setShowLargeLoad(false)}
+        />
       )}
     </div>
   );

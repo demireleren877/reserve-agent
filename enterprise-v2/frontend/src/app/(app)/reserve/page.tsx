@@ -783,6 +783,11 @@ export default function Home() {
                     lrInputPerOrigin,
                     basisPerOrigin,
                     correctionPerOrigin,
+                  }).catch((e) => {
+                    alert(
+                      "Excel dışa aktarma hatası: " +
+                        (e instanceof Error ? e.message : String(e)),
+                    );
                   });
                 }}
                 className="px-3 py-1.5 text-xs font-medium rounded-md bg-[color:var(--surface-alt)] border border-[color:var(--border)] text-[color:var(--muted-strong)] hover:text-[color:var(--foreground)] hover:bg-[color:var(--primary-soft)] transition"

@@ -1,4 +1,4 @@
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 import type { Triangle } from "@/types/triangle";
 import type { BranchOriginRow } from "@/lib/reserve-pipeline";
 import { fitInversePower, fitExponential, fitPower, fitWeibull } from "@/lib/tail-fit";
@@ -33,125 +33,226 @@ export interface ExportData {
   correctionPerOrigin: Record<string, number>;
 }
 
-function fmt(v: number | null | undefined): number | string {
-  if (v == null) return "";
-  return Math.round(v);
+// ── Tema renkleri (ARGB) ──
+const C = {
+  primary: "FF1D4ED8",
+  primarySoft: "FFEAF0FF",
+  headerText: "FFFFFFFF",
+  triHeader: "FF334155",
+  zebra: "FFF7F9FB",
+  diagonal: "FFFFF7E6",
+  ibnr: "FF1D4ED8",
+  border: "FFE2E5EA",
+  borderStrong: "FFCBD1D9",
+  totalFill: "FFEAF0FF",
+};
+
+const F_MONEY = "#,##0";
+const F_FACTOR = "0.0000";
+const F_PCT = "0.0%";
+const F_K = "0.000";
+
+type Cell = ExcelJS.Cell;
+
+function thinBorder(): Partial<ExcelJS.Borders> {
+  const s: ExcelJS.Border = { style: "thin", color: { argb: C.border } };
+  return { top: s, left: s, bottom: s, right: s };
 }
 
-function pct(v: number | null | undefined, decimals = 1): string {
-  if (v == null) return "";
-  return (v * 100).toFixed(decimals) + "%";
+function fill(cell: Cell, argb: string) {
+  cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb } };
 }
 
-function triSheet(tri: Triangle, label: string, incremental = false): XLSX.WorkSheet {
+/** Başlık satırını renklendirir (mavi zemin, beyaz kalın). */
+function styleHeaderRow(row: ExcelJS.Row, argb = C.primary) {
+  row.eachCell((cell) => {
+    fill(cell, argb);
+    cell.font = { bold: true, color: { argb: C.headerText }, size: 11 };
+    cell.alignment = { horizontal: "center", vertical: "middle" };
+    cell.border = thinBorder();
+  });
+  row.height = 20;
+}
+
+function setCols(ws: ExcelJS.Worksheet, widths: number[]) {
+  widths.forEach((w, i) => {
+    ws.getColumn(i + 1).width = w;
+  });
+}
+
+/** Üçgen sheet'i — renkli başlık, para formatı, son köşegen vurgusu. */
+function addTriangleSheet(
+  wb: ExcelJS.Workbook,
+  tri: Triangle,
+  sheetName: string,
+  incremental = false,
+) {
   const values = incremental
-    ? tri.values.map(row => row.map((v, j) => {
-        if (v == null) return null;
-        if (j === 0) return v;
-        const prev = row[j - 1];
-        return prev != null ? v - prev : null;
-      }))
+    ? tri.values.map((row) =>
+        row.map((v, j) => {
+          if (v == null) return null;
+          if (j === 0) return v;
+          const prev = row[j - 1];
+          return prev != null ? v - prev : null;
+        }),
+      )
     : tri.values;
 
-  const header = [label, ...tri.development_periods.map((d, i) => `Dev ${i + 1}`)];
-  const rows = tri.origin_periods.map((o, i) => [
-    o,
-    ...values[i].map(v => (v != null ? Math.round(v) : "")),
-  ]);
-  const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
-  ws["!cols"] = header.map(() => ({ wch: 12 }));
-  return ws;
+  const ws = wb.addWorksheet(sheetName);
+  const header = ["Kaza Yılı", ...tri.development_periods.map((_, i) => `Dev ${i + 1}`)];
+  const hRow = ws.addRow(header);
+  styleHeaderRow(hRow, C.triHeader);
+
+  // son köşegen (rapor dönemi) sütun indeksleri
+  const lastIdx = values.map((row) => {
+    let li = -1;
+    for (let j = 0; j < row.length; j++) if (row[j] != null) li = j;
+    return li;
+  });
+
+  tri.origin_periods.forEach((o, i) => {
+    const r = ws.addRow([o, ...values[i].map((v) => (v != null ? Math.round(v) : null))]);
+    r.getCell(1).font = { bold: true };
+    r.getCell(1).border = thinBorder();
+    for (let j = 0; j < values[i].length; j++) {
+      const cell = r.getCell(j + 2);
+      cell.numFmt = F_MONEY;
+      cell.border = thinBorder();
+      if (j === lastIdx[i] && values[i][j] != null) fill(cell, C.diagonal);
+    }
+  });
+
+  setCols(ws, header.map((_, i) => (i === 0 ? 13 : 12)));
+  ws.views = [{ state: "frozen", xSplit: 1, ySplit: 1 }];
 }
 
-export function exportToExcel(data: ExportData): void {
-  const wb = XLSX.utils.book_new();
+export async function exportToExcel(data: ExportData): Promise<void> {
+  const wb = new ExcelJS.Workbook();
+  wb.creator = "Actuarius Enterprise";
+  wb.created = new Date();
   const tri = data.triangle;
 
-  // ── 1. Özet ───────────────────────────────────────────────────────────────
-  const summaryHeader = [
+  // ══ 1. Özet (FORMÜLLÜ) ══
+  const ws = wb.addWorksheet("Özet");
+  const titleRow = ws.addRow([
+    `${data.branchName} — ${data.periodLabel} (${data.frequency === "quarterly" ? "Çeyreklik" : "Yıllık"})`,
+  ]);
+  titleRow.getCell(1).font = { bold: true, size: 13, color: { argb: C.primary } };
+  ws.addRow([]);
+
+  const header = [
     "Kaza Yılı", "Son Değer", "Prim", "Yıllık Prim", "Düzeltme (k)",
     "CDF", "% Gelişmiş", "CL Ultimate", "BF Ultimate", "Seçilen Ult",
     "IBNR", "Baz", "Seçilen LR", "ULR",
   ];
-  const summaryRows = data.rows.map(r => [
-    r.origin,
-    fmt(r.latest),
-    fmt(r.premium),
-    fmt(r.premium_annual),
-    r.correction !== 1 ? r.correction.toFixed(3) : "",
-    r.cdf.toFixed(4),
-    pct(r.pct_developed),
-    fmt(r.cl_ultimate),
-    fmt(r.bf_ultimate),
-    fmt(r.selected_ultimate),
-    fmt(r.ibnr),
-    r.basis.toUpperCase(),
-    pct(r.selected_lr),
-    r.ulr != null ? pct(r.ulr) : "",
-  ]);
-  if (data.totals) {
-    summaryRows.push([]);
-    summaryRows.push([
-      "TOPLAM",
-      fmt(data.totals.latest),
-      fmt(data.totals.exposure_raw),
-      fmt(data.totals.exposure_annual),
-      "", "", "",
-      fmt(data.totals.cl_ultimate),
-      fmt(data.totals.bf_ultimate),
-      fmt(data.totals.selected_ultimate),
-      fmt(data.totals.ibnr),
-      "", "",
-      data.totals.ulr != null ? pct(data.totals.ulr) : "",
-    ]);
-  }
-  const summarySheet = XLSX.utils.aoa_to_sheet([
-    [`${data.branchName} — ${data.periodLabel} (${data.frequency === "quarterly" ? "Çeyreklik" : "Yıllık"})`],
-    [],
-    summaryHeader,
-    ...summaryRows,
-  ]);
-  summarySheet["!cols"] = summaryHeader.map((_, i) => ({ wch: i === 0 ? 12 : i >= 7 ? 14 : 10 }));
-  XLSX.utils.book_append_sheet(wb, summarySheet, "Özet");
+  const hdrRow = ws.addRow(header);
+  styleHeaderRow(hdrRow);
 
-  // ── 2. LDF-CDF ────────────────────────────────────────────────────────────
+  const firstData = hdrRow.number + 1; // 4
+  data.rows.forEach((r, idx) => {
+    const rn = firstData + idx;
+    const row = ws.addRow([
+      r.origin,
+      r.latest,
+      r.premium > 0 ? r.premium : null,
+      r.premium_annual > 0 ? r.premium_annual : null,
+      r.correction !== 1 ? r.correction : null,
+      r.cdf,
+      { formula: `IFERROR(B${rn}/H${rn},"")` },       // % Gelişmiş = Latest/CL
+      { formula: `B${rn}*F${rn}` },                    // CL Ultimate = Latest*CDF
+      r.bf_ultimate,                                   // BF Ultimate (değer)
+      { formula: `IF(L${rn}="BF",I${rn},H${rn})` },    // Seçilen = baz'a göre
+      { formula: `J${rn}-B${rn}` },                    // IBNR = Seçilen − Latest
+      r.basis.toUpperCase(),
+      r.selected_lr,
+      { formula: `IFERROR(J${rn}/C${rn},"")` },        // ULR = Seçilen/Prim
+    ]);
+    row.eachCell((cell) => (cell.border = thinBorder()));
+    row.getCell(1).font = { bold: true };
+    [2, 3, 4, 8, 9, 10, 11].forEach((c) => (row.getCell(c).numFmt = F_MONEY));
+    row.getCell(5).numFmt = F_K;
+    row.getCell(6).numFmt = F_FACTOR;
+    row.getCell(7).numFmt = F_PCT;
+    row.getCell(13).numFmt = F_PCT;
+    row.getCell(14).numFmt = F_PCT;
+    row.getCell(11).font = { bold: true, color: { argb: C.ibnr } };
+    row.getCell(12).alignment = { horizontal: "center" };
+    if (idx % 2 === 1) row.eachCell((cell) => { if (!cell.fill) fill(cell, C.zebra); });
+  });
+
+  const lastData = firstData + data.rows.length - 1;
+  const totRn = lastData + 2;
+  ws.addRow([]);
+  const totalRow = ws.addRow([
+    "TOPLAM",
+    { formula: `SUM(B${firstData}:B${lastData})` },
+    { formula: `SUM(C${firstData}:C${lastData})` },
+    { formula: `SUM(D${firstData}:D${lastData})` },
+    null, null,
+    { formula: `IFERROR(B${totRn}/H${totRn},"")` },
+    { formula: `SUM(H${firstData}:H${lastData})` },
+    { formula: `SUM(I${firstData}:I${lastData})` },
+    { formula: `SUM(J${firstData}:J${lastData})` },
+    { formula: `SUM(K${firstData}:K${lastData})` },
+    null, null,
+    { formula: `IFERROR(J${totRn}/C${totRn},"")` },
+  ]);
+  totalRow.eachCell((cell) => {
+    cell.font = { bold: true };
+    fill(cell, C.totalFill);
+    cell.border = { top: { style: "medium", color: { argb: C.borderStrong } } };
+  });
+  [2, 3, 4, 8, 9, 10, 11].forEach((c) => (totalRow.getCell(c).numFmt = F_MONEY));
+  totalRow.getCell(7).numFmt = F_PCT;
+  totalRow.getCell(14).numFmt = F_PCT;
+  totalRow.getCell(11).font = { bold: true, color: { argb: C.ibnr } };
+
+  setCols(ws, [12, 12, 12, 12, 11, 10, 11, 13, 13, 13, 13, 8, 11, 9]);
+  ws.views = [{ state: "frozen", ySplit: 3 }];
+
+  // ══ 2. LDF-CDF ══
   if (tri) {
-    const devs = tri.development_periods;
-    const header = ["Gelişim Dönemi", "Seçilen LDF", "Efektif CDF"];
-    const rows = devs.map((d, i) => [
-      String(d),
-      i < data.selectedLDFs.length ? data.selectedLDFs[i].toFixed(5) : "",
-      i < data.effectiveCDFs.length ? data.effectiveCDFs[i].toFixed(5) : "1.00000",
-    ]);
-    const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
-    ws["!cols"] = [{ wch: 16 }, { wch: 14 }, { wch: 14 }];
-    XLSX.utils.book_append_sheet(wb, ws, "LDF-CDF");
+    const s = wb.addWorksheet("LDF-CDF");
+    styleHeaderRow(s.addRow(["Gelişim Dönemi", "Seçilen LDF", "Efektif CDF"]));
+    tri.development_periods.forEach((_, i) => {
+      const row = s.addRow([
+        i + 1,
+        i < data.selectedLDFs.length ? data.selectedLDFs[i] : null,
+        i < data.effectiveCDFs.length ? data.effectiveCDFs[i] : 1,
+      ]);
+      row.getCell(2).numFmt = "0.00000";
+      row.getCell(3).numFmt = "0.00000";
+      row.eachCell((c) => (c.border = thinBorder()));
+    });
+    setCols(s, [16, 14, 14]);
   }
 
-  // ── 3. Curve ──────────────────────────────────────────────────────────────
+  // ══ 3. Curve ══
   if (tri && data.selectedLDFs.length) {
     const devs = tri.development_periods;
     const ex = fitExponential(data.selectedLDFs);
     const ip = fitInversePower(data.selectedLDFs);
     const pw = fitPower(data.selectedLDFs);
-    const wb_ = fitWeibull(data.selectedLDFs);
-
+    const wbl = fitWeibull(data.selectedLDFs);
     const modelNames: Record<number, string> = {
       1: "Initial", 2: "Exp.Decay", 3: "Inv.Power", 4: "Power", 5: "Weibull", 6: "User",
     };
-    const header = [
-      "Dev.", "Initial CDF", "Exp. Decay CDF", "Inv. Power CDF", "Power CDF",
-      "Weibull CDF", "User Value", "Model", "Selected CDF", "Cumul%", "Incr%",
-    ];
+    const s = wb.addWorksheet("Curve");
+    styleHeaderRow(
+      s.addRow([
+        "Dev.", "Initial CDF", "Exp. Decay", "Inv. Power", "Power",
+        "Weibull", "User Value", "Model", "Selected CDF", "Cumul%", "Incr%",
+      ]),
+    );
     let prevCumul = 0;
-    const rows = devs.map((d, i) => {
+    devs.forEach((d, i) => {
       const key = String(d);
       const model = data.cdfModelPerPeriod?.[key] ?? (data.cdfChoicePerPeriod[key] === "user" ? 6 : 1);
       const initCDF = i < data.initialCDFs.length ? data.initialCDFs[i] : 1;
       const expCDF = ex.ok && i < ex.cdfs.length ? ex.cdfs[i] : null;
       const ipCDF = ip.ok && i < ip.cdfs.length ? ip.cdfs[i] : null;
       const pwCDF = pw.ok && i < pw.cdfs.length ? pw.cdfs[i] : null;
-      const wbCDF = wb_.ok && i < wb_.cdfs.length ? wb_.cdfs[i] : null;
+      const wbCDF = wbl.ok && i < wbl.cdfs.length ? wbl.cdfs[i] : null;
       const userCDF = data.cdfInitial[key] ?? null;
       const selCDF =
         model === 2 ? (expCDF ?? initCDF)
@@ -163,91 +264,87 @@ export function exportToExcel(data: ExportData): void {
       const cumulPct = selCDF > 0 ? 100 / selCDF : 0;
       const incrPct = cumulPct - prevCumul;
       prevCumul = cumulPct;
-      return [
-        i + 1,
-        initCDF,
-        expCDF ?? "",
-        ipCDF ?? "",
-        pwCDF ?? "",
-        wbCDF ?? "",
-        userCDF ?? "",
-        modelNames[model] ?? String(model),
-        selCDF,
-        cumulPct / 100,
-        incrPct / 100,
-      ];
+      const row = s.addRow([
+        i + 1, initCDF, expCDF, ipCDF, pwCDF, wbCDF, userCDF,
+        modelNames[model] ?? String(model), selCDF, cumulPct / 100, incrPct / 100,
+      ]);
+      for (let c = 2; c <= 9; c++) if (c !== 8) row.getCell(c).numFmt = F_FACTOR;
+      row.getCell(10).numFmt = "0.00%";
+      row.getCell(11).numFmt = "0.00%";
+      row.getCell(8).alignment = { horizontal: "center" };
+      if (model !== 1) row.getCell(8).font = { bold: true, color: { argb: C.primary } };
+      row.eachCell((c) => (c.border = thinBorder()));
     });
-    const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
-    ws["!cols"] = header.map(() => ({ wch: 14 }));
-    for (let r = 1; r <= rows.length; r++) {
-      const cumAddr = XLSX.utils.encode_cell({ r, c: 9 });
-      const incrAddr = XLSX.utils.encode_cell({ r, c: 10 });
-      if (ws[cumAddr]) ws[cumAddr].z = "0.00%";
-      if (ws[incrAddr]) ws[incrAddr].z = "0.00%";
-    }
-    XLSX.utils.book_append_sheet(wb, ws, "Curve");
+    setCols(s, [7, 13, 12, 12, 12, 12, 12, 11, 13, 11, 11]);
   }
 
-  // ── 4. ILR ────────────────────────────────────────────────────────────────
-  if (tri && tri.origin_periods.some(o => (data.premiums[o] ?? 0) > 0)) {
+  // ══ 4. ILR (%) ══
+  if (tri && tri.origin_periods.some((o) => (data.premiums[o] ?? 0) > 0)) {
     const devs = tri.development_periods;
-    const header = ["Kaza Yılı", "Prim (düz.)", ...devs.map((_, i) => `Dev ${i + 1}`)];
-    const rows = tri.origin_periods.map((origin, i) => {
+    const s = wb.addWorksheet("ILR (%)");
+    styleHeaderRow(s.addRow(["Kaza Yılı", "Prim (düz.)", ...devs.map((_, i) => `Dev ${i + 1}`)]));
+    tri.origin_periods.forEach((origin, i) => {
       const rawPrem = data.premiums[origin] ?? 0;
       const k = (data.correctionPerOrigin[origin] ?? 0) > 0 ? data.correctionPerOrigin[origin] : 1;
       const adjPrem = rawPrem * k;
-      const ilrCells = tri.values[i].map(v =>
-        v != null && adjPrem > 0 ? parseFloat(((v / adjPrem) * 100).toFixed(2)) : "",
+      const cells = tri.values[i].map((v) =>
+        v != null && adjPrem > 0 ? (v / adjPrem) : null,
       );
-      return [origin, adjPrem > 0 ? Math.round(adjPrem) : "", ...ilrCells];
+      const row = s.addRow([origin, adjPrem > 0 ? Math.round(adjPrem) : null, ...cells]);
+      row.getCell(1).font = { bold: true };
+      row.getCell(2).numFmt = F_MONEY;
+      for (let j = 0; j < cells.length; j++) row.getCell(j + 3).numFmt = F_PCT;
+      row.eachCell((c) => (c.border = thinBorder()));
     });
-    const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
-    ws["!cols"] = header.map((_, i) => ({ wch: i < 2 ? 14 : 10 }));
-    XLSX.utils.book_append_sheet(wb, ws, "ILR (%)");
+    setCols(s, [12, 14, ...devs.map(() => 10)]);
+    s.views = [{ state: "frozen", xSplit: 1, ySplit: 1 }];
   }
 
-  // ── 5. BF Girdileri ───────────────────────────────────────────────────────
+  // ══ 5. BF Girdileri ══
   if (tri) {
-    const header = ["Kaza Yılı", "Prim", "Düzeltme k", "Yıllık Prim", "Temel", "Seçilen LR"];
-    const rows = tri.origin_periods.map(origin => {
+    const s = wb.addWorksheet("BF Girdileri");
+    styleHeaderRow(s.addRow(["Kaza Yılı", "Prim", "Düzeltme k", "Yıllık Prim", "Temel", "Seçilen LR"]));
+    tri.origin_periods.forEach((origin) => {
       const rawPrem = data.premiums[origin] ?? 0;
       const k = (data.correctionPerOrigin[origin] ?? 0) > 0 ? data.correctionPerOrigin[origin] : 1;
-      return [
+      const row = s.addRow([
         origin,
-        rawPrem > 0 ? Math.round(rawPrem) : "",
-        k !== 1 ? k : "",
-        rawPrem > 0 ? Math.round(rawPrem * k) : "",
+        rawPrem > 0 ? Math.round(rawPrem) : null,
+        k !== 1 ? k : null,
+        rawPrem > 0 ? Math.round(rawPrem * k) : null,
         (data.basisPerOrigin[origin] ?? "cl").toUpperCase(),
         data.lrInputPerOrigin[origin] ? data.lrInputPerOrigin[origin] + "%" : "",
-      ];
+      ]);
+      row.getCell(1).font = { bold: true };
+      row.getCell(2).numFmt = F_MONEY;
+      row.getCell(3).numFmt = F_K;
+      row.getCell(4).numFmt = F_MONEY;
+      row.getCell(5).alignment = { horizontal: "center" };
+      row.eachCell((c) => (c.border = thinBorder()));
     });
-    const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
-    ws["!cols"] = header.map((_, i) => ({ wch: i === 0 ? 12 : 14 }));
-    XLSX.utils.book_append_sheet(wb, ws, "BF Girdileri");
+    setCols(s, [12, 14, 12, 14, 10, 12]);
   }
 
-  // ── 6–9. Üçgenler ─────────────────────────────────────────────────────────
+  // ══ 6–9. Üçgenler ══
   const paid = data.paidTriangle;
   const incurred = data.incurredTriangle;
-
   if (paid) {
-    XLSX.utils.book_append_sheet(wb, triSheet(paid, "Kaza Yılı"), "Kümülatif Ödeme");
-    XLSX.utils.book_append_sheet(wb, triSheet(paid, "Kaza Yılı", true), "Artımsal Ödeme");
+    addTriangleSheet(wb, paid, "Kümülatif Ödeme");
+    addTriangleSheet(wb, paid, "Artımsal Ödeme", true);
   } else if (tri?.triangle_type === "paid") {
-    XLSX.utils.book_append_sheet(wb, triSheet(tri, "Kaza Yılı"), "Kümülatif Ödeme");
-    XLSX.utils.book_append_sheet(wb, triSheet(tri, "Kaza Yılı", true), "Artımsal Ödeme");
+    addTriangleSheet(wb, tri, "Kümülatif Ödeme");
+    addTriangleSheet(wb, tri, "Artımsal Ödeme", true);
   }
-
   if (incurred) {
-    XLSX.utils.book_append_sheet(wb, triSheet(incurred, "Kaza Yılı"), "Gerçekleşen");
+    addTriangleSheet(wb, incurred, "Gerçekleşen");
   } else if (tri?.triangle_type === "incurred") {
-    XLSX.utils.book_append_sheet(wb, triSheet(tri, "Kaza Yılı"), "Gerçekleşen");
+    addTriangleSheet(wb, tri, "Gerçekleşen");
   }
-
-  // Muallak = incurred - paid (only when both are available)
-  if (paid && incurred &&
+  if (
+    paid && incurred &&
     paid.origin_periods.length === incurred.origin_periods.length &&
-    paid.development_periods.length === incurred.development_periods.length) {
+    paid.development_periods.length === incurred.development_periods.length
+  ) {
     const muallakTri: Triangle = {
       ...incurred,
       values: incurred.values.map((row, i) =>
@@ -257,10 +354,24 @@ export function exportToExcel(data: ExportData): void {
         }),
       ),
     };
-    XLSX.utils.book_append_sheet(wb, triSheet(muallakTri, "Kaza Yılı"), "Muallak");
+    addTriangleSheet(wb, muallakTri, "Muallak");
   }
 
-  const filename = `${data.periodLabel}_${data.branchName}_rezerv.xlsx`
-    .replace(/[/\\:*?"<>|]/g, "_");
-  XLSX.writeFile(wb, filename);
+  // ── İndir (blob + anchor — pywebview/browser uyumlu) ──
+  const filename = `${data.periodLabel}_${data.branchName}_rezerv.xlsx`.replace(
+    /[/\\:*?"<>|]/g,
+    "_",
+  );
+  const buf = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }

@@ -53,3 +53,25 @@ export function newDiagonalToFileData(
   }
   return fd;
 }
+
+/**
+ * İki FileData'yı birleştirir (origin → gelişim tarihi → {dosya: tutar}).
+ * Roll-forward'da önceki dönemin TÜM köşegenleri + yeni köşegen birlikte kalsın diye.
+ * Aynı origin+gelişim tarihi çakışırsa `next` kazanır (yeni köşegen güncel).
+ */
+export function mergeFileData(
+  prior: FileData | null | undefined,
+  next: FileData | null | undefined,
+): FileData {
+  const out: FileData = {};
+  for (const src of [prior, next]) {
+    if (!src) continue;
+    for (const [origin, byDate] of Object.entries(src)) {
+      out[origin] = out[origin] ?? {};
+      for (const [date, files] of Object.entries(byDate)) {
+        out[origin][date] = { ...files };
+      }
+    }
+  }
+  return out;
+}

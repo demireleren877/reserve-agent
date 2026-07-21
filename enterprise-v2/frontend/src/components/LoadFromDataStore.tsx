@@ -52,8 +52,10 @@ export function LoadFromDataStore({ onClose, onLoaded, target = "gross" }: Props
   const [priorPeriodId, setPriorPeriodId] = useState<string>("");
 
   const selectedPeriod = store.periods.find((p) => p.id === periodId);
+  // Large hedefinde hasar kaynağı "Büyük Hasar (Large)" tipini kullanır.
+  const claimsTypeId = isLarge ? "large" : "hasar";
   const hasarDatasets = selectedPeriod
-    ? Object.values(selectedPeriod.datasets).filter((d) => d.typeId === "hasar")
+    ? Object.values(selectedPeriod.datasets).filter((d) => d.typeId === claimsTypeId)
     : [];
   const ucgenDatasets = selectedPeriod
     ? Object.values(selectedPeriod.datasets).filter((d) => d.typeId === "ucgen")

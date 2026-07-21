@@ -36,6 +36,12 @@ export const DATA_TYPES: DataTypeDef[] = [
     columns: ["Dosya No", "Branş", "Hasar Tarihi", "Gelişim Tarihi", "Ödeme", "Muallak"],
   },
   {
+    id: "large",
+    label: "Büyük Hasar (Large)",
+    description: "Large-loss dosya bazlı hasar kayıtları — Attritional için ayrılır",
+    columns: ["Dosya No", "Branş", "Hasar Tarihi", "Gelişim Tarihi", "Ödeme", "Muallak"],
+  },
+  {
     id: "prim",
     label: "Prim Verisi",
     description: "Dönemsel prim kazanım verileri",

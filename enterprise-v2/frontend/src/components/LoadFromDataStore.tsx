@@ -52,13 +52,14 @@ export function LoadFromDataStore({ onClose, onLoaded, target = "gross" }: Props
   const [priorPeriodId, setPriorPeriodId] = useState<string>("");
 
   const selectedPeriod = store.periods.find((p) => p.id === periodId);
-  // Large hedefinde hasar kaynağı "Büyük Hasar (Large)" tipini kullanır.
+  // Large hedefinde: hasar → "Büyük Hasar (Large)", hazır üçgen → "Large Üçgen".
   const claimsTypeId = isLarge ? "large" : "hasar";
+  const triangleTypeId = isLarge ? "large_ucgen" : "ucgen";
   const hasarDatasets = selectedPeriod
     ? Object.values(selectedPeriod.datasets).filter((d) => d.typeId === claimsTypeId)
     : [];
   const ucgenDatasets = selectedPeriod
-    ? Object.values(selectedPeriod.datasets).filter((d) => d.typeId === "ucgen")
+    ? Object.values(selectedPeriod.datasets).filter((d) => d.typeId === triangleTypeId)
     : [];
   // hasar ve rollforward güncel dönem hasar dataset'ini kullanır; ucgen → üçgen dataset'i
   const activeDatasets = source === "ucgen" ? ucgenDatasets : hasarDatasets;

@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import {
   DATA_TYPES,
+  isTriangleType,
   useDataStore,
   type DataPeriod,
   type DataTypeDef,
@@ -333,7 +334,7 @@ function DatasetViewer({
       </div>
 
       <div className="flex-1 overflow-auto">
-        {dataset.typeId === "ucgen" && (dataset.records as TriangleRecord[]).length > 0 && (
+        {isTriangleType(dataset.typeId) && (dataset.records as TriangleRecord[]).length > 0 && (
           <div className="p-4">
             {(dataset.records as TriangleRecord[]).map((rec, i) => (
               <div key={i} className="mb-6">
@@ -362,7 +363,7 @@ function DatasetViewer({
             ))}
           </div>
         )}
-        {dataset.typeId !== "ucgen" && (
+        {!isTriangleType(dataset.typeId) && (
         <table className="w-full text-[12.5px] border-collapse">
           {dataset.typeId === "prim" ? (
             <>
@@ -410,7 +411,7 @@ function DatasetViewer({
         )}
       </div>
 
-      {totalPages > 1 && dataset.typeId !== "ucgen" && (
+      {totalPages > 1 && !isTriangleType(dataset.typeId) && (
         <div className="flex items-center gap-3 px-4 py-3 border-t flex-shrink-0" style={{ borderColor: "var(--border)" }}>
           <button disabled={page === 0} onClick={() => setPage((p) => p - 1)}
             className="px-3 py-1 rounded-lg text-[12px] border disabled:opacity-40" style={{ borderColor: "var(--border)" }}>
@@ -439,6 +440,7 @@ function PeriodDetail({ period }: { period: DataPeriod }) {
   const [view, setView] = useState<RightView>({ kind: "overview" });
   const [showPrimWizard, setShowPrimWizard] = useState(false);
   const [showTriangleWizard, setShowTriangleWizard] = useState(false);
+  const [triangleWizardType, setTriangleWizardType] = useState<"ucgen" | "large_ucgen">("ucgen");
   const [viewerDataset, setViewerDataset] = useState<Dataset | null>(null);
   const [viewerLoading, setViewerLoading] = useState(false);
 
@@ -491,7 +493,7 @@ function PeriodDetail({ period }: { period: DataPeriod }) {
     const recs = result.records; // [paid, incurred]
     const ds: Dataset = {
       datasetId: newId(),
-      typeId: "ucgen",
+      typeId: triangleWizardType,
       meta: {
         filename: result.filename,
         uploadedAt: new Date().toISOString(),
@@ -580,8 +582,9 @@ function PeriodDetail({ period }: { period: DataPeriod }) {
               onImport={() =>
                 def.id === "prim"
                   ? setShowPrimWizard(true)
-                  : def.id === "ucgen"
-                  ? setShowTriangleWizard(true)
+                  : isTriangleType(def.id)
+                  ? (setTriangleWizardType(def.id as "ucgen" | "large_ucgen"),
+                    setShowTriangleWizard(true))
                   : setView({ kind: "wizard", typeId: def.id })
               }
               onView={(dsId) => openViewer(dsId)}

@@ -53,7 +53,19 @@ export const DATA_TYPES: DataTypeDef[] = [
     description: "Hazır paid veya incurred gelişim üçgeni",
     columns: ["Branş", "Üçgen Türü", "Kaza Dönemi", "Gelişim Dönemi"],
   },
+  {
+    id: "large_ucgen",
+    label: "Large Üçgen",
+    description: "Hazır large paid/incurred gelişim üçgeni",
+    columns: ["Branş", "Üçgen Türü", "Kaza Dönemi", "Gelişim Dönemi"],
+  },
 ];
+
+/** Üçgen tipli veri tipleri (gross + large hazır üçgen). */
+export const TRIANGLE_TYPE_IDS = ["ucgen", "large_ucgen"] as const;
+export function isTriangleType(typeId: string): boolean {
+  return typeId === "ucgen" || typeId === "large_ucgen";
+}
 
 // ─── Tipler ───────────────────────────────────────────────────────────────────
 

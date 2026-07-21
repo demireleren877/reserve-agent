@@ -222,7 +222,7 @@ export function CurveTab({
               {rows.map((r, rowIdx) => (
                 <tr
                   key={r.key}
-                  className={"border-t " + (!r.included ? "opacity-50 " : "") + "hover:bg-[color:var(--surface-alt)]/20"}
+                  className={"border-t hover:bg-[color:var(--surface-alt)]/20"}
                 >
                   <td className="px-2 py-0.5 font-medium leading-tight tabular text-[11px]">{r.i + 1}</td>
 
@@ -248,15 +248,15 @@ export function CurveTab({
                     </button>
                   </td>
 
-                  <DragCell value={r.initLDF} active={r.model === 1}
+                  <DragCell value={r.initLDF} active={r.model === 1} faded={!r.included}
                     onMouseDown={() => startDrag(r.key, 1)} onMouseEnter={() => enterDrag(r.key)} />
-                  <DragCell value={r.expLDF} active={r.model === 2} dim
+                  <DragCell value={r.expLDF} active={r.model === 2}
                     onMouseDown={() => startDrag(r.key, 2)} onMouseEnter={() => enterDrag(r.key)} />
-                  <DragCell value={r.ipLDF} active={r.model === 3} dim
+                  <DragCell value={r.ipLDF} active={r.model === 3}
                     onMouseDown={() => startDrag(r.key, 3)} onMouseEnter={() => enterDrag(r.key)} />
-                  <DragCell value={r.pwLDF} active={r.model === 4} dim
+                  <DragCell value={r.pwLDF} active={r.model === 4}
                     onMouseDown={() => startDrag(r.key, 4)} onMouseEnter={() => enterDrag(r.key)} />
-                  <DragCell value={r.wbLDF} active={r.model === 5} dim
+                  <DragCell value={r.wbLDF} active={r.model === 5}
                     onMouseDown={() => startDrag(r.key, 5)} onMouseEnter={() => enterDrag(r.key)} />
 
                   <UserValueCell
@@ -297,9 +297,9 @@ export function CurveTab({
 }
 
 function DragCell({
-  value, active, dim, onMouseDown, onMouseEnter,
+  value, active, faded, onMouseDown, onMouseEnter,
 }: {
-  value: number | null; active: boolean; dim?: boolean;
+  value: number | null; active: boolean; faded?: boolean;
   onMouseDown: () => void; onMouseEnter: () => void;
 }) {
   if (value == null) {
@@ -311,11 +311,13 @@ function DragCell({
       onMouseEnter={onMouseEnter}
       className={
         "text-right px-2 py-0.5 text-[12px] tabular cursor-pointer transition " +
-        (active
-          ? "bg-[color:var(--success-soft)] text-[color:var(--success)] font-semibold"
-          : dim
-          ? "text-[color:var(--muted)] hover:bg-[color:var(--surface-alt)]"
-          : "text-[color:var(--muted-strong)] hover:bg-[color:var(--surface-alt)]")
+        (active ? "font-semibold " : "") +
+        (faded ? "opacity-50" : "")
+      }
+      style={
+        active
+          ? { background: "#16a34a", color: "#ffffff" }   // seçili: koyu yeşil, full opak
+          : { background: "#dcfce7", color: "#6b7280" }   // diğerleri: soft yeşil, gri metin
       }
     >
       {formatFactor(value)}
@@ -369,11 +371,12 @@ function UserValueCell({
       title="Tıkla / sürükle · Çift tık: değer gir"
       className={
         "text-right px-2 py-0.5 text-[12px] tabular cursor-pointer transition " +
-        (active
-          ? "bg-[color:var(--success-soft)] text-[color:var(--success)] font-semibold"
-          : value != null
-          ? "text-[color:var(--foreground)] hover:bg-[color:var(--surface-alt)]"
-          : "text-[color:var(--muted)] hover:bg-[color:var(--surface-alt)]")
+        (active ? "font-semibold" : "")
+      }
+      style={
+        active
+          ? { background: "#16a34a", color: "#ffffff" }   // seçili: koyu yeşil, full opak
+          : { background: "#dcfce7", color: "#6b7280" }   // diğerleri: soft yeşil, gri metin
       }
     >
       {formatFactor(value ?? 1)}

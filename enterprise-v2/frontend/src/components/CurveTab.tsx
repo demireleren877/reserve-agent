@@ -311,14 +311,12 @@ function DragCell({
       onMouseEnter={onMouseEnter}
       className={
         "text-right px-2 py-0.5 text-[12px] tabular cursor-pointer transition " +
-        (active ? "font-semibold " : "") +
+        (active
+          ? "font-semibold "
+          : "text-[color:var(--muted-strong)] hover:bg-[color:var(--surface-alt)] ") +
         (faded ? "opacity-50" : "")
       }
-      style={
-        active
-          ? { background: "#16a34a", color: "#ffffff" }   // seçili: koyu yeşil, full opak
-          : { background: "#dcfce7", color: "#6b7280" }   // diğerleri: soft yeşil, gri metin
-      }
+      style={active ? { background: "#16a34a", color: "#ffffff" } : undefined}
     >
       {formatFactor(value)}
     </td>
@@ -371,13 +369,13 @@ function UserValueCell({
       title="Tıkla / sürükle · Çift tık: değer gir"
       className={
         "text-right px-2 py-0.5 text-[12px] tabular cursor-pointer transition " +
-        (active ? "font-semibold" : "")
+        (active
+          ? "font-semibold "
+          : value != null
+          ? "text-[color:var(--foreground)] hover:bg-[color:var(--surface-alt)] "
+          : "text-[color:var(--muted)] hover:bg-[color:var(--surface-alt)] ")
       }
-      style={
-        active
-          ? { background: "#16a34a", color: "#ffffff" }   // seçili: koyu yeşil, full opak
-          : { background: "#dcfce7", color: "#6b7280" }   // diğerleri: soft yeşil, gri metin
-      }
+      style={active ? { background: "#16a34a", color: "#ffffff" } : undefined}
     >
       {formatFactor(value ?? 1)}
     </td>

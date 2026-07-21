@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { LDFMethod, Triangle, FileData } from "@/types/triangle";
-import { formatFactor, formatNumber } from "@/lib/api";
+import { formatNumber } from "@/lib/api";
 import { devDate } from "@/lib/roll-forward-util";
 import {
   WINDOWS,
@@ -108,6 +108,14 @@ export function LDFTab(props: Props) {
   } = props;
 
   const [heatmap, setHeatmap] = useState(false);
+  const [decimals, setDecimals] = useState(4);
+  const ff = useMemo(() => {
+    const nf = new Intl.NumberFormat("tr-TR", {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals,
+    });
+    return (n: number) => nf.format(n);
+  }, [decimals]);
   const [hover, setHover] = useState<
     { o: string; i: number; j: number; x: number; y: number } | null
   >(null);
@@ -211,6 +219,30 @@ export function LDFTab(props: Props) {
           </span>
         )}
         <div className="flex items-center gap-3 ml-auto text-[11px] text-[color:var(--muted)]">
+          <span className="inline-flex items-center gap-1">
+            <span className="uppercase tracking-wide font-semibold text-[10px]">Ondalık</span>
+            <span className="inline-flex items-center h-6 rounded-md border border-[color:var(--border)] overflow-hidden">
+              <button
+                onClick={() => setDecimals((d) => Math.max(0, d - 1))}
+                disabled={decimals <= 0}
+                className="w-6 h-full text-[13px] text-[color:var(--muted-strong)] hover:bg-[color:var(--surface-alt)] disabled:opacity-30"
+                aria-label="azalt"
+              >
+                −
+              </button>
+              <span className="px-1.5 tabular font-medium text-[color:var(--foreground)] min-w-[18px] text-center border-x border-[color:var(--border)]">
+                {decimals}
+              </span>
+              <button
+                onClick={() => setDecimals((d) => Math.min(10, d + 1))}
+                disabled={decimals >= 10}
+                className="w-6 h-full text-[13px] text-[color:var(--muted-strong)] hover:bg-[color:var(--surface-alt)] disabled:opacity-30"
+                aria-label="artır"
+              >
+                +
+              </button>
+            </span>
+          </span>
           <button
             onClick={() => setHeatmap((v) => !v)}
             className={
@@ -364,7 +396,7 @@ export function LDFTab(props: Props) {
                           }
                           data-key={key}
                         >
-                          {formatFactor(cell.value)}
+                          {ff(cell.value)}
                         </button>
                       </td>
                     );
@@ -441,7 +473,7 @@ export function LDFTab(props: Props) {
                                 : "hover:bg-[color:var(--surface-alt)]")
                             }
                           >
-                            {formatFactor(v)}
+                            {ff(v)}
                           </span>
                         </td>
                       );
@@ -462,7 +494,7 @@ export function LDFTab(props: Props) {
                     key={j}
                     className="text-right px-1.5 py-1 font-semibold text-[color:var(--primary)]"
                   >
-                    {formatFactor(v)}
+                    {ff(v)}
                   </td>
                 ))}
               </tr>
@@ -489,7 +521,7 @@ export function LDFTab(props: Props) {
             </span>
             {hoverInfo.median != null && (
               <span className="text-[color:var(--muted)]">
-                medyan {formatFactor(hoverInfo.median)}
+                medyan {ff(hoverInfo.median)}
               </span>
             )}
           </div>
@@ -497,12 +529,12 @@ export function LDFTab(props: Props) {
           <div className="flex items-center gap-2.5 tabular flex-wrap">
             <span>
               Bu dönem:{" "}
-              <b>{hoverInfo.cur != null ? formatFactor(hoverInfo.cur) : "—"}</b>
+              <b>{hoverInfo.cur != null ? ff(hoverInfo.cur) : "—"}</b>
             </span>
             {hoverInfo.hasPrior ? (
               <span className="text-[color:var(--muted)]">
                 Önceki{prior?.label ? ` (${prior.label})` : ""}:{" "}
-                {hoverInfo.priorVal != null ? formatFactor(hoverInfo.priorVal) : "—"}
+                {hoverInfo.priorVal != null ? ff(hoverInfo.priorVal) : "—"}
               </span>
             ) : (
               <span className="text-[color:var(--muted)]">önceki dönem yok</span>
@@ -517,7 +549,7 @@ export function LDFTab(props: Props) {
                 }
               >
                 {hoverInfo.delta > 0 ? "+" : ""}
-                {formatFactor(hoverInfo.delta)}
+                {ff(hoverInfo.delta)}
               </span>
             )}
           </div>

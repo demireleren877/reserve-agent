@@ -92,35 +92,37 @@ export function TriangleGrid(props: Props) {
   }, [matrix, fmt, headerWidth]);
 
   const rowData = useMemo(() => {
-    return matrix.rows.map((r) => {
-      const row: Record<string, number | string | null> = { header: r.header };
+    const rows = matrix.rows.map((r) => {
+      const row: Record<string, number | string | null | boolean> = { header: r.header };
       r.cells.forEach((v, j) => {
         row[`c${j}`] = v ?? null;
       });
       return row;
     });
-  }, [matrix.rows]);
-
-  const pinnedBottom = useMemo(() => {
-    const row: Record<string, number | string | null> = { header: "Toplam" };
+    // Toplam satırı (sütun toplamları) EN ALTTA — normal satır olarak (pinned
+    // yerine) garanti görünür.
+    const total: Record<string, number | string | null | boolean> = {
+      header: "Toplam",
+      __total: true,
+    };
     matrix.totals.forEach((v, j) => {
-      row[`c${j}`] = v ?? null;
+      total[`c${j}`] = v ?? null;
     });
-    return [row];
-  }, [matrix.totals]);
+    rows.push(total);
+    return rows;
+  }, [matrix.rows, matrix.totals]);
 
   return (
     <div className="ag-theme-quartz" style={{ width: "100%" }}>
       <AgGridReact
         columnDefs={columnDefs}
         rowData={rowData}
-        pinnedBottomRowData={pinnedBottom}
         defaultColDef={{ resizable: true, sortable: false }}
         headerHeight={32}
         rowHeight={30}
         domLayout="autoHeight"
         getRowStyle={(p) =>
-          p.node.rowPinned === "bottom"
+          (p.data as { __total?: boolean } | undefined)?.__total
             ? {
                 fontWeight: 600,
                 background: "var(--surface-alt)",

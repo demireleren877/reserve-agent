@@ -1,8 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { LDFMethod, Triangle } from "@/types/triangle";
-import { formatFactor } from "@/lib/api";
+import type { LDFMethod, Triangle, FileData } from "@/types/triangle";
+import { formatFactor, formatNumber } from "@/lib/api";
+import { devDate } from "@/lib/roll-forward-util";
 import {
   WINDOWS,
   type Window,
@@ -59,10 +60,21 @@ function heatmapStyle(
   return { backgroundColor: `rgba(37, 99, 235, ${alpha})` };
 }
 
+/** LDF hücresi hover popup'ı için önceki dönem karşılaştırma verisi. */
+export interface LDFPriorRef {
+  label: string;
+  triangle: Triangle;
+  fileData?: FileData | null;
+}
+
 interface Props {
   triangle: Triangle | null;
   window: Window;
   excludedCells: Set<string>;
+  /** Güncel dönem dosya kırılımı (origin→dev→{dosya_no: kümülatif ödeme}). */
+  fileData?: FileData | null;
+  /** Önceki dönem — hover'da değişim ve sebep dosyalar için. */
+  prior?: LDFPriorRef | null;
   /** Curve cascade uygulanmış CDF zinciri. Verilirse CDF satırında
    *  bu değerler gösterilir. */
   cdfsOverride?: number[];
@@ -91,19 +103,68 @@ export function LDFTab(props: Props) {
     onSetKarmaWindow,
     onInitKarma,
     onClearKarma,
+    fileData,
+    prior,
   } = props;
 
   const [heatmap, setHeatmap] = useState(true);
+  const [hover, setHover] = useState<
+    { o: string; i: number; j: number; x: number; y: number } | null
+  >(null);
 
   const ratios = useMemo(
     () => (triangle ? developmentRatios(triangle, excludedCells) : []),
     [triangle, excludedCells],
   );
 
+  // Önceki dönem link-ratio üçgeni (eleme flag'i önemsiz, sadece değerler).
+  const priorRatios = useMemo(
+    () => (prior?.triangle ? developmentRatios(prior.triangle, new Set<string>()) : []),
+    [prior?.triangle],
+  );
+  const priorIdxByLabel = useMemo(() => {
+    const m = new Map<string, number>();
+    prior?.triangle?.origin_periods.forEach((o, i) => m.set(o, i));
+    return m;
+  }, [prior?.triangle]);
+
   const columnStats = useMemo(() => {
     if (!triangle) return [] as ColStats[];
     return computeColumnStats(ratios, triangle.development_periods.length - 1);
   }, [triangle, ratios]);
+
+  // Hover popup verisi: bu dönem / önceki dönem LDF + değişime sebep dosyalar.
+  const hoverInfo = useMemo(() => {
+    if (!hover || !triangle) return null;
+    const { o, i, j } = hover;
+    const cur = ratios[i]?.[j]?.value ?? null;
+    const median = columnStats[j]?.median ?? null;
+    const pIdx = priorIdxByLabel.get(o);
+    const hasPrior = !!prior && pIdx != null;
+    const priorVal = hasPrior ? priorRatios[pIdx as number]?.[j]?.value ?? null : null;
+    const delta = cur != null && priorVal != null ? cur - priorVal : null;
+
+    type FileRow = { file: string; prev: number; cur: number; delta: number; tag: string };
+    let files: FileRow[] = [];
+    if (prior?.fileData && fileData && pIdx != null) {
+      const devLabel = devDate(o, j + 1, triangle); // numerator hücresi (dev j+1)
+      const curF = fileData[o]?.[devLabel] ?? {};
+      const prevF = prior.fileData[o]?.[devLabel] ?? {};
+      for (const f of new Set([...Object.keys(curF), ...Object.keys(prevF)])) {
+        const pv = prevF[f] ?? 0;
+        const cv = curF[f] ?? 0;
+        const d = cv - pv;
+        if (Math.abs(d) < 1) continue;
+        const tag =
+          pv > 0 && cv === 0 ? "large'a geçti"
+          : pv === 0 && cv > 0 ? "yeni"
+          : d > 0 ? "arttı" : "azaldı";
+        files.push({ file: f, prev: pv, cur: cv, delta: d, tag });
+      }
+      files.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+    }
+    return { o, j, cur, priorVal, delta, median, files, hasPrior };
+  }, [hover, triangle, ratios, columnStats, prior, priorRatios, priorIdxByLabel, fileData]);
 
   const windowLDFs = useMemo(() => {
     if (!triangle) return {} as Record<string, number[]>;
@@ -260,11 +321,17 @@ export function LDFTab(props: Props) {
                       <td key={j} className="px-0.5 py-0" style={cellHeat}>
                         <button
                           onClick={() => onToggleCell(o, j)}
-                          title={
-                            cell.excluded
-                              ? "Dahil et"
-                              : `Medyan: ${formatFactor(columnStats[j]?.median ?? 0)} — tıkla eleme`
+                          onMouseEnter={(e) =>
+                            setHover({ o, i, j, x: e.clientX, y: e.clientY })
                           }
+                          onMouseMove={(e) =>
+                            setHover((h) =>
+                              h && h.o === o && h.j === j
+                                ? { ...h, x: e.clientX, y: e.clientY }
+                                : h,
+                            )
+                          }
+                          onMouseLeave={() => setHover(null)}
                           className={
                             "w-full text-right px-1.5 py-0.5 rounded text-[11px] transition leading-tight " +
                             (cell.excluded
@@ -379,6 +446,100 @@ export function LDFTab(props: Props) {
           </table>
         </div>
       </div>
+
+      {hover && hoverInfo && (
+        <div
+          style={{
+            position: "fixed",
+            left: Math.min(hover.x + 14, (globalThis.innerWidth || 1200) - 316),
+            top: Math.max(8, Math.min(hover.y + 14, (globalThis.innerHeight || 800) - 240)),
+            zIndex: 60,
+            pointerEvents: "none",
+            width: 300,
+          }}
+          className="card shadow-lg p-2.5 text-[11px]"
+        >
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="font-semibold">
+              {hoverInfo.o} · {hoverInfo.j + 1}→{hoverInfo.j + 2}
+            </span>
+            {hoverInfo.median != null && (
+              <span className="text-[color:var(--muted)]">
+                medyan {formatFactor(hoverInfo.median)}
+              </span>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2.5 tabular flex-wrap">
+            <span>
+              Bu dönem:{" "}
+              <b>{hoverInfo.cur != null ? formatFactor(hoverInfo.cur) : "—"}</b>
+            </span>
+            {hoverInfo.hasPrior ? (
+              <span className="text-[color:var(--muted)]">
+                Önceki{prior?.label ? ` (${prior.label})` : ""}:{" "}
+                {hoverInfo.priorVal != null ? formatFactor(hoverInfo.priorVal) : "—"}
+              </span>
+            ) : (
+              <span className="text-[color:var(--muted)]">önceki dönem yok</span>
+            )}
+            {hoverInfo.delta != null && Math.abs(hoverInfo.delta) >= 0.0001 && (
+              <span
+                className={
+                  "font-semibold " +
+                  (hoverInfo.delta > 0
+                    ? "text-[color:var(--danger)]"
+                    : "text-[color:var(--primary)]")
+                }
+              >
+                {hoverInfo.delta > 0 ? "+" : ""}
+                {formatFactor(hoverInfo.delta)}
+              </span>
+            )}
+          </div>
+
+          {hoverInfo.hasPrior &&
+            (hoverInfo.files.length > 0 ? (
+              <div className="border-t border-[color:var(--border)] mt-1.5 pt-1.5">
+                <div className="text-[9px] uppercase tracking-wide text-[color:var(--muted)] mb-1">
+                  Değişime sebep dosyalar · ödeme
+                </div>
+                {hoverInfo.files.slice(0, 6).map((f) => (
+                  <div
+                    key={f.file}
+                    className="flex items-center justify-between gap-2 py-0.5"
+                  >
+                    <span className="font-medium truncate max-w-[96px]">{f.file}</span>
+                    <span className="tabular text-[color:var(--muted)] whitespace-nowrap">
+                      {formatNumber(f.prev)}→{formatNumber(f.cur)}
+                    </span>
+                    <span
+                      className={
+                        "shrink-0 px-1 py-px rounded text-[9px] font-semibold " +
+                        (f.tag === "large'a geçti"
+                          ? "bg-[color:var(--danger-soft)] text-[color:var(--danger)]"
+                          : f.tag === "yeni"
+                          ? "bg-[color:var(--primary-soft)] text-[color:var(--primary)]"
+                          : "bg-[color:var(--surface-alt)] text-[color:var(--muted-strong)]")
+                      }
+                    >
+                      {f.tag}
+                    </span>
+                  </div>
+                ))}
+                {hoverInfo.files.length > 6 && (
+                  <div className="text-[9px] text-[color:var(--muted)] mt-0.5">
+                    +{hoverInfo.files.length - 6} dosya daha
+                  </div>
+                )}
+              </div>
+            ) : hoverInfo.delta != null && Math.abs(hoverInfo.delta) < 0.0001 ? (
+              <div className="border-t border-[color:var(--border)] mt-1.5 pt-1.5 text-[color:var(--muted)]">
+                değişim yok
+              </div>
+            ) : null)}
+        </div>
+      )}
     </div>
   );
 }

@@ -50,7 +50,30 @@ const TABS: { id: Tab; label: string; sub: string }[] = [
 ];
 
 export default function Home() {
-  const { navLevel, activePeriod, activeBranch, setReadOnly } = useProject();
+  const { project, navLevel, activePeriod, activeBranch, setReadOnly } = useProject();
+
+  // LDF hover karşılaştırması için önceki dönemin eşleşen branch'i (aynı frekans+ad).
+  const priorLDFRef = useMemo(() => {
+    if (!activePeriod || !activeBranch) return null;
+    const order = (label: string): number => {
+      const m = label.match(/^(\d{4})(?:[Qq](\d))?/);
+      return m ? parseInt(m[1], 10) * 4 + (m[2] ? parseInt(m[2], 10) : 0) : 0;
+    };
+    const sorted = [...project.periods].sort((a, b) => order(a.label) - order(b.label));
+    const idx = sorted.findIndex((p) => p.id === activePeriod.id);
+    for (let k = idx - 1; k >= 0; k--) {
+      const b = sorted[k].branches.find(
+        (br) =>
+          br.frequency === activeBranch.frequency &&
+          br.name === activeBranch.name &&
+          br.triangle,
+      );
+      if (b?.triangle) {
+        return { label: sorted[k].label, triangle: b.triangle, fileData: b.fileData ?? null };
+      }
+    }
+    return null;
+  }, [project.periods, activePeriod, activeBranch]);
   const setters = useBranchSetters("user");
 
   const [tab, setTab] = useState<Tab>("data");
@@ -814,6 +837,8 @@ export default function Home() {
             excludedCells={excludedCells}
             cdfsOverride={initialCDFs}
             karmaWindowPerStep={activeBranch?.karmaWindowPerStep ?? {}}
+            fileData={activeBranch?.fileData}
+            prior={priorLDFRef}
             onWindowChange={guardedSetters.setWindow}
             onToggleCell={toggleCellHandler}
             onClearCells={() => setExcludedCellsHandler(new Set())}

@@ -763,6 +763,16 @@ export function useProject(): Ctx {
 export interface BranchSetters {
   setTriangle: (t: Branch["triangle"], fileName?: string | null, fileData?: FileData) => void;
   setBothTriangles: (paid: Branch["triangle"], incurred: Branch["triangle"], fileName?: string, fileData?: FileData | null, count?: Branch["triangle"]) => void;
+  /** Roll-forward: yeni üçgenleri yükle ama TÜM model varsayım/seçimlerini base'den
+   *  koru (elemeler, curve, CDF, premium, LR, basis, correction, window, largeModel).
+   *  Sadece VERİ değişir; formüller/seçimler aynı kalır. */
+  setRolledForward: (
+    paid: Branch["triangle"],
+    incurred: Branch["triangle"],
+    fileName: string,
+    fileData: FileData | null | undefined,
+    base: Branch,
+  ) => void;
   /** LARGE-LOSS üçgenlerini yükle (ödeme + gerçekleşen). */
   setLargeTriangles: (paid: Branch["triangle"], incurred: Branch["triangle"], fileData?: FileData | null) => void;
   clearLarge: () => void;
@@ -886,6 +896,34 @@ export function useBranchSetters(
           }),
           "triangle_loaded",
           fileName ? { fileName } : {},
+          source,
+        ),
+      setRolledForward: (paid, incurred, fileName, fileData, base) =>
+        updData(
+          () => ({
+            triangle: incurred,
+            triangleFileName: fileName ?? null,
+            fileData: fileData ?? undefined,
+            paidTriangle: paid,
+            incurredTriangle: incurred,
+            // ── Model varsayımları/seçimleri KORUNUR (base'den taşınır) ──
+            method: base.method,
+            window: base.window,
+            excludedCells: [...(base.excludedCells ?? [])],
+            karmaWindowPerStep: { ...(base.karmaWindowPerStep ?? {}) },
+            premiums: { ...(base.premiums ?? {}) },
+            lrInputPerOrigin: { ...(base.lrInputPerOrigin ?? {}) },
+            basisPerOrigin: { ...(base.basisPerOrigin ?? {}) },
+            correctionPerOrigin: { ...(base.correctionPerOrigin ?? {}) },
+            cdfInitial: { ...(base.cdfInitial ?? {}) },
+            cdfChoicePerPeriod: { ...(base.cdfChoicePerPeriod ?? {}) },
+            cdfModelPerPeriod: { ...(base.cdfModelPerPeriod ?? {}) },
+            curveIncludePerPeriod: { ...(base.curveIncludePerPeriod ?? {}) },
+            largeWindow: base.largeWindow,
+            largeModel: base.largeModel ? { ...base.largeModel } : undefined,
+          }),
+          "roll_forward",
+          { fileName },
           source,
         ),
       setLargeTriangles: (paid, incurred, fileData) =>

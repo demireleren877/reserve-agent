@@ -265,8 +265,8 @@ export function LoadFromDataStore({ onClose, onLoaded, target = "gross" }: Props
       }
 
       const fileName = `${selectedPeriod?.label ?? ""} – ${brans} (roll-forward)`;
-      // incurred temel verilmediyse çalışma üçgeni olarak paid kullanılır
-      commit(paidTriangle, incurredTriangle ?? paidTriangle, fileName, fileData);
+      // Roll-forward: SADECE veri değişir; base'in tüm varsayım/seçimleri korunur.
+      setters.setRolledForward(paidTriangle, incurredTriangle ?? paidTriangle, fileName, fileData, base);
       if (hasLargeBase) {
         setters.setLargeTriangles(newLargePaid ?? null, newLargeInc ?? null, newLargeFd ?? null);
       }

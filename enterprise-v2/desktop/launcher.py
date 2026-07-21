@@ -26,6 +26,45 @@ from pathlib import Path
 
 APP_TITLE = "Actuarius Enterprise"
 
+# Açılış splash'i — pencere backend hazır olmadan anında görünür (offline'da
+# ağ timeout'ları yüzünden gecikme olsa bile kullanıcı boş ekran görmez).
+# Tamamen self-contained: harici font/görsel/istek YOK (offline uyumlu).
+SPLASH_HTML = """<!DOCTYPE html><html lang="tr"><head><meta charset="utf-8"><style>
+*{margin:0;padding:0;box-sizing:border-box}html,body{height:100%}
+body{font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+background:radial-gradient(1100px 560px at 50% -12%,#eaf0ff 0%,#f6f7f9 58%);
+color:#0f172a;display:flex;align-items:center;justify-content:center;height:100vh;overflow:hidden}
+.wrap{text-align:center;animation:fade .5s ease both}
+.ring{width:52px;height:52px;margin:0 auto 24px;border-radius:50%;
+border:3px solid #e2e5ea;border-top-color:#1d4ed8;animation:spin .8s linear infinite}
+.logo{font-size:25px;font-weight:700;letter-spacing:-.02em;margin-bottom:5px}
+.logo b{color:#1d4ed8}
+.sub{font-size:12px;color:#64748b;margin-bottom:30px;letter-spacing:.02em}
+.load{font-size:13px;color:#475569;font-weight:500}
+.load::after{content:"";animation:dots 1.4s steps(1,end) infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1}}
+@keyframes dots{0%{content:""}25%{content:"."}50%{content:".."}75%{content:"..."}100%{content:""}}
+@media(prefers-color-scheme:dark){body{background:radial-gradient(1100px 560px at 50% -12%,#10192e 0%,#0b1220 58%);color:#e2e8f0}
+.logo{color:#f1f5f9}.sub{color:#94a3b8}.ring{border-color:#1e293b;border-top-color:#60a5fa}.load{color:#cbd5e1}}
+</style></head><body><div class="wrap">
+<div class="ring"></div>
+<div class="logo">Actuarius <b>Enterprise</b></div>
+<div class="sub">Aktüeryal Rezerv &amp; IBNR</div>
+<div class="load">Yükleniyor</div>
+</div></body></html>"""
+
+ERROR_HTML = """<!DOCTYPE html><html lang="tr"><head><meta charset="utf-8"><style>
+body{font-family:-apple-system,"Segoe UI",sans-serif;background:#f6f7f9;color:#0f172a;
+display:flex;align-items:center;justify-content:center;height:100vh;text-align:center}
+.b{max-width:440px;padding:24px}.t{font-size:16px;font-weight:600;margin-bottom:8px}
+.s{font-size:13px;color:#64748b;line-height:1.5}
+</style></head><body><div class="b">
+<div class="t">Uygulama başlatılamadı</div>
+<div class="s">Arka plan servisi yanıt vermedi. Uygulamayı kapatıp tekrar açmayı deneyin.
+Sorun sürerse yöneticinize başvurun.</div>
+</div></body></html>"""
+
 
 def _ensure_std_streams() -> None:
     """Windowed (konsolsuz) PyInstaller build'inde sys.stdout/stderr None olur;
@@ -136,18 +175,15 @@ def main() -> None:
     thread = threading.Thread(target=server.run, daemon=True)
     thread.start()
 
-    if not _wait_health(base_url):
-        server.should_exit = True
-        _fatal("Backend başlatılamadı (health yanıt vermedi).")
-        return
-
     # Selftest: pencere açmadan paketin sağlığını doğrula (CI / build sonrası kontrol).
     if os.environ.get("ACTUARIUS_SELFTEST") == "1":
-        try:
-            with urllib.request.urlopen(f"{base_url}/v1/connections", timeout=3) as r:
-                ok = r.status == 200
-        except Exception:
-            ok = False
+        ok = _wait_health(base_url)
+        if ok:
+            try:
+                with urllib.request.urlopen(f"{base_url}/v1/connections", timeout=3) as r:
+                    ok = r.status == 200
+            except Exception:
+                ok = False
         server.should_exit = True
         thread.join(timeout=5)
         print("SELFTEST_OK" if ok else "SELFTEST_FAIL")
@@ -177,15 +213,26 @@ def main() -> None:
             except Exception as e:  # pragma: no cover
                 return {"ok": False, "error": str(e)}
 
-    webview.create_window(
+    # Pencereyi ANINDA splash ile aç (backend'i beklemeden). Böylece offline
+    # makinede açılış gecikse bile kullanıcı animasyonlu yükleniyor ekranı görür.
+    window = webview.create_window(
         APP_TITLE,
-        base_url,
+        html=SPLASH_HTML,
         width=1440,
         height=900,
         min_size=(1120, 720),
         js_api=_Bridge(),
     )
-    webview.start()  # pencere kapanana kadar bloklar
+
+    def _on_ready(win) -> None:
+        # GUI döngüsü başladıktan sonra arka planda çalışır: backend hazır olunca
+        # gerçek uygulamaya geç. Splash bu sırada görünür.
+        if _wait_health(base_url, timeout=60.0):
+            win.load_url(base_url)
+        else:
+            win.load_html(ERROR_HTML)
+
+    webview.start(_on_ready, window)  # pencere kapanana kadar bloklar
 
     server.should_exit = True
     thread.join(timeout=5)

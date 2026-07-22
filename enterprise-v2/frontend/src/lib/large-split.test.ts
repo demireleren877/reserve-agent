@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   subtractTriangle,
+  completeLarge,
   deriveAttritional,
   hasLarge,
   computeLargeSummary,
@@ -77,11 +78,35 @@ describe("subtractTriangle", () => {
     expect(a.values[1]).toEqual([120, 180, null]); // 2022 large yok → gross
   });
 
-  it("large daha az gelişim sütunu → eksik dev = 0", () => {
+  it("large daha az gelişim sütunu → kümülatif CARRY-FORWARD (rapor dönemine kadar)", () => {
+    // Large 2017 dev0'da 10 ile başlayıp durur → dev1,dev2'de de 10 (kümülatif korunur).
     const g = tri([[100, 150, 165]]);
     const l: Triangle = { ...tri([[10]]), development_periods: [0] };
     const { tri: a } = subtractTriangle(g, l);
-    expect(a.values[0]).toEqual([90, 150, 165]);
+    expect(a.values[0]).toEqual([90, 140, 155]); // 150−10, 165−10
+  });
+
+  it("carry-forward: large son hareketten sonra aynı tutarla taşınır", () => {
+    const g = tri([[100, 150, 165]]);
+    const l = tri([[10, 20, null]]); // dev2 hareketi yok → 20 taşınır
+    const { tri: a } = subtractTriangle(g, l);
+    expect(a.values[0]).toEqual([90, 130, 145]); // 165−20
+  });
+});
+
+describe("completeLarge — gross şekline carry-forward", () => {
+  it("large'ı gross boyutuna tamamlar, son değeri taşır", () => {
+    const g = tri([
+      [100, 150, 165],
+      [120, 180, null],
+      [130, null, null],
+    ]);
+    const l: Triangle = { ...tri([[10, 20]]), development_periods: [0, 1] };
+    const c = completeLarge(g, l)!;
+    // 2021: 10, 20, 20 (dev2 taşındı) ; 2022: large yok → 0 ; 2023: 0
+    expect(c.values[0]).toEqual([10, 20, 20]);
+    expect(c.values[1]).toEqual([0, 0, null]); // gross null olan hücre null
+    expect(c.development_periods).toEqual([0, 1, 2]); // gross şekli
   });
 });
 

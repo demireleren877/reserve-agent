@@ -24,6 +24,7 @@ import {
   hasLarge,
   deriveAttritional,
   attritionalWorkingTriangle,
+  largeWorkingTriangles,
   computeLargeSummary,
   computeAttritionalSummary,
 } from "@/lib/large-split";
@@ -119,21 +120,24 @@ export default function Home() {
 
   const grossTriangle = activeBranch?.triangle ?? null;
   const isPaidType = grossTriangle?.triangle_type === "paid";
+  // Large segment üçgenleri GROSS şekline carry-forward ile tamamlanır.
+  const largeWork = useMemo(
+    () => (activeBranch && largeOn ? largeWorkingTriangles(activeBranch) : null),
+    [activeBranch, largeOn],
+  );
   const triangle = useMemo(() => {
     if (!activeBranch) return null;
     if (isLargeSeg) {
-      const lp = activeBranch.largePaidTriangle ?? activeBranch.largeIncurredTriangle ?? null;
-      const li = activeBranch.largeIncurredTriangle ?? activeBranch.largePaidTriangle ?? null;
-      return (isPaidType ? lp : li) ?? null;
+      return (isPaidType ? largeWork?.paid ?? largeWork?.incurred : largeWork?.incurred ?? largeWork?.paid) ?? null;
     }
     return (largeOn ? attritionalWorkingTriangle(activeBranch) : grossTriangle) ?? null;
-  }, [activeBranch, isLargeSeg, largeOn, grossTriangle, isPaidType]);
+  }, [activeBranch, isLargeSeg, largeOn, grossTriangle, isPaidType, largeWork]);
 
   const effPaid = isLargeSeg
-    ? activeBranch?.largePaidTriangle ?? (isPaidType ? triangle : null)
+    ? largeWork?.paid ?? (isPaidType ? triangle : null)
     : (largeOn ? attr?.paid : activeBranch?.paidTriangle) ?? (isPaidType ? triangle : null);
   const effIncurred = isLargeSeg
-    ? activeBranch?.largeIncurredTriangle ?? (!isPaidType ? triangle : null)
+    ? largeWork?.incurred ?? (!isPaidType ? triangle : null)
     : (largeOn ? attr?.incurred : activeBranch?.incurredTriangle) ?? (!isPaidType ? triangle : null);
 
   // Param kaynağı: Large segmentinde nötr defaults + kaydedilmiş largeModel.

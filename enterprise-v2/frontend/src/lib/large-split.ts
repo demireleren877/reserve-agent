@@ -32,10 +32,14 @@ export function subtractTriangle(
   const values = gross.values.map((row, i) => {
     const o = gross.origin_periods[i];
     const lrow = largeByOrigin.get(o);
+    // KÜMÜLATİF carry-forward: large bir gelişim döneminde son hareketini yapıp
+    // dursa da, kümülatif tutar sonraki dönemlerde (rapor dönemine kadar) korunur.
+    let last = 0;
     return row.map((g, j) => {
+      const lv = lrow?.[j];
+      if (lv != null) last = lv;
       if (g == null) return null;
-      const l = lrow?.[j] ?? 0;
-      const a = g - (l ?? 0);
+      const a = g - last;
       if (a < 0) {
         negativeCells.push(`${o}|${j}`);
         return 0;
@@ -44,6 +48,31 @@ export function subtractTriangle(
     });
   });
   return { tri: { ...gross, values }, negativeCells };
+}
+
+/**
+ * LARGE üçgenini GROSS şekline tamamlar (carry-forward): aynı origin × gelişim
+ * dönemleri, her satırda son kümülatif large değeri rapor dönemine kadar taşınır.
+ * Large segmentinin kendi üçgeni de gross ile aynı boyutta olsun diye.
+ */
+export function completeLarge(
+  gross: Triangle | null | undefined,
+  large: Triangle | null | undefined,
+): Triangle | null {
+  if (!gross) return large ?? null;
+  if (!large) return null;
+  const byO = new Map<string, (number | null)[]>();
+  large.origin_periods.forEach((o, i) => byO.set(o, large.values[i] ?? []));
+  const values = gross.values.map((row, i) => {
+    const lrow = byO.get(gross.origin_periods[i]);
+    let last = 0;
+    return row.map((g, j) => {
+      const lv = lrow?.[j];
+      if (lv != null) last = lv;
+      return g == null ? null : last;
+    });
+  });
+  return { ...gross, values, triangle_type: large.triangle_type };
 }
 
 export interface AttritionalTriangles {
@@ -83,14 +112,20 @@ export function attritionalWorkingTriangle(branch: Branch): Triangle | null {
   return a.incurred ?? a.paid;
 }
 
+/** LARGE segmentinin çalışma üçgenleri — GROSS şekline carry-forward ile tamamlanmış. */
+export function largeWorkingTriangles(branch: Branch): { paid: Triangle | null; incurred: Triangle | null } {
+  return {
+    paid: completeLarge(branch.paidTriangle, branch.largePaidTriangle),
+    incurred: completeLarge(branch.incurredTriangle, branch.largeIncurredTriangle),
+  };
+}
+
 /** LARGE üçgeni + largeModel parametreleriyle özet (kendi bağımsız modeli). */
 export function computeLargeSummary(branch: Branch): BranchSummary | null {
   if (!hasLarge(branch)) return null;
   const t = branch.triangle?.triangle_type;
-  const tri =
-    t === "paid"
-      ? branch.largePaidTriangle ?? branch.largeIncurredTriangle ?? null
-      : branch.largeIncurredTriangle ?? branch.largePaidTriangle ?? null;
+  const lw = largeWorkingTriangles(branch);
+  const tri = t === "paid" ? lw.paid ?? lw.incurred : lw.incurred ?? lw.paid;
   if (!tri) return null;
   const lm = branch.largeModel ?? {};
   const synthetic: Branch = {

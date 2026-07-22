@@ -65,15 +65,11 @@ export function DataTab({ paidTriangle, incurredTriangle, viewingLarge }: Props)
   const setters = useBranchSetters("user");
   const largeOn = hasLarge(activeBranch);
 
-  // Guard'lar: large>gross (negatif) ve large gross ile aynı değerlemede değil (bayat).
+  // Guard: large > gross (negatif attritional) — veri kalitesi. Large kısa olsa
+  // sorun değil; kümülatif carry-forward ile rapor dönemine taşınır.
   const largeWarnings = useMemo(() => {
-    if (!largeOn || !activeBranch) return { negative: 0, staleDev: false };
-    const neg = deriveAttritional(activeBranch).negativeCells.length;
-    const gi = activeBranch.incurredTriangle ?? activeBranch.paidTriangle ?? null;
-    const li = activeBranch.largeIncurredTriangle ?? activeBranch.largePaidTriangle ?? null;
-    const staleDev =
-      !!gi && !!li && li.development_periods.length < gi.development_periods.length;
-    return { negative: neg, staleDev };
+    if (!largeOn || !activeBranch) return { negative: 0 };
+    return { negative: deriveAttritional(activeBranch).negativeCells.length };
   }, [largeOn, activeBranch]);
 
   // Görünüm seçenekleri
@@ -244,13 +240,6 @@ export function DataTab({ paidTriangle, incurredTriangle, viewingLarge }: Props)
               <>Görünen ve modellenen: <b>Attritional (Gross − Large)</b>. Segment
                 seçiciden Large&apos;a geçebilirsin · Toplam Özet&apos;te.</>
             )}
-          </div>
-        )}
-        {largeOn && largeWarnings.staleDev && (
-          <div className="px-3.5 py-1.5 border-b bg-[color:var(--danger-soft)] text-[11px] text-[color:var(--danger)]">
-            ⚠ Large üçgeni gross&apos;tan daha az gelişim dönemi içeriyor — güncel
-            değerlemeye ait <b>değil</b> gibi. Bu dönemin large&apos;ını yeniden yükleyin,
-            yoksa yeni köşegendeki büyük hasarlar attritional&apos;a sızar.
           </div>
         )}
         {largeOn && largeWarnings.negative > 0 && (

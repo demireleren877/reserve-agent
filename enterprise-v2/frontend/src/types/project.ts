@@ -52,6 +52,12 @@ export interface Branch {
    *  parametreleri Branch'in kendi alanlarında; Large kendi setini burada tutar. */
   largeModel?: LargeModel;
 
+  /** Roll-forward'da uygulanan dosya-bazlı düzeltmeler (non-destructive, denetlenebilir).
+   *  Key = dosya_no. Roll sırasında o dosyanın ödeme/muallağı bu değerlerle değiştirilir. */
+  rollAdjustments?: Record<string, ClaimAdjustment>;
+  /** LARGE roll-forward düzeltmeleri (gross'tan ayrı). */
+  largeRollAdjustments?: Record<string, ClaimAdjustment>;
+
   method: LDFMethod;
   window: Window;
   excludedCells: string[];
@@ -100,6 +106,16 @@ export interface Branch {
   /** Cashflow'dan hesaplanan aylık dağılım — iskonto için kullanılır.
    *  Key: origin period string. Value: { month (1-based offset), weight }[] sums to 1. */
   cashflowMonthlyPattern?: Record<string, { month: number; weight: number }[]>;
+}
+
+/** Roll-forward'da bir dosyaya (claim) uygulanan düzeltme. Alan verilmezse orijinal kalır. */
+export interface ClaimAdjustment {
+  /** Düzeltilmiş toplam muallak (stok). */
+  muallak?: number;
+  /** Düzeltilmiş toplam ödeme. */
+  odeme?: number;
+  /** Not/gerekçe (denetim için). */
+  note?: string;
 }
 
 /** LARGE segmentinin bağımsız model parametre seti (Branch param alt-kümesi). */

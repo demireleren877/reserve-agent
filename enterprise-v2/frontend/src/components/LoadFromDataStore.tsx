@@ -5,6 +5,8 @@ import { useDataStore, type TriangleRecord } from "@/lib/data-store";
 import { buildTriangleFromRecords, rollForwardTriangle, type ClaimRecord } from "@/lib/api";
 import { newDiagonalToFileData, mergeFileData } from "@/lib/roll-forward-util";
 import { useBranchSetters, useProject } from "@/lib/project-store";
+import { aggregateClaims, applyAdjustments, type ClaimAgg } from "@/lib/roll-adjust";
+import type { ClaimAdjustment } from "@/types/project";
 
 interface Props {
   onClose: () => void;
@@ -16,10 +18,15 @@ interface Props {
 type Granularity = "yearly" | "quarterly";
 type Source = "hasar" | "ucgen" | "rollforward";
 
+const _nf = new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 0 });
+function fmtNum(n: number): string {
+  return _nf.format(n);
+}
+
 export function LoadFromDataStore({ onClose, onLoaded, target = "gross" }: Props) {
   const store = useDataStore();
   const setters = useBranchSetters("user");
-  const { project, activeBranch } = useProject();
+  const { project, activeBranch, actions } = useProject();
   const isLarge = target === "large";
 
   // Hedefe göre üçgenleri doğru segmente yaz.
@@ -50,6 +57,77 @@ export function LoadFromDataStore({ onClose, onLoaded, target = "gross" }: Props
 
   // Roll-forward: yeni verinin ÜZERİNE geleceği, sistemde zaten üçgeni olan dönem
   const [priorPeriodId, setPriorPeriodId] = useState<string>("");
+
+  // Dosya düzeltmeleri (roll-forward, non-destructive). Aktif branch'te saklıysa yükle.
+  const [adjustments, setAdjustments] = useState<Record<string, ClaimAdjustment>>(
+    () => ((isLarge ? activeBranch?.largeRollAdjustments : activeBranch?.rollAdjustments) ?? {}),
+  );
+  const [adjOpen, setAdjOpen] = useState(false);
+  const [adjSearch, setAdjSearch] = useState("");
+  const [claimAggs, setClaimAggs] = useState<ClaimAgg[]>([]);
+  const [loadingAggs, setLoadingAggs] = useState(false);
+
+  // Düzeltme paneli açılınca güncel dönemin dosya bazlı hareketlerini topla (branş filtresiyle).
+  useEffect(() => {
+    if (source !== "rollforward" || !adjOpen || !periodId || !selectedDatasetId || !brans) {
+      return;
+    }
+    let cancelled = false;
+    setLoadingAggs(true);
+    (async () => {
+      try {
+        let ds = store.periods.find((p) => p.id === periodId)?.datasets[selectedDatasetId] ?? null;
+        if (!ds?.records?.length) ds = await store.loadDatasetRecords(periodId, selectedDatasetId);
+        const recs = (ds?.records ?? []) as ClaimRecord[];
+        const aggs = aggregateClaims(recs, brans).sort((a, b) => b.muallak - a.muallak);
+        if (!cancelled) setClaimAggs(aggs);
+      } catch {
+        if (!cancelled) setClaimAggs([]);
+      } finally {
+        if (!cancelled) setLoadingAggs(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [source, adjOpen, periodId, selectedDatasetId, brans, store]);
+
+  // Branş/dönem/hedef değişince düzeltmeleri sıfırla (farklı segmentin düzeltmesi karışmasın).
+  useEffect(() => {
+    setAdjustments((isLarge ? activeBranch?.largeRollAdjustments : activeBranch?.rollAdjustments) ?? {});
+    setAdjSearch("");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [brans, priorPeriodId, isLarge]);
+
+  const adjCount = Object.keys(adjustments).length;
+
+  function setOverride(dosya: string, field: "muallak" | "odeme", raw: string) {
+    setAdjustments((prev) => {
+      const next = { ...prev };
+      const cur = { ...(next[dosya] ?? {}) };
+      const trimmed = raw.trim();
+      if (trimmed === "") {
+        delete cur[field];
+      } else {
+        const v = Number(trimmed.replace(/\s/g, "").replace(",", "."));
+        if (Number.isNaN(v)) return prev;
+        cur[field] = v;
+      }
+      if (cur.muallak == null && cur.odeme == null && cur.note == null) {
+        delete next[dosya];
+      } else {
+        next[dosya] = cur;
+      }
+      return next;
+    });
+  }
+
+  // Panelde gösterilecek satırlar: düzeltilmiş dosyalar her zaman üstte + arama/top-N.
+  const visibleAggs = (() => {
+    const q = adjSearch.trim();
+    if (q) return claimAggs.filter((a) => a.dosya.includes(q) || a.kazaYili.includes(q));
+    const overridden = claimAggs.filter((a) => adjustments[a.dosya]);
+    const rest = claimAggs.filter((a) => !adjustments[a.dosya]).slice(0, 25);
+    return [...overridden, ...rest];
+  })();
 
   const selectedPeriod = store.periods.find((p) => p.id === periodId);
   // Large hedefinde: hasar → "Büyük Hasar (Large)", hazır üçgen → "Large Üçgen".
@@ -219,10 +297,13 @@ export function LoadFromDataStore({ onClose, onLoaded, target = "gross" }: Props
       const og = priorPaid.origin_granularity as Granularity;
       const dg = priorPaid.development_granularity as Granularity;
 
+      // Dosya düzeltmeleri: non-destructive — kayıtlar düzeltilmiş değerlerle dönüştürülür.
+      const rolledRecords = applyAdjustments(ds.records as ClaimRecord[], adjustments);
+
       const { paidTriangle, incurredTriangle, newDiagonalFiles } = await rollForwardTriangle(
         priorPaid,
         priorIncurred,
-        ds.records as ClaimRecord[],
+        rolledRecords,
         brans,
         og,
         dg,
@@ -242,6 +323,14 @@ export function LoadFromDataStore({ onClose, onLoaded, target = "gross" }: Props
         const fd = mergeFileData(base.fileData, newDiagFd);
         setters.setRolledForward(paidTriangle, incurredTriangle ?? paidTriangle, fileName, fd, base);
       }
+
+      // Dosya düzeltmelerini branch'e kaydet (denetlenebilir + yeniden roll'da korunur).
+      const adjField = isLarge ? "largeRollAdjustments" : "rollAdjustments";
+      actions.updateActiveBranch(
+        () => ({ [adjField]: adjCount > 0 ? adjustments : undefined }),
+        "roll_adjustments",
+        { count: adjCount, target },
+      );
       onLoaded();
       onClose();
     } catch (e) {
@@ -259,7 +348,7 @@ export function LoadFromDataStore({ onClose, onLoaded, target = "gross" }: Props
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="card w-full max-w-md shadow-xl border border-[color:var(--border)]">
+      <div className={`card w-full ${source === "rollforward" ? "max-w-lg" : "max-w-md"} shadow-xl border border-[color:var(--border)]`}>
         <div className="p-5 border-b border-[color:var(--border)] flex items-center justify-between">
           <h2 className="text-sm font-semibold">
             Veri Modülünden Yükle
@@ -277,7 +366,7 @@ export function LoadFromDataStore({ onClose, onLoaded, target = "gross" }: Props
           </button>
         </div>
 
-        <div className="p-5 space-y-4">
+        <div className="p-5 space-y-4 max-h-[78vh] overflow-y-auto">
           {/* Kaynak seçimi — gross gibi large için de: full veri / hazır üçgen / roll-forward */}
           <div className="flex rounded-lg overflow-hidden border border-[color:var(--border)]">
             {(["hasar", "ucgen", "rollforward"] as Source[]).map((s) => (
@@ -470,6 +559,112 @@ export function LoadFromDataStore({ onClose, onLoaded, target = "gross" }: Props
                 );
               })()}
             </>
+          )}
+
+          {/* Dosya düzeltmeleri (opsiyonel) — bir dosyanın ödeme/muallağını roll-forward'da düzelt */}
+          {source === "rollforward" && priorPeriodId && brans && bransList.length > 0 && (
+            <div className="rounded-lg" style={{ border: "1px solid var(--border)" }}>
+              <button
+                type="button"
+                onClick={() => setAdjOpen((o) => !o)}
+                className="w-full flex items-center justify-between px-3 py-2 text-[11px] font-semibold"
+                style={{ color: "var(--muted-strong)" }}
+              >
+                <span className="flex items-center gap-2">
+                  <span style={{ transform: adjOpen ? "rotate(90deg)" : "none", transition: "transform .15s" }}>▸</span>
+                  Dosya düzeltmeleri (opsiyonel)
+                  {adjCount > 0 && (
+                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded"
+                      style={{ background: "var(--warning-soft,#f59e0b22)", color: "var(--warning-strong,#b45309)" }}>
+                      {adjCount} düzeltme
+                    </span>
+                  )}
+                </span>
+              </button>
+
+              {adjOpen && (
+                <div className="px-3 pb-3 space-y-2">
+                  <p className="text-[10px] leading-relaxed" style={{ color: "var(--muted)" }}>
+                    Yanlış girilmiş bir dosyanın (claim) muallak/ödemesini bu dönem için düzeltin.
+                    Orijinal veriye dokunulmaz; düzeltme yalnızca bu roll-forward'a uygulanır ve saklanır.
+                    Boş bırakılan alan orijinal kalır.
+                  </p>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={adjSearch}
+                    onChange={(e) => setAdjSearch(e.target.value)}
+                    placeholder="Dosya no ara… (boşsa en büyük muallaklar)"
+                    className="w-full text-xs border border-[color:var(--border)] rounded-md px-2.5 py-1.5 bg-[color:var(--surface)] text-[color:var(--foreground)]"
+                  />
+                  {loadingAggs ? (
+                    <p className="text-[11px]" style={{ color: "var(--muted)" }}>Dosyalar yükleniyor…</p>
+                  ) : visibleAggs.length === 0 ? (
+                    <p className="text-[11px]" style={{ color: "var(--muted)" }}>
+                      {adjSearch.trim() ? "Eşleşen dosya yok." : "Dosya bulunamadı."}
+                    </p>
+                  ) : (
+                    <div className="max-h-64 overflow-y-auto rounded-md" style={{ border: "1px solid var(--border)" }}>
+                      <table className="w-full text-[11px]">
+                        <thead className="sticky top-0" style={{ background: "var(--surface-alt)" }}>
+                          <tr style={{ color: "var(--muted)" }}>
+                            <th className="text-left font-medium px-2 py-1">Dosya · Kaza yılı</th>
+                            <th className="text-right font-medium px-2 py-1">Ödeme</th>
+                            <th className="text-right font-medium px-2 py-1">Muallak</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {visibleAggs.map((a) => {
+                            const ov = adjustments[a.dosya];
+                            const changed = !!ov && (ov.muallak != null || ov.odeme != null);
+                            return (
+                              <tr key={a.dosya} style={{ borderTop: "1px solid var(--border)", background: changed ? "var(--warning-soft,#f59e0b18)" : undefined }}>
+                                <td className="px-2 py-1">
+                                  <span className="font-mono">{a.dosya}</span>
+                                  <span style={{ color: "var(--muted)" }}> · {a.kazaYili}</span>
+                                </td>
+                                <td className="px-1 py-1">
+                                  <input
+                                    type="text"
+                                    inputMode="decimal"
+                                    defaultValue={ov?.odeme != null ? String(ov.odeme) : ""}
+                                    onChange={(e) => setOverride(a.dosya, "odeme", e.target.value)}
+                                    placeholder={fmtNum(a.odeme)}
+                                    className="w-24 text-right text-[11px] border border-[color:var(--border)] rounded px-1.5 py-1 bg-[color:var(--surface)]"
+                                    title={`Orijinal ödeme: ${fmtNum(a.odeme)}`}
+                                  />
+                                </td>
+                                <td className="px-1 py-1">
+                                  <input
+                                    type="text"
+                                    inputMode="decimal"
+                                    defaultValue={ov?.muallak != null ? String(ov.muallak) : ""}
+                                    onChange={(e) => setOverride(a.dosya, "muallak", e.target.value)}
+                                    placeholder={fmtNum(a.muallak)}
+                                    className="w-24 text-right text-[11px] border border-[color:var(--border)] rounded px-1.5 py-1 bg-[color:var(--surface)]"
+                                    title={`Orijinal muallak: ${fmtNum(a.muallak)}`}
+                                  />
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                  {adjCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setAdjustments({})}
+                      className="text-[10px] underline"
+                      style={{ color: "var(--muted)" }}
+                    >
+                      Tüm düzeltmeleri temizle
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
           )}
 
           {error && (

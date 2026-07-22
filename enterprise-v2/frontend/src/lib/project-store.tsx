@@ -932,7 +932,10 @@ export function useBranchSetters(
             window: base.window,
             excludedCells: [...(base.excludedCells ?? [])],
             karmaWindowPerStep: { ...(base.karmaWindowPerStep ?? {}) },
-            premiums: { ...(base.premiums ?? {}) },
+            // NOT: exposure (premiums) taşınmaz — döneme özel, veri modülünden
+            // canlı gelir (useDataPremiums). Önceki dönemin primi sızmasın diye
+            // roll-forward'da premiums'u boş bırakıyoruz.
+            premiums: {},
             lrInputPerOrigin: { ...(base.lrInputPerOrigin ?? {}) },
             basisPerOrigin: { ...(base.basisPerOrigin ?? {}) },
             correctionPerOrigin: { ...(base.correctionPerOrigin ?? {}) },
@@ -941,8 +944,9 @@ export function useBranchSetters(
             cdfModelPerPeriod: { ...(base.cdfModelPerPeriod ?? {}) },
             curveIncludePerPeriod: { ...(base.curveIncludePerPeriod ?? {}) },
             largeWindow: base.largeWindow,
-            largeModel: base.largeModel ? { ...base.largeModel } : undefined,
-            grossModel: base.grossModel ? { ...base.grossModel } : undefined,
+            // Segment modelleri korunur ama exposure (premiums) taşınmaz — canlı gelir.
+            largeModel: base.largeModel ? { ...base.largeModel, premiums: {} } : undefined,
+            grossModel: base.grossModel ? { ...base.grossModel, premiums: {} } : undefined,
           }),
           "roll_forward",
           { fileName },

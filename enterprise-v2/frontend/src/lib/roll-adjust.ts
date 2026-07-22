@@ -7,6 +7,7 @@
 
 import type { ClaimRecord } from "@/lib/api";
 import type { ClaimAdjustment } from "@/types/project";
+import type { Triangle, FileData } from "@/types/triangle";
 
 export interface ClaimAgg {
   dosya: string;
@@ -116,4 +117,82 @@ export function applyAdjustments(
     });
   }
   return out;
+}
+
+/** FileData'dan dosya_no → origin etiketi eşlemesi (temel üçgende dosyanın satırını bulmak için). */
+export function originByDosyaFromFileData(fd: FileData | undefined): Map<string, string> {
+  const m = new Map<string, string>();
+  if (!fd) return m;
+  for (const [origin, devs] of Object.entries(fd)) {
+    for (const cell of Object.values(devs)) {
+      for (const dosya of Object.keys(cell)) if (!m.has(dosya)) m.set(dosya, origin);
+    }
+  }
+  return m;
+}
+
+function lastNonNullIdx(row: (number | null)[]): number {
+  for (let j = row.length - 1; j >= 0; j--) if (row[j] != null) return j;
+  return -1;
+}
+
+/**
+ * TEMEL dönem düzeltmeleri: roll-forward'da seçilen önceki dönemin (temel) üçgenine,
+ * bir dosyanın ödeme/muallak düzeltmesini NON-DESTRUCTIVE delta-yama olarak uygular.
+ * Düzeltme, dosyanın origin satırının DIAGONAL hücresine (rapor dönemi = son kümülatif)
+ * eklenir; böylece roll-forward bu düzeltilmiş temelin üzerine taşınır.
+ *
+ * - dPaid  = (yeni ödeme − orijinal ödeme)  → paid ve incurred'a
+ * - dMuallak = (yeni muallak − orijinal muallak) → yalnız incurred'a (incurred = ödeme + muallak)
+ *
+ * Orijinal değerler `baseAggs` (temel dönemin kendi dosya verisi) üzerinden alınır.
+ * Origin yerleşimi önce `originByDosya` (FileData), yoksa kaza yılı ile eşlenir.
+ */
+export function applyBaseAdjustments(
+  priorPaid: Triangle,
+  priorIncurred: Triangle | null,
+  baseAggs: ClaimAgg[],
+  adjustments: Record<string, ClaimAdjustment> | undefined,
+  originByDosya?: Map<string, string>,
+): { paid: Triangle; incurred: Triangle | null; unplaced: string[] } {
+  const keys = Object.keys(adjustments ?? {});
+  if (!keys.length) return { paid: priorPaid, incurred: priorIncurred, unplaced: [] };
+  const adj = adjustments!;
+  const aggByDosya = new Map(baseAggs.map((a) => [a.dosya, a]));
+
+  const paidVals = priorPaid.values.map((r) => r.slice());
+  const incVals = priorIncurred ? priorIncurred.values.map((r) => r.slice()) : null;
+  const origins = priorPaid.origin_periods;
+
+  const findOrigin = (dosya: string, agg: ClaimAgg): number => {
+    const lbl = originByDosya?.get(dosya);
+    if (lbl != null) {
+      const i = origins.indexOf(lbl);
+      if (i >= 0) return i;
+    }
+    // Kaza yılı ile eşle (yıllık: "2024"; çeyreklik: "2024Q1" → yıl önekiyle ilk eşleşen)
+    return origins.findIndex((o) => /(\d{4})/.exec(o)?.[1] === agg.kazaYili);
+  };
+
+  const unplaced: string[] = [];
+  for (const d of keys) {
+    const agg = aggByDosya.get(d);
+    if (!agg) { unplaced.push(d); continue; } // temel dönemde bu dosya yok
+    const a = adj[d];
+    const dPaid = (a.odeme ?? agg.odeme) - agg.odeme;
+    const dMual = (a.muallak ?? agg.muallak) - agg.muallak;
+    if (dPaid === 0 && dMual === 0) continue;
+    const oi = findOrigin(d, agg);
+    if (oi < 0) { unplaced.push(d); continue; }
+    const diag = lastNonNullIdx(paidVals[oi]);
+    if (diag < 0) { unplaced.push(d); continue; }
+    paidVals[oi][diag] = (paidVals[oi][diag] ?? 0) + dPaid;
+    if (incVals) incVals[oi][diag] = (incVals[oi][diag] ?? 0) + dPaid + dMual;
+  }
+
+  return {
+    paid: { ...priorPaid, values: paidVals },
+    incurred: priorIncurred && incVals ? { ...priorIncurred, values: incVals } : priorIncurred,
+    unplaced,
+  };
 }

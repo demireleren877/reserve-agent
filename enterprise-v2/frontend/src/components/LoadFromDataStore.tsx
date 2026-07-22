@@ -5,7 +5,13 @@ import { useDataStore, type TriangleRecord } from "@/lib/data-store";
 import { buildTriangleFromRecords, rollForwardTriangle, type ClaimRecord } from "@/lib/api";
 import { newDiagonalToFileData, mergeFileData } from "@/lib/roll-forward-util";
 import { useBranchSetters, useProject } from "@/lib/project-store";
-import { aggregateClaims, applyAdjustments, type ClaimAgg } from "@/lib/roll-adjust";
+import {
+  aggregateClaims,
+  applyAdjustments,
+  applyBaseAdjustments,
+  originByDosyaFromFileData,
+  type ClaimAgg,
+} from "@/lib/roll-adjust";
 import type { ClaimAdjustment } from "@/types/project";
 
 interface Props {
@@ -58,20 +64,35 @@ export function LoadFromDataStore({ onClose, onLoaded, target = "gross" }: Props
   // Roll-forward: yeni verinin ÜZERİNE geleceği, sistemde zaten üçgeni olan dönem
   const [priorPeriodId, setPriorPeriodId] = useState<string>("");
 
-  // Dosya düzeltmeleri (roll-forward, non-destructive). Aktif branch'te saklıysa yükle.
+  // Dosya düzeltmeleri (roll-forward, non-destructive). Kapsam: güncel dönem (artımsal
+  // kayıtlar) VEYA temel/önceki dönem (temel üçgene delta-yama). Aktif branch'te saklıysa yükle.
+  const [adjScope, setAdjScope] = useState<"current" | "base">("current");
   const [adjustments, setAdjustments] = useState<Record<string, ClaimAdjustment>>(
     () => ((isLarge ? activeBranch?.largeRollAdjustments : activeBranch?.rollAdjustments) ?? {}),
+  );
+  const [baseAdjustments, setBaseAdjustments] = useState<Record<string, ClaimAdjustment>>(
+    () => ((isLarge ? activeBranch?.largeBaseRollAdjustments : activeBranch?.baseRollAdjustments) ?? {}),
   );
   const [adjOpen, setAdjOpen] = useState(false);
   const [adjSearch, setAdjSearch] = useState("");
   const [claimAggs, setClaimAggs] = useState<ClaimAgg[]>([]);
+  const [baseAggs, setBaseAggs] = useState<ClaimAgg[]>([]);
   const [loadingAggs, setLoadingAggs] = useState(false);
+  const [loadingBaseAggs, setLoadingBaseAggs] = useState(false);
 
-  // Düzeltme paneli açılınca güncel dönemin dosya bazlı hareketlerini topla (branş filtresiyle).
+  const claimsTypeId = isLarge ? "large" : "hasar";
+  // Temel dönemin (proje) veri-store karşılığı — etikete göre eşlenir (id uzayları ayrı).
+  const basePeriodLabel = project.periods.find((p) => p.id === priorPeriodId)?.label;
+  const baseStorePeriod = basePeriodLabel
+    ? store.periods.find((sp) => sp.label === basePeriodLabel)
+    : undefined;
+  const baseHasClaimDataset = !!(
+    baseStorePeriod && Object.values(baseStorePeriod.datasets).some((d) => d.typeId === claimsTypeId)
+  );
+
+  // Güncel dönemin dosya hareketlerini topla (panel açık + kapsam=güncel).
   useEffect(() => {
-    if (source !== "rollforward" || !adjOpen || !periodId || !selectedDatasetId || !brans) {
-      return;
-    }
+    if (source !== "rollforward" || !adjOpen || adjScope !== "current" || !periodId || !selectedDatasetId || !brans) return;
     let cancelled = false;
     setLoadingAggs(true);
     (async () => {
@@ -88,19 +109,53 @@ export function LoadFromDataStore({ onClose, onLoaded, target = "gross" }: Props
       }
     })();
     return () => { cancelled = true; };
-  }, [source, adjOpen, periodId, selectedDatasetId, brans, store]);
+  }, [source, adjOpen, adjScope, periodId, selectedDatasetId, brans, store]);
 
-  // Branş/dönem/hedef değişince düzeltmeleri sıfırla (farklı segmentin düzeltmesi karışmasın).
+  // Temel dönemin dosya hareketlerini topla (panel açık + kapsam=temel).
+  useEffect(() => {
+    if (source !== "rollforward" || !adjOpen || adjScope !== "base" || !brans || !baseStorePeriod) return;
+    let cancelled = false;
+    setLoadingBaseAggs(true);
+    (async () => {
+      try {
+        const dsMeta = Object.values(baseStorePeriod.datasets).find((d) => d.typeId === claimsTypeId);
+        if (!dsMeta) { if (!cancelled) setBaseAggs([]); return; }
+        let ds: typeof dsMeta | null = dsMeta;
+        if (!ds.records?.length) ds = await store.loadDatasetRecords(baseStorePeriod.id, dsMeta.datasetId);
+        const recs = (ds?.records ?? []) as ClaimRecord[];
+        const aggs = aggregateClaims(recs, brans).sort((a, b) => b.muallak - a.muallak);
+        if (!cancelled) setBaseAggs(aggs);
+      } catch {
+        if (!cancelled) setBaseAggs([]);
+      } finally {
+        if (!cancelled) setLoadingBaseAggs(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [source, adjOpen, adjScope, brans, baseStorePeriod, claimsTypeId, store]);
+
+  // Branş/dönem/hedef değişince düzeltmeleri sıfırla (farklı segmentin/dönemin düzeltmesi karışmasın).
   useEffect(() => {
     setAdjustments((isLarge ? activeBranch?.largeRollAdjustments : activeBranch?.rollAdjustments) ?? {});
+    setBaseAdjustments((isLarge ? activeBranch?.largeBaseRollAdjustments : activeBranch?.baseRollAdjustments) ?? {});
     setAdjSearch("");
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [brans, priorPeriodId, isLarge]);
 
-  const adjCount = Object.keys(adjustments).length;
+  // Kapsam=temel ama o dönemde dosya verisi yoksa güncel'e düş.
+  useEffect(() => {
+    if (adjScope === "base" && !baseHasClaimDataset) setAdjScope("current");
+  }, [adjScope, baseHasClaimDataset]);
+
+  const isBaseScope = adjScope === "base";
+  const activeAdj = isBaseScope ? baseAdjustments : adjustments;
+  const setActiveAdj = isBaseScope ? setBaseAdjustments : setAdjustments;
+  const activeAggs = isBaseScope ? baseAggs : claimAggs;
+  const activeLoading = isBaseScope ? loadingBaseAggs : loadingAggs;
+  const adjCount = Object.keys(adjustments).length + Object.keys(baseAdjustments).length;
 
   function setOverride(dosya: string, field: "muallak" | "odeme", raw: string) {
-    setAdjustments((prev) => {
+    setActiveAdj((prev) => {
       const next = { ...prev };
       const cur = { ...(next[dosya] ?? {}) };
       const trimmed = raw.trim();
@@ -123,15 +178,15 @@ export function LoadFromDataStore({ onClose, onLoaded, target = "gross" }: Props
   // Panelde gösterilecek satırlar: düzeltilmiş dosyalar her zaman üstte + arama/top-N.
   const visibleAggs = (() => {
     const q = adjSearch.trim();
-    if (q) return claimAggs.filter((a) => a.dosya.includes(q) || a.kazaYili.includes(q));
-    const overridden = claimAggs.filter((a) => adjustments[a.dosya]);
-    const rest = claimAggs.filter((a) => !adjustments[a.dosya]).slice(0, 25);
+    if (q) return activeAggs.filter((a) => a.dosya.includes(q) || a.kazaYili.includes(q));
+    const overridden = activeAggs.filter((a) => activeAdj[a.dosya]);
+    const rest = activeAggs.filter((a) => !activeAdj[a.dosya]).slice(0, 25);
     return [...overridden, ...rest];
   })();
 
   const selectedPeriod = store.periods.find((p) => p.id === periodId);
   // Large hedefinde: hasar → "Büyük Hasar (Large)", hazır üçgen → "Large Üçgen".
-  const claimsTypeId = isLarge ? "large" : "hasar";
+  // (claimsTypeId yukarıda tanımlı.)
   const triangleTypeId = isLarge ? "large_ucgen" : "ucgen";
   const hasarDatasets = selectedPeriod
     ? Object.values(selectedPeriod.datasets).filter((d) => d.typeId === claimsTypeId)
@@ -281,23 +336,29 @@ export function LoadFromDataStore({ onClose, onLoaded, target = "gross" }: Props
       if (!ds?.records?.length) throw new Error("Güncel dönem hasar kaydı bulunamadı");
 
       // Roll-forward temeli — hedefe göre gross ya da large üçgenleri.
-      const priorPaid = isLarge ? base.largePaidTriangle : base.paidTriangle;
-      const priorIncurred = (isLarge ? base.largeIncurredTriangle : base.incurredTriangle) ?? null;
-      if (!priorPaid) {
+      const basePaid0 = isLarge ? base.largePaidTriangle : base.paidTriangle;
+      const baseIncurred0 = (isLarge ? base.largeIncurredTriangle : base.incurredTriangle) ?? null;
+      if (!basePaid0) {
         throw new Error(
           isLarge
             ? "Seçilen dönemde LARGE üçgeni yok — önce o dönemin large'ını yükleyin."
             : "Seçilen dönemde hem ödeme hem muallak üçgeni olmalı (ikisini de yükleyin).",
         );
       }
-      if (!isLarge && !priorIncurred) {
+      if (!isLarge && !baseIncurred0) {
         throw new Error("Seçilen dönemde hem ödeme hem muallak üçgeni olmalı (ikisini de yükleyin).");
       }
+
+      // TEMEL dönem düzeltmeleri: prior üçgenlere delta-yama (non-destructive), roll'dan ÖNCE.
+      const baseOriginMap = originByDosyaFromFileData(isLarge ? base.largeFileData : base.fileData);
+      const patched = applyBaseAdjustments(basePaid0, baseIncurred0, baseAggs, baseAdjustments, baseOriginMap);
+      const priorPaid = patched.paid;
+      const priorIncurred = patched.incurred;
 
       const og = priorPaid.origin_granularity as Granularity;
       const dg = priorPaid.development_granularity as Granularity;
 
-      // Dosya düzeltmeleri: non-destructive — kayıtlar düzeltilmiş değerlerle dönüştürülür.
+      // Güncel dönem düzeltmeleri: non-destructive — kayıtlar düzeltilmiş değerlerle dönüştürülür.
       const rolledRecords = applyAdjustments(ds.records as ClaimRecord[], adjustments);
 
       const { paidTriangle, incurredTriangle, newDiagonalFiles } = await rollForwardTriangle(
@@ -325,11 +386,17 @@ export function LoadFromDataStore({ onClose, onLoaded, target = "gross" }: Props
       }
 
       // Dosya düzeltmelerini branch'e kaydet (denetlenebilir + yeniden roll'da korunur).
-      const adjField = isLarge ? "largeRollAdjustments" : "rollAdjustments";
+      const curField = isLarge ? "largeRollAdjustments" : "rollAdjustments";
+      const baseField = isLarge ? "largeBaseRollAdjustments" : "baseRollAdjustments";
+      const curCount = Object.keys(adjustments).length;
+      const baseCount = Object.keys(baseAdjustments).length;
       actions.updateActiveBranch(
-        () => ({ [adjField]: adjCount > 0 ? adjustments : undefined }),
+        () => ({
+          [curField]: curCount > 0 ? adjustments : undefined,
+          [baseField]: baseCount > 0 ? baseAdjustments : undefined,
+        }),
         "roll_adjustments",
-        { count: adjCount, target },
+        { current: curCount, base: baseCount, unplaced: patched.unplaced, target },
       );
       onLoaded();
       onClose();
@@ -584,10 +651,36 @@ export function LoadFromDataStore({ onClose, onLoaded, target = "gross" }: Props
 
               {adjOpen && (
                 <div className="px-3 pb-3 space-y-2">
+                  {/* Kapsam: hangi dönemin dosyasını düzeltiyoruz? */}
+                  {baseHasClaimDataset && (
+                    <div className="flex rounded-md overflow-hidden border border-[color:var(--border)]">
+                      {([
+                        ["current", `Güncel dönem${selectedPeriod ? ` (${selectedPeriod.label})` : ""}`],
+                        ["base", `Temel dönem${basePeriodLabel ? ` (${basePeriodLabel})` : ""}`],
+                      ] as const).map(([val, lbl]) => {
+                        const n = val === "base" ? Object.keys(baseAdjustments).length : Object.keys(adjustments).length;
+                        return (
+                          <button
+                            key={val}
+                            type="button"
+                            onClick={() => { setAdjScope(val); setAdjSearch(""); }}
+                            className="flex-1 py-1.5 text-[10px] font-medium transition"
+                            style={{
+                              background: adjScope === val ? "var(--primary)" : "var(--surface)",
+                              color: adjScope === val ? "#fff" : "var(--muted-strong)",
+                            }}
+                          >
+                            {lbl}{n > 0 ? ` · ${n}` : ""}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                   <p className="text-[10px] leading-relaxed" style={{ color: "var(--muted)" }}>
-                    Yanlış girilmiş bir dosyanın (claim) muallak/ödemesini bu dönem için düzeltin.
-                    Orijinal veriye dokunulmaz; düzeltme yalnızca bu roll-forward'a uygulanır ve saklanır.
-                    Boş bırakılan alan orijinal kalır.
+                    {isBaseScope
+                      ? "TEMEL dönemin dosyasını düzeltin (örn. muallağı yanlış girilmiş bir hasar). Düzeltme, temel üçgenin o origin diagonaline delta olarak uygulanır; roll-forward bu düzeltilmiş temelin üzerine taşınır."
+                      : "GÜNCEL dönemin dosyasını (claim) düzeltin. Düzeltme yalnızca bu roll-forward'a uygulanır."}
+                    {" Orijinal veriye dokunulmaz; boş bırakılan alan orijinal kalır."}
                   </p>
                   <input
                     type="text"
@@ -597,7 +690,7 @@ export function LoadFromDataStore({ onClose, onLoaded, target = "gross" }: Props
                     placeholder="Dosya no ara… (boşsa en büyük muallaklar)"
                     className="w-full text-xs border border-[color:var(--border)] rounded-md px-2.5 py-1.5 bg-[color:var(--surface)] text-[color:var(--foreground)]"
                   />
-                  {loadingAggs ? (
+                  {activeLoading ? (
                     <p className="text-[11px]" style={{ color: "var(--muted)" }}>Dosyalar yükleniyor…</p>
                   ) : visibleAggs.length === 0 ? (
                     <p className="text-[11px]" style={{ color: "var(--muted)" }}>
@@ -615,10 +708,10 @@ export function LoadFromDataStore({ onClose, onLoaded, target = "gross" }: Props
                         </thead>
                         <tbody>
                           {visibleAggs.map((a) => {
-                            const ov = adjustments[a.dosya];
+                            const ov = activeAdj[a.dosya];
                             const changed = !!ov && (ov.muallak != null || ov.odeme != null);
                             return (
-                              <tr key={a.dosya} style={{ borderTop: "1px solid var(--border)", background: changed ? "var(--warning-soft,#f59e0b18)" : undefined }}>
+                              <tr key={`${adjScope}:${a.dosya}`} style={{ borderTop: "1px solid var(--border)", background: changed ? "var(--warning-soft,#f59e0b18)" : undefined }}>
                                 <td className="px-2 py-1">
                                   <span className="font-mono">{a.dosya}</span>
                                   <span style={{ color: "var(--muted)" }}> · {a.kazaYili}</span>
@@ -652,14 +745,14 @@ export function LoadFromDataStore({ onClose, onLoaded, target = "gross" }: Props
                       </table>
                     </div>
                   )}
-                  {adjCount > 0 && (
+                  {Object.keys(activeAdj).length > 0 && (
                     <button
                       type="button"
-                      onClick={() => setAdjustments({})}
+                      onClick={() => setActiveAdj({})}
                       className="text-[10px] underline"
                       style={{ color: "var(--muted)" }}
                     >
-                      Tüm düzeltmeleri temizle
+                      Bu dönemin düzeltmelerini temizle ({isBaseScope ? "temel" : "güncel"})
                     </button>
                   )}
                 </div>

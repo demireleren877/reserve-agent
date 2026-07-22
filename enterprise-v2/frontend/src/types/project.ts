@@ -57,6 +57,11 @@ export interface Branch {
   rollAdjustments?: Record<string, ClaimAdjustment>;
   /** LARGE roll-forward düzeltmeleri (gross'tan ayrı). */
   largeRollAdjustments?: Record<string, ClaimAdjustment>;
+  /** Roll-forward'da TEMEL (önceki) döneme uygulanan dosya düzeltmeleri. Temel üçgene
+   *  delta-yama olarak uygulanır (o dönemin origin diagonaline). Key = dosya_no. */
+  baseRollAdjustments?: Record<string, ClaimAdjustment>;
+  /** LARGE temel dönem düzeltmeleri. */
+  largeBaseRollAdjustments?: Record<string, ClaimAdjustment>;
 
   method: LDFMethod;
   window: Window;

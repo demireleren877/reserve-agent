@@ -67,19 +67,22 @@ export function LoadFromDataStore({ onClose, onLoaded, target = "gross" }: Props
   // Roll-forward temeli: sistemde (projede) üçgeni olan dönemler. Yeni artımsal
   // veri bunlardan seçilenin üzerine "ileri taşınır".
   // Roll-forward temeli, HEM paid HEM incurred üçgeni olan branch olmalı.
+  // Hedefe göre temel branch koşulu: gross → paid+incurred, large → large üçgeni.
+  const baseHasData = (b: (typeof project.periods)[number]["branches"][number]) =>
+    isLarge ? !!(b.largePaidTriangle || b.largeIncurredTriangle) : !!(b.paidTriangle && b.incurredTriangle);
   function baseBranchOf(prjPeriodId: string) {
     const p = project.periods.find((x) => x.id === prjPeriodId);
     if (!p) return null;
-    const withBoth = p.branches.filter((b) => b.paidTriangle && b.incurredTriangle);
+    const withData = p.branches.filter(baseHasData);
     return (
-      withBoth.find((b) => activeBranch && b.frequency === activeBranch.frequency && b.name === activeBranch.name) ??
-      withBoth.find((b) => activeBranch && b.frequency === activeBranch.frequency) ??
-      withBoth[0] ??
+      withData.find((b) => activeBranch && b.frequency === activeBranch.frequency && b.name === activeBranch.name) ??
+      withData.find((b) => activeBranch && b.frequency === activeBranch.frequency) ??
+      withData[0] ??
       null
     );
   }
   const priorPeriodOptions = project.periods.filter(
-    (p) => p.id !== project.activePeriodId && p.branches.some((b) => b.paidTriangle && b.incurredTriangle),
+    (p) => p.id !== project.activePeriodId && p.branches.some(baseHasData),
   );
 
   // Seçili dönem/kaynak değişince dataset seçimini sıfırla
@@ -192,17 +195,26 @@ export function LoadFromDataStore({ onClose, onLoaded, target = "gross" }: Props
     setLoading(true);
     try {
       const base = baseBranchOf(priorPeriodId);
-      // paid için ASLA incurred'a düşme — temelde ikisi de olmalı.
-      if (!base?.paidTriangle || !base?.incurredTriangle) {
-        throw new Error("Seçilen dönemde hem ödeme hem muallak üçgeni olmalı (ikisini de yükleyin).");
-      }
-      const priorPaid = base.paidTriangle;
-      const priorIncurred = base.incurredTriangle;
+      if (!base) throw new Error("Seçilen dönemde üçgen bulunamadı.");
 
-      // Güncel dönem artımsal hasar kayıtları
+      // Güncel dönem artımsal hasar kayıtları (gross → "hasar", large → "large" tipi)
       let ds = selectedPeriod?.datasets[selectedDatasetId] ?? null;
       if (!ds?.records?.length) ds = await store.loadDatasetRecords(periodId, selectedDatasetId);
       if (!ds?.records?.length) throw new Error("Güncel dönem hasar kaydı bulunamadı");
+
+      // Roll-forward temeli — hedefe göre gross ya da large üçgenleri.
+      const priorPaid = isLarge ? base.largePaidTriangle : base.paidTriangle;
+      const priorIncurred = (isLarge ? base.largeIncurredTriangle : base.incurredTriangle) ?? null;
+      if (!priorPaid) {
+        throw new Error(
+          isLarge
+            ? "Seçilen dönemde LARGE üçgeni yok — önce o dönemin large'ını yükleyin."
+            : "Seçilen dönemde hem ödeme hem muallak üçgeni olmalı (ikisini de yükleyin).",
+        );
+      }
+      if (!isLarge && !priorIncurred) {
+        throw new Error("Seçilen dönemde hem ödeme hem muallak üçgeni olmalı (ikisini de yükleyin).");
+      }
 
       const og = priorPaid.origin_granularity as Granularity;
       const dg = priorPaid.development_granularity as Granularity;
@@ -216,59 +228,19 @@ export function LoadFromDataStore({ onClose, onLoaded, target = "gross" }: Props
         dg,
       );
 
-      // Önceki dönemin TÜM köşegen dosya kırılımı + yeni köşegen → hepsi kalsın.
       const newDiagFd = newDiagonalFiles
         ? newDiagonalToFileData(paidTriangle, newDiagonalFiles)
         : null;
-      const fileData = mergeFileData(base.fileData, newDiagFd);
-
-      // ── LARGE de birlikte ileri taşınır (base'de large varsa) ──
-      // Gross ilerlerken large geride kalırsa uyumsuz olur ("Large > Gross",
-      // stale uyarısı). Bu yüzden aynı dönemin large hasar verisiyle large da roll edilir.
-      let newLargePaid: import("@/types/triangle").Triangle | null | undefined;
-      let newLargeInc: import("@/types/triangle").Triangle | null | undefined;
-      let newLargeFd: import("@/types/triangle").FileData | undefined;
-      const hasLargeBase = !!(base.largePaidTriangle || base.largeIncurredTriangle);
-      if (hasLargeBase) {
-        // Bu döneme ait "Büyük Hasar (Large)" hasar dataset'ini bul.
-        const largeMetas = selectedPeriod
-          ? Object.values(selectedPeriod.datasets).filter((d) => d.typeId === "large")
-          : [];
-        let largeMeta =
-          largeMetas.find((d) => d.meta.brans_list?.includes(brans)) ?? largeMetas[0] ?? null;
-        if (!largeMeta) {
-          throw new Error(
-            "Bu branşta LARGE var; roll-forward için bu döneme ait 'Büyük Hasar (Large)' " +
-              "verisini de Veri Modülünden yükleyin (yoksa large gross ile uyumsuz kalır).",
-          );
-        }
-        let lds = largeMeta;
-        if (!lds.records?.length) lds = (await store.loadDatasetRecords(periodId, lds.datasetId)) ?? lds;
-        if (!lds.records?.length) throw new Error("Güncel dönem large hasar kaydı bulunamadı");
-
-        const priorLargePaid = base.largePaidTriangle ?? base.largeIncurredTriangle!;
-        const priorLargeInc = base.largeIncurredTriangle ?? null;
-        const rf = await rollForwardTriangle(
-          priorLargePaid,
-          priorLargeInc,
-          lds.records as ClaimRecord[],
-          brans,
-          og,
-          dg,
-        );
-        newLargePaid = rf.paidTriangle;
-        newLargeInc = rf.incurredTriangle ?? rf.paidTriangle;
-        const lDiagFd = rf.newDiagonalFiles
-          ? newDiagonalToFileData(rf.paidTriangle, rf.newDiagonalFiles)
-          : null;
-        newLargeFd = mergeFileData(base.largeFileData, lDiagFd);
-      }
-
       const fileName = `${selectedPeriod?.label ?? ""} – ${brans} (roll-forward)`;
-      // Roll-forward: SADECE veri değişir; base'in tüm varsayım/seçimleri korunur.
-      setters.setRolledForward(paidTriangle, incurredTriangle ?? paidTriangle, fileName, fileData, base);
-      if (hasLargeBase) {
-        setters.setLargeTriangles(newLargePaid ?? null, newLargeInc ?? null, newLargeFd ?? null);
+
+      if (isLarge) {
+        // Large segment üçgenleri (gross'tan bağımsız). largeModel korunur (dokunulmaz).
+        const fd = mergeFileData(base.largeFileData, newDiagFd);
+        setters.setLargeTriangles(paidTriangle, incurredTriangle ?? paidTriangle, fd);
+      } else {
+        // Gross: SADECE veri değişir; base'in tüm varsayım/seçimleri korunur.
+        const fd = mergeFileData(base.fileData, newDiagFd);
+        setters.setRolledForward(paidTriangle, incurredTriangle ?? paidTriangle, fileName, fd, base);
       }
       onLoaded();
       onClose();
@@ -306,9 +278,9 @@ export function LoadFromDataStore({ onClose, onLoaded, target = "gross" }: Props
         </div>
 
         <div className="p-5 space-y-4">
-          {/* Kaynak seçimi — Large hedefinde roll-forward yok (önceki large temeli gerekir) */}
+          {/* Kaynak seçimi — gross gibi large için de: full veri / hazır üçgen / roll-forward */}
           <div className="flex rounded-lg overflow-hidden border border-[color:var(--border)]">
-            {((isLarge ? ["hasar", "ucgen"] : ["hasar", "ucgen", "rollforward"]) as Source[]).map((s) => (
+            {(["hasar", "ucgen", "rollforward"] as Source[]).map((s) => (
               <button
                 key={s}
                 onClick={() => setSource(s)}

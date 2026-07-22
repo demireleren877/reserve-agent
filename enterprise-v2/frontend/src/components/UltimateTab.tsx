@@ -43,7 +43,7 @@ export function UltimateTab({ summary, onBasisChange }: Props) {
   if (!summary || summary.rows.length === 0) {
     return (
       <div className="card p-10 text-center text-sm text-[color:var(--muted)]">
-        Önce Veri sekmesinden bir üçgen yükleyin.
+        Load a triangle from the Data tab first.
       </div>
     );
   }
@@ -78,7 +78,7 @@ export function UltimateTab({ summary, onBasisChange }: Props) {
     <div className="space-y-4">
       <div className="grid grid-cols-3 gap-3">
         <Stat
-          label="Toplam Seçili Ultimate"
+          label="Total Selected Ultimate"
           value={formatNumber(totals.selectedUlt)}
         />
         <Stat label="Toplam IBNR" value={formatNumber(totals.ibnr)} accent />
@@ -90,16 +90,16 @@ export function UltimateTab({ summary, onBasisChange }: Props) {
 
       <div className="card p-0 overflow-hidden">
         <div className="flex items-center justify-between px-4 py-3 border-b bg-[color:var(--surface-alt)]">
-          <h2 className="text-sm font-semibold">Ultimate / IBNR — Origin Bazında</h2>
+          <h2 className="text-sm font-semibold">Ultimate / IBNR — By Origin</h2>
           <span className="text-xs text-[color:var(--muted)]">
-            CL veya BF Ultimate hücresine tıkla · sürükleyerek birden fazla satır seç
+            Click a CL or BF Ultimate cell · drag to select multiple rows
           </span>
         </div>
         <div className="overflow-x-auto">
           <table className="text-sm w-full tabular">
             <thead>
               <tr className="text-[color:var(--muted-strong)] text-[11px] uppercase tracking-wide bg-[color:var(--surface-alt)]">
-                <th className="text-left px-3 py-2 font-semibold">Kaza Yılı</th>
+                <th className="text-left px-3 py-2 font-semibold">Accident Year</th>
                 <th className="text-right px-3 py-2 font-semibold">Latest</th>
                 <th className="text-right px-3 py-2 font-semibold">Exposure</th>
                 <th className="text-right px-3 py-2 font-semibold">CL Ultimate</th>
@@ -208,7 +208,7 @@ function UltimateCell({
         onMouseDown();
       }}
       onMouseEnter={onMouseEnter}
-      title={selected ? "Seçili temel" : "Tıkla / sürükleyerek seç"}
+      title={selected ? "Selected basis" : "Click / drag to select"}
       className={
         "w-full h-full text-right px-3 py-1.5 text-sm tabular transition cursor-pointer select-none " +
         (selected

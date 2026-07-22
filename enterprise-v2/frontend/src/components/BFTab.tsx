@@ -122,7 +122,7 @@ export function BFTab(props: Props) {
   if (!triangle) {
     return (
       <div className="card p-10 text-center text-sm text-[color:var(--muted)]">
-        Önce Veri sekmesinden bir üçgen yükleyin.
+        Load a triangle from the Data tab first.
       </div>
     );
   }
@@ -131,35 +131,35 @@ export function BFTab(props: Props) {
     <>
     <div className="space-y-4">
       <div className="grid grid-cols-3 gap-3">
-        <Stat label="Toplam Exposure" value={formatNumber(totals.premium)} />
-        <Stat label="Toplam New Ultimate" value={formatNumber(totals.newUltimate)} />
-        <Stat label="Toplam IBNR" value={formatNumber(totals.ibnr)} accent />
+        <Stat label="Total Exposure" value={formatNumber(totals.premium)} />
+        <Stat label="Total New Ultimate" value={formatNumber(totals.newUltimate)} />
+        <Stat label="Total IBNR" value={formatNumber(totals.ibnr)} accent />
       </div>
 
       <div className="card p-0 overflow-hidden">
         <div className="flex items-center justify-between px-4 py-3 border-b bg-[color:var(--surface-alt)] gap-3 flex-wrap">
           <div>
             <h2 className="text-sm font-semibold">
-              BF — Selected Loss Ratio Yöntemi
+              BF — Selected Loss Ratio Method
             </h2>
             <span className="text-xs text-[color:var(--muted)]">
-              Selected LR: sayı (0.7, 70%) veya formül (avg, vw, sum_cl/sum_exp)
+              Selected LR: number (0.7, 70%) or formula (avg, vw, sum_cl/sum_exp)
             </span>
           </div>
           <span className="text-[11px] text-[color:var(--muted)]">
-            Exposure, veri modülündeki prim verisinden otomatik gelir; hücreye yazarak override edebilirsin.
+            Exposure comes automatically from premium data in the Data module; type in a cell to override.
           </span>
         </div>
         <div className="overflow-x-auto">
           <table className="text-sm w-full tabular">
             <thead>
               <tr className="text-[color:var(--muted-strong)] text-[11px] uppercase tracking-wide bg-[color:var(--surface-alt)]">
-                <th className="text-left px-3 py-2 font-semibold">Kaza Yılı</th>
+                <th className="text-left px-3 py-2 font-semibold">Accident Year</th>
                 <th className="text-right px-3 py-2 font-semibold">Latest</th>
                 <th className="text-right px-3 py-2 font-semibold">Exposure</th>
                 <th
                   className="text-right px-3 py-2 font-semibold"
-                  title="Çeyreklik modelde kaza yılı tamamlanmamış origin için annualization katsayısı (Q1: 4, Q1+Q2: 2, vb.). 1 = düzeltme yok."
+                  title="Annualization factor for origins with an incomplete accident year in a quarterly model (Q1: 4, Q1+Q2: 2, etc.). 1 = no adjustment."
                 >
                   Correction
                 </th>
@@ -184,7 +184,7 @@ export function BFTab(props: Props) {
                   <td className="px-1 py-0.5 w-[140px]">
                     <EditableNumber
                       value={r.premium || null}
-                      placeholder="exposure gir"
+                      placeholder="enter exposure"
                       format={(v) => formatNumber(v)}
                       onCommit={(v) => onPremiumChange(r.origin, v)}
                     />
@@ -225,7 +225,7 @@ export function BFTab(props: Props) {
                 </tr>
               ))}
               <tr className="border-t-2 border-[color:var(--border-strong)] font-semibold bg-[color:var(--surface-alt)]">
-                <td className="px-3 py-2">Toplam</td>
+                <td className="px-3 py-2">Total</td>
                 <td className="text-right px-3 py-2">
                   {formatNumber(totals.latest)}
                 </td>
@@ -247,19 +247,19 @@ export function BFTab(props: Props) {
 
       <div className="card p-3 text-xs text-[color:var(--muted-strong)] leading-relaxed space-y-2">
         <div>
-          <strong>Formül söz dizimi (Selected Loss Ratio hücrelerinde):</strong>
+          <strong>Formula syntax (in Selected Loss Ratio cells):</strong>
         </div>
         <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1 pl-4 list-disc">
           <li>
             <code className="font-mono">0.75</code> veya{" "}
-            <code className="font-mono">75%</code> — sabit değer
+            <code className="font-mono">75%</code> — fixed value
           </li>
           <li>
             <code className="font-mono">avg(2020, 2021, 2022)</code> — pattern
-            ratio ortalaması
+            ratio average
           </li>
           <li>
-            <code className="font-mono">avg(2020:2022)</code> — aynı, aralık
+            <code className="font-mono">avg(2020:2022)</code> — same, range
             olarak
           </li>
           <li>
@@ -270,14 +270,14 @@ export function BFTab(props: Props) {
             <code className="font-mono">
               sum_cl(2020:2022) / sum_exp(2020:2022)
             </code>{" "}
-            — açık yazılımı
+            — explicit form
           </li>
           <li>
-            <code className="font-mono">avg(2020:2022) * 1.1</code> — artırılmış
+            <code className="font-mono">avg(2020:2022) * 1.1</code> — scaled up
             ortalama
           </li>
           <li>
-            Çeyreklik: <code className="font-mono">avg(2020Q1:2021Q4)</code>
+            Quarterly: <code className="font-mono">avg(2020Q1:2021Q4)</code>
           </li>
         </ul>
       </div>
@@ -388,7 +388,7 @@ function EditableFormula({
         ref={inputRef}
         type="text"
         value={draft}
-        placeholder='örn. avg(2020:2022)'
+        placeholder='e.g. avg(2020:2022)'
         onChange={(e) => setDraft(e.target.value)}
         onBlur={() => {
           onCommit(draft);
@@ -417,10 +417,10 @@ function EditableFormula({
         error
           ? `Hata: ${error}`
           : isFormula
-          ? `Formül: ${rawInput}`
+          ? `Formula: ${rawInput}`
           : isDefaulted
-          ? "Varsayılan (Pattern Ratio) — tıkla düzenle"
-          : "Manuel değer — tıkla düzenle"
+          ? "Default (Pattern Ratio) — click to edit"
+          : "Manual value — click to edit"
       }
       className={
         "w-full text-right px-3 py-1.5 text-sm tabular transition cursor-text " +

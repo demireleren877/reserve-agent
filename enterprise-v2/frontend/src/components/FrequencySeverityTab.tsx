@@ -45,11 +45,11 @@ export function FrequencySeverityTab({
     return (
       <div className="max-w-xl mx-auto mt-10 rounded-xl px-5 py-4 text-[13px] leading-relaxed"
         style={{ background: "var(--surface-alt)", border: "1px solid var(--border)", color: "var(--muted-strong)" }}>
-        <div className="font-semibold mb-1 text-[color:var(--foreground)]">Frekans-Şiddet kullanılamıyor</div>
-        Bu yöntem her kaza yılı için <strong>ihbar edilen hasar adedini</strong> gerektirir.
-        Adet üçgeni yalnızca <strong>DOSYA_NO kolonu içeren hasar verisinden</strong> (Veri
-        modülünden yükleme) otomatik türetilir. Bu branş doğrudan üçgen yüklemesiyle
-        oluşturulmuş; adet bilgisi yok.
+        <div className="font-semibold mb-1 text-[color:var(--foreground)]">Frequency-Severity unavailable</div>
+        This method requires the <strong>reported claim count</strong> for each accident year.
+        The count triangle is derived automatically only from <strong>claim data containing a
+        CLAIM_NO column</strong> (loaded via the Data module). This branch was created by loading a
+        triangle directly, so count information is not available.
       </div>
     );
   }
@@ -66,18 +66,18 @@ export function FrequencySeverityTab({
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Stat label="Toplam Ult Adet" value={TR2.format(result.totals.ultimateCount)} sub="ihbar adedi projeksiyonu" />
         <Stat label="Toplam Ult Hasar" value={formatNumber(result.totals.ultimateLoss)} sub="adet × ortalama maliyet" />
-        <Stat label="IBNR (Frekans-Şiddet)" value={formatNumber(fsIbnr)} sub="ult − latest" />
+        <Stat label="IBNR (Frequency-Severity)" value={formatNumber(fsIbnr)} sub="ult − latest" />
         <Stat
           label="CL ile Fark"
           value={diff != null ? formatNumber(diff) : "—"}
-          sub={diffPct != null ? `CL IBNR'a göre %${TR2.format(diffPct)}` : "CL karşılaştırması yok"}
+          sub={diffPct != null ? `vs CL IBNR ${TR2.format(diffPct)}%` : "No CL comparison"}
         />
       </div>
 
       {/* Gelişim faktörleri */}
       <div className="card p-4 overflow-x-auto">
         <div className="text-[11px] font-semibold uppercase tracking-wide text-[color:var(--muted-strong)] mb-2">
-          Gelişim Faktörleri (hacim ağırlıklı)
+          Development Factors (volume weighted)
         </div>
         <table className="text-[12px] border-collapse">
           <tbody>
@@ -88,7 +88,7 @@ export function FrequencySeverityTab({
               ))}
             </tr>
             <tr>
-              <td className="pr-4 py-1 font-medium text-[color:var(--muted-strong)] whitespace-nowrap">Şiddet LDF</td>
+              <td className="pr-4 py-1 font-medium text-[color:var(--muted-strong)] whitespace-nowrap">Severity LDF</td>
               {result.severityLdfs.map((f, i) => (
                 <td key={i} className="px-3 py-1 tabular-nums text-right">{TR4.format(f)}</td>
               ))}
@@ -102,7 +102,7 @@ export function FrequencySeverityTab({
         <table className="text-[12px] border-collapse w-full">
           <thead className="sticky top-0" style={{ background: "var(--surface)" }}>
             <tr>
-              {["Kaza Yılı", "Latest Adet", "Ult Adet", "Latest Şiddet", "Ult Şiddet", "Ult Hasar", "IBNR"].map((h) => (
+              {["Accident Year", "Latest Count", "Ult Count", "Latest Severity", "Ult Severity", "Ult Claims", "IBNR"].map((h) => (
                 <th key={h} className="px-4 py-2 text-right font-semibold whitespace-nowrap first:text-left"
                   style={{ borderBottom: "2px solid var(--border)", color: "var(--muted-strong)" }}>{h}</th>
               ))}
@@ -125,9 +125,9 @@ export function FrequencySeverityTab({
       </div>
 
       <p className="text-[11px] text-[color:var(--muted)] leading-relaxed px-1">
-        {"Şiddet = kümülatif tutar / kümülatif ihbar adedi (incurred üçgeni bazlı ortalama hasar maliyeti). " +
-          "Adet ve şiddet ayrı geliştirilip çarpılır — saf Chain-Ladder'dan farklı bir tahmindir; aradaki " +
-          "sapma frekans/şiddet gelişiminin ayrışmasını gösterir, makullük kontrolü için kullanın."}
+        {"Severity = cumulative amount / cumulative reported count (average claim cost based on the incurred triangle). " +
+          "Count and severity are developed separately and multiplied — a different estimate than pure Chain-Ladder; the " +
+          "gap shows the divergence of frequency/severity development, use it as a sanity check."}
       </p>
     </div>
   );

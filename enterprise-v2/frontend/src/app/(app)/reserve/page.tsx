@@ -48,15 +48,15 @@ import { evalFormula, type FormulaContext } from "@/lib/formula";
 type Tab = "data" | "file" | "ldf" | "curve" | "ilr" | "bf" | "freq" | "ultimate" | "summary";
 
 const TABS: { id: Tab; label: string; sub: string }[] = [
-  { id: "data",     label: "Veri",          sub: "Üçgen önizleme" },
-  { id: "file",     label: "Dosya",         sub: "Dosya kırılımı" },
-  { id: "ldf",      label: "LDF",           sub: "Gelişim faktörleri" },
-  { id: "curve",    label: "Curve",         sub: "CDF eğrisi" },
-  { id: "ilr",      label: "ILR",           sub: "Loss ratio üçgeni" },
+  { id: "data",     label: "Data",          sub: "Triangle preview" },
+  { id: "file",     label: "Files",         sub: "Claim breakdown" },
+  { id: "ldf",      label: "LDF",           sub: "Development factors" },
+  { id: "curve",    label: "Curve",         sub: "CDF curve" },
+  { id: "ilr",      label: "ILR",           sub: "Loss ratio triangle" },
   { id: "bf",       label: "BF",            sub: "Bornhuetter–Ferguson" },
-  { id: "freq",     label: "Frekans-Şiddet", sub: "Adet × ort. maliyet" },
-  { id: "ultimate", label: "Ultimate/IBNR", sub: "Rezerv projeksiyonu" },
-  { id: "summary",  label: "Özet",          sub: "Model raporu" },
+  { id: "freq",     label: "Freq-Severity", sub: "Count × avg. cost" },
+  { id: "ultimate", label: "Ultimate/IBNR", sub: "Reserve projection" },
+  { id: "summary",  label: "Summary",       sub: "Model report" },
 ];
 
 export default function Home() {
@@ -932,10 +932,10 @@ export default function Home() {
           </div>
           <span className="text-[11px] text-[color:var(--muted)]">
             {isGrossSeg
-              ? "Gross = tüm veri (ayrım yapılmadan) doğrudan modellenir — bağımsız parametreler."
+              ? "Gross = all data modeled directly (no split) — independent parameters."
               : isLargeSeg
-              ? "Large segmentini modelliyorsun (bağımsız parametreler)."
-              : "Attritional = Gross − Large. Toplam Özet'te."}
+              ? "You are modeling the Large segment (independent parameters)."
+              : "Attritional = Gross − Large. Total is in Summary."}
           </span>
         </div>
       )}
@@ -1008,13 +1008,13 @@ export default function Home() {
                     correctionPerOrigin,
                   }).catch((e) => {
                     alert(
-                      "Excel dışa aktarma hatası: " +
+                      "Excel export error: " +
                         (e instanceof Error ? e.message : String(e)),
                     );
                   });
                 }}
                 className="px-3 py-1.5 text-xs font-medium rounded-md bg-[color:var(--surface-alt)] border border-[color:var(--border)] text-[color:var(--muted-strong)] hover:text-[color:var(--foreground)] hover:bg-[color:var(--primary-soft)] transition"
-                title="Analizi Excel'e aktar"
+                title="Export analysis to Excel"
               >
                 ↓ Excel
               </button>
@@ -1209,10 +1209,10 @@ function ToggleToast({
       <div className="p-3 flex items-start gap-3">
         <div className="flex-1 min-w-0">
           <div className="text-[10px] uppercase tracking-wide font-semibold text-[color:var(--muted-strong)]">
-            {excluded ? "Hücre elendi" : "Hücre dahil edildi"}
+            {excluded ? "Cell excluded" : "Cell included"}
           </div>
           <div className="text-sm font-medium mt-0.5 truncate">
-            {origin} · adım {step + 1}→{step + 2}
+            {origin} · step {step + 1}→{step + 2}
           </div>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-[10px] uppercase text-[color:var(--muted)]">

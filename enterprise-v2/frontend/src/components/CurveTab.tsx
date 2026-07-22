@@ -60,7 +60,7 @@ export function CurveTab({
   if (!triangle) {
     return (
       <div className="card p-10 text-center text-sm text-[color:var(--muted)]">
-        Önce Veri sekmesinden bir üçgen yükleyin.
+        Load a triangle from the Data tab first.
       </div>
     );
   }
@@ -147,7 +147,7 @@ export function CurveTab({
         <div className="flex flex-col leading-tight">
           <span className="text-[13px] font-medium">CDF Curve</span>
           <span className="text-[10px] text-[color:var(--muted)]">
-            Tıkla veya sürükle seç · User Value: çift tık
+            Click or drag to select · User Value: double-click
           </span>
         </div>
         <div className="flex items-center gap-2 ml-auto">
@@ -161,10 +161,10 @@ export function CurveTab({
           )}
           {(hasOverrides || hasExcludes) && (
             <button
-              onClick={() => { if (confirm("Tüm seçimler ve override'lar temizlensin mi?")) onReset(); }}
+              onClick={() => { if (confirm("Clear all selections and overrides?")) onReset(); }}
               className="btn text-[11px] py-1 px-2"
             >
-              Sıfırla
+              Reset
             </button>
           )}
         </div>
@@ -231,7 +231,7 @@ export function CurveTab({
                     <button
                       onClick={() => !r.autoExcluded && onToggleInclude(r.key, !r.included)}
                       disabled={r.autoExcluded}
-                      title={r.autoExcluded ? "LDF ≤ 1: otomatik hariç" : undefined}
+                      title={r.autoExcluded ? "LDF ≤ 1: auto-excluded" : undefined}
                       className={
                         "text-[10px] font-semibold px-1.5 py-0.5 rounded transition " +
                         (r.autoExcluded ? "opacity-40 cursor-not-allowed" : "")
@@ -366,7 +366,7 @@ function UserValueCell({
       onMouseDown={e => { e.preventDefault(); onMouseDown(); }}
       onMouseEnter={onMouseEnter}
       onDoubleClick={() => { setEditing(true); }}
-      title="Tıkla / sürükle · Çift tık: değer gir"
+      title="Click / drag · Double-click: enter value"
       className={
         "text-right px-2 py-0.5 text-[12px] tabular cursor-pointer transition " +
         (active

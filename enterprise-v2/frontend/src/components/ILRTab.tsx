@@ -19,7 +19,7 @@ export function ILRTab({ triangle, premiums, correctionPerOrigin, selectedLDFs }
   if (!triangle) {
     return (
       <div className="card p-16 text-center text-sm text-[color:var(--muted)]">
-        Önce veri yükleyin.
+        Load data first.
       </div>
     );
   }
@@ -31,7 +31,7 @@ export function ILRTab({ triangle, premiums, correctionPerOrigin, selectedLDFs }
       <div className="card p-0 overflow-hidden">
         <Header mode={mode} setMode={setMode} triangle={triangle} />
         <div className="p-8 text-center text-sm text-[color:var(--muted)]">
-          ILR hesabı için BF sekmesinden kaza yıllarına prim girilmesi gerekiyor.
+          For ILR, premiums must be entered for accident years in the BF tab.
         </div>
       </div>
     );
@@ -71,7 +71,7 @@ export function ILRTab({ triangle, premiums, correctionPerOrigin, selectedLDFs }
               </th>
               {mode === "ilr" && (
                 <th className="text-right px-3 py-2 font-semibold min-w-[100px] border-r border-[color:var(--border)]">
-                  Prim (düz.)
+                  Premium (adj.)
                 </th>
               )}
               {devs.map((_, idx) => (
@@ -156,7 +156,7 @@ export function ILRTab({ triangle, premiums, correctionPerOrigin, selectedLDFs }
         <div className="px-4 py-2.5 border-t border-[color:var(--border)] bg-[color:var(--surface-alt)] flex items-center gap-4 text-[11px] text-[color:var(--muted-strong)]">
           <span className="inline-flex items-center gap-1.5">
             <span className="w-3 h-3 rounded border border-[color:var(--border)]" style={{ background: "var(--surface)" }} />
-            Gözlenen
+            Observed
           </span>
           <span className="inline-flex items-center gap-1.5">
             <span className="w-3 h-3 rounded" style={{ background: "var(--primary-soft)", border: "1px solid var(--primary)" }} />
@@ -172,14 +172,14 @@ function Header({ mode, setMode, triangle }: { mode: Mode; setMode: (m: Mode) =>
   return (
     <div className="flex items-center justify-between px-4 py-3 border-b bg-[color:var(--surface-alt)] gap-4">
       <h2 className="text-sm font-semibold shrink-0">
-        {mode === "ilr" ? "Incurred Loss Ratio Üçgeni" : "Hasar Üçgeni · Projeksiyonlu"}
+        {mode === "ilr" ? "Incurred Loss Ratio Triangle" : "Claims Triangle · Projected"}
       </h2>
 
       <div className="flex items-center gap-3 ml-auto">
         <span className="text-xs text-[color:var(--muted)] tabular hidden sm:inline">
           {mode === "ilr"
-            ? `Hasar / (Prim × Düzeltme) · ${triangle.origin_periods.length}×${triangle.development_periods.length}`
-            : `Gözlem + LDF · ${triangle.origin_periods.length}×${triangle.development_periods.length}`}
+            ? `Claims / (Premium × Correction) · ${triangle.origin_periods.length}×${triangle.development_periods.length}`
+            : `Observed + LDF · ${triangle.origin_periods.length}×${triangle.development_periods.length}`}
         </span>
         <div className="inline-flex rounded-md p-0.5" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
           <button

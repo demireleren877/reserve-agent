@@ -18,9 +18,9 @@ import {
 type TriType = "paid" | "muallak" | "incurred";
 
 const TYPE_TABS: { id: TriType; label: string }[] = [
-  { id: "paid", label: "Ödeme" },
-  { id: "muallak", label: "Muallak" },
-  { id: "incurred", label: "Gerçekleşen" },
+  { id: "paid", label: "Paid" },
+  { id: "muallak", label: "Outstanding" },
+  { id: "incurred", label: "Incurred" },
 ];
 
 interface Props {
@@ -50,14 +50,14 @@ function toMuallak(paid: Triangle, incurred: Triangle): Triangle | null {
 }
 
 function lenLabel(months: number): string {
-  if (months === 3) return "Çeyreklik";
-  if (months === 12) return "Yıllık";
-  if (months % 12 === 0) return `${months / 12} yıllık`;
-  return `${months} ay`;
+  if (months === 3) return "Quarterly";
+  if (months === 12) return "Yearly";
+  if (months % 12 === 0) return `${months / 12}-year`;
+  return `${months} months`;
 }
 
 function granLabel(g: "yearly" | "quarterly"): string {
-  return g === "quarterly" ? "Çeyreklik" : "Yıllık";
+  return g === "quarterly" ? "Quarterly" : "Yearly";
 }
 
 export function DataTab({ paidTriangle, incurredTriangle, viewingLarge, largeActive, largeNegativeCount }: Props) {
@@ -111,9 +111,9 @@ export function DataTab({ paidTriangle, incurredTriangle, viewingLarge, largeAct
   const base = baseByType[type];
 
   const missingByType: Record<TriType, string> = {
-    paid: "Ödeme üçgeni yüklenmedi.",
-    muallak: "Muallak için hem Ödeme hem Gerçekleşen üçgeni yüklenmeli.",
-    incurred: "Gerçekleşen üçgeni yüklenmedi.",
+    paid: "Paid triangle not loaded.",
+    muallak: "Outstanding requires both Paid and Incurred triangles.",
+    incurred: "Incurred triangle not loaded.",
   };
 
   const safeOriginLen = originOpts.includes(originLen) ? originLen : originOpts[0];
@@ -139,13 +139,13 @@ export function DataTab({ paidTriangle, incurredTriangle, viewingLarge, largeAct
       <>
         <div className="card p-12 text-center">
           <div className="text-sm text-[color:var(--muted)] max-w-sm mx-auto space-y-4">
-            <p>Üçgen verisi henüz yüklenmedi.</p>
+            <p>No triangle data loaded yet.</p>
             <div className="flex flex-col gap-2 items-center">
               <button
                 onClick={() => setShowLoadDialog(true)}
                 className="px-5 py-2.5 text-sm font-medium rounded-md bg-[color:var(--primary)] text-white hover:opacity-90 transition"
               >
-                Veri Modülünden Yükle
+                Load from Data Module
               </button>
             </div>
           </div>
@@ -202,9 +202,9 @@ export function DataTab({ paidTriangle, incurredTriangle, viewingLarge, largeAct
             {largeOn && (
               <span
                 className="inline-flex items-center gap-1.5 text-[11px] px-2 py-1 rounded bg-[color:var(--primary-soft)] text-[color:var(--primary)] font-medium"
-                title="Large veri modülünden dinamik geliyor (Attritional = Gross − Large)."
+                title="Large comes dynamically from the Data module (Attritional = Gross − Large)."
               >
-                Large (veri modülünden)
+                Large (from Data module)
               </span>
             )}
             <span className="text-xs text-[color:var(--muted)] tabular">
@@ -216,34 +216,34 @@ export function DataTab({ paidTriangle, incurredTriangle, viewingLarge, largeAct
         {largeOn && (
           <div className="px-3.5 py-1.5 border-b bg-[color:var(--primary-soft)]/40 text-[11px] text-[color:var(--primary)]">
             {viewingLarge ? (
-              <>Görünen: <b>Large</b> segmenti (ham large üçgeni).</>
+              <>Showing: <b>Large</b> segment (raw large triangle).</>
             ) : (
-              <>Görünen ve modellenen: <b>Attritional (Gross − Large)</b>. Segment
-                seçiciden Large&apos;a geçebilirsin · Toplam Özet&apos;te.</>
+              <>Showing and modeling: <b>Attritional (Gross − Large)</b>. Switch to
+                Large from the segment selector · Total in Summary.</>
             )}
           </div>
         )}
         {largeOn && largeWarnings.negative > 0 && (
           <div className="px-3.5 py-1.5 border-b bg-[color:var(--warn-soft,#fbf0e2)] text-[11px] text-[color:var(--warning)]">
-            ⓘ {largeWarnings.negative} hücrede Large &gt; Gross — attritional negatif
-            (değer <b>kırpılmadı</b>, olduğu gibi bırakıldı). Gross ve Large aynı kapsamda mı kontrol edin.
+            ⓘ Large &gt; Gross in {largeWarnings.negative} cells — attritional negative
+            (value <b>not clamped</b>, kept as-is). Check that Gross and Large have the same scope.
           </div>
         )}
 
         {/* Kontrol şeridi */}
         <div className="flex flex-wrap items-start gap-x-4 gap-y-3 px-3.5 py-3 border-b bg-[color:var(--surface-alt)]/40">
-          <Field label="Değer">
+          <Field label="Value">
             <Segmented
               value={cumulative ? "cum" : "inc"}
               options={[
-                { value: "cum", label: "Kümülatif" },
-                { value: "inc", label: "Artımsal" },
+                { value: "cum", label: "Cumulative" },
+                { value: "inc", label: "Incremental" },
               ]}
               onChange={(v) => setCumulative(v === "cum")}
             />
           </Field>
 
-          <Field label="Ondalık">
+          <Field label="Decimals">
             <Stepper
               value={decimals}
               options={[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]}
@@ -255,18 +255,18 @@ export function DataTab({ paidTriangle, incurredTriangle, viewingLarge, largeAct
 
           <VDivider />
 
-          <Field label="Sütun">
+          <Field label="Column">
             <Segmented
               value={view}
               options={[
-                { value: "development", label: "Gelişim" },
+                { value: "development", label: "Development" },
                 { value: "calendar", label: "Takvim" },
               ]}
               onChange={(v) => setView(v as ViewMode)}
             />
           </Field>
 
-          <Field label="Düzen">
+          <Field label="Layout">
             <TransposeToggle
               active={transposed}
               onClick={() => setTransposed((v) => !v)}
@@ -275,7 +275,7 @@ export function DataTab({ paidTriangle, incurredTriangle, viewingLarge, largeAct
 
           <VDivider />
 
-          <Field label="Kaza dönemi" hint={`kayıt: ${originStored}`}>
+          <Field label="Accident period" hint={`stored: ${originStored}`}>
             <Stepper
               value={safeOriginLen}
               options={originOpts}
@@ -284,7 +284,7 @@ export function DataTab({ paidTriangle, incurredTriangle, viewingLarge, largeAct
               onChange={setOriginLen}
             />
           </Field>
-          <Field label="Gelişim dönemi" hint={`kayıt: ${devStored}`}>
+          <Field label="Development period" hint={`stored: ${devStored}`}>
             <Stepper
               value={safeDevLen}
               options={devOpts}
@@ -301,7 +301,7 @@ export function DataTab({ paidTriangle, incurredTriangle, viewingLarge, largeAct
                   setDevLen(devOpts[devOpts.length - 1]);
                 }}
                 className="h-8 px-3 rounded-lg border border-[color:var(--border)] bg-[color:var(--surface)] text-[11px] font-semibold text-[color:var(--muted-strong)] hover:border-[color:var(--border-strong)] hover:bg-[color:var(--surface-alt)] transition"
-                title="En kaba (tam toplanmış) görünüme geç"
+                title="Switch to the coarsest (fully aggregated) view"
               >
                 Max
               </button>
@@ -316,12 +316,12 @@ export function DataTab({ paidTriangle, incurredTriangle, viewingLarge, largeAct
               <span className="font-semibold text-[color:var(--muted-strong)]">
                 {TYPE_TABS.find((t) => t.id === type)?.label}
               </span>
-              <ViewChip>{cumulative ? "Kümülatif" : "Artımsal"}</ViewChip>
+              <ViewChip>{cumulative ? "Cumulative" : "Incremental"}</ViewChip>
               <ViewChip>
-                {view === "development" ? "Gelişim" : "Takvim"}
+                {view === "development" ? "Development" : "Calendar"}
               </ViewChip>
               <ViewChip>Kaza {lenLabel(safeOriginLen)}</ViewChip>
-              <ViewChip>Gelişim {lenLabel(safeDevLen)}</ViewChip>
+              <ViewChip>Development {lenLabel(safeDevLen)}</ViewChip>
               {transposed && <ViewChip>Transpoze</ViewChip>}
             </div>
             <TriangleGrid matrix={matrix} decimals={decimals} />
@@ -466,7 +466,7 @@ function Stepper<T extends number>({
         onClick={() => canDown && onChange(options[idx - 1])}
         disabled={!canDown}
         className={chevron}
-        aria-label="azalt"
+        aria-label="decrease"
       >
         −
       </button>
@@ -482,7 +482,7 @@ function Stepper<T extends number>({
         onClick={() => canUp && onChange(options[idx + 1])}
         disabled={!canUp}
         className={chevron}
-        aria-label="artır"
+        aria-label="increase"
       >
         +
       </button>
@@ -512,26 +512,26 @@ function SummaryStrip({
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
       <Stat
-        label="Üçgen"
+        label="Triangle"
         value={`${triangle.origin_periods.length}×${triangle.development_periods.length}`}
         sub={loaded}
       />
       <Stat
-        label="Origin Aralığı"
+        label="Origin Range"
         value={`${oldestOrigin} — ${lastOrigin}`}
-        sub={`kaza ${granMonths(triangle.origin_granularity) === 3 ? "çeyreklik" : "yıllık"}`}
+        sub={`accident ${granMonths(triangle.origin_granularity) === 3 ? "quarterly" : "yearly"}`}
       />
       <Stat
-        label="Gelişim"
+        label="Development"
         value={
           triangle.development_granularity === "quarterly"
-            ? "Çeyreklik"
-            : "Yıllık"
+            ? "Quarterly"
+            : "Yearly"
         }
-        sub={`${triangle.development_periods.length} dönem`}
+        sub={`${triangle.development_periods.length} periods`}
       />
       <Stat
-        label="Toplam Güncel"
+        label="Total Current"
         value={formatNumber(latestSum)}
         sub={triangle.triangle_type}
       />

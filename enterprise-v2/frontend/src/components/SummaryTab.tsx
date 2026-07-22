@@ -126,8 +126,8 @@ export function SummaryTab(props: Props) {
     }
     if (excludedCells.size > 0) {
       items.push({
-        label: "Hücre eleme",
-        value: `${excludedCells.size} hücre`,
+        label: "Cell exclusion",
+        value: `${excludedCells.size} cells`,
         tone: "accent",
       });
     }
@@ -164,7 +164,7 @@ export function SummaryTab(props: Props) {
   if (!triangle) {
     return (
       <div className="card p-10 text-center text-sm text-[color:var(--muted)]">
-        Önce Veri sekmesinden bir üçgen yükleyin.
+        Load a triangle from the Data tab first.
       </div>
     );
   }
@@ -194,7 +194,7 @@ export function SummaryTab(props: Props) {
         <div>
           <h2 className="text-lg font-semibold tracking-tight">{branchName}</h2>
           <p className="text-xs text-[color:var(--muted)] mt-1">
-            {periodLabel} · {frequency === "yearly" ? "Yıllık" : "Çeyreklik"} ·{" "}
+            {periodLabel} · {frequency === "yearly" ? "Yearly" : "Quarterly"} ·{" "}
             {triangleLabel} · {originRange} · {triangle.origin_periods.length}×
             {triangle.development_periods.length}
           </p>
@@ -224,17 +224,16 @@ export function SummaryTab(props: Props) {
         <div className="grid grid-cols-1 lg:grid-cols-[1.1fr_1fr] gap-6 lg:gap-10">
           {/* Sol: hero IBNR + kompozisyon çubuğu */}
           <div className="min-w-0">
-            <div className="label mb-1.5">Seçili IBNR</div>
+            <div className="label mb-1.5">Selected IBNR</div>
             <div className="flex items-baseline gap-3 flex-wrap">
               <span className="text-[2.75rem] leading-none font-semibold tabular text-[color:var(--primary)] tracking-tight">
                 {formatNumber(totals.ibnr)}
               </span>
               <span className="text-sm text-[color:var(--muted)]">
-                Ultimate&apos;ın{" "}
                 <span className="font-semibold text-[color:var(--muted-strong)]">
-                  %{ibnrPct.toFixed(1)}
-                </span>
-                &apos;i
+                  {ibnrPct.toFixed(1)}%
+                </span>{" "}
+                of Ultimate
               </span>
             </div>
 
@@ -266,7 +265,7 @@ export function SummaryTab(props: Props) {
                   />
                   {triangleLabel} · {formatNumber(totals.latest)}{" "}
                   <span className="text-[color:var(--muted)]">
-                    (%{devPct.toFixed(1)} gelişmiş)
+                    ({devPct.toFixed(1)}% developed)
                   </span>
                 </span>
                 <span className="inline-flex items-center gap-1.5 text-[color:var(--primary)] font-medium">
@@ -282,13 +281,13 @@ export function SummaryTab(props: Props) {
 
           {/* Sağ: ikincil metrikler */}
           <div className="grid grid-cols-2 gap-x-8 gap-y-5 lg:border-l lg:pl-10 content-center">
-            <Metric label="Seçili Ultimate" value={formatNumber(ult)} />
+            <Metric label="Selected Ultimate" value={formatNumber(ult)} />
             <Metric
-              label={`Toplam ${triangleLabel}`}
+              label={`Total ${triangleLabel}`}
               value={formatNumber(totals.latest)}
             />
             <Metric
-              label="Exposure (yıllık)"
+              label="Exposure (annual)"
               value={formatNumber(totals.exposure)}
             />
             <Metric
@@ -303,8 +302,8 @@ export function SummaryTab(props: Props) {
       {largeTotals && (
         <section>
           <SectionHeader
-            title="Segment Kırılımı"
-            hint="Attritional (ana model) + Large = Toplam"
+            title="Segment Breakdown"
+            hint="Attritional (main model) + Large = Total"
           />
           <div className="card overflow-hidden">
             <table className="text-sm w-full tabular">
@@ -312,7 +311,7 @@ export function SummaryTab(props: Props) {
                 <tr className="text-[color:var(--muted)] text-[10.5px] uppercase tracking-wide">
                   <th className="text-left font-medium px-4 py-2.5">Segment</th>
                   <th className="text-right font-medium px-4 py-2.5">Latest</th>
-                  <th className="text-right font-medium px-4 py-2.5">Seçili Ultimate</th>
+                  <th className="text-right font-medium px-4 py-2.5">Selected Ultimate</th>
                   <th className="text-right font-medium px-4 py-2.5">IBNR</th>
                 </tr>
               </thead>
@@ -329,7 +328,7 @@ export function SummaryTab(props: Props) {
                   <td className="px-4 py-2 font-medium">
                     Large
                     <span className="ml-1.5 text-[10px] font-normal text-[color:var(--muted)]">
-                      (ayrı CL)
+                      (separate CL)
                     </span>
                   </td>
                   <td className="text-right px-4 py-2">{formatNumber(largeTotals.latest)}</td>
@@ -341,7 +340,7 @@ export function SummaryTab(props: Props) {
               </tbody>
               <tfoot>
                 <tr className="border-t-2 border-[color:var(--border-strong)] font-semibold bg-[color:var(--surface-alt)]/60">
-                  <td className="px-4 py-2.5">Toplam</td>
+                  <td className="px-4 py-2.5">Total</td>
                   <td className="text-right px-4 py-2.5">
                     {formatNumber(attrBreak.latest + largeTotals.latest)}
                   </td>
@@ -361,15 +360,15 @@ export function SummaryTab(props: Props) {
       {/* ── Origin Bazında Final ── */}
       <section>
         <SectionHeader
-          title="Origin Bazında Final"
-          hint="Seçili temel (CL/BF) başına ultimate & IBNR"
+          title="Final by Origin"
+          hint="Ultimate & IBNR per selected basis (CL/BF)"
           action={
             hasExclusionCol ? (
               <button
                 onClick={() => setShowExclusionModal(true)}
                 className="btn text-[11px] py-1 px-2.5"
               >
-                Eleme detayı · {exclusionImpacts.length}
+                Exclusion detail · {exclusionImpacts.length}
               </button>
             ) : undefined
           }
@@ -387,7 +386,7 @@ export function SummaryTab(props: Props) {
                   <th className="text-right font-medium px-3 py-2.5">% Dev</th>
                   <th className="text-center font-medium px-3 py-2.5">Temel</th>
                   <th className="text-right font-medium px-3 py-2.5">Sel. LR</th>
-                  <th className="text-right font-medium px-3 py-2.5">Seçili Ult</th>
+                  <th className="text-right font-medium px-3 py-2.5">Selected Ult</th>
                   <th className="text-right font-medium px-4 py-2.5">IBNR</th>
                   {hasExclusionCol && (
                     <th
@@ -507,7 +506,7 @@ export function SummaryTab(props: Props) {
               </tbody>
               <tfoot>
                 <tr className="border-t-2 border-[color:var(--border-strong)] font-semibold bg-[color:var(--surface-alt)]/60">
-                  <td className="px-4 py-2.5">Toplam</td>
+                  <td className="px-4 py-2.5">Total</td>
                   <td className="text-right px-3 py-2.5">
                     {formatNumber(totals.latest)}
                   </td>
@@ -544,14 +543,14 @@ export function SummaryTab(props: Props) {
         </div>
         {hasExclusionCol && (
           <p className="text-[11px] text-[color:var(--muted)] mt-2 px-0.5">
-            <span className="font-medium">Eleme</span> sütunu: o origin&apos;deki
-            elemelerin net IBNR etkisi (pozitif + düşürmüş, negatif − yükseltmiş).
-            Adım bazlı döküm için{" "}
+            The <span className="font-medium">Exclusion</span> column: the net IBNR effect of
+            exclusions at that origin (positive + lowered it, negative − raised it).
+            For a step-by-step breakdown{" "}
             <button
               onClick={() => setShowExclusionModal(true)}
               className="text-[color:var(--primary)] font-medium hover:underline"
             >
-              Eleme detayı
+              Exclusion detail
             </button>
             .
           </p>

@@ -56,16 +56,16 @@ export function ExclusionDetailModal({ impacts, excludedCount, onClose }: Props)
         >
           <div>
             <h3 className="text-sm font-semibold tracking-tight">
-              Eleme Etkisi Detayı
+              Exclusion Impact Detail
               {excludedCount > 0 && (
                 <span className="text-[color:var(--muted)] font-normal">
                   {" "}
-                  · {excludedCount} hücre
+                  · {excludedCount} cells
                 </span>
               )}
             </h3>
             <p className="text-[11px] text-[color:var(--muted)] mt-0.5">
-              Her adım için o eleme uygulanmasaydı toplam IBNR ne kadar değişirdi.
+              For each step, how much total IBNR would change if that exclusion were not applied.
             </p>
           </div>
           <button
@@ -105,17 +105,17 @@ export function ExclusionDetailModal({ impacts, excludedCount, onClose }: Props)
         <div className="overflow-auto">
           {impacts.length === 0 ? (
             <div className="p-8 text-center text-sm text-[color:var(--muted)]">
-              Hiç hücre elenmemiş.
+              No cells excluded.
             </div>
           ) : (
             <table className="text-[12.5px] w-full tabular">
               <thead className="sticky top-0 bg-[color:var(--surface)]">
                 <tr className="text-[color:var(--muted)] text-[10px] uppercase tracking-wide">
                   <th className="text-left font-medium px-5 py-2.5">Kaza</th>
-                  <th className="text-left font-medium px-3 py-2.5">Adım</th>
+                  <th className="text-left font-medium px-3 py-2.5">Step</th>
                   <th className="text-right font-medium px-3 py-2.5">LDF</th>
                   <th className="text-right font-medium px-3 py-2.5">
-                    Kolon medyanı
+                    Column median
                   </th>
                   <th className="text-right font-medium px-3 py-2.5">Sapma</th>
                   <th className="text-right font-medium px-5 py-2.5">
@@ -178,7 +178,7 @@ export function ExclusionDetailModal({ impacts, excludedCount, onClose }: Props)
           className="px-5 py-2.5 shrink-0 text-[11px] text-[color:var(--muted)]"
           style={{ borderTop: "1px solid var(--border)" }}
         >
-          Pozitif (+) = eleme rezervi düşürmüş · Negatif (−) = yükseltmiş.
+          Positive (+) = exclusion lowered the reserve · Negative (−) = raised it.
         </div>
       </div>
     </div>

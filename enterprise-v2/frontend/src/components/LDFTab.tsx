@@ -165,9 +165,9 @@ export function LDFTab(props: Props) {
         const d = cv - pv;
         if (Math.abs(d) < 1) continue;
         const tag =
-          pv > 0 && cv === 0 ? "large'a geçti"
+          pv > 0 && cv === 0 ? "moved to large"
           : pv === 0 && cv > 0 ? "yeni"
-          : d > 0 ? "arttı" : "azaldı";
+          : d > 0 ? "increased" : "decreased";
         files.push({ file: f, prev: pv, cur: cv, delta: d, tag });
       }
       files.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
@@ -221,12 +221,12 @@ export function LDFTab(props: Props) {
               className="inline-block h-3 w-3 rounded-sm ring-1 ring-[color:var(--warning)]"
               style={{ background: "var(--accent-cell)" }}
             />
-            Geçen döneme ({prior.label}) göre değişen oran · hücreye gel: detay
+            Change vs previous period ({prior.label}) · hover a cell for details
           </span>
         )}
         <div className="flex items-center gap-3 ml-auto text-[11px] text-[color:var(--muted)]">
           <span className="inline-flex items-center gap-1">
-            <span className="uppercase tracking-wide font-semibold text-[10px]">Ondalık</span>
+            <span className="uppercase tracking-wide font-semibold text-[10px]">Decimals</span>
             <span className="inline-flex items-center h-6 rounded-md border border-[color:var(--border)] overflow-hidden">
               <button
                 onClick={() => setDecimals((d) => Math.max(0, d - 1))}
@@ -243,7 +243,7 @@ export function LDFTab(props: Props) {
                 onClick={() => setDecimals((d) => Math.min(10, d + 1))}
                 disabled={decimals >= 10}
                 className="w-6 h-full text-[13px] text-[color:var(--muted-strong)] hover:bg-[color:var(--surface-alt)] disabled:opacity-30"
-                aria-label="artır"
+                aria-label="increase"
               >
                 +
               </button>
@@ -257,7 +257,7 @@ export function LDFTab(props: Props) {
                 ? "bg-[color:var(--primary-soft)] border-[color:var(--primary-border)] text-[color:var(--primary)]"
                 : "hover:border-[color:var(--border-strong)]")
             }
-            title="Kolon bazlı aykırı değer renklendirmesi"
+            title="Column-based outlier coloring"
           >
             <span
               className={
@@ -278,18 +278,18 @@ export function LDFTab(props: Props) {
             <>
               <span className="flex items-center gap-1.5">
                 <span className="h-3 w-3 rounded-sm" style={{ background: "rgba(37,99,235,0.35)" }} />
-                düşük
+                low
               </span>
               <span className="flex items-center gap-1.5">
                 <span className="h-3 w-3 rounded-sm" style={{ background: "rgba(220,38,38,0.35)" }} />
-                yüksek
+                high
               </span>
             </>
           )}
           {excludedCells.size > 0 && (
             <>
               <span className="border-l pl-3 ml-1">
-                {excludedCells.size} hücre hariç
+                {excludedCells.size} cells excluded
               </span>
               <button onClick={onClearCells} className="btn text-xs">
                 temizle
@@ -302,9 +302,9 @@ export function LDFTab(props: Props) {
       {/* Combined horizontal-scroll panel: LDF triangle + window rows + CDFs */}
       <div className="card p-0 overflow-hidden">
         <div className="flex items-center justify-between px-4 py-3 border-b bg-[color:var(--surface-alt)]">
-          <h2 className="text-sm font-semibold">Gelişim Oranları & CDF</h2>
+          <h2 className="text-sm font-semibold">Development Ratios & CDF</h2>
           <span className="text-xs text-[color:var(--muted)]">
-            Hücreye tıklayarak eleyin · seçili volume:{" "}
+            Click a cell to exclude · selected volume:{" "}
             <strong className="text-[color:var(--foreground)]">
               {WINDOWS.find((w) => w.id === window)?.label}
             </strong>
@@ -316,7 +316,7 @@ export function LDFTab(props: Props) {
             <thead>
               <tr className="text-[color:var(--muted-strong)] bg-[color:var(--surface-alt)]">
                 <th className="text-left px-2 py-1 font-semibold sticky left-0 bg-[color:var(--surface-alt)] z-[1] min-w-[88px]">
-                  Kaza / Adım
+                  Accident / Step
                 </th>
                 {Array.from({ length: steps }).map((_, j) => (
                   <th
@@ -336,7 +336,7 @@ export function LDFTab(props: Props) {
                   colSpan={steps + 1}
                   className="px-2 py-0.5 text-[9px] uppercase tracking-wide font-semibold text-[color:var(--muted-strong)] bg-[color:var(--background)]"
                 >
-                  Gelişim Oranları (Üçgen)
+                  Development Ratios (Triangle)
                 </td>
               </tr>
               {triangle.origin_periods.map((o, i) => (
@@ -418,7 +418,7 @@ export function LDFTab(props: Props) {
                   colSpan={steps + 1}
                   className="px-2 py-0.5 text-[9px] uppercase tracking-wide font-semibold text-[color:var(--muted-strong)] bg-[color:var(--background)]"
                 >
-                  Seçilmiş LDF — volume'a tıkla
+                  Selected LDF — click volume
                 </td>
               </tr>
               {WINDOWS.map((w) => {
@@ -532,7 +532,7 @@ export function LDFTab(props: Props) {
                             if (wasActive) onWindowChange(n);
                           }}
                           className="w-12 text-[11px] tabular border border-[color:var(--border)] rounded px-1 py-0.5 text-right"
-                          title="Kullanıcı tanımlı volume (son N kaza dönemi)"
+                          title="User-defined volume (last N accident periods)"
                         />
                       </span>
                     </td>
@@ -611,16 +611,16 @@ export function LDFTab(props: Props) {
 
           <div className="flex items-center gap-2.5 tabular flex-wrap">
             <span>
-              Bu dönem:{" "}
+              This period:{" "}
               <b>{hoverInfo.cur != null ? ff(hoverInfo.cur) : "—"}</b>
             </span>
             {hoverInfo.hasPrior ? (
               <span className="text-[color:var(--muted)]">
-                Önceki{prior?.label ? ` (${prior.label})` : ""}:{" "}
+                Previous{prior?.label ? ` (${prior.label})` : ""}:{" "}
                 {hoverInfo.priorVal != null ? ff(hoverInfo.priorVal) : "—"}
               </span>
             ) : (
-              <span className="text-[color:var(--muted)]">önceki dönem yok</span>
+              <span className="text-[color:var(--muted)]">no previous period</span>
             )}
             {hoverInfo.delta != null && Math.abs(hoverInfo.delta) >= 0.0001 && (
               <span
@@ -641,7 +641,7 @@ export function LDFTab(props: Props) {
             (hoverInfo.files.length > 0 ? (
               <div className="border-t border-[color:var(--border)] mt-1.5 pt-1.5">
                 <div className="text-[9px] uppercase tracking-wide text-[color:var(--muted)] mb-1">
-                  Değişime sebep dosyalar · ödeme
+                  Files causing the change · paid
                 </div>
                 {hoverInfo.files.slice(0, 6).map((f) => (
                   <div
@@ -655,7 +655,7 @@ export function LDFTab(props: Props) {
                     <span
                       className={
                         "shrink-0 px-1 py-px rounded text-[9px] font-semibold " +
-                        (f.tag === "large'a geçti"
+                        (f.tag === "moved to large"
                           ? "bg-[color:var(--danger-soft)] text-[color:var(--danger)]"
                           : f.tag === "yeni"
                           ? "bg-[color:var(--primary-soft)] text-[color:var(--primary)]"
@@ -674,7 +674,7 @@ export function LDFTab(props: Props) {
               </div>
             ) : hoverInfo.delta != null && Math.abs(hoverInfo.delta) < 0.0001 ? (
               <div className="border-t border-[color:var(--border)] mt-1.5 pt-1.5 text-[color:var(--muted)]">
-                değişim yok
+                no change
               </div>
             ) : null)}
         </div>
@@ -686,7 +686,7 @@ export function LDFTab(props: Props) {
 function EmptyState() {
   return (
     <div className="card p-10 text-center text-sm text-[color:var(--muted)]">
-      Önce Veri sekmesinden bir üçgen yükleyin.
+      Load a triangle from the Data tab first.
     </div>
   );
 }

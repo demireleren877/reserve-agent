@@ -31,7 +31,7 @@ export function UploadForm({ onLoaded }: Props) {
       });
       onLoaded(triangle);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Yükleme hatası");
+      setError(e instanceof Error ? e.message : "Upload error");
     } finally {
       setLoading(false);
     }
@@ -50,14 +50,14 @@ export function UploadForm({ onLoaded }: Props) {
             <option value="incurred">Incurred</option>
           </select>
         </Field>
-        <Field label="Değer">
+        <Field label="Value">
           <select
             value={cumulative ? "cum" : "inc"}
             onChange={(e) => setCumulative(e.target.value === "cum")}
             className="input-base"
           >
-            <option value="cum">Kümülatif</option>
-            <option value="inc">Artımsal</option>
+            <option value="cum">Cumulative</option>
+            <option value="inc">Incremental</option>
           </select>
         </Field>
         <Field label="Kaza">
@@ -66,18 +66,18 @@ export function UploadForm({ onLoaded }: Props) {
             onChange={(e) => setOriginGranularity(e.target.value as Granularity)}
             className="input-base"
           >
-            <option value="yearly">Yıllık</option>
-            <option value="quarterly">Çeyreklik</option>
+            <option value="yearly">Yearly</option>
+            <option value="quarterly">Quarterly</option>
           </select>
         </Field>
-        <Field label="Gelişim">
+        <Field label="Development">
           <select
             value={devGranularity}
             onChange={(e) => setDevGranularity(e.target.value as Granularity)}
             className="input-base"
           >
-            <option value="yearly">Yıllık</option>
-            <option value="quarterly">Çeyreklik</option>
+            <option value="yearly">Yearly</option>
+            <option value="quarterly">Quarterly</option>
           </select>
         </Field>
       </div>
@@ -89,17 +89,17 @@ export function UploadForm({ onLoaded }: Props) {
         className="w-full rounded-md border border-dashed border-[color:var(--border-strong)] bg-[color:var(--surface-alt)] py-6 px-3 text-sm text-[color:var(--muted-strong)] transition hover:border-[color:var(--primary)] hover:text-[color:var(--primary)] hover:bg-[color:var(--primary-soft)] disabled:opacity-50"
       >
         {loading
-          ? "Yükleniyor…"
+          ? "Uploading…"
           : fileName
           ? fileName
-          : "Excel seç (.xlsx)"}
+          : "Select Excel (.xlsx)"}
       </button>
 
       <input
         ref={inputRef}
         type="file"
         accept=".xlsx,.xls"
-        aria-label="Excel dosyası seç"
+        aria-label="Select Excel file"
         onChange={(e) => {
           const f = e.target.files?.[0];
           if (f) handleFile(f);
@@ -116,7 +116,7 @@ export function UploadForm({ onLoaded }: Props) {
       <p className="text-[11px] text-[color:var(--muted)] leading-relaxed">
         Beklenen kolonlar: <strong>ACCIDENT_YEAR</strong>,{" "}
         <strong>DEVELOPMENT_DATE</strong>, <strong>PAID</strong> (veya INCURRED).
-        Çeyreklik formatlar: <code>2024Q1</code>, <code>2024-Q1</code>.
+        Quarterly formats: <code>2024Q1</code>, <code>2024-Q1</code>.
       </p>
     </div>
   );

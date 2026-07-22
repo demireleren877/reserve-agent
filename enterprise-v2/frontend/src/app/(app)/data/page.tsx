@@ -19,8 +19,8 @@ import { useProvisionModels } from "@/lib/provision-models";
 
 // ─── Yardımcı ─────────────────────────────────────────────────────────────────
 
-const TR2 = new Intl.NumberFormat("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const TR0 = new Intl.NumberFormat("tr-TR", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+const TR2 = new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const TR0 = new Intl.NumberFormat("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 function fmt(n: number) { return TR2.format(n); }
 function fmt0(n: number) { return TR0.format(n); }
 function newId(): string {
@@ -50,7 +50,7 @@ function AddPeriodForm({ onAdd }: { onAdd: (label: string) => void }) {
   return (
     <div className="px-3 pb-3 space-y-1.5">
       <div className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: "var(--muted)" }}>
-        Dönem Ekle
+        Add Period
       </div>
       <div
         className="flex items-center gap-0 rounded-lg border overflow-hidden transition"
@@ -79,12 +79,12 @@ function AddPeriodForm({ onAdd }: { onAdd: (label: string) => void }) {
             borderColor: "var(--border)",
           }}
         >
-          Ekle
+          Add
         </button>
       </div>
       {showError && (
         <div className="text-[10.5px]" style={{ color: "var(--danger)" }}>
-          Format: 2025Q1 (yıl + Q + çeyrek)
+          Format: 2025Q1 (year + Q + quarter)
         </div>
       )}
     </div>
@@ -116,14 +116,14 @@ function PeriodList({
         style={{ borderColor: "var(--border)" }}
       >
         <div className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--muted)" }}>
-          Dönemler
+          Periods
         </div>
       </div>
 
       <div className="flex-1 overflow-y-auto py-1.5">
         {periods.length === 0 && (
           <div className="px-3 py-4 text-[12px] text-center" style={{ color: "var(--muted)" }}>
-            Henüz dönem yok
+            No periods yet
           </div>
         )}
         {periods.map((p) => {
@@ -147,7 +147,7 @@ function PeriodList({
                 </div>
                 {datasetCount > 0 && (
                   <div className="text-[10.5px]" style={{ color: "var(--muted)" }}>
-                    {datasetCount} veri seti
+                    {datasetCount} datasets
                   </div>
                 )}
               </div>
@@ -155,7 +155,7 @@ function PeriodList({
                 onClick={(e) => { e.stopPropagation(); onDelete(p.id); }}
                 className="opacity-0 group-hover:opacity-100 transition p-0.5 rounded hover:bg-red-100"
                 style={{ color: "#dc2626" }}
-                title="Dönemi sil"
+                title="Delete period"
               >
                 <TrashIcon />
               </button>
@@ -208,7 +208,7 @@ function DataTypeCard({
                 className="text-[10.5px] font-semibold px-1.5 py-0.5 rounded-full"
                 style={{ background: "#dcfce7", color: "#15803d" }}
               >
-                {datasets.length} veri seti
+                {datasets.length} datasets
               </span>
             )}
           </div>
@@ -239,7 +239,7 @@ function DataTypeCard({
             >
               <div className="flex-1 min-w-0 grid grid-cols-3 gap-2">
                 <div>
-                  <div style={{ color: "var(--muted)" }}>Kayıt</div>
+                  <div style={{ color: "var(--muted)" }}>Records</div>
                   <div className="font-semibold" style={{ color: "var(--foreground)" }}>
                     {fmt0(ds.meta.record_count)}
                   </div>
@@ -251,7 +251,7 @@ function DataTypeCard({
                   </div>
                 </div>
                 <div>
-                  <div style={{ color: "var(--muted)" }}>Yüklenme</div>
+                  <div style={{ color: "var(--muted)" }}>Uploaded</div>
                   <div className="font-semibold" style={{ color: "var(--foreground)" }}>
                     {new Date(ds.meta.uploadedAt).toLocaleDateString("tr-TR")}
                   </div>
@@ -263,7 +263,7 @@ function DataTypeCard({
                   className="px-2.5 py-1 rounded-lg text-[11.5px] border transition"
                   style={{ borderColor: "var(--border)", color: "var(--muted-strong)" }}
                 >
-                  Görüntüle
+                  View
                 </button>
                 <button
                   onClick={() => onRemove(ds.datasetId)}
@@ -287,7 +287,7 @@ function DataTypeCard({
           color: datasets.length > 0 ? "var(--primary)" : "#fff",
         }}
       >
-        {datasets.length > 0 ? "+ Yeni ekle" : "Veri yükle"}
+        {datasets.length > 0 ? "+ Add new" : "Upload data"}
       </button>
     </div>
   );
@@ -330,7 +330,7 @@ function DatasetViewer({
           {periodLabel} · {typeLabel}
         </div>
         <div className="ml-auto text-[12px]" style={{ color: "var(--muted)" }}>
-          {fmt0(total)} kayıt · {dataset.meta.filename}
+          {fmt0(total)} records · {dataset.meta.filename}
         </div>
       </div>
 
@@ -347,7 +347,7 @@ function DatasetViewer({
                     {rec.triangle_type === "paid" ? "Paid" : "Incurred"}
                   </span>
                   <span className="text-[10.5px]" style={{ color: "var(--muted)" }}>
-                    {rec.origin_granularity === "yearly" ? "Yıllık" : "Çeyreklik"} kaza · {rec.development_granularity === "yearly" ? "Yıllık" : "Çeyreklik"} gelişim
+                    {rec.origin_granularity === "yearly" ? "Yearly" : "Quarterly"} accident · {rec.development_granularity === "yearly" ? "Yearly" : "Quarterly"} development
                   </span>
                 </div>
                 <div className="rounded-lg border overflow-auto" style={{ borderColor: "var(--border)" }}>
@@ -370,7 +370,7 @@ function DatasetViewer({
             <>
               <thead>
                 <tr style={{ background: "var(--surface-alt)" }}>
-                  {["Branş", "Dönem", "EP"].map((h) => (
+                  {["Branch", "Period", "EP"].map((h) => (
                     <th key={h} className="px-4 py-2.5 text-left font-semibold border-b whitespace-nowrap" style={{ borderColor: "var(--border)", color: "var(--muted-strong)" }}>{h}</th>
                   ))}
                 </tr>
@@ -389,7 +389,7 @@ function DatasetViewer({
             <>
               <thead>
                 <tr style={{ background: "var(--surface-alt)" }}>
-                  {["Dosya No", "Branş", "Hasar Tarihi", "Gelişim Tarihi", "Ödeme", "Muallak"].map((h) => (
+                  {["Claim No", "Branch", "Loss Date", "Development Date", "Paid", "Outstanding"].map((h) => (
                     <th key={h} className="px-4 py-2.5 text-left font-semibold border-b whitespace-nowrap" style={{ borderColor: "var(--border)", color: "var(--muted-strong)" }}>{h}</th>
                   ))}
                 </tr>
@@ -588,7 +588,7 @@ function PeriodDetail({ period }: { period: DataPeriod }) {
       <div className="mb-5">
         <div className="text-[18px] font-bold" style={{ color: "var(--foreground)" }}>{period.label}</div>
         <div className="text-[12.5px] mt-0.5" style={{ color: "var(--muted)" }}>
-          Oluşturulma: {new Date(period.createdAt).toLocaleDateString("tr-TR")}
+          Created: {new Date(period.createdAt).toLocaleDateString("en-GB")}
         </div>
       </div>
 
@@ -644,12 +644,12 @@ function EmptyState({ hasPeriods }: { hasPeriods: boolean }) {
         <TableIcon color="var(--muted)" />
       </div>
       <div className="text-[14px] font-semibold mb-1" style={{ color: "var(--muted-strong)" }}>
-        {hasPeriods ? "Bir dönem seç" : "Dönem oluştur"}
+        {hasPeriods ? "Select a period" : "Create a period"}
       </div>
       <div className="text-[12.5px]">
         {hasPeriods
-          ? "Sol panelden bir dönem seçerek verilerini yönet."
-          : "Sol panelden yeni bir dönem ekleyerek başla."}
+          ? "Select a period from the left panel to manage its data."
+          : "Add a new period from the left panel to get started."}
       </div>
     </div>
   );
@@ -682,7 +682,7 @@ export default function DataPage() {
           <div>
             <div className="text-[14px] font-semibold" style={{ color: "var(--foreground)" }}>Veri</div>
             <div className="text-[11.5px]" style={{ color: "var(--muted)" }}>
-              Dönem bazlı veri yönetimi
+              Period-based data management
             </div>
           </div>
         </div>

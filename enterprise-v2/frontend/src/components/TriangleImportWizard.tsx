@@ -82,7 +82,7 @@ export function TriangleImportWizard({ onDone, onCancel }: Props) {
       setPaidFile(f);
       setPaidTri(await parseOne(f, paidCumulative));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Ödeme üçgeni okunamadı");
+      setError(e instanceof Error ? e.message : "Could not read paid triangle");
     } finally { setLoading(false); }
   }
 
@@ -93,7 +93,7 @@ export function TriangleImportWizard({ onDone, onCancel }: Props) {
       // Muallak = bakiye (stok) → olduğu gibi al (akümüle etme)
       setMuallakTri(await parseOne(f, true));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Muallak üçgeni okunamadı");
+      setError(e instanceof Error ? e.message : "Could not read outstanding triangle");
     } finally { setLoading(false); }
   }
 
@@ -103,7 +103,7 @@ export function TriangleImportWizard({ onDone, onCancel }: Props) {
       setIncurredTri(addOutstanding(paidTri, muallakTri));
       setStep("preview");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Incurred hesaplanamadı");
+      setError(e instanceof Error ? e.message : "Could not compute incurred");
     }
   }
 
@@ -124,7 +124,7 @@ export function TriangleImportWizard({ onDone, onCancel }: Props) {
         style={{ maxWidth: step === "preview" ? 720 : 560, maxHeight: "90vh" }}
       >
         <div className="p-5 border-b border-[color:var(--border)] flex items-center justify-between flex-shrink-0">
-          <h2 className="text-sm font-semibold">Üçgen Verisi İçeri Aktar</h2>
+          <h2 className="text-sm font-semibold">Import Triangle Data</h2>
           <button onClick={onCancel} className="text-[color:var(--muted)] hover:text-[color:var(--foreground)] text-lg px-1">×</button>
         </div>
 
@@ -133,26 +133,26 @@ export function TriangleImportWizard({ onDone, onCancel }: Props) {
             <>
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-[color:var(--muted-strong)] mb-1">Branş Adı</label>
+                  <label className="block text-xs font-medium text-[color:var(--muted-strong)] mb-1">Branch Name</label>
                   <input
-                    value={brans} onChange={(e) => setBrans(e.target.value)} placeholder="örn. Kasko"
+                    value={brans} onChange={(e) => setBrans(e.target.value)} placeholder="e.g. Motor"
                     className="w-full text-sm border border-[color:var(--border)] rounded-md px-3 py-2 bg-[color:var(--surface)] text-[color:var(--foreground)] outline-none focus:border-[color:var(--primary)]"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-[color:var(--muted-strong)] mb-1">Kaza Dönemi</label>
+                  <label className="block text-xs font-medium text-[color:var(--muted-strong)] mb-1">Accident Period</label>
                   <select value={originGran} onChange={(e) => setOriginGran(e.target.value as Granularity)}
                     className="w-full text-sm border border-[color:var(--border)] rounded-md px-3 py-2 bg-[color:var(--surface)] text-[color:var(--foreground)]">
-                    <option value="yearly">Yıllık</option>
-                    <option value="quarterly">Çeyreklik</option>
+                    <option value="yearly">Yearly</option>
+                    <option value="quarterly">Quarterly</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-[color:var(--muted-strong)] mb-1">Gelişim Dönemi</label>
+                  <label className="block text-xs font-medium text-[color:var(--muted-strong)] mb-1">Development Period</label>
                   <select value={devGran} onChange={(e) => setDevGran(e.target.value as Granularity)}
                     className="w-full text-sm border border-[color:var(--border)] rounded-md px-3 py-2 bg-[color:var(--surface)] text-[color:var(--foreground)]">
-                    <option value="yearly">Yıllık</option>
-                    <option value="quarterly">Çeyreklik</option>
+                    <option value="yearly">Yearly</option>
+                    <option value="quarterly">Quarterly</option>
                   </select>
                 </div>
               </div>
@@ -161,24 +161,24 @@ export function TriangleImportWizard({ onDone, onCancel }: Props) {
                 <input type="checkbox" id="paidcum" checked={paidCumulative}
                   onChange={(e) => setPaidCumulative(e.target.checked)} className="w-4 h-4 rounded" />
                 <label htmlFor="paidcum" className="text-xs text-[color:var(--muted-strong)] cursor-pointer">
-                  Ödeme üçgeni kümülatif (işaretlenmezse artımsal kabul edilir)
+                  Paid triangle is cumulative (if unchecked, treated as incremental)
                 </label>
               </div>
 
               <p className="text-[11px] text-[color:var(--muted)]">
-                Her iki üçgen de zorunludur. <b>incurred = ödeme + muallak</b> otomatik hesaplanır;
-                roll-forward için önceki dönemde hem ödeme hem muallak hazır olur.
+                Both triangles are required. <b>incurred = paid + outstanding</b> is computed automatically;
+                so both paid and outstanding are available in the prior period for roll-forward.
               </p>
 
               {/* İki yükleme kutusu */}
               <div className="grid grid-cols-2 gap-3">
                 <UploadZone
-                  label="Ödeme (paid) üçgeni" done={!!paidTri} fileName={paidFile?.name}
+                  label="Paid triangle" done={!!paidTri} fileName={paidFile?.name}
                   onPick={() => paidRef.current?.click()}
                   onDrop={(f) => handlePaid(f)}
                 />
                 <UploadZone
-                  label="Muallak (outstanding) üçgeni" done={!!muallakTri} fileName={muallakFile?.name}
+                  label="Outstanding triangle" done={!!muallakTri} fileName={muallakFile?.name}
                   onPick={() => muallakRef.current?.click()}
                   onDrop={(f) => handleMuallak(f)}
                 />
@@ -188,7 +188,7 @@ export function TriangleImportWizard({ onDone, onCancel }: Props) {
               <input ref={muallakRef} type="file" accept=".xlsx,.xls" className="hidden"
                 onChange={(e) => { const f = e.target.files?.[0]; if (f) handleMuallak(f); }} />
 
-              {loading && <p className="text-xs text-[color:var(--muted)] text-center">Ayrıştırılıyor…</p>}
+              {loading && <p className="text-xs text-[color:var(--muted)] text-center">Parsing…</p>}
             </>
           )}
 
@@ -196,10 +196,10 @@ export function TriangleImportWizard({ onDone, onCancel }: Props) {
             <>
               <div className="flex items-center gap-2 mb-1">
                 <span className="text-xs text-[color:var(--muted-strong)]">
-                  {incurredTri.origin_periods.length} kaza dönemi · {incurredTri.development_periods.length} gelişim adımı
+                  {incurredTri.origin_periods.length} accident periods · {incurredTri.development_periods.length} development steps
                 </span>
                 <span className="text-[10.5px] font-semibold px-1.5 py-0.5 rounded-full" style={{ background: "#dcfce7", color: "#15803d" }}>
-                  {brans.trim() || "—"} · Ödeme + Muallak = Incurred
+                  {brans.trim() || "—"} · Paid + Outstanding = Incurred
                 </span>
               </div>
               <div className="overflow-auto rounded-lg border border-[color:var(--border)]">
@@ -219,10 +219,10 @@ export function TriangleImportWizard({ onDone, onCancel }: Props) {
               className="px-4 py-2 text-sm rounded-md border border-[color:var(--border)] text-[color:var(--muted-strong)] hover:text-[color:var(--foreground)] transition">← Geri</button>
           )}
           <button onClick={onCancel}
-            className="px-4 py-2 text-sm rounded-md border border-[color:var(--border)] text-[color:var(--muted-strong)] hover:text-[color:var(--foreground)] transition">İptal</button>
+            className="px-4 py-2 text-sm rounded-md border border-[color:var(--border)] text-[color:var(--muted-strong)] hover:text-[color:var(--foreground)] transition">Cancel</button>
           {step === "configure" && (
             <button onClick={goPreview} disabled={!canPreview}
-              className="px-4 py-2 text-sm rounded-md bg-[color:var(--primary)] text-white font-medium hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed">Önizle →</button>
+              className="px-4 py-2 text-sm rounded-md bg-[color:var(--primary)] text-white font-medium hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed">Preview →</button>
           )}
           {step === "preview" && (
             <button onClick={handleConfirm}
@@ -249,7 +249,7 @@ function UploadZone({ label, done, fileName, onPick, onDrop }: {
         {done ? "✓ " : ""}{label}
       </p>
       <p className="text-[10.5px] text-[color:var(--muted)] mt-1 truncate">
-        {fileName ?? "Excel sürükleyin veya tıklayın"}
+        {fileName ?? "Drag or click an Excel file"}
       </p>
     </div>
   );

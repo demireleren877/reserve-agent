@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Import wizard: Yükle → Sheet Seç → Sütun Eşleştir → Önizle → İçeri Aktar
+ * Import wizard: Yükle → Sheet Seç → Sütun Eşleştir → Preview → İçeri Aktar
  */
 
 import { useCallback, useRef, useState } from "react";
@@ -15,12 +15,12 @@ import {
 // ─── Sabitler ─────────────────────────────────────────────────────────────────
 
 export const REQUIRED_FIELDS: { key: string; label: string; hint: string }[] = [
-  { key: "dosya_no",       label: "Dosya No",        hint: "Hasar dosya / poliçe numarası" },
-  { key: "brans",          label: "Branş",            hint: "Sigorta branşı (Kasko, Trafik…)" },
-  { key: "hasar_tarihi",   label: "Hasar Tarihi",     hint: "Hasarın oluş tarihi" },
-  { key: "gelisim_tarihi", label: "Gelişim Tarihi",   hint: "Raporlama / değerleme tarihi" },
-  { key: "odeme",          label: "Ödeme",            hint: "Gerçekleşen ödeme tutarı" },
-  { key: "muallak",        label: "Muallak",          hint: "Bilanço karşılığı (case reserve)" },
+  { key: "dosya_no",       label: "Claim No",        hint: "Claim file / policy number" },
+  { key: "brans",          label: "Branch",           hint: "Line of business (Motor, MTPL…)" },
+  { key: "hasar_tarihi",   label: "Loss Date",        hint: "Date the loss occurred" },
+  { key: "gelisim_tarihi", label: "Development Date",  hint: "Reporting / valuation date" },
+  { key: "odeme",          label: "Paid",             hint: "Paid amount" },
+  { key: "muallak",        label: "Outstanding",      hint: "Case reserve" },
 ];
 
 type WizardStep = "upload" | "sheet" | "mapping" | "preview" | "importing";
@@ -63,11 +63,11 @@ function resolveSuggested(inspect: DataInspectResult, sheet: string | null): Rec
 // ─── Adım göstergesi ──────────────────────────────────────────────────────────
 
 const STEP_LABELS: Record<WizardStep, string> = {
-  upload:    "Yükle",
-  sheet:     "Sayfa",
-  mapping:   "Sütunlar",
-  preview:   "Önizle",
-  importing: "Önizle",
+  upload:    "Upload",
+  sheet:     "Sheet",
+  mapping:   "Columns",
+  preview:   "Preview",
+  importing: "Preview",
 };
 
 function StepIndicator({ current, hasSheet }: { current: WizardStep; hasSheet: boolean }) {
@@ -143,10 +143,10 @@ function UploadStep({
       <div className="w-full max-w-lg">
         <div className="mb-6 text-center">
           <h2 className="text-[18px] font-bold mb-2" style={{ color: "var(--foreground)" }}>
-            Dosya seç
+            Choose file
           </h2>
           <p className="text-[13px]" style={{ color: "var(--muted-strong)" }}>
-            CSV veya Excel (.xlsx / .xls) — maks. 50 MB
+            CSV or Excel (.xlsx / .xls) — max. 50 MB
           </p>
         </div>
 
@@ -171,16 +171,16 @@ function UploadStep({
             <div className="flex flex-col items-center gap-2">
               <Spinner />
               <span className="text-[13px]" style={{ color: "var(--muted-strong)" }}>
-                Dosya inceleniyor…
+                Inspecting file…
               </span>
             </div>
           ) : (
             <div className="text-center">
               <div className="text-[14px] font-semibold mb-1" style={{ color: "var(--foreground)" }}>
-                Dosyayı sürükle veya tıkla
+                Drag or click a file
               </div>
               <div className="text-[12px]" style={{ color: "var(--muted)" }}>
-                CSV, TXT, XLSX veya XLS
+                CSV, TXT, XLSX or XLS
               </div>
             </div>
           )}
@@ -221,10 +221,10 @@ function SheetStep({
     <div className="flex flex-col items-center justify-center flex-1 px-8 py-10">
       <div className="w-full max-w-sm">
         <h2 className="text-[18px] font-bold mb-2 text-center" style={{ color: "var(--foreground)" }}>
-          Excel sayfası seç
+          Select Excel sheet
         </h2>
         <p className="text-[13px] text-center mb-6" style={{ color: "var(--muted-strong)" }}>
-          Dosyada {sheets.length} sayfa bulundu. Veriyi içeren sayfayı seç.
+          Found {sheets.length} sheets. Select the sheet containing the data.
         </p>
 
         <div className="space-y-2 mb-8">
@@ -243,7 +243,7 @@ function SheetStep({
               <span className="text-[13.5px] font-medium">{s}</span>
               {selected === s && (
                 <span className="ml-auto text-[11px] font-semibold" style={{ color: "var(--primary)" }}>
-                  Seçili
+                  Selected
                 </span>
               )}
             </button>
@@ -290,10 +290,10 @@ function MappingStep({
     <div className="flex flex-col flex-1 overflow-hidden">
       <div className="flex-1 overflow-auto px-6 py-6">
         <h2 className="text-[17px] font-bold mb-1" style={{ color: "var(--foreground)" }}>
-          Sütun eşleştirme
+          Column mapping
         </h2>
         <p className="text-[13px] mb-6" style={{ color: "var(--muted-strong)" }}>
-          Her alan için dosyadaki karşılık gelen sütunu seç.
+          Select the matching column in the file for each field.
         </p>
 
         {/* Eşleştirme tablosu */}
@@ -332,7 +332,7 @@ function MappingStep({
                     color: val ? "var(--foreground)" : "var(--muted)",
                   }}
                 >
-                  <option value="">— seçiniz —</option>
+                  <option value="">— select —</option>
                   {headers
                     .filter((h) => h.trim() !== "")
                     .map((h, i) => (
@@ -359,7 +359,7 @@ function MappingStep({
         {preview.length > 0 && (
           <div>
             <div className="text-[12px] font-semibold mb-2" style={{ color: "var(--muted-strong)" }}>
-              Dosya önizlemesi (ilk {preview.length} satır)
+              File preview (first {preview.length} rows)
             </div>
             <div
               className="rounded-xl border overflow-auto"
@@ -425,7 +425,7 @@ function MappingStep({
           className="px-6 py-2.5 rounded-xl text-[13.5px] font-semibold transition disabled:opacity-40"
           style={{ background: "var(--primary)", color: "#fff" }}
         >
-          Önizle →
+          Preview →
         </button>
       </div>
     </div>
@@ -471,10 +471,10 @@ function PreviewStep({
     <div className="flex flex-col flex-1 overflow-hidden">
       <div className="flex-1 overflow-auto px-6 py-6">
         <h2 className="text-[17px] font-bold mb-1" style={{ color: "var(--foreground)" }}>
-          Eşleştirme özeti
+          Mapping summary
         </h2>
         <p className="text-[13px] mb-5" style={{ color: "var(--muted-strong)" }}>
-          Aşağıdaki eşleştirme ile verinizi içeri aktaracaksınız.
+          You will import your data with the mapping below.
         </p>
 
         {/* Dosya bilgisi */}
@@ -492,7 +492,7 @@ function PreviewStep({
           </div>
         </div>
 
-        {/* Eşleştirme özeti */}
+        {/* Mapping summary */}
         <div
           className="rounded-xl border overflow-hidden mb-5"
           style={{ borderColor: "var(--border)" }}
@@ -501,7 +501,7 @@ function PreviewStep({
             className="px-4 py-2.5 border-b text-[12px] font-semibold"
             style={{ borderColor: "var(--border)", background: "var(--surface-alt)", color: "var(--muted-strong)" }}
           >
-            Sütun eşleştirmesi
+            Column mapping
           </div>
           <div className="divide-y" style={{ borderColor: "var(--border)" }}>
             {REQUIRED_FIELDS.map((f) => (
@@ -536,7 +536,7 @@ function PreviewStep({
           <div className="px-4 py-3">
             <label className="block max-w-[240px]">
               <span className="block text-[11.5px] font-medium mb-1" style={{ color: "var(--muted-strong)" }}>
-                Kaza Dönemi (model frekansı)
+                Accident Period (model frequency)
               </span>
               <select
                 value={frequency}
@@ -544,14 +544,14 @@ function PreviewStep({
                 className="w-full text-[13px] border rounded-lg px-3 py-2 bg-[color:var(--surface)]"
                 style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
               >
-                <option value="yearly">Yıllık</option>
-                <option value="quarterly">Çeyreklik</option>
+                <option value="yearly">Yearly</option>
+                <option value="quarterly">Quarterly</option>
               </select>
             </label>
           </div>
           <div className="px-4 pb-3 text-[11px]" style={{ color: "var(--muted)" }}>
-            İçe aktarınca rezervde her branş için boş model oluşturulur. Veriyi modele
-            bağlamayı (üçgen kurma / roll-forward) rezerv modülünde sen seçersin.
+            On import, an empty model is created for each branch in the Reserve module. You choose
+            how to bind data (build triangle / roll-forward) there.
           </div>
         </div>
 
@@ -562,11 +562,11 @@ function PreviewStep({
               className="px-4 py-2.5 border-b text-[12px] font-semibold"
               style={{ borderColor: "var(--border)", background: "var(--surface-alt)", color: "var(--muted-strong)" }}
             >
-              Large yöntemi
+              Large method
             </div>
             <div className="px-4 py-3 space-y-3">
               <div className="flex rounded-lg overflow-hidden border" style={{ borderColor: "var(--border)" }}>
-                {([["direct", "Doğrudan"], ["rollforward", "Roll-forward"]] as const).map(([val, lbl]) => (
+                {([["direct", "Direct"], ["rollforward", "Roll-forward"]] as const).map(([val, lbl]) => (
                   <button
                     key={val}
                     type="button"
@@ -584,11 +584,11 @@ function PreviewStep({
               {largeMethod === "rollforward" && (
                 <label className="block">
                   <span className="block text-[11.5px] font-medium mb-1" style={{ color: "var(--muted-strong)" }}>
-                    Taban (önceki) dönem
+                    Base (previous) period
                   </span>
                   {basePeriodOptions.length === 0 ? (
                     <span className="text-[11px]" style={{ color: "var(--muted)" }}>
-                      Large&apos;ı olan önceki dönem yok — önce bir döneme large yükleyin ya da Doğrudan seçin.
+                      No previous period has large — load large into a period first, or choose Direct.
                     </span>
                   ) : (
                     <select
@@ -597,7 +597,7 @@ function PreviewStep({
                       className="w-full text-[13px] border rounded-lg px-3 py-2 bg-[color:var(--surface)]"
                       style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
                     >
-                      <option value="">— dönem seçin —</option>
+                      <option value="">— select period —</option>
                       {basePeriodOptions.map((lbl) => (
                         <option key={lbl} value={lbl}>{lbl}</option>
                       ))}
@@ -607,8 +607,8 @@ function PreviewStep({
               )}
             </div>
             <div className="px-4 pb-3 text-[11px]" style={{ color: "var(--muted)" }}>
-              Doğrudan: tüm large kayıtlarından kümülatif üçgen. Roll-forward: taban dönemin
-              large&apos;ı üzerine bu dönemin hareketi taşınır. Model bu large&apos;ı otomatik yansıtır.
+              Direct: cumulative triangle from all large records. Roll-forward: this period's movement
+              is carried over the base period's large. The model reflects this large automatically.
             </div>
           </div>
         )}
@@ -635,7 +635,7 @@ function PreviewStep({
           style={{ background: "var(--primary)", color: "#fff" }}
         >
           {importing && <Spinner small />}
-          {importing ? "İçeri aktarılıyor…" : "İçeri aktar"}
+          {importing ? "Importing…" : "Import"}
         </button>
       </div>
     </div>
@@ -698,7 +698,7 @@ export function DataImportWizard({
       });
       setStep(multiSheet ? "sheet" : "mapping");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Dosya okunamadı");
+      setError(e instanceof Error ? e.message : "Could not read file");
     } finally {
       setLoading(false);
     }
@@ -740,7 +740,7 @@ export function DataImportWizard({
           : {}),
       });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "İçeri aktarma hatası");
+      setError(e instanceof Error ? e.message : "Import error");
       setStep("preview");
     } finally {
       setLoading(false);

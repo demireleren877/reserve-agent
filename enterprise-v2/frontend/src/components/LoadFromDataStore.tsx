@@ -24,7 +24,7 @@ interface Props {
 type Granularity = "yearly" | "quarterly";
 type Source = "hasar" | "ucgen" | "rollforward";
 
-const _nf = new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 0 });
+const _nf = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
 function fmtNum(n: number): string {
   return _nf.format(n);
 }
@@ -265,7 +265,7 @@ export function LoadFromDataStore({ onClose, onLoaded, target = "gross" }: Props
       if (!ds?.records?.length) {
         ds = await store.loadDatasetRecords(periodId, selectedDatasetId);
       }
-      if (!ds?.records?.length) throw new Error("Kayıt bulunamadı");
+      if (!ds?.records?.length) throw new Error("No records found");
 
       const { paidTriangle, incurredTriangle, countTriangle, fileData } = await buildTriangleFromRecords(
         ds.records as import("@/lib/api").ClaimRecord[],
@@ -294,7 +294,7 @@ export function LoadFromDataStore({ onClose, onLoaded, target = "gross" }: Props
       if (!ds?.records?.length) {
         ds = await store.loadDatasetRecords(periodId, selectedDatasetId);
       }
-      if (!ds?.records?.length) throw new Error("Üçgen verisi bulunamadı");
+      if (!ds?.records?.length) throw new Error("Triangle data not found");
 
       const recs = ds.records as TriangleRecord[];
       const toTri = (rec: TriangleRecord) => ({
@@ -328,12 +328,12 @@ export function LoadFromDataStore({ onClose, onLoaded, target = "gross" }: Props
     setLoading(true);
     try {
       const base = baseBranchOf(priorPeriodId);
-      if (!base) throw new Error("Seçilen dönemde üçgen bulunamadı.");
+      if (!base) throw new Error("No triangle in the selected period.");
 
       // Güncel dönem artımsal hasar kayıtları (gross → "hasar", large → "large" tipi)
       let ds = selectedPeriod?.datasets[selectedDatasetId] ?? null;
       if (!ds?.records?.length) ds = await store.loadDatasetRecords(periodId, selectedDatasetId);
-      if (!ds?.records?.length) throw new Error("Güncel dönem hasar kaydı bulunamadı");
+      if (!ds?.records?.length) throw new Error("No claim records in the current period");
 
       // Roll-forward temeli — hedefe göre gross ya da large üçgenleri.
       const basePaid0 = isLarge ? base.largePaidTriangle : base.paidTriangle;
@@ -341,12 +341,12 @@ export function LoadFromDataStore({ onClose, onLoaded, target = "gross" }: Props
       if (!basePaid0) {
         throw new Error(
           isLarge
-            ? "Seçilen dönemde LARGE üçgeni yok — önce o dönemin large'ını yükleyin."
-            : "Seçilen dönemde hem ödeme hem muallak üçgeni olmalı (ikisini de yükleyin).",
+            ? "No LARGE triangle in the selected period — load that period's large first."
+            : "The selected period must have both paid and outstanding triangles (load both).",
         );
       }
       if (!isLarge && !baseIncurred0) {
-        throw new Error("Seçilen dönemde hem ödeme hem muallak üçgeni olmalı (ikisini de yükleyin).");
+        throw new Error("The selected period must have both paid and outstanding triangles (load both).");
       }
 
       // TEMEL dönem düzeltmeleri: prior üçgenlere delta-yama (non-destructive), roll'dan ÖNCE.
@@ -418,7 +418,7 @@ export function LoadFromDataStore({ onClose, onLoaded, target = "gross" }: Props
       <div className={`card w-full ${source === "rollforward" ? "max-w-lg" : "max-w-md"} shadow-xl border border-[color:var(--border)]`}>
         <div className="p-5 border-b border-[color:var(--border)] flex items-center justify-between">
           <h2 className="text-sm font-semibold">
-            Veri Modülünden Yükle
+            Load from Data Module
             {isLarge && (
               <span className="ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[color:var(--primary-soft)] text-[color:var(--primary)] align-middle">
                 LARGE
@@ -446,7 +446,7 @@ export function LoadFromDataStore({ onClose, onLoaded, target = "gross" }: Props
                   color: source === s ? "#fff" : "var(--muted-strong)",
                 }}
               >
-                {s === "hasar" ? "Hasar verisi" : s === "ucgen" ? "Hazır üçgen" : "Roll-forward"}
+                {s === "hasar" ? "Claim data" : s === "ucgen" ? "Prebuilt triangle" : "Roll-forward"}
               </button>
             ))}
           </div>
@@ -455,12 +455,12 @@ export function LoadFromDataStore({ onClose, onLoaded, target = "gross" }: Props
           {source === "rollforward" && (
             <div className="rounded-lg p-3 space-y-2" style={{ background: "var(--surface-alt)", border: "1px solid var(--border)" }}>
               <label className="block text-[11px] font-semibold" style={{ color: "var(--muted-strong)" }}>
-                Hangi dönemin üzerine? (temel)
+                Onto which period? (base)
               </label>
               {priorPeriodOptions.length === 0 ? (
                 <p className="text-[11px]" style={{ color: "var(--muted)" }}>
-                  Sistemde hem ödeme hem muallak üçgeni olan başka dönem yok. Önce bir döneme
-                  ödeme+muallak üçgeni (ya da hasar verisi) yükleyin.
+                  There is no other period with both paid and outstanding triangles. First load a
+                  paid+outstanding triangle (or claim data) into a period.
                 </p>
               ) : (
                 <select
@@ -468,7 +468,7 @@ export function LoadFromDataStore({ onClose, onLoaded, target = "gross" }: Props
                   onChange={(e) => setPriorPeriodId(e.target.value)}
                   className="w-full text-sm border border-[color:var(--border)] rounded-md px-3 py-2 bg-[color:var(--surface)] text-[color:var(--foreground)]"
                 >
-                  <option value="">— dönem seçin —</option>
+                  <option value="">— select period —</option>
                   {priorPeriodOptions.map((p) => {
                     const b = baseBranchOf(p.id);
                     return (
@@ -480,8 +480,8 @@ export function LoadFromDataStore({ onClose, onLoaded, target = "gross" }: Props
                 </select>
               )}
               <p className="text-[10px]" style={{ color: "var(--muted)" }}>
-                Bu dönemin ödeme ve muallak üçgeni temel alınır; güncel dönemin artımsal hareketi
-                onların üzerine eklenir.
+                This period's paid and outstanding triangles are used as the base; the current period's incremental movement
+                is added on top.
               </p>
             </div>
           )}
@@ -489,11 +489,11 @@ export function LoadFromDataStore({ onClose, onLoaded, target = "gross" }: Props
           {/* Dönem */}
           <div>
             <label className="block text-xs font-medium text-[color:var(--muted-strong)] mb-1">
-              Dönem
+              Period
             </label>
             {store.periods.length === 0 ? (
               <p className="text-xs text-[color:var(--muted)]">
-                Henüz dönem eklenmemiş. Veri modülüne gidip dönem oluşturun.
+                No periods added yet. Go to the Data module and create a period.
               </p>
             ) : (
               <select
@@ -521,7 +521,7 @@ export function LoadFromDataStore({ onClose, onLoaded, target = "gross" }: Props
               >
                 {activeDatasets.map((ds) => (
                   <option key={ds.datasetId} value={ds.datasetId}>
-                    {ds.meta.filename} ({new Date(ds.meta.uploadedAt).toLocaleDateString("tr-TR")})
+                    {ds.meta.filename} ({new Date(ds.meta.uploadedAt).toLocaleDateString("en-GB")})
                   </option>
                 ))}
               </select>
@@ -534,19 +534,19 @@ export function LoadFromDataStore({ onClose, onLoaded, target = "gross" }: Props
               {hasarDatasets.length === 0 ? (
                 <p className="text-xs text-[color:var(--muted)]">
                   {source === "rollforward"
-                    ? "Güncel döneme hasar (dosya bazlı) verisi yüklenmemiş."
-                    : "Bu döneme hasar verisi yüklenmemiş."}
+                    ? "No claim (file-level) data loaded into the current period."
+                    : "No claim data loaded into this period."}
                 </p>
               ) : (
                 <>
                   <div>
                     <label className="block text-xs font-medium text-[color:var(--muted-strong)] mb-1">
-                      Branş
+                      Branch
                     </label>
                     {loadingRecords ? (
-                      <p className="text-xs text-[color:var(--muted)]">Yükleniyor…</p>
+                      <p className="text-xs text-[color:var(--muted)]">Loading…</p>
                     ) : bransList.length === 0 ? (
-                      <p className="text-xs text-[color:var(--muted)]">Branş bilgisi bulunamadı.</p>
+                      <p className="text-xs text-[color:var(--muted)]">No branch information found.</p>
                     ) : (
                       <select
                         value={brans}
@@ -564,28 +564,28 @@ export function LoadFromDataStore({ onClose, onLoaded, target = "gross" }: Props
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <label className="block text-xs font-medium text-[color:var(--muted-strong)] mb-1">
-                          Kaza Dönemi
+                          Accident Period
                         </label>
                         <select
                           value={originGran}
                           onChange={(e) => setOriginGran(e.target.value as Granularity)}
                           className="w-full text-sm border border-[color:var(--border)] rounded-md px-3 py-2 bg-[color:var(--surface)] text-[color:var(--foreground)]"
                         >
-                          <option value="yearly">Yıllık</option>
-                          <option value="quarterly">Çeyreklik</option>
+                          <option value="yearly">Yearly</option>
+                          <option value="quarterly">Quarterly</option>
                         </select>
                       </div>
                       <div>
                         <label className="block text-xs font-medium text-[color:var(--muted-strong)] mb-1">
-                          Gelişim Dönemi
+                          Development Period
                         </label>
                         <select
                           value={devGran}
                           onChange={(e) => setDevGran(e.target.value as Granularity)}
                           className="w-full text-sm border border-[color:var(--border)] rounded-md px-3 py-2 bg-[color:var(--surface)] text-[color:var(--foreground)]"
                         >
-                          <option value="yearly">Yıllık</option>
-                          <option value="quarterly">Çeyreklik</option>
+                          <option value="yearly">Yearly</option>
+                          <option value="quarterly">Quarterly</option>
                         </select>
                       </div>
                     </div>
@@ -593,8 +593,8 @@ export function LoadFromDataStore({ onClose, onLoaded, target = "gross" }: Props
 
                   <p className="text-xs text-[color:var(--muted)] leading-relaxed">
                     {source === "rollforward"
-                      ? "Güncel dönemin ARTIMSAL hareketi (bu dönem ödemesi + dönem sonu muallak), temel üçgenin son diagonaline eklenir. Granülarite temel üçgenden alınır."
-                      : "Paid üçgeni (kümülatif ödeme) ve Incurred üçgeni (kümülatif ödeme + dönem sonu muallak) otomatik oluşturulur."}
+                      ? "The current period's INCREMENTAL movement (this period's paid + end-of-period outstanding) is added to the last diagonal of the base triangle. Granularity is taken from the base triangle."
+                      : "The Paid triangle (cumulative paid) and Incurred triangle (cumulative paid + end-of-period outstanding) are built automatically."}
                   </p>
                 </>
               )}
@@ -606,7 +606,7 @@ export function LoadFromDataStore({ onClose, onLoaded, target = "gross" }: Props
             <>
               {ucgenDatasets.length === 0 ? (
                 <p className="text-xs text-[color:var(--muted)]">
-                  Bu döneme henüz üçgen verisi yüklenmemiş. Veri modülünde "Üçgen Verisi" kartından yükleyin.
+                  No triangle data loaded into this period yet. Load it from the "Triangle Data" card in the Data module.
                 </p>
               ) : (() => {
                 const ucgenDs = selectedPeriod?.datasets[selectedDatasetId];
@@ -617,10 +617,10 @@ export function LoadFromDataStore({ onClose, onLoaded, target = "gross" }: Props
                       {ucgenDs.meta.brans_list?.[0] ?? "—"}
                     </div>
                     <div style={{ color: "var(--muted-strong)" }}>
-                      {ucgenDs.meta.filename} · {ucgenDs.meta.record_count} kaza dönemi
+                      {ucgenDs.meta.filename} · {ucgenDs.meta.record_count} accident periods
                     </div>
                     <div style={{ color: "var(--muted)" }}>
-                      Yüklenme: {new Date(ucgenDs.meta.uploadedAt).toLocaleDateString("tr-TR")}
+                      Uploaded: {new Date(ucgenDs.meta.uploadedAt).toLocaleDateString("en-GB")}
                     </div>
                   </div>
                 );
@@ -628,7 +628,7 @@ export function LoadFromDataStore({ onClose, onLoaded, target = "gross" }: Props
             </>
           )}
 
-          {/* Dosya düzeltmeleri (opsiyonel) — bir dosyanın ödeme/muallağını roll-forward'da düzelt */}
+          {/* Claim adjustments (optional) — bir dosyanın ödeme/muallağını roll-forward'da düzelt */}
           {source === "rollforward" && priorPeriodId && brans && bransList.length > 0 && (
             <div className="rounded-lg" style={{ border: "1px solid var(--border)" }}>
               <button
@@ -639,11 +639,11 @@ export function LoadFromDataStore({ onClose, onLoaded, target = "gross" }: Props
               >
                 <span className="flex items-center gap-2">
                   <span style={{ transform: adjOpen ? "rotate(90deg)" : "none", transition: "transform .15s" }}>▸</span>
-                  Dosya düzeltmeleri (opsiyonel)
+                  Claim adjustments (optional)
                   {adjCount > 0 && (
                     <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded"
                       style={{ background: "var(--warning-soft,#f59e0b22)", color: "var(--warning-strong,#b45309)" }}>
-                      {adjCount} düzeltme
+                      {adjCount} adjustments
                     </span>
                   )}
                 </span>
@@ -655,8 +655,8 @@ export function LoadFromDataStore({ onClose, onLoaded, target = "gross" }: Props
                   {baseHasClaimDataset && (
                     <div className="flex rounded-md overflow-hidden border border-[color:var(--border)]">
                       {([
-                        ["current", `Güncel dönem${selectedPeriod ? ` (${selectedPeriod.label})` : ""}`],
-                        ["base", `Temel dönem${basePeriodLabel ? ` (${basePeriodLabel})` : ""}`],
+                        ["current", `Current period${selectedPeriod ? ` (${selectedPeriod.label})` : ""}`],
+                        ["base", `Base period${basePeriodLabel ? ` (${basePeriodLabel})` : ""}`],
                       ] as const).map(([val, lbl]) => {
                         const n = val === "base" ? Object.keys(baseAdjustments).length : Object.keys(adjustments).length;
                         return (
@@ -678,32 +678,32 @@ export function LoadFromDataStore({ onClose, onLoaded, target = "gross" }: Props
                   )}
                   <p className="text-[10px] leading-relaxed" style={{ color: "var(--muted)" }}>
                     {isBaseScope
-                      ? "TEMEL dönemin dosyasını düzeltin (örn. muallağı yanlış girilmiş bir hasar). Düzeltme, temel üçgenin o origin diagonaline delta olarak uygulanır; roll-forward bu düzeltilmiş temelin üzerine taşınır."
-                      : "GÜNCEL dönemin dosyasını (claim) düzeltin. Düzeltme yalnızca bu roll-forward'a uygulanır."}
-                    {" Orijinal veriye dokunulmaz; boş bırakılan alan orijinal kalır."}
+                      ? "Adjust a claim in the BASE period (e.g. a claim with a wrong outstanding). The adjustment is applied as a delta on that origin's diagonal of the base triangle; roll-forward is then carried over this corrected base."
+                      : "Adjust a claim in the CURRENT period. The adjustment applies only to this roll-forward."}
+                    {" Original data is not modified; a field left blank keeps its original value."}
                   </p>
                   <input
                     type="text"
                     inputMode="numeric"
                     value={adjSearch}
                     onChange={(e) => setAdjSearch(e.target.value)}
-                    placeholder="Dosya no ara… (boşsa en büyük muallaklar)"
+                    placeholder="Search claim no… (empty = largest outstanding)"
                     className="w-full text-xs border border-[color:var(--border)] rounded-md px-2.5 py-1.5 bg-[color:var(--surface)] text-[color:var(--foreground)]"
                   />
                   {activeLoading ? (
-                    <p className="text-[11px]" style={{ color: "var(--muted)" }}>Dosyalar yükleniyor…</p>
+                    <p className="text-[11px]" style={{ color: "var(--muted)" }}>Loading claims…</p>
                   ) : visibleAggs.length === 0 ? (
                     <p className="text-[11px]" style={{ color: "var(--muted)" }}>
-                      {adjSearch.trim() ? "Eşleşen dosya yok." : "Dosya bulunamadı."}
+                      {adjSearch.trim() ? "No matching claim." : "No claims found."}
                     </p>
                   ) : (
                     <div className="max-h-64 overflow-y-auto rounded-md" style={{ border: "1px solid var(--border)" }}>
                       <table className="w-full text-[11px]">
                         <thead className="sticky top-0" style={{ background: "var(--surface-alt)" }}>
                           <tr style={{ color: "var(--muted)" }}>
-                            <th className="text-left font-medium px-2 py-1">Dosya · Kaza yılı</th>
-                            <th className="text-right font-medium px-2 py-1">Ödeme</th>
-                            <th className="text-right font-medium px-2 py-1">Muallak</th>
+                            <th className="text-left font-medium px-2 py-1">Claim · Accident year</th>
+                            <th className="text-right font-medium px-2 py-1">Paid</th>
+                            <th className="text-right font-medium px-2 py-1">Outstanding</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -724,7 +724,7 @@ export function LoadFromDataStore({ onClose, onLoaded, target = "gross" }: Props
                                     onChange={(e) => setOverride(a.dosya, "odeme", e.target.value)}
                                     placeholder={fmtNum(a.odeme)}
                                     className="w-24 text-right text-[11px] border border-[color:var(--border)] rounded px-1.5 py-1 bg-[color:var(--surface)]"
-                                    title={`Orijinal ödeme: ${fmtNum(a.odeme)}`}
+                                    title={`Original paid: ${fmtNum(a.odeme)}`}
                                   />
                                 </td>
                                 <td className="px-1 py-1">
@@ -735,7 +735,7 @@ export function LoadFromDataStore({ onClose, onLoaded, target = "gross" }: Props
                                     onChange={(e) => setOverride(a.dosya, "muallak", e.target.value)}
                                     placeholder={fmtNum(a.muallak)}
                                     className="w-24 text-right text-[11px] border border-[color:var(--border)] rounded px-1.5 py-1 bg-[color:var(--surface)]"
-                                    title={`Orijinal muallak: ${fmtNum(a.muallak)}`}
+                                    title={`Original outstanding: ${fmtNum(a.muallak)}`}
                                   />
                                 </td>
                               </tr>
@@ -752,7 +752,7 @@ export function LoadFromDataStore({ onClose, onLoaded, target = "gross" }: Props
                       className="text-[10px] underline"
                       style={{ color: "var(--muted)" }}
                     >
-                      Bu dönemin düzeltmelerini temizle ({isBaseScope ? "temel" : "güncel"})
+                      Clear this period's adjustments ({isBaseScope ? "base" : "current"})
                     </button>
                   )}
                 </div>
@@ -772,7 +772,7 @@ export function LoadFromDataStore({ onClose, onLoaded, target = "gross" }: Props
             onClick={onClose}
             className="px-4 py-2 text-sm rounded-md border border-[color:var(--border)] text-[color:var(--muted-strong)] hover:text-[color:var(--foreground)] transition"
           >
-            İptal
+            Cancel
           </button>
           <button
             onClick={handleBuild}
@@ -787,8 +787,8 @@ export function LoadFromDataStore({ onClose, onLoaded, target = "gross" }: Props
             className="px-4 py-2 text-sm rounded-md bg-[color:var(--primary)] text-white font-medium hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading
-              ? source === "ucgen" ? "Yükleniyor…" : source === "rollforward" ? "Taşınıyor…" : "Oluşturuluyor…"
-              : source === "ucgen" ? "Üçgeni Yükle" : source === "rollforward" ? "İleri Taşı" : "Üçgenleri Yükle"}
+              ? source === "ucgen" ? "Loading…" : source === "rollforward" ? "Rolling forward…" : "Building…"
+              : source === "ucgen" ? "Load Triangle" : source === "rollforward" ? "Roll Forward" : "Load Triangles"}
           </button>
         </div>
       </div>

@@ -32,33 +32,33 @@ export interface DataTypeDef {
 export const DATA_TYPES: DataTypeDef[] = [
   {
     id: "hasar",
-    label: "Hasar Verisi",
-    description: "Dosya bazlı hasar kayıtları",
-    columns: ["Dosya No", "Branş", "Hasar Tarihi", "Gelişim Tarihi", "Ödeme", "Muallak"],
+    label: "Claim Data",
+    description: "File-level claim records",
+    columns: ["Claim No", "Branch", "Loss Date", "Development Date", "Paid", "Outstanding"],
   },
   {
     id: "large",
-    label: "Büyük Hasar (Large)",
-    description: "Large-loss dosya bazlı hasar kayıtları — Attritional için ayrılır",
-    columns: ["Dosya No", "Branş", "Hasar Tarihi", "Gelişim Tarihi", "Ödeme", "Muallak"],
+    label: "Large Loss",
+    description: "File-level large-loss records — separated out for Attritional",
+    columns: ["Claim No", "Branch", "Loss Date", "Development Date", "Paid", "Outstanding"],
   },
   {
     id: "prim",
-    label: "Prim Verisi",
-    description: "Dönemsel prim kazanım verileri",
-    columns: ["Branş", "Dönem", "Prim"],
+    label: "Premium Data",
+    description: "Periodic earned premium data",
+    columns: ["Branch", "Period", "Premium"],
   },
   {
     id: "ucgen",
-    label: "Üçgen Verisi",
-    description: "Hazır paid veya incurred gelişim üçgeni",
-    columns: ["Branş", "Üçgen Türü", "Kaza Dönemi", "Gelişim Dönemi"],
+    label: "Triangle Data",
+    description: "Prebuilt paid or incurred development triangle",
+    columns: ["Branch", "Triangle Type", "Accident Period", "Development Period"],
   },
   {
     id: "large_ucgen",
-    label: "Large Üçgen",
-    description: "Hazır large paid/incurred gelişim üçgeni",
-    columns: ["Branş", "Üçgen Türü", "Kaza Dönemi", "Gelişim Dönemi"],
+    label: "Large Triangle",
+    description: "Prebuilt large paid/incurred development triangle",
+    columns: ["Branch", "Triangle Type", "Accident Period", "Development Period"],
   },
 ];
 

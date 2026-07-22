@@ -27,6 +27,13 @@ import { newDiagonalToFileData, mergeFileData } from "@/lib/roll-forward-util";
 import type { Frequency } from "@/types/project";
 import type { Triangle, FileData } from "@/types/triangle";
 
+/** Branş adı karşılaştırması case-insensitive (+ trim, Türkçe locale). "Kasko" = "KASKO". */
+const normBrans = (s: string | null | undefined): string =>
+  String(s ?? "").trim().toLocaleLowerCase("tr-TR");
+export function sameBrans(a: string | null | undefined, b: string | null | undefined): boolean {
+  return normBrans(a) === normBrans(b);
+}
+
 export function useProvisionModels() {
   const { project, actions } = useProject();
 
@@ -47,7 +54,8 @@ export function useProvisionModels() {
       for (const brans of bransList) {
         if (existing) {
           const period = project.periods.find((p) => p.id === periodId);
-          const has = period?.branches.some((b) => b.name === brans && b.frequency === frequency);
+          // Case-insensitive: "Kasko" ile "KASKO" aynı branş → çift model olmaz.
+          const has = period?.branches.some((b) => sameBrans(b.name, brans) && b.frequency === frequency);
           if (has) continue; // zaten var
         }
         actions.createBranch(periodId, frequency, brans);
@@ -94,7 +102,7 @@ export function useDataPremiums(
       }
       if (cancelled) return;
       const map: Record<string, number> = {};
-      for (const r of recs) if (r.brans === brans) map[r.donem] = r.ep;
+      for (const r of recs) if (sameBrans(r.brans, brans)) map[r.donem] = r.ep;
       setPremiums(map);
     })();
     return () => {
@@ -155,7 +163,7 @@ async function resolveLargeTriangles(
   const ucgenDs = datasets.find((d) => d.typeId === "large_ucgen");
   if (ucgenDs) {
     const recs = (await recordsOf(ucgenDs, period.id, load)) as TriangleRecord[];
-    const forBrans = recs.filter((r) => r.brans === brans);
+    const forBrans = recs.filter((r) => sameBrans(r.brans, brans));
     const pool = forBrans.length ? forBrans : recs;
     const paidRec = pool.find((r) => r.triangle_type === "paid");
     const incRec = pool.find((r) => r.triangle_type === "incurred");
@@ -173,6 +181,9 @@ async function resolveLargeTriangles(
   const recs = (await recordsOf(largeDs, period.id, load)) as ClaimRecord[];
   const method = largeDs.meta.largeMethod ?? "direct";
   const baseLabel = largeDs.meta.largeBasePeriodLabel;
+  // Backend brans'ı TAM eşleşmeyle filtreler; datadaki gerçek casing'i geçir
+  // (model adı "Kasko", kayıt "KASKO" olsa da doğru filtrelensin).
+  const actualBrans = recs.find((r) => sameBrans(r.brans, brans))?.brans ?? brans;
 
   if (method === "rollforward" && baseLabel) {
     const base = await resolveLargeTriangles(baseLabel, brans, og, dg, dataPeriods, load, seen);
@@ -181,7 +192,7 @@ async function resolveLargeTriangles(
         base.paid,
         base.incurred ?? null,
         recs,
-        brans,
+        actualBrans,
         og,
         dg,
       );
@@ -195,7 +206,7 @@ async function resolveLargeTriangles(
     // taban çözülemedi → doğrudana düş
   }
 
-  const t = await buildTriangleFromRecords(recs, brans, og, dg);
+  const t = await buildTriangleFromRecords(recs, actualBrans, og, dg);
   return { paid: t.paidTriangle, incurred: t.incurredTriangle, fileData: t.fileData ?? null };
 }
 

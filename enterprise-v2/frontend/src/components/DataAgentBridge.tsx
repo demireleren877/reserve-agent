@@ -39,7 +39,7 @@ export function DataAgentBridge() {
         })),
       })),
       active_period_id: store.activePeriodId,
-      note: "Veri modülü: yüklü dönemler ve dataset meta bilgileri. Veri yükleme/silme agent tarafından yapılamaz.",
+      note: "Data module: loaded periods and dataset metadata. Data upload/deletion cannot be done by the agent.",
     };
   }, [store.periods, store.activePeriodId]);
 

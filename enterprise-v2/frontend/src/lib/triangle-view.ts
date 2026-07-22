@@ -190,7 +190,7 @@ export function buildDisplayMatrix(base: Triangle, opts: ViewOptions): DisplayMa
       while (c.length < nCols) c.push(null);
       return c;
     });
-    return assemble(origins, columns, padded, "Kaza", "Gelişim", opts.transposed);
+    return assemble(origins, columns, padded, "Accident", "Development", opts.transposed);
   }
 
   // ── Takvim (calendar) görünümü ──

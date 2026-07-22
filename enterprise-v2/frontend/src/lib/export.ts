@@ -100,7 +100,7 @@ function addTriangleSheet(
     : tri.values;
 
   const ws = wb.addWorksheet(sheetName);
-  const header = ["Kaza Yılı", ...tri.development_periods.map((_, i) => `Dev ${i + 1}`)];
+  const header = ["Accident Year", ...tri.development_periods.map((_, i) => `Dev ${i + 1}`)];
   const hRow = ws.addRow(header);
   styleHeaderRow(hRow, C.triHeader);
 
@@ -134,17 +134,17 @@ export async function exportToExcel(data: ExportData): Promise<void> {
   const tri = data.triangle;
 
   // ══ 1. Özet (FORMÜLLÜ) ══
-  const ws = wb.addWorksheet("Özet");
+  const ws = wb.addWorksheet("Summary");
   const titleRow = ws.addRow([
-    `${data.branchName} — ${data.periodLabel} (${data.frequency === "quarterly" ? "Çeyreklik" : "Yıllık"})`,
+    `${data.branchName} — ${data.periodLabel} (${data.frequency === "quarterly" ? "Quarterly" : "Yearly"})`,
   ]);
   titleRow.getCell(1).font = { bold: true, size: 13, color: { argb: C.primary } };
   ws.addRow([]);
 
   const header = [
-    "Kaza Yılı", "Son Değer", "Prim", "Yıllık Prim", "Düzeltme (k)",
-    "CDF", "% Gelişmiş", "CL Ultimate", "BF Ultimate", "Seçilen Ult",
-    "IBNR", "Baz", "Seçilen LR", "ULR",
+    "Accident Year", "Latest Value", "Premium", "Annual Premium", "Correction (k)",
+    "CDF", "% Developed", "CL Ultimate", "BF Ultimate", "Selected Ult",
+    "IBNR", "Basis", "Selected LR", "ULR",
   ];
   const hdrRow = ws.addRow(header);
   styleHeaderRow(hdrRow);
@@ -214,7 +214,7 @@ export async function exportToExcel(data: ExportData): Promise<void> {
   // ══ 2. LDF-CDF ══
   if (tri) {
     const s = wb.addWorksheet("LDF-CDF");
-    styleHeaderRow(s.addRow(["Gelişim Dönemi", "Seçilen LDF", "Efektif CDF"]));
+    styleHeaderRow(s.addRow(["Development Period", "Selected LDF", "Effective CDF"]));
     tri.development_periods.forEach((_, i) => {
       const row = s.addRow([
         i + 1,
@@ -283,7 +283,7 @@ export async function exportToExcel(data: ExportData): Promise<void> {
   if (tri && tri.origin_periods.some((o) => (data.premiums[o] ?? 0) > 0)) {
     const devs = tri.development_periods;
     const s = wb.addWorksheet("ILR (%)");
-    styleHeaderRow(s.addRow(["Kaza Yılı", "Prim (düz.)", ...devs.map((_, i) => `Dev ${i + 1}`)]));
+    styleHeaderRow(s.addRow(["Accident Year", "Premium (adj.)", ...devs.map((_, i) => `Dev ${i + 1}`)]));
     tri.origin_periods.forEach((origin, i) => {
       const rawPrem = data.premiums[origin] ?? 0;
       const k = (data.correctionPerOrigin[origin] ?? 0) > 0 ? data.correctionPerOrigin[origin] : 1;
@@ -304,7 +304,7 @@ export async function exportToExcel(data: ExportData): Promise<void> {
   // ══ 5. BF Girdileri ══
   if (tri) {
     const s = wb.addWorksheet("BF Girdileri");
-    styleHeaderRow(s.addRow(["Kaza Yılı", "Prim", "Düzeltme k", "Yıllık Prim", "Temel", "Seçilen LR"]));
+    styleHeaderRow(s.addRow(["Accident Year", "Premium", "Correction k", "Annual Premium", "Basis", "Selected LR"]));
     tri.origin_periods.forEach((origin) => {
       const rawPrem = data.premiums[origin] ?? 0;
       const k = (data.correctionPerOrigin[origin] ?? 0) > 0 ? data.correctionPerOrigin[origin] : 1;
@@ -330,16 +330,16 @@ export async function exportToExcel(data: ExportData): Promise<void> {
   const paid = data.paidTriangle;
   const incurred = data.incurredTriangle;
   if (paid) {
-    addTriangleSheet(wb, paid, "Kümülatif Ödeme");
-    addTriangleSheet(wb, paid, "Artımsal Ödeme", true);
+    addTriangleSheet(wb, paid, "Cumulative Paid");
+    addTriangleSheet(wb, paid, "Incremental Paid", true);
   } else if (tri?.triangle_type === "paid") {
-    addTriangleSheet(wb, tri, "Kümülatif Ödeme");
-    addTriangleSheet(wb, tri, "Artımsal Ödeme", true);
+    addTriangleSheet(wb, tri, "Cumulative Paid");
+    addTriangleSheet(wb, tri, "Incremental Paid", true);
   }
   if (incurred) {
-    addTriangleSheet(wb, incurred, "Gerçekleşen");
+    addTriangleSheet(wb, incurred, "Incurred");
   } else if (tri?.triangle_type === "incurred") {
-    addTriangleSheet(wb, tri, "Gerçekleşen");
+    addTriangleSheet(wb, tri, "Incurred");
   }
   if (
     paid && incurred &&

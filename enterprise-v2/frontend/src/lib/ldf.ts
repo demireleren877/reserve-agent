@@ -11,7 +11,7 @@ export const WINDOWS: { id: Window; label: string }[] = [
   { id: 5,     label: "Son 5" },
   { id: 6,     label: "Son 6" },
   { id: 7,     label: "Son 7" },
-  { id: "all", label: "Tüm" },
+  { id: "all", label: "All" },
 ];
 
 export function cellKey(origin: string, step: number): string {

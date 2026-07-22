@@ -102,8 +102,8 @@ function buildDiscountSnapshot(periods: Period[], activeBranch: Branch | null) {
           total_unpaid_liability: Math.round(summary.totals.latest + summary.totals.ibnr),
           quick_discount_at_30pct: quickDiscount,
           note: hasPattern
-            ? "compute_discount ile özel faiz oranı veya eğri kullanabilirsiniz."
-            : "Nakit akışı pattern eksik — Cashflow modülünde hesaplayın.",
+            ? "You can use a custom interest rate or curve with compute_discount."
+            : "Cashflow pattern missing — compute it in the Cashflow module.",
         };
       }),
   );
@@ -111,7 +111,7 @@ function buildDiscountSnapshot(periods: Period[], activeBranch: Branch | null) {
   return {
     branches,
     active_branch_id: activeBranch?.id ?? null,
-    note: "İskonto modülü: her branş için Unpaid Liability ve iskonto özeti. compute_discount ile detaylı hesap.",
+    note: "Discount module: Unpaid Liability and discount summary per branch. Use compute_discount for a detailed calculation.",
   };
 }
 
@@ -132,7 +132,7 @@ export function computeDiscountForBranch(
   if (Object.keys(pattern).length === 0) {
     return {
       error:
-        "Bu branş için cashflow pattern hesaplanmamış. Cashflow modülünde önce hesaplamayı çalıştırın.",
+        "No cashflow pattern computed for this branch. Run the calculation in the Cashflow module first.",
     };
   }
 

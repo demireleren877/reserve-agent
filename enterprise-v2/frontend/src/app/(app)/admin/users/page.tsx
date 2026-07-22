@@ -41,7 +41,7 @@ export default function UsersPage() {
     try {
       setUsers(await fetchUsers());
     } catch {
-      setError("Kullanıcılar yüklenemedi.");
+      setError("Could not load users.");
     } finally {
       setLoading(false);
     }
@@ -97,7 +97,7 @@ export default function UsersPage() {
 
   return (
     <div className="p-8 max-w-3xl mx-auto">
-      <h1 className="text-2xl font-semibold mb-6">Kullanıcı Yönetimi</h1>
+      <h1 className="text-2xl font-semibold mb-6">User Management</h1>
 
       {error && (
         <div className="mb-4 p-3 rounded bg-red-50 border border-red-200 text-red-700 text-sm">
@@ -107,10 +107,10 @@ export default function UsersPage() {
 
       {/* Yeni kullanıcı */}
       <div className="mb-8 p-5 rounded-xl border bg-[color:var(--surface)]">
-        <h2 className="text-base font-medium mb-4">Yeni Kullanıcı Ekle</h2>
+        <h2 className="text-base font-medium mb-4">Add New User</h2>
         <form onSubmit={handleCreate} className="flex flex-wrap gap-3 items-end">
           <div className="flex flex-col gap-1">
-            <label className="text-xs text-[color:var(--muted-strong)]">Kullanıcı adı</label>
+            <label className="text-xs text-[color:var(--muted-strong)]">Username</label>
             <input
               className="border rounded-lg px-3 py-2 text-sm w-40 bg-[color:var(--background)]"
               value={newUsername}
@@ -120,7 +120,7 @@ export default function UsersPage() {
             />
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-xs text-[color:var(--muted-strong)]">Şifre</label>
+            <label className="text-xs text-[color:var(--muted-strong)]">Password</label>
             <input
               type="password"
               className="border rounded-lg px-3 py-2 text-sm w-40 bg-[color:var(--background)]"
@@ -137,7 +137,7 @@ export default function UsersPage() {
               value={newRole}
               onChange={(e) => setNewRole(e.target.value as "user" | "admin")}
             >
-              <option value="user">Kullanıcı</option>
+              <option value="user">User</option>
               <option value="admin">Admin</option>
             </select>
           </div>
@@ -153,16 +153,16 @@ export default function UsersPage() {
 
       {/* Kullanıcı listesi */}
       {loading ? (
-        <p className="text-sm text-[color:var(--muted-strong)]">Yükleniyor...</p>
+        <p className="text-sm text-[color:var(--muted-strong)]">Loading...</p>
       ) : (
         <div className="rounded-xl border overflow-hidden">
           <table className="w-full text-sm">
             <thead className="bg-[color:var(--surface)]">
               <tr>
-                <th className="px-4 py-3 text-left font-medium text-[color:var(--muted-strong)]">Kullanıcı</th>
+                <th className="px-4 py-3 text-left font-medium text-[color:var(--muted-strong)]">User</th>
                 <th className="px-4 py-3 text-left font-medium text-[color:var(--muted-strong)]">Rol</th>
                 <th className="px-4 py-3 text-left font-medium text-[color:var(--muted-strong)]">Durum</th>
-                <th className="px-4 py-3 text-right font-medium text-[color:var(--muted-strong)]">İşlemler</th>
+                <th className="px-4 py-3 text-right font-medium text-[color:var(--muted-strong)]">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -175,7 +175,7 @@ export default function UsersPage() {
                         ? "bg-purple-100 text-purple-700"
                         : "bg-blue-50 text-blue-600"
                     }`}>
-                      {u.role === "admin" ? "Admin" : "Kullanıcı"}
+                      {u.role === "admin" ? "Admin" : "User"}
                     </span>
                   </td>
                   <td className="px-4 py-3">
@@ -191,13 +191,13 @@ export default function UsersPage() {
                         onClick={() => { setResetUserId(u.id); setResetPassword(""); }}
                         className="text-xs px-2 py-1 rounded border hover:bg-[color:var(--surface)] text-[color:var(--muted-strong)]"
                       >
-                        Şifre
+                        Password
                       </button>
                       <button
                         onClick={() => handleToggleActive(u)}
                         className="text-xs px-2 py-1 rounded border hover:bg-[color:var(--surface)] text-[color:var(--muted-strong)]"
                       >
-                        {u.is_active ? "Devre Dışı" : "Aktifleştir"}
+                        {u.is_active ? "Deactivate" : "Activate"}
                       </button>
                       <button
                         onClick={() => handleDelete(u)}
@@ -218,12 +218,12 @@ export default function UsersPage() {
       {resetUserId !== null && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
           <div className="bg-[color:var(--background)] rounded-2xl p-6 w-80 shadow-xl">
-            <h3 className="font-medium mb-4">Şifre Sıfırla</h3>
+            <h3 className="font-medium mb-4">Reset Password</h3>
             <form onSubmit={handleResetPassword} className="flex flex-col gap-3">
               <input
                 type="password"
                 className="border rounded-lg px-3 py-2 text-sm bg-[color:var(--surface)]"
-                placeholder="Yeni şifre"
+                placeholder="New password"
                 value={resetPassword}
                 onChange={(e) => setResetPassword(e.target.value)}
                 required
@@ -235,7 +235,7 @@ export default function UsersPage() {
                   onClick={() => setResetUserId(null)}
                   className="px-3 py-1.5 rounded-lg border text-sm"
                 >
-                  İptal
+                  Cancel
                 </button>
                 <button
                   type="submit"

@@ -25,7 +25,7 @@ export async function uploadExcel(
   file: File,
   opts: UploadOptions,
 ): Promise<{ triangle: Triangle; warnings: string[]; file_data?: Record<string, Record<string, Record<string, number>>> | null }> {
-  if (file.size > MAX_UPLOAD_BYTES) throw new Error("Dosya 10 MB sınırını aşıyor");
+  if (file.size > MAX_UPLOAD_BYTES) throw new Error("File exceeds the 10 MB limit");
   const buffer = await file.arrayBuffer();
   const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer)));
   const authHeaders = await getAuthHeaders();
@@ -41,7 +41,7 @@ export async function uploadExcel(
     }),
   });
   if (!res.ok) {
-    const body = await res.json().catch(() => ({ detail: "Yükleme hatası" }));
+    const body = await res.json().catch(() => ({ detail: "Upload error" }));
     throw new Error(body.detail || `HTTP ${res.status}`);
   }
   return res.json();
@@ -72,7 +72,7 @@ export async function compute(
     body: JSON.stringify(body),
   });
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: "Hesaplama hatası" }));
+    const err = await res.json().catch(() => ({ detail: "Calculation error" }));
     throw new Error(err.detail || `HTTP ${res.status}`);
   }
   return res.json();
@@ -146,7 +146,7 @@ export async function chatWithAgent(
     body: JSON.stringify(body),
   });
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: "Agent hatası" }));
+    const err = await res.json().catch(() => ({ detail: "Agent error" }));
     throw new Error(err.detail || `HTTP ${res.status}`);
   }
   return res.json();
@@ -156,7 +156,7 @@ export async function uploadPremiums(
   file: File,
   originGranularity: "yearly" | "quarterly" = "yearly",
 ): Promise<Record<string, number>> {
-  if (file.size > MAX_UPLOAD_BYTES) throw new Error("Dosya 10 MB sınırını aşıyor");
+  if (file.size > MAX_UPLOAD_BYTES) throw new Error("File exceeds the 10 MB limit");
   const buffer = await file.arrayBuffer();
   const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer)));
   const authHeaders = await getAuthHeaders();
@@ -166,7 +166,7 @@ export async function uploadPremiums(
     body: JSON.stringify({ file_b64: base64, origin_granularity: originGranularity }),
   });
   if (!res.ok) {
-    const body = await res.json().catch(() => ({ detail: "Yükleme hatası" }));
+    const body = await res.json().catch(() => ({ detail: "Upload error" }));
     throw new Error(body.detail || `HTTP ${res.status}`);
   }
   const data = await res.json();
@@ -226,7 +226,7 @@ export async function uploadCashflowFile(file: File): Promise<{
   report_date: string;
   records: CashflowRecord[];
 }> {
-  if (file.size > 300 * 1024 * 1024) throw new Error("Dosya 300 MB sınırını aşıyor");
+  if (file.size > 300 * 1024 * 1024) throw new Error("File exceeds the 300 MB limit");
   const buffer = await file.arrayBuffer();
   const base64 = bufferToBase64(buffer);
   const authHeaders = await getAuthHeaders();
@@ -236,7 +236,7 @@ export async function uploadCashflowFile(file: File): Promise<{
     body: JSON.stringify({ file_b64: base64, filename: file.name }),
   });
   if (!res.ok) {
-    const body = await res.json().catch(() => ({ detail: "Yükleme hatası" }));
+    const body = await res.json().catch(() => ({ detail: "Upload error" }));
     throw new Error(body.detail || `HTTP ${res.status}`);
   }
   return res.json();
@@ -262,7 +262,7 @@ export async function computeCashflowFromTriangle(
     }),
   });
   if (!res.ok) {
-    const body = await res.json().catch(() => ({ detail: "Hesaplama hatası" }));
+    const body = await res.json().catch(() => ({ detail: "Calculation error" }));
     const detail = Array.isArray(body.detail)
       ? body.detail.map((e: { msg?: string }) => e.msg ?? JSON.stringify(e)).join("; ")
       : body.detail;
@@ -299,7 +299,7 @@ export async function computeCashflow(
     body: JSON.stringify({ records }),
   });
   if (!res.ok) {
-    const body = await res.json().catch(() => ({ detail: "Hesaplama hatası" }));
+    const body = await res.json().catch(() => ({ detail: "Calculation error" }));
     throw new Error(body.detail || `HTTP ${res.status}`);
   }
   return res.json();
@@ -338,7 +338,7 @@ export interface DataImportResult {
 }
 
 export async function inspectDataFile(file: File): Promise<DataInspectResult> {
-  if (file.size > 50 * 1024 * 1024) throw new Error("Dosya 50 MB sınırını aşıyor");
+  if (file.size > 50 * 1024 * 1024) throw new Error("File exceeds the 50 MB limit");
   const base64 = bufferToBase64(await file.arrayBuffer());
   const authHeaders = await getAuthHeaders();
   const res = await fetch(`${API_BASE}/v1/data/inspect`, {
@@ -347,7 +347,7 @@ export async function inspectDataFile(file: File): Promise<DataInspectResult> {
     body: JSON.stringify({ file_b64: base64, filename: file.name }),
   });
   if (!res.ok) {
-    const body = await res.json().catch(() => ({ detail: "İnceleme hatası" }));
+    const body = await res.json().catch(() => ({ detail: "Inspection error" }));
     throw new Error(body.detail || `HTTP ${res.status}`);
   }
   return res.json();
@@ -358,7 +358,7 @@ export async function importDataFile(
   sheetName: string | null,
   columnMapping: Record<string, string>,
 ): Promise<DataImportResult> {
-  if (file.size > 50 * 1024 * 1024) throw new Error("Dosya 50 MB sınırını aşıyor");
+  if (file.size > 50 * 1024 * 1024) throw new Error("File exceeds the 50 MB limit");
   const base64 = bufferToBase64(await file.arrayBuffer());
   const authHeaders = await getAuthHeaders();
   const res = await fetch(`${API_BASE}/v1/data/import`, {
@@ -372,7 +372,7 @@ export async function importDataFile(
     }),
   });
   if (!res.ok) {
-    const body = await res.json().catch(() => ({ detail: "İçeri aktarma hatası" }));
+    const body = await res.json().catch(() => ({ detail: "Import error" }));
     throw new Error(body.detail || `HTTP ${res.status}`);
   }
   return res.json();
@@ -403,7 +403,7 @@ export interface PrimImportResult {
 }
 
 export async function inspectPrimFile(file: File): Promise<PrimInspectResult> {
-  if (file.size > 50 * 1024 * 1024) throw new Error("Dosya 50 MB sınırını aşıyor");
+  if (file.size > 50 * 1024 * 1024) throw new Error("File exceeds the 50 MB limit");
   const base64 = bufferToBase64(await file.arrayBuffer());
   const authHeaders = await getAuthHeaders();
   const res = await fetch(`${API_BASE}/v1/data/inspect-prim`, {
@@ -412,7 +412,7 @@ export async function inspectPrimFile(file: File): Promise<PrimInspectResult> {
     body: JSON.stringify({ file_b64: base64, filename: file.name }),
   });
   if (!res.ok) {
-    const body = await res.json().catch(() => ({ detail: "İnceleme hatası" }));
+    const body = await res.json().catch(() => ({ detail: "Inspection error" }));
     throw new Error(body.detail || `HTTP ${res.status}`);
   }
   return res.json();
@@ -423,7 +423,7 @@ export async function importPrimFile(
   sheetName: string | null,
   columnMapping: Record<string, string>,
 ): Promise<PrimImportResult> {
-  if (file.size > 50 * 1024 * 1024) throw new Error("Dosya 50 MB sınırını aşıyor");
+  if (file.size > 50 * 1024 * 1024) throw new Error("File exceeds the 50 MB limit");
   const base64 = bufferToBase64(await file.arrayBuffer());
   const authHeaders = await getAuthHeaders();
   const res = await fetch(`${API_BASE}/v1/data/import-prim`, {
@@ -437,7 +437,7 @@ export async function importPrimFile(
     }),
   });
   if (!res.ok) {
-    const body = await res.json().catch(() => ({ detail: "İçeri aktarma hatası" }));
+    const body = await res.json().catch(() => ({ detail: "Import error" }));
     throw new Error(body.detail || `HTTP ${res.status}`);
   }
   return res.json();
@@ -461,7 +461,7 @@ export async function buildTriangleFromRecords(
     }),
   });
   if (!res.ok) {
-    const body = await res.json().catch(() => ({ detail: "Üçgen oluşturma hatası" }));
+    const body = await res.json().catch(() => ({ detail: "Triangle build error" }));
     throw new Error(body.detail || `HTTP ${res.status}`);
   }
   const data = await res.json();
@@ -499,7 +499,7 @@ export async function rollForwardTriangle(
     }),
   });
   if (!res.ok) {
-    const body = await res.json().catch(() => ({ detail: "Roll-forward hatası" }));
+    const body = await res.json().catch(() => ({ detail: "Roll-forward error" }));
     throw new Error(body.detail || `HTTP ${res.status}`);
   }
   const data = await res.json();

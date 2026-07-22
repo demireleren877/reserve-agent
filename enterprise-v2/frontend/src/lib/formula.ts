@@ -63,7 +63,7 @@ function tokenize(src: string): Token[] {
         val /= 100;
         j++;
       }
-      if (!Number.isFinite(val)) throw new Error(`Geçersiz sayı: ${src.slice(i, j)}`);
+      if (!Number.isFinite(val)) throw new Error(`Invalid number: ${src.slice(i, j)}`);
       out.push({ type: "num", value: val });
       i = j;
       continue;
@@ -109,7 +109,7 @@ function tokenize(src: string): Token[] {
 
 function refToRank(ref: string): { rank: number; quarterly: boolean } {
   const m = /^(\d{4})(?:Q([1-4]))?$/i.exec(ref);
-  if (!m) throw new Error(`Geçersiz yıl: ${ref}`);
+  if (!m) throw new Error(`Invalid year: ${ref}`);
   const year = parseInt(m[1], 10);
   if (m[2]) return { rank: year * 4 + (parseInt(m[2], 10) - 1), quarterly: true };
   return { rank: year, quarterly: false };
@@ -141,7 +141,7 @@ class Parser {
   parse(): number {
     const v = this.parseAdditive();
     if (this.peek().type !== "eof") {
-      throw new Error("İfade sonunda beklenmeyen token");
+      throw new Error("Unexpected token at end of expression");
     }
     return v;
   }
@@ -167,7 +167,7 @@ class Parser {
         this.eat();
         const right = this.parseUnary();
         if (t.op === "/") {
-          if (right === 0) throw new Error("Sıfıra bölme");
+          if (right === 0) throw new Error("Division by zero");
           left = left / right;
         } else {
           left = left * right;
@@ -206,7 +206,7 @@ class Parser {
     if (t.type === "ident") {
       this.eat();
       if (this.peek().type !== "lparen") {
-        throw new Error(`"${t.name}" sonrasında "(" bekleniyor`);
+        throw new Error(`"(" expected after "${t.name}"`);
       }
       this.eat();
       const years = this.parseYearArgs();
@@ -228,7 +228,7 @@ class Parser {
         const a = refToRank(first);
         const b = refToRank(second);
         if (a.quarterly !== b.quarterly)
-          throw new Error(`Aralık türleri eşleşmiyor: ${first}:${second}`);
+          throw new Error(`Range types do not match: ${first}:${second}`);
         const lo = Math.min(a.rank, b.rank);
         const hi = Math.max(a.rank, b.rank);
         for (let r = lo; r <= hi; r++) out.push(rankToRef(r, a.quarterly));
@@ -244,7 +244,7 @@ class Parser {
 
   private parseOneRef(): string {
     const t = this.eat();
-    if (t.type !== "num") throw new Error("Yıl referansı bekleniyor (ör. 2020)");
+    if (t.type !== "num") throw new Error("Year reference expected (e.g. 2020)");
     const year = Math.floor(t.value);
     const nt = this.peek();
     if (nt.type === "ident" && /^q[1-4]$/.test(nt.name)) {
@@ -255,14 +255,14 @@ class Parser {
   }
 
   private callFunction(name: string, years: string[]): number {
-    if (years.length === 0) throw new Error(`${name}() için yıl verilmedi`);
+    if (years.length === 0) throw new Error(`No year provided for ${name}()`);
     if (name === "avg" || name === "ortalama") {
       const vals: number[] = [];
       for (const y of years) {
         const v = this.ctx.pattern.get(y);
         if (v != null && Number.isFinite(v)) vals.push(v);
       }
-      if (vals.length === 0) throw new Error("Pattern ratio bulunamadı");
+      if (vals.length === 0) throw new Error("Pattern ratio not found");
       return vals.reduce((s, x) => s + x, 0) / vals.length;
     }
     if (name === "vw") {
@@ -282,7 +282,7 @@ class Parser {
       return years.reduce((s, y) => s + (this.ctx.exposure.get(y) ?? 0), 0);
     }
     if (name === "pattern") {
-      if (years.length !== 1) throw new Error("pattern() tek yıl alır");
+      if (years.length !== 1) throw new Error("pattern() takes a single year");
       const v = this.ctx.pattern.get(years[0]);
       if (v == null) throw new Error(`Pattern yok: ${years[0]}`);
       return v;
@@ -301,12 +301,12 @@ export function evalFormula(
     const tokens = tokenize(trimmed);
     const parser = new Parser(tokens, ctx);
     const v = parser.parse();
-    if (!Number.isFinite(v)) return { value: null, error: "Sonuç geçersiz" };
+    if (!Number.isFinite(v)) return { value: null, error: "Result is invalid" };
     return { value: v, error: null };
   } catch (e) {
     return {
       value: null,
-      error: e instanceof Error ? e.message : "Parse hatası",
+      error: e instanceof Error ? e.message : "Parse error",
     };
   }
 }

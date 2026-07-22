@@ -47,7 +47,7 @@ export default function ConnectionsPage() {
   if (list === null) {
     return (
       <Shell>
-        <div className="text-[13px]" style={{ color: "#8a8898" }}>Yükleniyor...</div>
+        <div className="text-[13px]" style={{ color: "#8a8898" }}>Loading...</div>
       </Shell>
     );
   }
@@ -57,9 +57,9 @@ export default function ConnectionsPage() {
     return (
       <Shell>
         <Card>
-          <h1 className="text-[15px] font-semibold mb-1" style={{ color: "#0a0a14" }}>Bağlantı</h1>
+          <h1 className="text-[15px] font-semibold mb-1" style={{ color: "#0a0a14" }}>Connection</h1>
           <p className="text-[12px] mb-4" style={{ color: "#8a8898" }}>
-            Bağlantı ortam değişkenleriyle yönetiliyor (sunucu dağıtımı). Buradan değiştirilemez.
+            The connection is managed via environment variables (server deployment). It cannot be changed here.
           </p>
           {c && (
             <div className="rounded-lg px-3 py-2.5 text-[13px]" style={inputStyle}>
@@ -68,7 +68,7 @@ export default function ConnectionsPage() {
           )}
           <button onClick={() => router.replace("/login")} className="mt-5 w-full py-2.5 rounded-lg text-[13.5px] font-semibold text-white"
             style={{ background: "linear-gradient(180deg, #2563eb, #1e40af)" }}>
-            Girişe dön
+            Back to login
           </button>
         </Card>
       </Shell>
@@ -96,7 +96,7 @@ export default function ConnectionsPage() {
     <Shell>
       <Card>
         <div className="flex items-center justify-between mb-4">
-          <h1 className="text-[15px] font-semibold" style={{ color: "#0a0a14" }}>Bağlantılar</h1>
+          <h1 className="text-[15px] font-semibold" style={{ color: "#0a0a14" }}>Connections</h1>
           <button onClick={() => setMode({ kind: "add" })}
             className="text-[12.5px] font-semibold px-3 py-1.5 rounded-lg text-white"
             style={{ background: "linear-gradient(180deg, #2563eb, #1e40af)" }}>
@@ -123,7 +123,7 @@ export default function ConnectionsPage() {
           className="mt-6 w-full py-2.5 rounded-lg text-[13.5px] font-semibold text-white disabled:opacity-50"
           style={{ background: "linear-gradient(180deg, #2563eb, #1e40af)" }}
         >
-          Seçili bağlantıyla girişe dön
+          Back to login with the selected connection
         </button>
       </Card>
     </Shell>
@@ -152,7 +152,7 @@ function ConnectionRow({
         border: `1px solid ${selected ? "#bcd0ff" : "#e8e5dd"}`,
       }}
     >
-      <button onClick={run(onSelect)} disabled={busy || selected} title="Seç"
+      <button onClick={run(onSelect)} disabled={busy || selected} title="Select"
         className="shrink-0 h-4 w-4 rounded-full border transition"
         style={{
           borderColor: selected ? "#2563eb" : "#c8c5bd",
@@ -166,7 +166,7 @@ function ConnectionRow({
         </div>
       </button>
       <button onClick={onEdit} disabled={busy} className="text-[11.5px] font-semibold px-2 py-1 rounded-md"
-        style={{ color: "#45445a", background: "#fff", border: "1px solid #e8e5dd" }}>Düzenle</button>
+        style={{ color: "#45445a", background: "#fff", border: "1px solid #e8e5dd" }}>Edit</button>
       <button onClick={run(onDelete)} disabled={busy} className="text-[11.5px] font-semibold px-2 py-1 rounded-md"
         style={{ color: "#b91c1c", background: "#fff", border: "1px solid #fecaca" }}>Sil</button>
     </div>
@@ -235,16 +235,16 @@ function ConnectionForm({
   return (
     <Card>
       <h1 className="text-[15px] font-semibold mb-1" style={{ color: "#0a0a14" }}>
-        {editing ? "Bağlantıyı düzenle" : "Yeni bağlantı"}
+        {editing ? "Edit connection" : "New connection"}
       </h1>
       <p className="text-[12px] mb-5" style={{ color: "#8a8898" }}>
-        Oracle bağlantı bilgileri bu bilgisayarda güvenli biçimde saklanır.
+        Oracle connection details are stored securely on this computer.
       </p>
 
       <form onSubmit={onSubmit} className="space-y-4">
         <div>
-          <label className={labelCls} style={labelStyle}>Bağlantı adı</label>
-          <input className={inputCls} style={inputStyle} required autoFocus placeholder="Üretim Oracle"
+          <label className={labelCls} style={labelStyle}>Connection name</label>
+          <input className={inputCls} style={inputStyle} required autoFocus placeholder="Production Oracle"
             value={name} onChange={(e) => setName(e.target.value)} disabled={busy} />
         </div>
 
@@ -262,20 +262,20 @@ function ConnectionForm({
         </div>
 
         <div>
-          <label className={labelCls} style={labelStyle}>Servis adı</label>
+          <label className={labelCls} style={labelStyle}>Service name</label>
           <input className={inputCls} style={inputStyle} required placeholder="ORCLPDB1"
             value={serviceName} onChange={(e) => setServiceName(e.target.value)} disabled={busy} />
         </div>
 
         <div className="flex gap-3">
           <div className="flex-1">
-            <label className={labelCls} style={labelStyle}>Veritabanı kullanıcısı</label>
+            <label className={labelCls} style={labelStyle}>Database user</label>
             <input className={inputCls} style={inputStyle} required autoComplete="off"
               value={user} onChange={(e) => setUser(e.target.value)} disabled={busy} />
           </div>
           <div className="flex-1">
             <label className={labelCls} style={labelStyle}>
-              Veritabanı şifresi {editing && <span style={{ color: "#8a8898" }}>(tekrar gir)</span>}
+              Database password {editing && <span style={{ color: "#8a8898" }}>(re-enter)</span>}
             </label>
             <input type="password" className={inputCls} style={inputStyle} required autoComplete="off"
               value={password} onChange={(e) => setPassword(e.target.value)} disabled={busy} />
@@ -285,21 +285,21 @@ function ConnectionForm({
         {!editing && (
           <label className="flex items-center gap-2 text-[12.5px] cursor-pointer" style={{ color: "#45445a" }}>
             <input type="checkbox" checked={initDb} onChange={(e) => setInitDb(e.target.checked)} disabled={busy} />
-            Yeni/boş veritabanı — şema ve ilk yöneticiyi kur
+            New/empty database — set up schema and first admin
           </label>
         )}
 
         {!editing && initDb && (
           <div className="rounded-lg p-3.5 space-y-4" style={{ background: "#f7f9ff", border: "1px solid #dbe4ff" }}>
-            <p className="text-[11.5px] font-semibold" style={{ color: "#3452c9" }}>İlk yönetici hesabı</p>
+            <p className="text-[11.5px] font-semibold" style={{ color: "#3452c9" }}>First admin account</p>
             <div className="flex gap-3">
               <div className="flex-1">
-                <label className={labelCls} style={labelStyle}>Yönetici kullanıcı adı</label>
+                <label className={labelCls} style={labelStyle}>Admin username</label>
                 <input className={inputCls} style={inputStyle} required={initDb} autoComplete="off"
                   value={adminUsername} onChange={(e) => setAdminUsername(e.target.value)} disabled={busy} />
               </div>
               <div className="flex-1">
-                <label className={labelCls} style={labelStyle}>Yönetici şifresi</label>
+                <label className={labelCls} style={labelStyle}>Admin password</label>
                 <input type="password" className={inputCls} style={inputStyle} required={initDb} autoComplete="new-password"
                   value={adminPassword} onChange={(e) => setAdminPassword(e.target.value)} disabled={busy} />
               </div>
@@ -313,13 +313,13 @@ function ConnectionForm({
         )}
         {testState === "ok" && !error && (
           <div className="text-[12.5px] px-3 py-2 rounded-lg"
-            style={{ background: "#f0fdf4", color: "#15803d", border: "1px solid #bbf7d0" }}>Bağlantı başarılı.</div>
+            style={{ background: "#f0fdf4", color: "#15803d", border: "1px solid #bbf7d0" }}>Connection successful.</div>
         )}
 
         <div className="flex gap-3 pt-1">
           <button type="button" onClick={onCancel} disabled={busy}
             className="py-2.5 px-4 rounded-lg text-[13.5px] font-semibold"
-            style={{ background: "#faf9f6", border: "1px solid #e8e5dd", color: "#45445a" }}>İptal</button>
+            style={{ background: "#faf9f6", border: "1px solid #e8e5dd", color: "#45445a" }}>Cancel</button>
           <button type="button" onClick={onTest} disabled={busy}
             className="flex-1 py-2.5 rounded-lg text-[13.5px] font-semibold"
             style={{ background: "#faf9f6", border: "1px solid #e8e5dd", color: "#45445a" }}>
@@ -347,7 +347,7 @@ function Shell({ children }: { children: React.ReactNode }) {
         </div>
         {children}
         <p className="text-center text-[11px] mt-5" style={{ color: "#8a8898" }}>
-          Enterprise — çevrimdışı kurulum
+          Enterprise — offline setup
         </p>
       </div>
     </div>
@@ -365,8 +365,8 @@ function Card({ children }: { children: React.ReactNode }) {
 function humanize(err: unknown): string {
   if (err instanceof ApiError) {
     if (err.message && !err.message.startsWith("http_")) return err.message;
-    if (err.status === 403) return "Bu işlem ortam değişkeni modunda kapalı.";
-    return `Sunucu hatası: ${err.code}`;
+    if (err.status === 403) return "This action is disabled in environment-variable mode.";
+    return `Server error: ${err.code}`;
   }
-  return "Backend'e ulaşılamadı. Uygulamayı yeniden başlatmayı deneyin.";
+  return "Could not reach the backend. Try restarting the app.";
 }

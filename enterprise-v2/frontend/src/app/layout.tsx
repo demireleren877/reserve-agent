@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Actuarius Enterprise",
-  description: "Actuarius — Kurumsal aktüeryal analiz platformu.",
+  description: "Actuarius — Enterprise actuarial analytics platform.",
 };
 
 export default function RootLayout({

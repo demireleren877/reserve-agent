@@ -58,7 +58,7 @@ export default function LoginPage() {
           style={{ background: "#fff", border: "1px solid #e8e5dd" }}
         >
           <h1 className="text-[15px] font-semibold mb-5" style={{ color: "#0a0a14" }}>
-            Kurumsal Giriş
+            Enterprise Login
           </h1>
 
           <form onSubmit={onSubmit} className="space-y-4">
@@ -67,7 +67,7 @@ export default function LoginPage() {
                 className="block text-[11.5px] font-semibold mb-1.5"
                 style={{ color: "#45445a" }}
               >
-                Kullanıcı adı
+                Username
               </label>
               <input
                 type="text"
@@ -87,7 +87,7 @@ export default function LoginPage() {
                 className="block text-[11.5px] font-semibold mb-1.5"
                 style={{ color: "#45445a" }}
               >
-                Şifre
+                Password
               </label>
               <input
                 type="password"
@@ -120,7 +120,7 @@ export default function LoginPage() {
                 boxShadow: "0 4px 12px rgba(37,83,228,0.25)",
               }}
             >
-              {busy ? "Giriş yapılıyor..." : "Giriş yap"}
+              {busy ? "Signing in..." : "Sign in"}
             </button>
           </form>
 
@@ -131,12 +131,12 @@ export default function LoginPage() {
             className="w-full mt-3 py-2 rounded-lg text-[12.5px] font-semibold transition disabled:opacity-50"
             style={{ background: "#faf9f6", border: "1px solid #e8e5dd", color: "#45445a" }}
           >
-            Bağlantılar
+            Connections
           </button>
         </div>
 
         <p className="text-center text-[11px] mt-5" style={{ color: "#8a8898" }}>
-          Enterprise — çevrimdışı kurulum
+          Enterprise — offline setup
         </p>
       </div>
     </div>
@@ -145,9 +145,9 @@ export default function LoginPage() {
 
 function humanizeError(err: unknown): string {
   if (err instanceof ApiError) {
-    if (err.status === 401) return "Kullanıcı adı veya şifre hatalı.";
-    if (err.status === 403) return "Hesabınız devre dışı bırakılmış.";
-    return `Sunucu hatası: ${err.code}`;
+    if (err.status === 401) return "Incorrect username or password.";
+    if (err.status === 403) return "Your account has been disabled.";
+    return `Server error: ${err.code}`;
   }
-  return "Bağlantı hatası. Backend'in çalıştığından emin olun.";
+  return "Connection error. Make sure the backend is running.";
 }

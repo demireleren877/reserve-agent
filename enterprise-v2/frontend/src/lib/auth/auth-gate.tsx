@@ -31,7 +31,7 @@ export function AuthGate({ children }: Props) {
         className="min-h-screen flex items-center justify-center"
         style={{ background: "#faf9f6", color: "#8a8898" }}
       >
-        <div className="text-[13px]">Yükleniyor...</div>
+        <div className="text-[13px]">Loading...</div>
       </div>
     );
   }

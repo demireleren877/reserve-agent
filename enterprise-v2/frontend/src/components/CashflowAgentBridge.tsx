@@ -120,6 +120,6 @@ function buildCashflowSnapshot(periods: Period[], activeBranch: Branch | null) {
   return {
     branches,
     active_branch_id: activeBranch?.id ?? null,
-    note: "Cashflow modülü: her branş için nakit akışı ayarları ve aylık dağılım pattern durumu.",
+    note: "Cashflow module: cashflow settings and monthly distribution pattern status per branch.",
   };
 }

@@ -6,7 +6,7 @@ const MODULES = [
   {
     href: "/reserve",
     label: "Rezerv",
-    desc: "Aktüeryal IBNR analizi · Chain-Ladder, Bornhuetter–Ferguson, parametrik tail fitting.",
+    desc: "Actuarial IBNR analysis · Chain-Ladder, Bornhuetter–Ferguson, parametric tail fitting.",
     tags: ["Chain-Ladder", "BF", "Tail Fitting", "AI Agent"],
     icon: <StackIcon />,
     active: true,
@@ -17,9 +17,9 @@ export default function AppHome() {
   return (
     <main className="flex-1 p-8 max-w-5xl w-full mx-auto">
       <div className="mb-10">
-        <h1 className="text-[24px] font-semibold tracking-tight mb-1.5">Modüller</h1>
+        <h1 className="text-[24px] font-semibold tracking-tight mb-1.5">Modules</h1>
         <p className="text-[13px] text-[color:var(--muted-strong)]">
-          Aktüeryal iş akışı modülleri. Aktif modülü seçin.
+          Actuarial workflow modules. Select the active module.
         </p>
       </div>
 
@@ -60,7 +60,7 @@ export default function AppHome() {
           </Link>
         ))}
 
-        {/* Yakında */}
+        {/* Coming soon */}
         <div
           className="rounded-xl p-5 opacity-60"
           style={{ background: "var(--surface)", border: "1px dashed var(--border)" }}>
@@ -71,12 +71,12 @@ export default function AppHome() {
             </div>
             <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded"
               style={{ background: "var(--surface-alt)", color: "var(--muted)" }}>
-              Yakında
+              Coming soon
             </span>
           </div>
           <div className="text-[15px] font-semibold mb-1.5" style={{ color: "var(--muted-strong)" }}>IFRS 17</div>
           <p className="text-[12.5px] leading-relaxed" style={{ color: "var(--muted)" }}>
-            Sigorta sözleşmeleri için IFRS 17 raporlaması · LRC, LIC, CSM hesabı.
+            IFRS 17 reporting for insurance contracts · LRC, LIC, CSM calculation.
           </p>
         </div>
       </div>

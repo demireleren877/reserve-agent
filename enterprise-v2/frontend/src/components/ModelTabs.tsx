@@ -124,8 +124,8 @@ export function ModelTabs() {
             <button
               onClick={(e) => closeTab(e, t.key)}
               className="ml-0.5 h-4 w-4 shrink-0 grid place-items-center rounded text-[color:var(--muted)] hover:text-[color:var(--foreground)] hover:bg-[color:var(--surface-alt)] opacity-60 group-hover:opacity-100 transition"
-              title="Sekmeyi kapat"
-              aria-label="Sekmeyi kapat"
+              title="Close tab"
+              aria-label="Close tab"
             >
               ×
             </button>
@@ -135,8 +135,8 @@ export function ModelTabs() {
       <button
         onClick={() => actions.goRoot()}
         className="shrink-0 h-8 w-8 grid place-items-center rounded-md text-[color:var(--muted)] hover:text-[color:var(--foreground)] hover:bg-[color:var(--surface-alt)] transition"
-        title="Dönemlere git / yeni model aç"
-        aria-label="Yeni model"
+        title="Go to periods / open new model"
+        aria-label="New model"
       >
         +
       </button>

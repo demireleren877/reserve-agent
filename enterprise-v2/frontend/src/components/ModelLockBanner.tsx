@@ -25,14 +25,14 @@ export function ModelLockBanner({
         <path d="M7 11V7a5 5 0 0 1 10 0v4" />
       </svg>
       <span className="flex-1">
-        <strong>{state.lockedByName ?? "Başka bir kullanıcı"}</strong> bu modeli düzenliyor — şu an salt okunur moddasınız.
+        <strong>{state.lockedByName ?? "Another user"}</strong> is editing this model — you are in read-only mode.
       </span>
       {onForceAcquire && (
         <button
           onClick={onForceAcquire}
           className="shrink-0 px-2.5 py-1 rounded-md font-semibold transition"
           style={{ background: "#92400e", color: "#fffbeb" }}
-          title="Kilidi devral (dikkat: diğer kullanıcının kaydedilmemiş değişikliği kaybolabilir)"
+          title="Take over the lock (warning: the other user's unsaved changes may be lost)"
         >
           Devral
         </button>

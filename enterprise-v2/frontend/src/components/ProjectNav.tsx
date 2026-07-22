@@ -14,9 +14,9 @@ export function Breadcrumb({ onUploaded: _onUploaded }: BreadcrumbProps) {
 
   const freqLabel =
     project.activeFrequency === "yearly"
-      ? "Yıllık"
+      ? "Yearly"
       : project.activeFrequency === "quarterly"
-      ? "Çeyreklik"
+      ? "Quarterly"
       : null;
 
   return (
@@ -31,7 +31,7 @@ export function Breadcrumb({ onUploaded: _onUploaded }: BreadcrumbProps) {
         }
       >
         <FolderIcon />
-        Dönemler
+        Periods
       </button>
       {activePeriod && (
         <>
@@ -82,9 +82,9 @@ export function Breadcrumb({ onUploaded: _onUploaded }: BreadcrumbProps) {
           <button
             onClick={actions.goUp}
             className="text-xs text-[color:var(--muted)] hover:text-[color:var(--foreground)]"
-            title="Yukarı"
+            title="Up"
           >
-            ↑ Yukarı
+            ↑ Up
           </button>
         )}
       </div>
@@ -95,25 +95,25 @@ export function Breadcrumb({ onUploaded: _onUploaded }: BreadcrumbProps) {
 // —————————————————————— Logs button ——————————————————————
 
 const ACTION_LABELS: Record<string, string> = {
-  branch_created: "Branş oluşturuldu",
-  triangle_loaded: "Üçgen yüklendi",
-  set_method: "Metod değişti",
-  set_window: "Window değişti",
-  cell_toggled: "Hücre eleme/dahil",
-  exclusions_replaced: "Elemeler güncellendi",
-  exclusions_cleared: "Elemeler temizlendi",
-  premiums_updated: "Exposure güncellendi",
-  premiums_bulk: "Exposure (toplu)",
-  selected_lr_set: "Selected LR değişti",
-  selected_lr_bulk: "Selected LR (toplu)",
-  basis_set: "Temel değişti",
-  basis_bulk: "Temel (toplu)",
-  correction_set: "Correction değişti",
-  correction_bulk: "Correction (toplu)",
+  branch_created: "Branch created",
+  triangle_loaded: "Triangle loaded",
+  set_method: "Method changed",
+  set_window: "Window changed",
+  cell_toggled: "Cell exclude/include",
+  exclusions_replaced: "Exclusions updated",
+  exclusions_cleared: "Exclusions cleared",
+  premiums_updated: "Exposure updated",
+  premiums_bulk: "Exposure (bulk)",
+  selected_lr_set: "Selected LR changed",
+  selected_lr_bulk: "Selected LR (bulk)",
+  basis_set: "Basis changed",
+  basis_bulk: "Basis (bulk)",
+  correction_set: "Correction changed",
+  correction_bulk: "Correction (bulk)",
   curve_cdf_set: "Curve User Value",
-  curve_choice_set: "Curve seçimi",
-  curve_choice_bulk: "Curve seçimi (toplu)",
-  curve_reset: "Curve sıfırlandı",
+  curve_choice_set: "Curve selection",
+  curve_choice_bulk: "Curve selection (bulk)",
+  curve_reset: "Curve reset",
 };
 
 function BranchLogsButton() {
@@ -156,11 +156,11 @@ function BranchLogsButton() {
             )}
           </div>
           {!activeBranch ? (
-            <div className="p-6 text-center text-sm text-[color:var(--muted)]">Aktif branş yok.</div>
+            <div className="p-6 text-center text-sm text-[color:var(--muted)]">No active branch.</div>
           ) : (() => {
             const entries = [...activeBranch.history].reverse();
             return entries.length === 0 ? (
-              <div className="p-6 text-center text-sm text-[color:var(--muted)]">Henüz kayıt yok.</div>
+              <div className="p-6 text-center text-sm text-[color:var(--muted)]">No records yet.</div>
             ) : (
               <div className="overflow-y-auto overflow-x-auto flex-1">
                 <table className="text-[11px] w-full tabular">
@@ -168,7 +168,7 @@ function BranchLogsButton() {
                     <tr className="border-b text-[10px] uppercase tracking-wide text-[color:var(--muted-strong)]">
                       <th className="text-left px-3 py-1.5 font-semibold">Zaman</th>
                       <th className="text-left px-3 py-1.5 font-semibold">Op.</th>
-                      <th className="text-left px-3 py-1.5 font-semibold">İşlem</th>
+                      <th className="text-left px-3 py-1.5 font-semibold">Action</th>
                       <th className="text-left px-3 py-1.5 font-semibold">Detay</th>
                     </tr>
                   </thead>

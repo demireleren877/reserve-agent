@@ -13,12 +13,12 @@ interface ModuleItem {
 }
 
 const MODULES: ModuleItem[] = [
-  { href: "/home", label: "Anasayfa", icon: <HomeIcon /> },
-  { href: "/data", label: "Veri", icon: <DatabaseIcon /> },
-  { href: "/reserve", label: "Rezerv", icon: <StackIcon /> },
-  { href: "/cashflow", label: "Nakit Akışı", icon: <CashflowIcon /> },
-  { href: "/discount", label: "İskonto", icon: <DiscountIcon /> },
-  { href: "/admin/users", label: "Kullanıcılar", icon: <UsersIcon />, adminOnly: true },
+  { href: "/home", label: "Home", icon: <HomeIcon /> },
+  { href: "/data", label: "Data", icon: <DatabaseIcon /> },
+  { href: "/reserve", label: "Reserve", icon: <StackIcon /> },
+  { href: "/cashflow", label: "Cashflow", icon: <CashflowIcon /> },
+  { href: "/discount", label: "Discount", icon: <DiscountIcon /> },
+  { href: "/admin/users", label: "Users", icon: <UsersIcon />, adminOnly: true },
 ];
 
 const STORAGE_KEY = "app-sidebar-collapsed";
@@ -91,7 +91,7 @@ export function AppSidebar() {
       <nav className="p-2 flex-1 overflow-y-auto">
         {!collapsed && (
           <div className="text-[10px] uppercase tracking-wide text-[color:var(--muted)] font-semibold px-2 py-2">
-            Modüller
+            Modules
           </div>
         )}
         <ul className="space-y-0.5">
@@ -141,7 +141,7 @@ export function AppSidebar() {
                   <div className="min-w-0">
                     <div className="text-[12.5px] font-semibold truncate">{username}</div>
                     <div className="text-[11px] truncate" style={{ color: "var(--muted-strong)" }}>
-                      {isAdmin ? "Admin" : "Kullanıcı"}
+                      {isAdmin ? "Admin" : "User"}
                     </div>
                   </div>
                 </div>
@@ -153,7 +153,7 @@ export function AppSidebar() {
                   style={{ color: "#dc2626" }}
                 >
                   <LogOutIcon />
-                  Çıkış yap
+                  Log out
                 </button>
               </div>
             </div>
@@ -174,7 +174,7 @@ export function AppSidebar() {
                   {username}
                 </div>
                 <div className="text-[10px] truncate leading-tight" style={{ color: "var(--muted)" }}>
-                  {isAdmin ? "Admin" : "Kullanıcı"}
+                  {isAdmin ? "Admin" : "User"}
                 </div>
               </div>
             )}
@@ -185,9 +185,9 @@ export function AppSidebar() {
         <button
           onClick={() => setCollapsed((c) => !c)}
           className="w-full inline-flex items-center justify-center gap-2 rounded-md py-1.5 text-[11px] text-[color:var(--muted-strong)] hover:bg-[color:var(--surface-alt)] transition"
-          title={collapsed ? "Genişlet" : "Daralt"}
+          title={collapsed ? "Expand" : "Collapse"}
         >
-          {collapsed ? <ChevronRightIcon /> : <><ChevronLeftIcon /><span>Daralt</span></>}
+          {collapsed ? <ChevronRightIcon /> : <><ChevronLeftIcon /><span>Collapse</span></>}
         </button>
       </div>
     </aside>

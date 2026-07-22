@@ -467,15 +467,9 @@ function PeriodDetail({ period }: { period: DataPeriod }) {
     };
     // setDataset optimistic update'i hemen uygular; remote hata verse de overview'a dön
     setDataset(period.id, ds).catch(() => {});
-    // Rezervde otomatik model kur (hasar → gross, large → large segment).
-    const recs = result.result.records as import("@/lib/data-store").ClaimRecord[];
-    const og = result.originGranularity;
-    const dg = result.developmentGranularity;
-    if (typeId === "large") {
-      provision.provisionLarge(period.label, recs, result.result.brans_list, og, dg).catch(() => {});
-    } else {
-      provision.provisionHasar(period.label, recs, result.result.brans_list, og, dg).catch(() => {});
-    }
+    // Rezervde SADECE model iskeleti oluştur (dönem + branş). Veriyi bağlamayı
+    // kullanıcı rezervde seçer. Large ayrı üçgen değil, aynı isimli modele bağlanır.
+    provision.provisionShells(period.label, result.result.brans_list, result.frequency);
     setView({ kind: "overview" });
   }
 
@@ -496,8 +490,7 @@ function PeriodDetail({ period }: { period: DataPeriod }) {
       records: r.records,
     };
     setDataset(period.id, ds).catch(() => {});
-    // Eşleşen modellere exposure otomatik atanır (branşa göre).
-    provision.provisionPrim(period.label, r.records as import("@/lib/data-store").PrimRecord[]);
+    // Prim yalnızca veri; model iskeleti oluşturmaz. Exposure'ı rezervde (BF) kullanıcı bağlar.
     setView({ kind: "overview" });
   }
 
@@ -516,8 +509,8 @@ function PeriodDetail({ period }: { period: DataPeriod }) {
       records: recs,
     };
     setDataset(period.id, ds).catch(() => {});
-    // Hazır üçgenden rezervde model kur (ucgen → gross, large_ucgen → large).
-    provision.provisionTriangle(period.label, recs, triangleWizardType);
+    // Hazır üçgen: rezervde yalnız model iskeleti (branş) oluştur; veriyi kullanıcı bağlar.
+    if (recs[0]) provision.provisionShells(period.label, [recs[0].brans], recs[0].origin_granularity);
     setShowTriangleWizard(false);
   }
 

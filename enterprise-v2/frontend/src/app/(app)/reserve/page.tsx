@@ -78,7 +78,9 @@ export default function Home() {
     isLargeSeg ? "large" : isGrossSeg ? "gross" : undefined,
   );
 
-  const [tab, setTab] = useState<Tab>("data");
+  // Alt-sekme her MODEL için ayrı hatırlanır (tarayıcı sekmesi gibi) — modeller
+  // arasında geçince açık alt-sekme taşmaz. `tab`/`setTab` triangle'dan sonra türetilir.
+  const [tabByKey, setTabByKey] = useState<Record<string, Tab>>({});
 
   const lockKey =
     navLevel === "branch" && activePeriod && activeBranch
@@ -138,6 +140,17 @@ export default function Home() {
     if (isGrossSeg) return grossTriangle;
     return (largeOn ? attritionalWorkingTriangle(activeBranch) : grossTriangle) ?? null;
   }, [activeBranch, isLargeSeg, isGrossSeg, largeOn, grossTriangle, isPaidType, largeWork]);
+
+  // Alt-sekme model başına: aktif modelin anahtarıyla sakla/oku. Üçgen yoksa
+  // data/file dışı sekmeler kilitli olduğundan güvenli olarak "data"ya düş.
+  const branchKey =
+    activePeriod && activeBranch ? `${activePeriod.id}:${activeBranch.id}` : null;
+  const rawTab: Tab = (branchKey && tabByKey[branchKey]) || "data";
+  const tab: Tab = !triangle && rawTab !== "data" && rawTab !== "file" ? "data" : rawTab;
+  const setTab = useCallback(
+    (t: Tab) => setTabByKey((m) => (branchKey ? { ...m, [branchKey]: t } : m)),
+    [branchKey],
+  );
 
   const effPaid = isLargeSeg
     ? largeWork?.paid ?? (isPaidType ? triangle : null)

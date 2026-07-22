@@ -138,3 +138,12 @@ button, input, select, textarea {
   --ag-header-column-separator-color: transparent;
   --ag-header-column-separator-display: none;
 }
+
+/* Yatay sekme şeridi için gizli scrollbar (ModelTabs) */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}

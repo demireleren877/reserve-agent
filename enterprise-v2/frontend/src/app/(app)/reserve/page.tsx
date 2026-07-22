@@ -13,6 +13,7 @@ import { ILRTab } from "@/components/ILRTab";
 import { FrequencySeverityTab } from "@/components/FrequencySeverityTab";
 import { FileAnalysisTab } from "@/components/FileAnalysisTab";
 import { Breadcrumb } from "@/components/ProjectNav";
+import { ModelTabs } from "@/components/ModelTabs";
 import { FolderBrowser } from "@/components/FolderBrowser";
 import { ModelLockBanner } from "@/components/ModelLockBanner";
 import { useModelLock } from "@/lib/use-model-lock";
@@ -1196,18 +1197,16 @@ function Shell({
 }) {
   return (
     <div className="min-h-screen">
-      <header className="border-b bg-[color:var(--surface)] px-6 h-14 flex items-center justify-between sticky top-0 z-40">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <div className="h-6 w-6 rounded-md bg-[color:var(--primary)] grid place-items-center text-white text-[11px] font-bold">
-              R
-            </div>
-            <h1 className="text-sm font-semibold">Rezerv</h1>
+      <header className="border-b bg-[color:var(--surface)] px-4 h-14 flex items-center gap-3 sticky top-0 z-40">
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="h-6 w-6 rounded-md bg-[color:var(--primary)] grid place-items-center text-white text-[11px] font-bold">
+            R
           </div>
-          <span className="text-[11px] text-[color:var(--muted)] hidden sm:inline">
-            Dönem → Model → Branş
-          </span>
+          <h1 className="text-sm font-semibold">Rezerv</h1>
         </div>
+        <div className="h-6 w-px bg-[color:var(--border)] shrink-0" />
+        {/* Açık modeller — tarayıcı sekmesi gibi */}
+        <ModelTabs />
       </header>
       <Breadcrumb onUploaded={onUploaded} />
       {children}

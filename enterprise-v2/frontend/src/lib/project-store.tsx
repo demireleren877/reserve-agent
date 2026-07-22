@@ -69,6 +69,8 @@ interface ProjectActions {
   goToPeriod(periodId: string): void;
   goToFrequency(freq: Frequency): void;
   goToBranch(branchId: string): void;
+  /** Bir branşı dönemiyle birlikte doğrudan aç (sekme geçişi için — dönem farklı olabilir). */
+  openBranch(periodId: string, branchId: string): void;
   goUp(): void;
   updateActiveBranch(
     updater: (prev: Branch) => Partial<Branch>,
@@ -554,6 +556,19 @@ export function ProjectProvider({ children, userId }: ProjectProviderProps) {
           return {
             ...prev,
             activeFrequency: branch?.frequency ?? prev.activeFrequency,
+            activeBranchId: branchId,
+          };
+        });
+      },
+      openBranch(periodId, branchId) {
+        setProject((prev) => {
+          const period = prev.periods.find((p) => p.id === periodId);
+          const branch = period?.branches.find((b) => b.id === branchId);
+          if (!branch) return prev;
+          return {
+            ...prev,
+            activePeriodId: periodId,
+            activeFrequency: branch.frequency,
             activeBranchId: branchId,
           };
         });

@@ -86,14 +86,9 @@ export function FileAnalysisTab({ triangle, fileData }: Props) {
   const [tab, setTab] = useState<"stats" | "largeloss" | "devt" | "compare">("stats");
   const { project, activePeriod, activeBranch } = useProject();
 
-  if (!fileData || !triangle) {
-    return (
-      <div className="card p-8 text-center text-sm text-[color:var(--muted)]">
-        Bu branş dosya kırılımlı veri içermiyor. DOSYA_NO kolonu içeren Excel yükleyin.
-      </div>
-    );
-  }
-
+  // NOT: Tüm hook'lar erken return'DEN ÖNCE çağrılmalı (Rules of Hooks). Aksi halde
+  // dosya datası olan/olmayan modeller arasında geçince hook sayısı değişir ve
+  // "rendered fewer hooks" hatasıyla sayfa çöker.
   // Previous periods (chronologically before active period) that have matching branches with fileData
   const prevPeriodBranches = useMemo((): { period: Period; branch: Branch }[] => {
     if (!activePeriod) return [];
@@ -116,6 +111,14 @@ export function FileAnalysisTab({ triangle, fileData }: Props) {
     }
     return result;
   }, [project.periods, activePeriod, activeBranch?.frequency]);
+
+  if (!fileData || !triangle) {
+    return (
+      <div className="card p-8 text-center text-sm text-[color:var(--muted)]">
+        Bu branş dosya kırılımlı veri içermiyor. DOSYA_NO kolonu içeren Excel yükleyin.
+      </div>
+    );
+  }
 
   const TABS = [
     { id: "stats", label: "İstatistikler" },

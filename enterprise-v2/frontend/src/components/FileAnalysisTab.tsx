@@ -115,15 +115,15 @@ export function FileAnalysisTab({ triangle, fileData }: Props) {
   if (!fileData || !triangle) {
     return (
       <div className="card p-8 text-center text-sm text-[color:var(--muted)]">
-        Bu branş dosya kırılımlı veri içermiyor. DOSYA_NO kolonu içeren Excel yükleyin.
+        This branch has no file-level breakdown data. Upload an Excel file with a CLAIM_NO column.
       </div>
     );
   }
 
   const TABS = [
-    { id: "stats", label: "İstatistikler" },
-    { id: "largeloss", label: "Büyük Hasar" },
-    { id: "devt", label: "Dosya Gelişimi" },
+    { id: "stats", label: "Statistics" },
+    { id: "largeloss", label: "Large Loss" },
+    { id: "devt", label: "File Development" },
     { id: "compare", label: `Runoff${prevPeriodBranches.length ? ` (${prevPeriodBranches.length})` : ""}` },
   ] as const;
 
@@ -195,13 +195,13 @@ function StatsTab({ triangle, fileData }: { triangle: Triangle; fileData: FileDa
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-3 gap-3">
-        <KpiCard label="Toplam Portföy" value={formatNumber(portfolio)} sub="son diagonal" />
-        <KpiCard label="Toplam Dosya" value={String(totalFiles)} sub="son diagonal" />
-        <KpiCard label="En Yüksek Top-1 Payı" value={pct(maxTop1)} accent={maxTop1 > 0.5} />
+        <KpiCard label="Total Portfolio" value={formatNumber(portfolio)} sub="latest diagonal" />
+        <KpiCard label="Toplam Dosya" value={String(totalFiles)} sub="latest diagonal" />
+        <KpiCard label="Highest Top-1 Share" value={pct(maxTop1)} accent={maxTop1 > 0.5} />
       </div>
 
       <div className="card p-4">
-        <div className="text-xs font-semibold mb-3">Son Diagonal — Kaza Yılı (bin TL)</div>
+        <div className="text-xs font-semibold mb-3">Latest Diagonal — Accident Year (000s)</div>
         <ResponsiveContainer width="100%" height={200}>
           <BarChart data={barData} margin={{ top: 4, right: 8, left: 0, bottom: 20 }}>
             <XAxis dataKey="name" tick={{ fontSize: 10 }} angle={-45} textAnchor="end" interval={0} />
@@ -220,14 +220,14 @@ function StatsTab({ triangle, fileData }: { triangle: Triangle; fileData: FileDa
           <table className="w-full text-xs tabular">
             <thead>
               <tr className="border-b text-[10px] uppercase tracking-wide text-[color:var(--muted-strong)] bg-[color:var(--surface-alt)]">
-                <th className="text-left px-3 py-2">Kaza Yılı</th>
+                <th className="text-left px-3 py-2">Accident Year</th>
                 <th className="text-right px-3 py-2">Toplam</th>
                 <th className="text-right px-3 py-2">Dosya</th>
                 <th className="text-right px-3 py-2">Ortalama</th>
                 <th className="text-right px-3 py-2">Medyan</th>
                 <th className="text-right px-3 py-2">CoV</th>
-                <th className="text-right px-3 py-2">Top-1 Payı</th>
-                <th className="text-right px-3 py-2">Top-3 Payı</th>
+                <th className="text-right px-3 py-2">Top-1 Share</th>
+                <th className="text-right px-3 py-2">Top-3 Share</th>
               </tr>
             </thead>
             <tbody>
@@ -284,23 +284,23 @@ function LargeLossTab({ triangle, fileData }: { triangle: Triangle; fileData: Fi
     if (!total) return null;
     const largeCount = Math.max(1, Math.ceil(vals.length * 0.1));
     const large = vals.slice(0, largeCount).reduce((s, v) => s + v, 0);
-    return { name: orig, "Büyük Hasar": Math.round(large / 1000), "Diğer": Math.round((total - large) / 1000) };
+    return { name: orig, "Large Loss": Math.round(large / 1000), "Other": Math.round((total - large) / 1000) };
   }).filter(Boolean), [triangle.origin_periods, diagFiles]);
 
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-3 gap-3">
-        <KpiCard label="En Büyük Dosya" value={formatNumber(allFiles[0]?.val ?? 0)} sub={allFiles[0]?.orig} />
+        <KpiCard label="Largest File" value={formatNumber(allFiles[0]?.val ?? 0)} sub={allFiles[0]?.orig} />
         <KpiCard
           label={`Top ${topN} Toplam`}
           value={formatNumber(largeTotal)}
-          sub={portfolioTotal > 0 ? `Portföyün ${pct(largeTotal / portfolioTotal)}'si` : undefined}
+          sub={portfolioTotal > 0 ? `${pct(largeTotal / portfolioTotal)} of portfolio` : undefined}
         />
         <KpiCard label="Toplam Dosya" value={String(allFiles.length)} />
       </div>
 
       <div className="card p-4">
-        <div className="text-xs font-semibold mb-3">Kaza Yılı Bazlı — En Büyük %10 vs Diğer (bin TL)</div>
+        <div className="text-xs font-semibold mb-3">By Accident Year — Top 10% vs Other (000s)</div>
         <ResponsiveContainer width="100%" height={200}>
           <BarChart data={byOrigin} margin={{ top: 4, right: 8, left: 0, bottom: 20 }}>
             <XAxis dataKey="name" tick={{ fontSize: 10 }} angle={-45} textAnchor="end" interval={0} />
@@ -310,15 +310,15 @@ function LargeLossTab({ triangle, fileData }: { triangle: Triangle; fileData: Fi
               contentStyle={TOOLTIP_STYLE}
             />
             <Legend iconSize={10} wrapperStyle={{ fontSize: 10 }} />
-            <Bar dataKey="Büyük Hasar" stackId="a" fill="#ef4444" />
-            <Bar dataKey="Diğer" stackId="a" fill="#d1d5db" radius={[3, 3, 0, 0]} />
+            <Bar dataKey="Large Loss" stackId="a" fill="#ef4444" />
+            <Bar dataKey="Other" stackId="a" fill="#d1d5db" radius={[3, 3, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>
 
       <div className="card p-0 overflow-hidden">
         <div className="px-4 py-2.5 border-b bg-[color:var(--surface-alt)] text-xs font-semibold flex items-center gap-3">
-          <span>En Büyük Dosyalar</span>
+          <span>Largest Files</span>
           <div className="flex items-center gap-1.5 ml-auto">
             {[10, 20, 50].map(n => (
               <button key={n} onClick={() => setTopN(n)}
@@ -333,10 +333,10 @@ function LargeLossTab({ triangle, fileData }: { triangle: Triangle; fileData: Fi
               <tr className="border-b text-[10px] uppercase tracking-wide text-[color:var(--muted-strong)] bg-[color:var(--surface-alt)]">
                 <th className="text-right px-3 py-2">#</th>
                 <th className="text-left px-3 py-2">Dosya No</th>
-                <th className="text-left px-3 py-2">Kaza Yılı</th>
-                <th className="text-right px-3 py-2">Değer</th>
-                <th className="text-right px-3 py-2">Portföy Payı</th>
-                <th className="text-right px-3 py-2">Kaza Yılı Payı</th>
+                <th className="text-left px-3 py-2">Accident Year</th>
+                <th className="text-right px-3 py-2">Value</th>
+                <th className="text-right px-3 py-2">Portfolio Share</th>
+                <th className="text-right px-3 py-2">Accident Year Share</th>
               </tr>
             </thead>
             <tbody>
@@ -428,9 +428,9 @@ function DevelopmentTab({ triangle, fileData }: { triangle: Triangle; fileData: 
     <div className="space-y-4">
       <div className="card p-4">
         <div className="flex items-center gap-3 mb-3">
-          <div className="text-xs font-semibold">Kaza Yılı Bazlı Gelişim (bin TL)</div>
+          <div className="text-xs font-semibold">Development by Accident Year (000s)</div>
           <div className="flex items-center gap-1.5 ml-auto text-[10px] text-[color:var(--muted)]">
-            Göster:
+            Show:
             {[3, 5, 8, 10].map(n => (
               <button key={n} onClick={() => setShowTopN(n)}
                 className={`px-2 py-0.5 rounded font-medium ${showTopN === n ? "bg-[color:var(--primary)] text-white" : "bg-[color:var(--surface-alt)] text-[color:var(--muted-strong)]"}`}
@@ -470,13 +470,13 @@ function DevelopmentTab({ triangle, fileData }: { triangle: Triangle; fileData: 
 
       <div className="card p-0 overflow-hidden">
         <div className="px-4 py-2.5 border-b bg-[color:var(--surface-alt)] text-xs font-semibold">
-          Rapor Dönemi × Kaza Yılı — Son Diagonal Toplam
+          Reporting Period × Accident Year — Latest Diagonal Total
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-xs tabular">
             <thead>
               <tr className="border-b text-[10px] uppercase tracking-wide text-[color:var(--muted-strong)] bg-[color:var(--surface-alt)]">
-                <th className="text-left px-3 py-2 sticky left-0 bg-[color:var(--surface-alt)]">Kaza Yılı</th>
+                <th className="text-left px-3 py-2 sticky left-0 bg-[color:var(--surface-alt)]">Accident Year</th>
                 {byPeriod.map(snap => (
                   <th key={snap.label} className="text-right px-3 py-2">{snap.label}</th>
                 ))}
@@ -567,15 +567,15 @@ function CompareTab({
     .filter(r => r.curr > 0 || r.comp > 0)
     .map(r => ({
       name: r.orig,
-      "Güncel": Math.round(r.curr / 1000),
-      "Karşılaştırma": Math.round(r.comp / 1000),
+      "Current": Math.round(r.curr / 1000),
+      "Comparison": Math.round(r.comp / 1000),
     }));
 
   if (!prevPeriodBranches.length) {
     return (
       <div className="card p-8 text-center text-xs text-[color:var(--muted)]">
-        Önceki dönemde aynı frekansta dosya bazlı Excel yüklenmiş branş bulunamadı.
-        Örneğin 2025Q4 döneminde bir branşa dosya bazlı Excel yüklerseniz, 2026Q1&apos;den bu dönem otomatik karşılaştırma seçeneği olarak görünür.
+        No branch with a file-level Excel loaded at the same frequency in a previous period.
+        For example, if you load a file-level Excel into a branch in 2025Q4, it will appear as an automatic comparison option from 2026Q1 onward.
       </div>
     );
   }
@@ -583,7 +583,7 @@ function CompareTab({
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3">
-        <div className="label">Karşılaştırma Branşı</div>
+        <div className="label">Comparison Branch</div>
         <select value={effectiveId} onChange={e => setCompareId(e.target.value)} className="input-base">
           {prevPeriodBranches.map(({ period, branch }) => (
             <option key={branch.id} value={branch.id}>
@@ -594,10 +594,10 @@ function CompareTab({
       </div>
 
       <div className="grid grid-cols-3 gap-3">
-        <KpiCard label="Güncel Toplam" value={formatNumber(totalCurr)} />
-        <KpiCard label="Karşılaştırma Toplam" value={formatNumber(totalComp)} sub={compareBranch?.name} />
+        <KpiCard label="Current Total" value={formatNumber(totalCurr)} />
+        <KpiCard label="Comparison Total" value={formatNumber(totalComp)} sub={compareBranch?.name} />
         <KpiCard
-          label="Toplam Değişim"
+          label="Total Change"
           value={(totalDelta >= 0 ? "+" : "") + formatNumber(totalDelta)}
           sub={totalComp > 0 ? pct(totalDelta / totalComp) : ""}
           accent={totalComp > 0 && Math.abs(totalDelta / totalComp) > 0.1}
@@ -606,7 +606,7 @@ function CompareTab({
 
       {barData.length > 0 && (
         <div className="card p-4">
-          <div className="text-xs font-semibold mb-3">Kaza Yılı Karşılaştırması (bin TL)</div>
+          <div className="text-xs font-semibold mb-3">Accident Year Comparison (000s)</div>
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={barData} margin={{ top: 4, right: 8, left: 0, bottom: 20 }}>
               <XAxis dataKey="name" tick={{ fontSize: 10 }} angle={-45} textAnchor="end" interval={0} />
@@ -616,8 +616,8 @@ function CompareTab({
                 contentStyle={TOOLTIP_STYLE}
               />
               <Legend iconSize={10} wrapperStyle={{ fontSize: 10 }} />
-              <Bar dataKey="Güncel" fill="var(--primary)" radius={[3, 3, 0, 0]} />
-              <Bar dataKey="Karşılaştırma" fill="#d1d5db" radius={[3, 3, 0, 0]} />
+              <Bar dataKey="Current" fill="var(--primary)" radius={[3, 3, 0, 0]} />
+              <Bar dataKey="Comparison" fill="#d1d5db" radius={[3, 3, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -628,9 +628,9 @@ function CompareTab({
           <table className="w-full text-xs tabular">
             <thead>
               <tr className="border-b text-[10px] uppercase tracking-wide text-[color:var(--muted-strong)] bg-[color:var(--surface-alt)]">
-                <th className="text-left px-3 py-2">Kaza Yılı</th>
-                <th className="text-right px-3 py-2">Güncel</th>
-                <th className="text-right px-3 py-2">Karşılaştırma</th>
+                <th className="text-left px-3 py-2">Accident Year</th>
+                <th className="text-right px-3 py-2">Current</th>
+                <th className="text-right px-3 py-2">Comparison</th>
                 <th className="text-right px-3 py-2">Δ</th>
                 <th className="text-right px-3 py-2">Δ%</th>
                 <th className="text-right px-3 py-2">G. Dosya</th>

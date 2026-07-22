@@ -64,7 +64,7 @@ export function RollForwardTab() {
   if (!activeBranch?.triangle) {
     return (
       <div className="card p-8 text-center text-sm text-[color:var(--muted)]">
-        Önce veri yükleyin.
+        Load data first.
       </div>
     );
   }
@@ -72,14 +72,14 @@ export function RollForwardTab() {
   if (!priorBranchOptions.length) {
     return (
       <div className="card p-8 text-center text-sm text-[color:var(--muted)]">
-        <p className="mb-1">Önceki dönemde bu frekansa ait üçgen bulunamadı.</p>
-        <p className="text-xs">Birden fazla rapor dönemi oluşturup her birine üçgen yükledikten sonra roll-forward aktif olur.</p>
+        <p className="mb-1">No triangle for this frequency in a previous period.</p>
+        <p className="text-xs">Roll-forward becomes available after you create multiple reporting periods and load a triangle into each.</p>
       </div>
     );
   }
 
   if (!currSummary || !priorSummary) {
-    return <div className="card p-8 text-center text-sm text-[color:var(--muted)]">Hesaplanıyor…</div>;
+    return <div className="card p-8 text-center text-sm text-[color:var(--muted)]">Calculating…</div>;
   }
 
   // Build per-origin rows: include only origins with data in current period
@@ -97,7 +97,7 @@ export function RollForwardTab() {
       const currIbnr = currUlt - currLatest;
       const payment = priorLatest != null ? currLatest - priorLatest : null;
       const expectedIbnr = priorUlt != null ? priorUlt - currLatest : null;
-      // Gelişim = gerçek - beklenen (pozitif = adverse, negatif = favorable)
+      // Gelişim = gerçek - beklenen (pozitif = adverse, negative = favorable)
       const development = expectedIbnr != null ? currIbnr - expectedIbnr : null;
       return {
         origin: curr.origin,
@@ -129,7 +129,7 @@ export function RollForwardTab() {
     <div className="space-y-4">
       {/* Period selector */}
       <div className="flex items-center gap-3">
-        <span className="text-xs text-[color:var(--muted-strong)] font-medium">Karşılaştırma Dönemi</span>
+        <span className="text-xs text-[color:var(--muted-strong)] font-medium">Comparison Period</span>
         <select
           value={effectiveId}
           onChange={e => setPriorId(e.target.value)}
@@ -151,22 +151,22 @@ export function RollForwardTab() {
         <KpiCard
           label={`${priorEntry?.period.label} IBNR`}
           value={formatNumber(totalPriorIbnr)}
-          sub="eşleşen kaza yılları"
+          sub="matching accident years"
         />
         <KpiCard
-          label="Dönem İçi Ödeme"
+          label="In-Period Payment"
           value={formatNumber(totalPayment)}
-          sub="kümülatif artış"
+          sub="cumulative increase"
         />
         <KpiCard
           label="Beklenen IBNR"
           value={formatNumber(totalExpected)}
-          sub="= önceki ult – mevcut latest"
+          sub="= prior ult – current latest"
         />
         <KpiCard
-          label="Gelişim (Fav / Adv)"
+          label="Development (Fav / Adv)"
           value={(totalDev > 0 ? "+" : "") + formatNumber(totalDev)}
-          sub={totalDev < 0 ? "favorable" : totalDev > 0 ? "adverse" : "nötr"}
+          sub={totalDev < 0 ? "favorable" : totalDev > 0 ? "adverse" : "neutral"}
           accent={Math.abs(totalDev) > 0}
           adverse={totalDev > 0}
         />
@@ -174,30 +174,30 @@ export function RollForwardTab() {
 
       {/* Explanation */}
       <div className="card p-3 text-[11px] text-[color:var(--muted)] bg-[color:var(--surface-alt)]">
-        <span className="font-semibold text-[color:var(--muted-strong)]">Nasıl okunur: </span>
-        Önceki dönem ultimatesi, dönem içi ödemeleri karşılayacak kadar büyüktü.
-        Beklenen IBNR = Önceki Ult − Mevcut Latest.
-        Gerçek IBNR = Mevcut Ult − Mevcut Latest.
-        Gelişim = Gerçek − Beklenen — <span className="text-green-600 font-medium">negatif = favorable</span>,{" "}
+        <span className="font-semibold text-[color:var(--muted-strong)]">How to read: </span>
+        The prior period ultimate was large enough to cover in-period payments.
+        Expected IBNR = Prior Ult − Current Latest.
+        Actual IBNR = Current Ult − Current Latest.
+        Development = Actual − Expected — <span className="text-green-600 font-medium">negative = favorable</span>,{" "}
         <span className="text-[color:var(--danger)] font-medium">pozitif = adverse</span>.
       </div>
 
       {/* Main table */}
       <div className="card p-0 overflow-hidden">
         <div className="px-4 py-2.5 border-b bg-[color:var(--surface-alt)] text-xs font-semibold">
-          Kaza Yılı Bazlı Roll-forward — {priorEntry?.period.label} → {activePeriod?.label}
+          Roll-forward by Accident Year — {priorEntry?.period.label} → {activePeriod?.label}
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-xs tabular">
             <thead>
               <tr className="border-b text-[10px] uppercase tracking-wide text-[color:var(--muted-strong)] bg-[color:var(--surface-alt)]">
-                <th className="text-left px-3 py-2 sticky left-0 bg-[color:var(--surface-alt)]">Kaza Yılı</th>
-                <th className="text-right px-3 py-2 border-r border-[color:var(--border)]" title={`${priorEntry?.period.label} seçilen ultimate − latest`}>Önceki IBNR</th>
-                <th className="text-right px-3 py-2 border-r border-[color:var(--border)]" title="Mevcut latest − önceki latest">Dönem Ödemesi</th>
-                <th className="text-right px-3 py-2 border-r border-[color:var(--border)]" title="Önceki ultimate − mevcut latest">Beklenen IBNR</th>
-                <th className="text-right px-3 py-2">Gerçek IBNR</th>
-                <th className="text-right px-3 py-2" title="Gerçek − Beklenen (neg = favorable)">Gelişim</th>
-                <th className="text-right px-3 py-2 border-l border-[color:var(--border)] text-[color:var(--muted)]">Önceki Ult</th>
+                <th className="text-left px-3 py-2 sticky left-0 bg-[color:var(--surface-alt)]">Accident Year</th>
+                <th className="text-right px-3 py-2 border-r border-[color:var(--border)]" title={`${priorEntry?.period.label} selected ultimate − latest`}>Prior IBNR</th>
+                <th className="text-right px-3 py-2 border-r border-[color:var(--border)]" title="Current latest − prior latest">Period Payment</th>
+                <th className="text-right px-3 py-2 border-r border-[color:var(--border)]" title="Prior ultimate − current latest">Expected IBNR</th>
+                <th className="text-right px-3 py-2">Actual IBNR</th>
+                <th className="text-right px-3 py-2" title="Actual − Expected (neg = favorable)">Development</th>
+                <th className="text-right px-3 py-2 border-l border-[color:var(--border)] text-[color:var(--muted)]">Prior Ult</th>
                 <th className="text-right px-3 py-2 text-[color:var(--muted)]">Mevcut Ult</th>
               </tr>
             </thead>
@@ -268,7 +268,7 @@ export function RollForwardTab() {
       {/* New origins note */}
       {rows.some(r => r.priorUlt == null) && (
         <div className="text-[11px] text-[color:var(--muted)] px-1">
-          "—" gösterilen kaza yılları önceki dönemde mevcut değildi — gelişim hesaplanamaz.
+          Accident years shown as "—" did not exist in the prior period — development cannot be computed.
         </div>
       )}
     </div>

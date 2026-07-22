@@ -84,7 +84,7 @@ export function ChatPanel({
       })
       .catch((e) => {
         setModelsError(
-          e instanceof Error ? e.message : "Backend'e ulaşılamadı",
+          e instanceof Error ? e.message : "Could not reach the backend",
         );
       })
       .finally(() => setModelsLoading(false));
@@ -158,8 +158,8 @@ export function ChatPanel({
       );
       if (resp.actions?.length && onActions) onActions(resp.actions);
       const body = resp.actions?.length
-        ? `${resp.assistant_message || ""}\n\n✓ ${resp.actions.length} aksiyon uygulandı.`
-        : resp.assistant_message || "(boş yanıt)";
+        ? `${resp.assistant_message || ""}\n\n✓ ${resp.actions.length} actions applied.`
+        : resp.assistant_message || "(empty response)";
       const finalMessages: ChatMessage[] = [
         ...newMessages,
         { role: "assistant", content: body.trim() },
@@ -177,7 +177,7 @@ export function ChatPanel({
       }
       if (uid) saveSession(uid, buildSession(finalMessages, nextHist));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Agent hatası");
+      setError(e instanceof Error ? e.message : "Agent error");
     } finally {
       setLoading(false);
     }
@@ -192,9 +192,9 @@ export function ChatPanel({
 
   const freqLabel =
     activeContext?.frequency === "yearly"
-      ? "Yıllık"
+      ? "Yearly"
       : activeContext?.frequency === "quarterly"
-      ? "Çeyreklik"
+      ? "Quarterly"
       : activeContext?.frequency ?? "";
 
   return (
@@ -215,7 +215,7 @@ export function ChatPanel({
               onChange={(e) => setModel(e.target.value)}
               disabled={modelsLoading || models.length === 0}
               className="h-6 max-w-[130px] rounded-md border border-[color:var(--border)] bg-[color:var(--surface-alt)] text-[11px] text-[color:var(--muted-strong)] px-1.5 outline-none focus:border-[color:var(--primary)] transition cursor-pointer disabled:opacity-50"
-              title="Model seç"
+              title="Select model"
             >
               {modelsLoading && <option value="">…</option>}
               {models.map((m) => (
@@ -244,7 +244,7 @@ export function ChatPanel({
           )}
           <Divider />
           <HeaderBtn
-            title="Sohbet geçmişi"
+            title="Chat history"
             active={showHistory}
             onClick={() => {
               if (uid) setSessions(loadSessions(uid));
@@ -294,7 +294,7 @@ export function ChatPanel({
             >
               <span>←</span> Geri
             </button>
-            <span className="text-sm font-medium">Geçmiş</span>
+            <span className="text-sm font-medium">History</span>
             <span className="ml-auto text-[11px] text-[color:var(--muted)]">
               {sessions.length} oturum
             </span>
@@ -302,7 +302,7 @@ export function ChatPanel({
           <div className="p-3 space-y-1">
             {sessions.length === 0 && (
               <div className="py-12 text-center text-xs text-[color:var(--muted)]">
-                Henüz kayıtlı sohbet yok
+                No saved chats yet
               </div>
             )}
             {[...sessions].reverse().map((s) => (
@@ -347,9 +347,9 @@ export function ChatPanel({
                 <AgentIconLg />
               </div>
               <div>
-                <div className="text-sm font-semibold">Agent şu an etkin değil</div>
+                <div className="text-sm font-semibold">Agent is not active</div>
                 <div className="text-xs text-[color:var(--muted)] mt-1 leading-relaxed">
-                  AI asistanı yakında kullanıma açılacak.
+                  The AI assistant will be available soon.
                 </div>
               </div>
             </div>
@@ -360,9 +360,9 @@ export function ChatPanel({
                 <AgentIconLg />
               </div>
               <div>
-                <div className="text-sm font-semibold">Nasıl yardımcı olabilirim?</div>
+                <div className="text-sm font-semibold">How can I help?</div>
                 <div className="text-xs text-[color:var(--muted)] mt-1 leading-relaxed">
-                  Rezerv analizi, IBNR hesaplama, LDF/BF ayarları ve senaryo sorularınızı yazın.
+                  Ask about reserve analysis, IBNR calculation, LDF/BF settings, and scenarios.
                 </div>
               </div>
             </div>
@@ -390,7 +390,7 @@ export function ChatPanel({
             value={input}
             onChange={(e) => { setInput(e.target.value); resizeTextarea(); }}
             onKeyDown={handleKeyDown}
-            placeholder={!modelsLoading && models.length === 0 ? "Agent etkin değil" : "Mesaj yazın…"}
+            placeholder={!modelsLoading && models.length === 0 ? "Agent not active" : "Type a message…"}
             disabled={loading || (!modelsLoading && models.length === 0)}
             rows={1}
             className="flex-1 input-base resize-none leading-relaxed overflow-y-auto"
@@ -400,13 +400,13 @@ export function ChatPanel({
             onClick={() => dispatchSend(input)}
             disabled={loading || !input.trim() || (!modelsLoading && models.length === 0)}
             className="btn btn-primary shrink-0 h-[38px] w-[38px] p-0 rounded-lg"
-            title="Gönder (Enter)"
+            title="Send (Enter)"
           >
             <SendIcon />
           </button>
         </div>
         <div className="text-[10px] text-[color:var(--muted)] mt-1.5 text-right">
-          Enter: gönder · Shift+Enter: yeni satır
+          Enter: send · Shift+Enter: new line
         </div>
       </div>
     </div>

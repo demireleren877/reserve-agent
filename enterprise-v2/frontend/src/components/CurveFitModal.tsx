@@ -212,7 +212,7 @@ export function CurveFitModal({ selectedLDFs, includeFlags, devPeriods, fits, on
 
                 {/* Axis label */}
                 <text x={ml + pw / 2} y={H - 8} textAnchor="middle" fontSize="10.5"
-                  fill="rgba(100,116,139,0.7)">Gelişim Dönemi</text>
+                  fill="rgba(100,116,139,0.7)">Development Period</text>
 
                 {/* Hover crosshair */}
                 {hoverPeriod != null && (() => {
@@ -283,7 +283,7 @@ export function CurveFitModal({ selectedLDFs, includeFlags, devPeriods, fits, on
                 {(() => {
                   const lx = ml + pw + 20;
                   const items = [
-                    { label: "Gözlenen", color: "rgba(226,232,240,0.8)" },
+                    { label: "Observed", color: "rgba(226,232,240,0.8)" },
                     ...CURVES.filter(c => fits[c.key].ok).map(c => ({ label: c.label, color: c.color })),
                   ];
                   return items.map(({ label, color }, idx) => {
@@ -303,7 +303,7 @@ export function CurveFitModal({ selectedLDFs, includeFlags, devPeriods, fits, on
                   const sx = xScale(hoverData.period);
                   const rows: { label: string; val: string; color: string }[] = [];
                   if (hoverData.obs != null)
-                    rows.push({ label: "Gözlenen", val: hoverData.obs.toFixed(5), color: "rgba(226,232,240,0.9)" });
+                    rows.push({ label: "Observed", val: hoverData.obs.toFixed(5), color: "rgba(226,232,240,0.9)" });
                   hoverData.models.forEach(m => rows.push({ label: m.label, val: m.val.toFixed(5), color: m.color }));
 
                   const bw = 172, lh = 17, bh = rows.length * lh + 30;
@@ -320,7 +320,7 @@ export function CurveFitModal({ selectedLDFs, includeFlags, devPeriods, fits, on
                         fill="rgba(5,8,18,0.97)" stroke="rgba(255,255,255,0.12)" strokeWidth="0.75" />
                       <text x={tx + 13} y={ty + 17} fontSize="9.5" fontWeight="600" letterSpacing="0.8"
                         fill="rgba(148,163,184,0.5)" fontFamily="ui-monospace,monospace">
-                        DÖNEM {hoverData.period}
+                        PERIOD {hoverData.period}
                       </text>
                       {rows.map(({ label, val, color }, ri) => (
                         <g key={ri}>
@@ -342,7 +342,7 @@ export function CurveFitModal({ selectedLDFs, includeFlags, devPeriods, fits, on
           {anyFit && (
             <div className="px-6 pb-5 pt-1">
               <div className="text-[10px] font-semibold uppercase tracking-widest mb-2"
-                style={{ color: "var(--muted)" }}>Fit İstatistikleri</div>
+                style={{ color: "var(--muted)" }}>Fit Statistics</div>
               <div className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--border)" }}>
                 <table className="w-full text-[12px]">
                   <thead>
@@ -399,7 +399,7 @@ export function CurveFitModal({ selectedLDFs, includeFlags, devPeriods, fits, on
                 </table>
               </div>
               <p className="mt-2 text-[10px]" style={{ color: "var(--muted)" }}>
-                R² &gt; 0.98 iyi · p &lt; 0.05 kötü fit göstergesi · χ² = Σ(gözlenen − fitted)² / fitted
+                R² &gt; 0.98 good · p &lt; 0.05 indicates poor fit · χ² = Σ(observed − fitted)² / fitted
               </p>
             </div>
           )}

@@ -3,28 +3,28 @@
 import { useProject } from "@/lib/project-store";
 
 const ACTION_LABELS: Record<string, string> = {
-  branch_created: "Branş oluşturuldu",
-  triangle_loaded: "Üçgen yüklendi",
-  set_method: "Metod değişti",
-  set_window: "Window değişti",
-  cell_toggled: "Hücre eleme/dahil",
-  cell_excluded: "Hücre elendi",
-  cell_included: "Hücre dahil edildi",
-  exclusions_replaced: "Elemeler güncellendi",
-  exclusions_cleared: "Elemeler temizlendi",
-  premiums_updated: "Exposure güncellendi",
-  premiums_bulk: "Exposure (toplu)",
-  selected_lr_set: "Selected LR değişti",
-  selected_lr_bulk: "Selected LR (toplu)",
-  basis_set: "Temel değişti",
-  basis_bulk: "Temel (toplu)",
-  correction_set: "Correction değişti",
-  correction_bulk: "Correction (toplu)",
+  branch_created: "Branch created",
+  triangle_loaded: "Triangle loaded",
+  set_method: "Method changed",
+  set_window: "Window changed",
+  cell_toggled: "Cell exclude/include",
+  cell_excluded: "Cell excluded",
+  cell_included: "Cell included",
+  exclusions_replaced: "Exclusions updated",
+  exclusions_cleared: "Exclusions cleared",
+  premiums_updated: "Exposure updated",
+  premiums_bulk: "Exposure (bulk)",
+  selected_lr_set: "Selected LR changed",
+  selected_lr_bulk: "Selected LR (bulk)",
+  basis_set: "Basis changed",
+  basis_bulk: "Basis (bulk)",
+  correction_set: "Correction changed",
+  correction_bulk: "Correction (bulk)",
   curve_cdf_set: "Curve User Value",
-  curve_choice_set: "Curve seçimi",
-  curve_choice_bulk: "Curve seçimi (toplu)",
+  curve_choice_set: "Curve selection",
+  curve_choice_bulk: "Curve selection (bulk)",
   curve_seeded: "Curve seed",
-  curve_reset: "Curve sıfırlandı",
+  curve_reset: "Curve reset",
 };
 
 export function HistoryTab() {
@@ -33,7 +33,7 @@ export function HistoryTab() {
   if (!activeBranch || !activePeriod) {
     return (
       <div className="card p-10 text-center text-sm text-[color:var(--muted)]">
-        Önce bir dönem ve branş seçin.
+        Select a period and branch first.
       </div>
     );
   }
@@ -49,25 +49,25 @@ export function HistoryTab() {
               {activePeriod.label} / {activeBranch.name}
             </h2>
             <p className="text-xs text-[color:var(--muted)] mt-0.5">
-              {activeBranch.frequency === "yearly" ? "Yıllık" : "Çeyreklik"} ·{" "}
-              {entries.length} kayıt
+              {activeBranch.frequency === "yearly" ? "Yearly" : "Quarterly"} ·{" "}
+              {entries.length} records
             </p>
           </div>
           <div className="text-[11px] text-[color:var(--muted)] tabular">
-            Oluşturma: {fmt(activeBranch.createdAt)}
+            Created: {fmt(activeBranch.createdAt)}
             <br />
-            Son değişim: {fmt(activeBranch.updatedAt)}
+            Last change: {fmt(activeBranch.updatedAt)}
           </div>
         </div>
       </div>
 
       <div className="card p-0 overflow-hidden">
         <div className="px-4 py-3 border-b bg-[color:var(--surface-alt)]">
-          <h3 className="text-sm font-semibold">Değişiklik Kaydı</h3>
+          <h3 className="text-sm font-semibold">Change Log</h3>
         </div>
         {entries.length === 0 ? (
           <div className="p-6 text-center text-sm text-[color:var(--muted)]">
-            Henüz kayıt yok.
+            No records yet.
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -78,10 +78,10 @@ export function HistoryTab() {
                     Zaman
                   </th>
                   <th className="text-left px-3 py-2 font-semibold w-[80px]">
-                    Operatör
+                    Operator
                   </th>
                   <th className="text-left px-3 py-2 font-semibold w-[200px]">
-                    İşlem
+                    Action
                   </th>
                   <th className="text-left px-3 py-2 font-semibold">Detay</th>
                 </tr>

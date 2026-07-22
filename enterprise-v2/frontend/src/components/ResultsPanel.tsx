@@ -46,12 +46,12 @@ export function ResultsPanel(props: Props) {
             onChange={(e) => onMethodChange(e.target.value as LDFMethod)}
             className="input"
           >
-            <option value="volume_weighted">Hacim Ağırlıklı</option>
+            <option value="volume_weighted">Volume Weighted</option>
             <option value="simple_average">Basit Ortalama</option>
             <option value="geometric_average">Geometrik Ortalama</option>
           </select>
         </Field>
-        <Field label="Son N dönem">
+        <Field label="Last N periods">
           <input
             type="number"
             min={1}
@@ -61,7 +61,7 @@ export function ResultsPanel(props: Props) {
               onNYearsChange(v === "" ? null : Number.parseInt(v, 10));
             }}
             className="input"
-            placeholder="Tümü"
+            placeholder="All"
           />
         </Field>
       </div>
@@ -69,7 +69,7 @@ export function ResultsPanel(props: Props) {
       <section>
         <div className="flex items-center justify-between mb-2">
           <h3 className="text-[11px] font-semibold uppercase tracking-wide text-[color:var(--muted)]">
-            Hariç tutulan
+            Excluded
           </h3>
           {excludedOrigins.length > 0 && (
             <button
@@ -110,7 +110,7 @@ export function ResultsPanel(props: Props) {
               onClick={() => onLDFOverride(null)}
               className="text-[11px] text-[color:var(--muted)] hover:text-[color:var(--foreground)]"
             >
-              sıfırla
+              reset
             </button>
           )}
         </div>
@@ -148,14 +148,14 @@ export function ResultsPanel(props: Props) {
 
       <section>
         <h3 className="text-[11px] font-semibold uppercase tracking-wide text-[color:var(--muted)] mb-2">
-          Sonuçlar
+          Results
         </h3>
         <div className="overflow-x-auto -mx-1">
           <table className="text-sm w-full tabular-nums">
             <thead>
               <tr className="text-[color:var(--muted)] text-[11px] uppercase tracking-wide">
                 <th className="text-left px-1 py-1 font-medium">Kaza</th>
-                <th className="text-right px-1 py-1 font-medium">Güncel</th>
+                <th className="text-right px-1 py-1 font-medium">Current</th>
                 <th className="text-right px-1 py-1 font-medium">CDF</th>
                 <th className="text-right px-1 py-1 font-medium">Ult.</th>
                 <th className="text-right px-1 py-1 font-medium">Rezerv</th>

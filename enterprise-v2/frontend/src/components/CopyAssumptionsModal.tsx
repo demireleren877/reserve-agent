@@ -12,13 +12,13 @@ interface Props {
 }
 
 const OPTION_LABELS: { key: keyof CopyAssumptionsOptions; label: string }[] = [
-  { key: "excludedCells", label: "Hücre Elemeleri" },
+  { key: "excludedCells", label: "Cell Exclusions" },
   { key: "window", label: "Volume (window)" },
-  { key: "curve", label: "Curve Ayarları" },
+  { key: "curve", label: "Curve Settings" },
   { key: "premiums", label: "Primler (Exposure)" },
-  { key: "lrFormulas", label: "Loss Ratio Formülleri" },
-  { key: "corrections", label: "Düzeltme Katsayıları (k)" },
-  { key: "basis", label: "Basis Seçimleri (CL/BF)" },
+  { key: "lrFormulas", label: "Loss Ratio Formulas" },
+  { key: "corrections", label: "Correction Factors (k)" },
+  { key: "basis", label: "Basis Selections (CL/BF)" },
 ];
 
 const ALL_ON: CopyAssumptionsOptions = {
@@ -54,21 +54,21 @@ export function CopyAssumptionsModal({ sourceBranch, allPeriods, onConfirm, onCa
       <div className="card p-6 w-full max-w-sm mx-4 shadow-2xl space-y-5">
         <div>
           <div className="text-sm font-semibold">
-            {sourceBranch.name} → Varsayımları Aktar
+            {sourceBranch.name} → Copy Assumptions
           </div>
           <div className="text-xs text-[color:var(--muted)] mt-0.5">
-            Hedef branşı ve aktarılacak varsayımları seçin.
+            Select the target branch and the assumptions to copy.
           </div>
         </div>
 
         {otherBranches.length === 0 ? (
           <div className="text-xs text-[color:var(--muted)] py-2">
-            Aktarılacak başka branş bulunamadı.
+            No other branch to copy to.
           </div>
         ) : (
           <>
             <div className="space-y-1.5">
-              <div className="label">Hedef Branş</div>
+              <div className="label">Target Branch</div>
               <select
                 value={targetBranchId}
                 onChange={(e) => setTargetBranchId(e.target.value)}
@@ -81,7 +81,7 @@ export function CopyAssumptionsModal({ sourceBranch, allPeriods, onConfirm, onCa
                     <optgroup key={p.id} label={p.label}>
                       {branches.map((b) => (
                         <option key={b.id} value={b.id}>
-                          {b.name} ({b.frequency === "yearly" ? "Yıllık" : "Çeyreklik"})
+                          {b.name} ({b.frequency === "yearly" ? "Yearly" : "Quarterly"})
                         </option>
                       ))}
                     </optgroup>
@@ -91,7 +91,7 @@ export function CopyAssumptionsModal({ sourceBranch, allPeriods, onConfirm, onCa
             </div>
 
             <div className="space-y-2">
-              <div className="label">Aktarılacak Varsayımlar</div>
+              <div className="label">Assumptions to Copy</div>
               <div className="space-y-1.5">
                 {OPTION_LABELS.map(({ key, label }) => (
                   <label key={key} className="flex items-center gap-2.5 cursor-pointer text-sm">
@@ -108,7 +108,7 @@ export function CopyAssumptionsModal({ sourceBranch, allPeriods, onConfirm, onCa
             </div>
 
             <div className="text-[11px] text-[color:var(--muted)] border border-[color:var(--border)] rounded-md px-3 py-2 bg-[color:var(--surface-alt)]">
-              Eşleşmeyen origin&apos;ler ve adımlar atlanır.
+              Origins and steps that do not match are skipped.
             </div>
 
             <div className="flex gap-2 pt-1">
@@ -119,7 +119,7 @@ export function CopyAssumptionsModal({ sourceBranch, allPeriods, onConfirm, onCa
               >
                 Aktar
               </button>
-              <button onClick={onCancel} className="btn flex-1">İptal</button>
+              <button onClick={onCancel} className="btn flex-1">Cancel</button>
             </div>
           </>
         )}

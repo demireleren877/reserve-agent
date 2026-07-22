@@ -55,8 +55,8 @@ function BarTooltip({ active, payload, label }: {
   active?: boolean; payload?: { name: string; value: number; fill: string }[]; label?: string;
 }) {
   if (!active || !payload?.length) return null;
-  const unpaidPaid = payload.find((p) => p.name === "İskontolu Unpaid");
-  const discount = payload.find((p) => p.name === "İskonto Tutarı");
+  const unpaidPaid = payload.find((p) => p.name === "Discounted Unpaid");
+  const discount = payload.find((p) => p.name === "Discount Amount");
   const total = (unpaidPaid?.value ?? 0) + (discount?.value ?? 0);
   return (
     <div
@@ -70,19 +70,19 @@ function BarTooltip({ active, payload, label }: {
       </div>
       {unpaidPaid && (
         <div className="flex justify-between gap-4">
-          <span style={{ color: unpaidPaid.fill }}>İskontolu Unpaid</span>
+          <span style={{ color: unpaidPaid.fill }}>Discounted Unpaid</span>
           <span className="font-mono">{fmt(unpaidPaid.value)}</span>
         </div>
       )}
       {discount && (
         <div className="flex justify-between gap-4">
-          <span style={{ color: discount.fill }}>İskonto</span>
+          <span style={{ color: discount.fill }}>Discount</span>
           <span className="font-mono">{fmt(discount.value)}</span>
         </div>
       )}
       {total > 0 && (
         <div className="flex justify-between gap-4 pt-1 border-t" style={{ borderColor: "var(--border)" }}>
-          <span style={{ color: "var(--muted-strong)" }}>İskonto %</span>
+          <span style={{ color: "var(--muted-strong)" }}>Discount %</span>
           <span className="font-mono">{pct((discount?.value ?? 0) / total)}</span>
         </div>
       )}
@@ -97,8 +97,8 @@ function SummaryPanel({ result }: { result: DiscountResult }) {
 
   const barData = result.origins.map((o) => ({
     origin: o.origin,
-    "İskontolu Unpaid": Math.round(o.bel),
-    "İskonto Tutarı": Math.round(o.unpaid - o.bel),
+    "Discounted Unpaid": Math.round(o.bel),
+    "Discount Amount": Math.round(o.unpaid - o.bel),
   }));
 
   return (
@@ -109,10 +109,10 @@ function SummaryPanel({ result }: { result: DiscountResult }) {
         style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
       >
         <div className="text-xs font-semibold text-[color:var(--foreground)] mb-1">
-          Unpaid Liability — Bileşim
+          Unpaid Liability — Composition
         </div>
         <div className="text-xs text-[color:var(--muted)] mb-4">
-          İskontolanmış rezerv (mavi) + iskonto kazancı (turuncu) = Unpaid Liability
+          Discounted reserve (blue) + discount gain (orange) = Unpaid Liability
         </div>
         <ResponsiveContainer width="100%" height={220}>
           <BarChart data={barData} margin={{ top: 4, right: 8, bottom: 4, left: 8 }}>
@@ -128,8 +128,8 @@ function SummaryPanel({ result }: { result: DiscountResult }) {
               width={52}
             />
             <Tooltip content={<BarTooltip />} cursor={{ fill: "var(--surface-alt)" }} />
-            <Bar dataKey="İskontolu Unpaid" stackId="a" fill="#3b82f6" radius={[0, 0, 0, 0]} />
-            <Bar dataKey="İskonto Tutarı" stackId="a" fill="#f97316" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="Discounted Unpaid" stackId="a" fill="#3b82f6" radius={[0, 0, 0, 0]} />
+            <Bar dataKey="Discount Amount" stackId="a" fill="#f97316" radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -142,12 +142,12 @@ function SummaryPanel({ result }: { result: DiscountResult }) {
         <table className="w-full text-xs">
           <thead>
             <tr style={{ background: "var(--surface-alt)" }}>
-              <th className="px-4 py-2.5 text-left font-medium text-[color:var(--muted-strong)]">Kaza Dönemi</th>
+              <th className="px-4 py-2.5 text-left font-medium text-[color:var(--muted-strong)]">Accident Period</th>
               <th className="px-4 py-2.5 text-right font-medium text-[color:var(--muted-strong)]">Unpaid Liability</th>
-              <th className="px-4 py-2.5 text-right font-medium text-[color:var(--muted-strong)]">İskontolu Unpaid</th>
-              <th className="px-4 py-2.5 text-right font-medium text-[color:var(--muted-strong)]">İskonto Tutarı</th>
-              <th className="px-4 py-2.5 text-right font-medium text-[color:var(--muted-strong)]">Tam. Ayı</th>
-              <th className="px-4 py-2.5 font-medium text-[color:var(--muted-strong)] min-w-[140px]">İskonto %</th>
+              <th className="px-4 py-2.5 text-right font-medium text-[color:var(--muted-strong)]">Discounted Unpaid</th>
+              <th className="px-4 py-2.5 text-right font-medium text-[color:var(--muted-strong)]">Discount Amount</th>
+              <th className="px-4 py-2.5 text-right font-medium text-[color:var(--muted-strong)]">Compl. Month</th>
+              <th className="px-4 py-2.5 font-medium text-[color:var(--muted-strong)] min-w-[140px]">Discount %</th>
             </tr>
           </thead>
           <tbody>
@@ -211,7 +211,7 @@ function CashflowPanel({ result }: { result: DiscountResult }) {
     (origin?.cashFlows ?? []).map((cf) => ({
       month: cf.month,
       "Nominal": Math.round(cf.amount),
-      "İskontolanmış": Math.round(cf.discounted),
+      "Discounted": Math.round(cf.discounted),
     })),
     [origin],
   );
@@ -224,25 +224,25 @@ function CashflowPanel({ result }: { result: DiscountResult }) {
       cumDiscounted += cf.discounted;
       return {
         month: cf.month,
-        "Nominal (kümülatif)": Math.round(cumNominal),
-        "İskontolanmış (kümülatif)": Math.round(cumDiscounted),
+        "Nominal (cumulative)": Math.round(cumNominal),
+        "Discounted (cumulative)": Math.round(cumDiscounted),
       };
     });
   }, [origin]);
 
   type ChartRow = { month: number; A: number; B: number };
   const chartData: ChartRow[] = view === "single"
-    ? singleData.map((d) => ({ month: d.month, A: d["Nominal"], B: d["İskontolanmış"] }))
-    : cumulativeData.map((d) => ({ month: d.month, A: d["Nominal (kümülatif)"], B: d["İskontolanmış (kümülatif)"] }));
-  const labelA = view === "single" ? "Nominal" : "Nominal (kümülatif)";
-  const labelB = view === "single" ? "İskontolanmış" : "İskontolanmış (kümülatif)";
+    ? singleData.map((d) => ({ month: d.month, A: d["Nominal"], B: d["Discounted"] }))
+    : cumulativeData.map((d) => ({ month: d.month, A: d["Nominal (cumulative)"], B: d["Discounted (cumulative)"] }));
+  const labelA = view === "single" ? "Nominal" : "Nominal (cumulative)";
+  const labelB = view === "single" ? "Discounted" : "Discounted (cumulative)";
 
   return (
     <div className="space-y-4">
       {/* Controls */}
       <div className="flex items-center gap-3 flex-wrap">
         <div className="flex items-center gap-2">
-          <span className="text-xs text-[color:var(--muted-strong)]">Kaza yılı:</span>
+          <span className="text-xs text-[color:var(--muted-strong)]">Accident year:</span>
           <select
             value={selectedOrigin}
             onChange={(e) => setSelectedOrigin(e.target.value)}
@@ -254,7 +254,7 @@ function CashflowPanel({ result }: { result: DiscountResult }) {
           </select>
         </div>
         <div className="flex rounded-lg overflow-hidden border" style={{ borderColor: "var(--border)" }}>
-          {([["single", "Aylık"], ["cumulative", "Kümülatif"]] as [string, string][]).map(([k, label]) => (
+          {([["single", "Monthly"], ["cumulative", "Cumulative"]] as [string, string][]).map(([k, label]) => (
             <button
               key={k}
               onClick={() => setView(k as "single" | "cumulative")}
@@ -275,10 +275,10 @@ function CashflowPanel({ result }: { result: DiscountResult }) {
         <div className="flex gap-3 flex-wrap">
           {[
             { label: "Unpaid Liability", value: fmt(origin.unpaid), color: "#6366f1" },
-            { label: "İskontolu Unpaid", value: fmt(origin.bel), color: "#3b82f6" },
-            { label: "İskonto", value: fmt(origin.unpaid - origin.bel), color: "#f97316" },
-            { label: "İskonto %", value: pct(origin.discountPct), color: discountColor(origin.discountPct) },
-            { label: "Tamamlanma Ayı", value: `${origin.duration}. ay`, color: "var(--muted-strong)" },
+            { label: "Discounted Unpaid", value: fmt(origin.bel), color: "#3b82f6" },
+            { label: "Discount", value: fmt(origin.unpaid - origin.bel), color: "#f97316" },
+            { label: "Discount %", value: pct(origin.discountPct), color: discountColor(origin.discountPct) },
+            { label: "Completion Month", value: `Month ${origin.duration}`, color: "var(--muted-strong)" },
           ].map((s) => (
             <div
               key={s.label}
@@ -337,7 +337,7 @@ function CashflowPanel({ result }: { result: DiscountResult }) {
           </AreaChart>
         </ResponsiveContainer>
         <p className="text-xs text-[color:var(--muted)] mt-2 text-center">
-          İki eğri arasındaki alan = iskonto tutarı
+          Area between the two curves = discount amount
         </p>
       </div>
     </div>
@@ -374,13 +374,13 @@ function SensitivityPanel({
 
   // 11 nokta: baz ± 500bp, 100bp adım
   const lineData = useMemo(() => {
-    const points: { rate: string; "İskontolu Unpaid": number; "İskonto Tutarı": number }[] = [];
+    const points: { rate: string; "Discounted Unpaid": number; "Discount Amount": number }[] = [];
     for (let bps = -500; bps <= 500; bps += 100) {
       const r = discountWithStandard(rows, monthlyPattern, shockedConfig(config, bps / 10000));
       points.push({
         rate: bps === 0 ? "Baz" : `${bps > 0 ? "+" : ""}${bps}bp`,
-        "İskontolu Unpaid": Math.round(r.base.totals.bel),
-        "İskonto Tutarı": Math.round(r.base.totals.unpaid - r.base.totals.bel),
+        "Discounted Unpaid": Math.round(r.base.totals.bel),
+        "Discount Amount": Math.round(r.base.totals.unpaid - r.base.totals.bel),
       });
     }
     return points;
@@ -403,9 +403,9 @@ function SensitivityPanel({
         className="rounded-xl p-4"
         style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
       >
-        <div className="text-xs font-semibold mb-1">Faiz Duyarlılığı</div>
+        <div className="text-xs font-semibold mb-1">Interest Sensitivity</div>
         <div className="text-xs text-[color:var(--muted)] mb-4">
-          Faiz değişimine göre İskontolu Unpaid ve İskonto Tutarı
+          Discounted Unpaid and Discount Amount by interest change
         </div>
         <ResponsiveContainer width="100%" height={220}>
           <LineChart data={lineData} margin={{ top: 4, right: 8, bottom: 4, left: 8 }}>
@@ -427,8 +427,8 @@ function SensitivityPanel({
             />
             <Legend wrapperStyle={{ fontSize: 11 }} />
             <ReferenceLine x="Baz" stroke="var(--muted)" strokeDasharray="4 2" label={{ value: "Baz", fontSize: 10, fill: "var(--muted)" }} />
-            <Line dataKey="İskontolu Unpaid" stroke="#3b82f6" strokeWidth={2} dot={{ r: 3, fill: "#3b82f6" }} />
-            <Line dataKey="İskonto Tutarı" stroke="#f97316" strokeWidth={2} dot={{ r: 3, fill: "#f97316" }} />
+            <Line dataKey="Discounted Unpaid" stroke="#3b82f6" strokeWidth={2} dot={{ r: 3, fill: "#3b82f6" }} />
+            <Line dataKey="Discount Amount" stroke="#f97316" strokeWidth={2} dot={{ r: 3, fill: "#f97316" }} />
           </LineChart>
         </ResponsiveContainer>
       </div>
@@ -444,11 +444,11 @@ function SensitivityPanel({
               <th className="px-4 py-2.5 text-left font-medium text-[color:var(--muted-strong)]">Senaryo</th>
               <th className="px-4 py-2.5 text-right font-medium text-[color:var(--muted-strong)]">Faiz</th>
               <th className="px-4 py-2.5 text-right font-medium text-[color:var(--muted-strong)]">Unpaid Liability</th>
-              <th className="px-4 py-2.5 text-right font-medium text-[color:var(--muted-strong)]">{isIfrs17 ? "BEL" : "İskontolu Unpaid"}</th>
-              <th className="px-4 py-2.5 text-right font-medium text-[color:var(--muted-strong)]">İskonto Tutarı</th>
+              <th className="px-4 py-2.5 text-right font-medium text-[color:var(--muted-strong)]">{isIfrs17 ? "BEL" : "Discounted Unpaid"}</th>
+              <th className="px-4 py-2.5 text-right font-medium text-[color:var(--muted-strong)]">Discount Amount</th>
               {isIfrs17 && <th className="px-4 py-2.5 text-right font-medium text-[color:var(--muted-strong)]">LIC</th>}
-              <th className="px-4 py-2.5 text-right font-medium text-[color:var(--muted-strong)]">İskonto %</th>
-              <th className="px-4 py-2.5 text-right font-medium text-[color:var(--muted-strong)]">{isIfrs17 ? "Δ LIC" : "Δ İsk. Unpaid"}</th>
+              <th className="px-4 py-2.5 text-right font-medium text-[color:var(--muted-strong)]">Discount %</th>
+              <th className="px-4 py-2.5 text-right font-medium text-[color:var(--muted-strong)]">{isIfrs17 ? "Δ LIC" : "Δ Disc. Unpaid"}</th>
             </tr>
           </thead>
           <tbody>
@@ -521,11 +521,11 @@ function ComparisonPanel({
       ? "Nominal (iskontosuz)"
       : configs.ifrs4.rateMode === "flat"
       ? `Sabit %${(configs.ifrs4.flatRate * 100).toFixed(1)}`
-      : `Eğri (${configs.ifrs4.curveNodes.length} nokta)`;
+      : `Curve (${configs.ifrs4.curveNodes.length} nodes)`;
   const rate17 =
     (configs.ifrs17.rateMode === "flat"
       ? `Sabit %${(configs.ifrs17.flatRate * 100).toFixed(1)}`
-      : `Eğri (${configs.ifrs17.curveNodes.length} nokta)`) +
+      : `Curve (${configs.ifrs17.curveNodes.length} nodes)`) +
     ` + ${configs.ifrs17.illiquidityPremiumBps}bp illikidite`;
 
   const carried4 = r4.base.totals.bel; // IFRS 4 bilanço karşılığı
@@ -533,12 +533,12 @@ function ComparisonPanel({
   const delta = carried17 - carried4;
 
   const rows: { label: string; v4: string; v17: string }[] = [
-    { label: "İskonto yaklaşımı", v4: rate4, v17: rate17 },
+    { label: "Discount approach", v4: rate4, v17: rate17 },
     { label: "Unpaid Liability (nominal)", v4: fmt(r4.base.totals.unpaid), v17: fmt(r17.base.totals.unpaid) },
-    { label: "İskontolu rezerv / BEL", v4: fmt(r4.base.totals.bel), v17: fmt(r17.base.totals.bel) },
-    { label: "İskonto tutarı", v4: fmt(r4.base.totals.unpaid - r4.base.totals.bel), v17: fmt(r17.base.totals.unpaid - r17.base.totals.bel) },
+    { label: "Discounted reserve / BEL", v4: fmt(r4.base.totals.bel), v17: fmt(r17.base.totals.bel) },
+    { label: "Discount amount", v4: fmt(r4.base.totals.unpaid - r4.base.totals.bel), v17: fmt(r17.base.totals.unpaid - r17.base.totals.bel) },
     { label: `Risk Adjustment (${raLabel})`, v4: "—", v17: fmt(r17.riskAdjustment.total) },
-    { label: "Bilanço karşılığı", v4: fmt(carried4), v17: `${fmt(carried17)} (LIC)` },
+    { label: "Balance-sheet provision", v4: fmt(carried4), v17: `${fmt(carried17)} (LIC)` },
   ];
 
   return (
@@ -577,11 +577,11 @@ function ComparisonPanel({
         </table>
       </div>
       <p className="text-xs text-[color:var(--muted)] leading-relaxed">
-        IFRS 4 karşılığı düzenleyici iskonto sonrası rezervdir; IFRS 17 LIC ise
-        bottom-up eğriyle iskontolanmış BEL üzerine finansal olmayan risk için
-        Risk Adjustment ekler. Parametreler sol paneldeki ilgili standart
-        seçiliyken düzenlenebilir — bu tablo iki konfigürasyonun güncel halini
-        karşılaştırır.
+        The IFRS 4 provision is the reserve after regulatory discounting; IFRS 17 LIC
+        adds a Risk Adjustment for non-financial risk on top of the BEL discounted with
+        the bottom-up curve. Parameters can be edited while the relevant standard is
+        selected in the left panel — this table compares the current state of both
+        configurations.
       </p>
     </div>
   );
@@ -593,7 +593,7 @@ function CurveEditor({ nodes, onChange }: { nodes: CurveNode[]; onChange: (nodes
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-[color:var(--muted-strong)]">İskonto Eğrisi</span>
+        <span className="text-xs font-medium text-[color:var(--muted-strong)]">Discount Curve</span>
         <button
           onClick={() => {
             const lastMonth = nodes[nodes.length - 1]?.month ?? 0;
@@ -601,11 +601,11 @@ function CurveEditor({ nodes, onChange }: { nodes: CurveNode[]; onChange: (nodes
           }}
           className="text-xs px-2 py-1 rounded border border-[color:var(--border)] text-[color:var(--muted-strong)] hover:text-[color:var(--foreground)] transition"
         >
-          + Satır
+          + Row
         </button>
       </div>
       {nodes.length === 0 ? (
-        <p className="text-xs text-[color:var(--muted)]">Eğri noktası eklenmemiş.</p>
+        <p className="text-xs text-[color:var(--muted)]">No curve nodes added.</p>
       ) : (
         <>
           <div className="grid grid-cols-[1fr_1fr_auto] gap-1 text-[10px] font-medium text-[color:var(--muted)] px-1">
@@ -626,7 +626,7 @@ function CurveEditor({ nodes, onChange }: { nodes: CurveNode[]; onChange: (nodes
               <button onClick={() => onChange(nodes.filter((_, j) => j !== i))} className="text-[color:var(--muted)] hover:text-red-500 px-1 text-base leading-none">×</button>
             </div>
           ))}
-          <p className="text-[10px] text-[color:var(--muted)]">Son noktanın ötesi flat extrapolasyon.</p>
+          <p className="text-[10px] text-[color:var(--muted)]">Beyond the last node is flat extrapolation.</p>
         </>
       )}
     </div>
@@ -720,14 +720,14 @@ export default function DiscountPage() {
         <div className="border-b flex items-center justify-between px-3 py-3" style={{ borderColor: "var(--border)" }}>
           {sidebarOpen && (
             <div>
-              <h1 className="text-xs font-semibold">İskonto</h1>
-              <p className="text-[10px] text-[color:var(--muted)]">İskontolanmış rezerv</p>
+              <h1 className="text-xs font-semibold">Discount</h1>
+              <p className="text-[10px] text-[color:var(--muted)]">Discounted reserve</p>
             </div>
           )}
           <button
             onClick={() => setSidebarOpen((v) => !v)}
             className="ml-auto p-1 rounded hover:bg-[color:var(--surface-alt)] transition text-[color:var(--muted-strong)]"
-            title={sidebarOpen ? "Daralt" : "Genişlet"}
+            title={sidebarOpen ? "Collapse" : "Expand"}
           >
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               {sidebarOpen ? <path d="M15 18l-6-6 6-6" /> : <path d="M9 18l6-6-6-6" />}
@@ -738,9 +738,9 @@ export default function DiscountPage() {
         {sidebarOpen && (
           <div className="px-3 py-3 space-y-4 flex-1">
             <div>
-              <label className="block text-[10px] font-medium text-[color:var(--muted-strong)] mb-1">Branş</label>
+              <label className="block text-[10px] font-medium text-[color:var(--muted-strong)] mb-1">Branch</label>
               {allBranches.length === 0 ? (
-                <p className="text-xs text-[color:var(--muted)]">Rezerv modülünde branş oluşturun.</p>
+                <p className="text-xs text-[color:var(--muted)]">Create a branch in the Reserve module.</p>
               ) : (
                 <select
                   value={selectedEntry?.branch.id ?? ""}
@@ -756,13 +756,13 @@ export default function DiscountPage() {
 
             {activeBranch && !hasPattern && (
               <div className="text-[10px] rounded-lg px-2.5 py-2 leading-relaxed" style={{ background: "#fffbeb", border: "1px solid #f59e0b44", color: "#b45309" }}>
-                Nakit akışı pattern yok. Nakit Akışı modülünde çalıştırın.
+                No cashflow pattern. Run it in the Cashflow module.
               </div>
             )}
 
             {/* Standart seçimi */}
             <div>
-              <label className="block text-[10px] font-medium text-[color:var(--muted-strong)] mb-1.5">Raporlama Standardı</label>
+              <label className="block text-[10px] font-medium text-[color:var(--muted-strong)] mb-1.5">Reporting Standard</label>
               <div className="flex rounded-lg overflow-hidden border" style={{ borderColor: "var(--border)" }}>
                 {(["ifrs4", "ifrs17"] as ReportingStandard[]).map((s) => (
                   <button key={s} onClick={() => setStandard(s)} className="flex-1 py-1.5 text-[10px] font-semibold transition"
@@ -773,13 +773,13 @@ export default function DiscountPage() {
               </div>
               <p className="text-[10px] text-[color:var(--muted)] mt-1 leading-relaxed">
                 {standard === "ifrs4"
-                  ? "Düzenleyici iskonto (SEDDK) veya nominal. Risk Adjustment yok."
-                  : "Bottom-up eğri (risk-free + illikidite primi) + Risk Adjustment → LIC."}
+                  ? "Regulatory discount (SEDDK) or nominal. No Risk Adjustment."
+                  : "Bottom-up curve (risk-free + illiquidity premium) + Risk Adjustment → LIC."}
               </p>
             </div>
 
             <div>
-              <label className="block text-[10px] font-medium text-[color:var(--muted-strong)] mb-1.5">İskonto Yöntemi</label>
+              <label className="block text-[10px] font-medium text-[color:var(--muted-strong)] mb-1.5">Discount Method</label>
               <div className="flex rounded-lg overflow-hidden border" style={{ borderColor: "var(--border)" }}>
                 {(standard === "ifrs4"
                   ? (["none", "flat", "curve"] as RateMode[])
@@ -787,7 +787,7 @@ export default function DiscountPage() {
                 ).map((m) => (
                   <button key={m} onClick={() => patchConfig({ rateMode: m })} className="flex-1 py-1.5 text-[10px] font-medium transition"
                     style={{ background: config.rateMode === m ? "var(--primary)" : "var(--surface)", color: config.rateMode === m ? "#fff" : "var(--muted-strong)" }}>
-                    {m === "none" ? "Nominal" : m === "flat" ? "Sabit" : "Eğri"}
+                    {m === "none" ? "Nominal" : m === "flat" ? "Flat" : "Curve"}
                   </button>
                 ))}
               </div>
@@ -796,7 +796,7 @@ export default function DiscountPage() {
             {config.rateMode === "flat" && (
               <div>
                 <label className="block text-[10px] font-medium text-[color:var(--muted-strong)] mb-1">
-                  {standard === "ifrs17" ? "Risk-Free Faiz (%)" : "Yıllık Faiz (%)"}
+                  {standard === "ifrs17" ? "Risk-Free Rate (%)" : "Annual Rate (%)"}
                 </label>
                 <input
                   type="number" min={0} max={200} step={0.1}
@@ -821,14 +821,14 @@ export default function DiscountPage() {
             {standard === "ifrs17" && (
               <>
                 <div>
-                  <label className="block text-[10px] font-medium text-[color:var(--muted-strong)] mb-1">İllikidite Primi (bps)</label>
+                  <label className="block text-[10px] font-medium text-[color:var(--muted-strong)] mb-1">Illiquidity Premium (bps)</label>
                   <input
                     type="number" min={0} max={1000} step={5}
                     value={config.illiquidityPremiumBps}
                     onChange={(e) => patchConfig({ illiquidityPremiumBps: Number(e.target.value) })}
                     className="w-full text-xs border border-[color:var(--border)] rounded-md px-2 py-1.5 bg-[color:var(--surface)] text-[color:var(--foreground)]"
                   />
-                  <p className="text-[10px] text-[color:var(--muted)] mt-1">Risk-free eğrinin üzerine eklenir (bottom-up).</p>
+                  <p className="text-[10px] text-[color:var(--muted)] mt-1">Added on top of the risk-free curve (bottom-up).</p>
                 </div>
 
                 <div>
@@ -842,7 +842,7 @@ export default function DiscountPage() {
                     }
                     className="w-full text-xs border border-[color:var(--border)] rounded-md px-2 py-1.5 bg-[color:var(--surface)] text-[color:var(--foreground)]"
                   >
-                    <option value="pct_of_bel">BEL yüzdesi</option>
+                    <option value="pct_of_bel">% of BEL</option>
                     <option value="cost_of_capital">Cost of Capital</option>
                     <option value="none">Yok</option>
                   </select>
@@ -850,7 +850,7 @@ export default function DiscountPage() {
 
                 {config.riskAdjustment.method === "pct_of_bel" && (
                   <div>
-                    <label className="block text-[10px] font-medium text-[color:var(--muted-strong)] mb-1">RA — BEL Yüzdesi (%)</label>
+                    <label className="block text-[10px] font-medium text-[color:var(--muted-strong)] mb-1">RA — % of BEL (%)</label>
                     <input
                       type="number" min={0} max={100} step={0.5}
                       value={(config.riskAdjustment.pctOfBel * 100).toFixed(1)}
@@ -867,7 +867,7 @@ export default function DiscountPage() {
                 {config.riskAdjustment.method === "cost_of_capital" && (
                   <div className="space-y-2">
                     <div>
-                      <label className="block text-[10px] font-medium text-[color:var(--muted-strong)] mb-1">CoC Oranı (%)</label>
+                      <label className="block text-[10px] font-medium text-[color:var(--muted-strong)] mb-1">CoC Rate (%)</label>
                       <input
                         type="number" min={0} max={50} step={0.5}
                         value={(config.riskAdjustment.cocRate * 100).toFixed(1)}
@@ -880,7 +880,7 @@ export default function DiscountPage() {
                       />
                     </div>
                     <div>
-                      <label className="block text-[10px] font-medium text-[color:var(--muted-strong)] mb-1">Sermaye Oranı (%)</label>
+                      <label className="block text-[10px] font-medium text-[color:var(--muted-strong)] mb-1">Capital Rate (%)</label>
                       <input
                         type="number" min={0} max={100} step={1}
                         value={(config.riskAdjustment.capitalRatio * 100).toFixed(0)}
@@ -891,7 +891,7 @@ export default function DiscountPage() {
                         }
                         className="w-full text-xs border border-[color:var(--border)] rounded-md px-2 py-1.5 bg-[color:var(--surface)] text-[color:var(--foreground)]"
                       />
-                      <p className="text-[10px] text-[color:var(--muted)] mt-1">SCR proxy = kalan yükümlülük × bu oran.</p>
+                      <p className="text-[10px] text-[color:var(--muted)] mt-1">SCR proxy = remaining liability × this rate.</p>
                     </div>
                   </div>
                 )}
@@ -906,8 +906,8 @@ export default function DiscountPage() {
         {/* Tab bar */}
         <div className="shrink-0 border-b px-6 flex items-end gap-1" style={{ borderColor: "var(--border)" }}>
           {([
-            { key: "summary", label: "Özet" },
-            { key: "cashflow", label: "Nakit Akışı" },
+            { key: "summary", label: "Summary" },
+            { key: "cashflow", label: "Cashflow" },
             ...(config.rateMode !== "none"
               ? [{ key: "sensitivity" as MainTab, label: "Sensitivite" }]
               : []),
@@ -925,18 +925,18 @@ export default function DiscountPage() {
         <div className="flex-1 overflow-y-auto p-6">
           {!activeBranch ? (
             <div className="h-full flex items-center justify-center">
-              <p className="text-sm text-[color:var(--muted)]">Sol panelden bir branş seçin.</p>
+              <p className="text-sm text-[color:var(--muted)]">Select a branch from the left panel.</p>
             </div>
           ) : !hasPattern ? (
             <div className="h-full flex items-center justify-center text-center">
               <div className="space-y-2">
-                <p className="text-sm text-[color:var(--muted)]">Nakit akışı pattern bulunamadı.</p>
-                <p className="text-xs text-[color:var(--muted)]">Nakit Akışı modülünde bu branşı hesaplayın.</p>
+                <p className="text-sm text-[color:var(--muted)]">No cashflow pattern found.</p>
+                <p className="text-xs text-[color:var(--muted)]">Compute this branch in the Cashflow module.</p>
               </div>
             </div>
           ) : !discountResult ? (
             <div className="h-full flex items-center justify-center">
-              <p className="text-sm text-[color:var(--muted)]">Hesaplanıyor…</p>
+              <p className="text-sm text-[color:var(--muted)]">Calculating…</p>
             </div>
           ) : (
             <>
@@ -948,13 +948,13 @@ export default function DiscountPage() {
                       { label: "BEL", value: fmt(discountResult.totals.bel), color: "#3b82f6" },
                       { label: "Risk Adjustment", value: fmt(standardResult.riskAdjustment.total), color: "#a855f7" },
                       { label: "LIC", value: fmt(standardResult.lic), color: "#0ea5e9" },
-                      { label: "İskonto %", value: pct(discountResult.totals.discountPct), color: discountColor(discountResult.totals.discountPct) },
+                      { label: "Discount %", value: pct(discountResult.totals.discountPct), color: discountColor(discountResult.totals.discountPct) },
                     ]
                   : [
                       { label: "Unpaid Liability", value: fmt(discountResult.totals.unpaid), color: "#6366f1" },
-                      { label: "İskontolu Unpaid", value: fmt(discountResult.totals.bel), color: "#3b82f6" },
-                      { label: "İskonto Tutarı", value: fmt(discountResult.totals.unpaid - discountResult.totals.bel), color: "#f97316" },
-                      { label: "İskonto %", value: pct(discountResult.totals.discountPct), color: discountColor(discountResult.totals.discountPct) },
+                      { label: "Discounted Unpaid", value: fmt(discountResult.totals.bel), color: "#3b82f6" },
+                      { label: "Discount Amount", value: fmt(discountResult.totals.unpaid - discountResult.totals.bel), color: "#f97316" },
+                      { label: "Discount %", value: pct(discountResult.totals.discountPct), color: discountColor(discountResult.totals.discountPct) },
                     ]
                 ).map((kpi) => (
                   <div key={kpi.label} className="rounded-xl px-4 py-3" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>

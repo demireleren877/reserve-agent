@@ -46,11 +46,11 @@ type NavLevel = "root" | "period" | "branch";
 type PeriodWithPaid = Period & { paidBranches: Branch[] };
 
 const TABS: { key: Tab; label: string; sub: string }[] = [
-  { key: "data",    label: "Veri",          sub: "Ödeme üçgeni" },
-  { key: "ldf",     label: "LDF",           sub: "Gelişim faktörleri" },
-  { key: "curve",   label: "Curve",         sub: "CDF eğrisi" },
-  { key: "pattern", label: "CF Pattern",    sub: "Çeyreklik" },
-  { key: "monthly", label: "Aylık Pattern", sub: "180 ay" },
+  { key: "data",    label: "Data",          sub: "Paid triangle" },
+  { key: "ldf",     label: "LDF",           sub: "Development factors" },
+  { key: "curve",   label: "Curve",         sub: "CDF curve" },
+  { key: "pattern", label: "CF Pattern",    sub: "Quarterly" },
+  { key: "monthly", label: "Monthly Pattern", sub: "180 months" },
 ];
 
 const EMPTY_FIT: TailFit = { ok: false, cdfs: [], params: {}, r2: undefined };
@@ -64,11 +64,11 @@ function timeAgo(iso: string): string {
   try {
     const diff = Date.now() - new Date(iso).getTime();
     const m = Math.floor(diff / 60000);
-    if (m < 1) return "az önce";
-    if (m < 60) return `${m} dk önce`;
+    if (m < 1) return "just now";
+    if (m < 60) return `${m} min ago`;
     const h = Math.floor(m / 60);
-    if (h < 24) return `${h} sa önce`;
-    return `${Math.floor(h / 24)} gün önce`;
+    if (h < 24) return `${h} hr ago`;
+    return `${Math.floor(h / 24)} days ago`;
   } catch { return ""; }
 }
 
@@ -105,13 +105,13 @@ function _xlsxDownload(wb: XLSX.WorkBook, filename: string) {
   // Masaüstü (pywebview) native kaydet köprüsü + tarayıcı fallback için ortak helper.
   const buf = XLSX.write(wb, { bookType: "xlsx", type: "array" }) as ArrayBuffer;
   downloadFile(buf, filename).catch((e) => {
-    alert("İndirme hatası: " + (e instanceof Error ? e.message : String(e)));
+    alert("Download error: " + (e instanceof Error ? e.message : String(e)));
   });
 }
 
 function exportTriangleXlsx(triangle: Triangle, branchLabel: string) {
   const devLabels = triangle.development_periods.map(String);
-  const header = ["Kaza Dönemi", ...devLabels];
+  const header = ["Accident Period", ...devLabels];
 
   const cumRows = triangle.origin_periods.map((o, i) => [o, ...triangle.values[i].map(v => v ?? "")]);
 
@@ -125,8 +125,8 @@ function exportTriangleXlsx(triangle: Triangle, branchLabel: string) {
   const incRows = triangle.origin_periods.map((o, i) => [o, ...incValues[i].map(v => v ?? "")]);
 
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([header, ...cumRows]), "Kümülatif");
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([header, ...incRows]), "Artımsal");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([header, ...cumRows]), "Cumulative");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([header, ...incRows]), "Incremental");
   _xlsxDownload(wb, `${branchLabel}_triangle.xlsx`);
 }
 
@@ -140,13 +140,13 @@ function exportLDFXlsx(
   const ratios = developmentRatios(triangle, excludedCells);
   const n = triangle.development_periods.length - 1;
   const stepLabels = Array.from({ length: n }, (_, i) => `${triangle.development_periods[i]}→${triangle.development_periods[i + 1]}`);
-  const header = ["Kaza Dönemi", ...stepLabels];
+  const header = ["Accident Period", ...stepLabels];
 
   const ratioRows = triangle.origin_periods.map((o, i) => [
     o,
     ...Array.from({ length: n }, (_, j) => {
       const cell = ratios[i]?.[j];
-      return cell != null ? (cell.excluded ? "(hariç)" : (cell.value ?? "")) : "";
+      return cell != null ? (cell.excluded ? "(excluded)" : (cell.value ?? "")) : "";
     }),
   ]);
 
@@ -237,8 +237,8 @@ function exportCurveXlsx(
 
 function exportPatternXlsx(result: CashflowComputeResult, mode: "quarterly" | "monthly", branchLabel: string) {
   const source = mode === "quarterly" ? result.quarterly_pattern : result.monthly_pattern;
-  const periodLabel = mode === "quarterly" ? "Period (Çeyrek)" : "Ay";
-  const header = ["Kaza Yılı", periodLabel, "Normalize Ağırlık"];
+  const periodLabel = mode === "quarterly" ? "Period (Quarter)" : "Month";
+  const header = ["Accident Year", periodLabel, "Normalized Weight"];
   const rows: (string | number)[][] = [];
   for (const year of result.origin_years) {
     for (const entry of source[String(year)] ?? []) {
@@ -249,7 +249,7 @@ function exportPatternXlsx(result: CashflowComputeResult, mode: "quarterly" | "m
   }
   const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, mode === "quarterly" ? "CF Pattern" : "Aylık Pattern");
+  XLSX.utils.book_append_sheet(wb, ws, mode === "quarterly" ? "CF Pattern" : "Monthly Pattern");
   _xlsxDownload(wb, `${branchLabel}_${mode}_pattern.xlsx`);
 }
 
@@ -321,11 +321,11 @@ function PeriodTile({ period, onOpen }: { period: PeriodWithPaid; onOpen: () => 
       <div>
         <div className="text-base font-semibold">{period.label}</div>
         <div className="text-xs text-[color:var(--muted)] mt-1 tabular">
-          {period.paidBranches.length} branş
+          {period.paidBranches.length} branches
         </div>
       </div>
       <div className="text-[11px] text-[color:var(--muted)] tabular">
-        Oluşturma: {new Date(period.createdAt).toLocaleDateString("tr-TR")}
+        Created: {new Date(period.createdAt).toLocaleDateString("en-GB")}
       </div>
     </div>
   );
@@ -333,7 +333,7 @@ function PeriodTile({ period, onOpen }: { period: PeriodWithPaid; onOpen: () => 
 
 function BranchTile({ branch, onOpen }: { branch: Branch; onOpen: () => void }) {
   const nOrigins = branch.paidTriangle?.origin_periods.length ?? 0;
-  const freq = branch.frequency === "quarterly" ? "Çeyreklik" : "Yıllık";
+  const freq = branch.frequency === "quarterly" ? "Quarterly" : "Yearly";
   return (
     <div onClick={onOpen}
       className="group card p-5 cursor-pointer transition hover:border-[color:var(--primary)] hover:shadow-md flex flex-col gap-3">
@@ -343,7 +343,7 @@ function BranchTile({ branch, onOpen }: { branch: Branch; onOpen: () => void }) 
       <div>
         <div className="text-base font-semibold">{branch.name}</div>
         <div className="text-xs text-[color:var(--muted)] mt-1 flex items-center gap-2">
-          <Pill ok>paid üçgen var</Pill>
+          <Pill ok>paid triangle loaded</Pill>
           <span className="tabular">{nOrigins} origin</span>
           <span>{freq}</span>
         </div>
@@ -361,15 +361,15 @@ function RootView({ periods, onOpen }: { periods: PeriodWithPaid[]; onOpen: (id:
   return (
     <main className="p-6 max-w-[1400px] mx-auto">
       <HeaderRow
-        title="Dönemler"
-        subtitle="Paid üçgeni yüklü dönemler. Bir döneme tıklayarak branşları görün."
+        title="Periods"
+        subtitle="Periods with a paid triangle loaded. Click a period to see its branches."
         count={periods.length}
       />
       {periods.length === 0 ? (
         <div className="text-center py-20 text-sm text-[color:var(--muted)]">
-          <p className="mb-3">Paid üçgeni yüklü branş bulunamadı.</p>
+          <p className="mb-3">No branch with a paid triangle found.</p>
           <Link href="/reserve" className="underline" style={{ color: "var(--primary)" }}>
-            Rezerv modülüne git →
+            Go to Reserve module →
           </Link>
         </div>
       ) : (
@@ -400,7 +400,7 @@ function PeriodView({
     <main className="p-6 max-w-[1400px] mx-auto">
       <HeaderRow
         title={period.label}
-        subtitle="Nakit akışı analizi yapmak istediğiniz branşı seçin."
+        subtitle="Select the branch you want to run cashflow analysis on."
         count={period.paidBranches.length}
       />
       <Grid>
@@ -451,12 +451,12 @@ function CashflowDataTab({ triangle }: { triangle: Triangle }) {
       {/* Summary strip */}
       <div className="grid grid-cols-4 gap-3">
         {[
-          { label: "Üçgen",        value: `${triangle.origin_periods.length}×${triangle.development_periods.length}` },
-          { label: "Origin Aralığı", value: `${triangle.origin_periods[0]} — ${triangle.origin_periods.at(-1)}`,
-            sub: `kaza ${triangle.origin_granularity === "quarterly" ? "çeyreklik" : "yıllık"}` },
-          { label: "Gelişim",      value: triangle.development_granularity === "quarterly" ? "Çeyreklik" : "Yıllık",
-            sub: `${triangle.development_periods.length} dönem` },
-          { label: "Toplam Güncel", value: formatNumber(latestSum), sub: "paid kümülatif" },
+          { label: "Triangle",     value: `${triangle.origin_periods.length}×${triangle.development_periods.length}` },
+          { label: "Origin Range", value: `${triangle.origin_periods[0]} — ${triangle.origin_periods.at(-1)}`,
+            sub: `accident ${triangle.origin_granularity === "quarterly" ? "quarterly" : "yearly"}` },
+          { label: "Development",  value: triangle.development_granularity === "quarterly" ? "Quarterly" : "Yearly",
+            sub: `${triangle.development_periods.length} periods` },
+          { label: "Total Current", value: formatNumber(latestSum), sub: "paid cumulative" },
         ].map(({ label, value, sub }) => (
           <div key={label} className="card p-3">
             <div className="text-[10px] uppercase tracking-wide font-semibold text-[color:var(--muted-strong)] mb-0.5">{label}</div>
@@ -470,8 +470,8 @@ function CashflowDataTab({ triangle }: { triangle: Triangle }) {
         <div className="flex items-center justify-between px-4 py-3 border-b bg-[color:var(--surface-alt)]">
           <div className="flex gap-1">
             {[
-              { id: "cum" as const, label: "Kümülatif Ödeme" },
-              { id: "inc" as const, label: "Artımsal Ödeme" },
+              { id: "cum" as const, label: "Cumulative Paid" },
+              { id: "inc" as const, label: "Incremental Paid" },
             ].map((t) => (
               <button key={t.id} onClick={() => setMode(t.id)}
                 className={"px-3 py-1 rounded text-xs font-medium transition " +
@@ -488,7 +488,7 @@ function CashflowDataTab({ triangle }: { triangle: Triangle }) {
         </div>
         <div className="p-2">
           <div className="text-[10px] text-[color:var(--muted-strong)] px-1 pb-1 font-semibold uppercase tracking-wide">
-            {mode === "cum" ? "Kümülatif Ödeme" : "Artımsal Ödeme"}
+            {mode === "cum" ? "Cumulative Paid" : "Incremental Paid"}
           </div>
           <TriangleGrid triangle={shown} />
         </div>
@@ -506,7 +506,7 @@ function entryPeriod(e: { period?: number; month?: number }): number {
 function PatternTable({ result, mode }: { result: CashflowComputeResult; mode: "quarterly" | "monthly" }) {
   const years = result.origin_years;
   const source = mode === "quarterly" ? result.quarterly_pattern : result.monthly_pattern;
-  const periodLabel = mode === "quarterly" ? "Period (Çeyrek)" : "Ay";
+  const periodLabel = mode === "quarterly" ? "Period (Quarter)" : "Month";
   const [transposed, setTransposed] = useState(true);
 
   // Matris: kaza yılı satır, period sütun. Tüm period'ların birleşimi (sıralı).
@@ -535,7 +535,7 @@ function PatternTable({ result, mode }: { result: CashflowComputeResult; mode: "
     <div className="space-y-3">
       <div className="flex items-center gap-2">
         <span className="text-[10px] uppercase tracking-wide font-semibold" style={{ color: "var(--muted)" }}>
-          Görünüm
+          View
         </span>
         <div className="inline-flex h-7 p-0.5 rounded-lg" style={{ background: "var(--surface-alt)", border: "1px solid var(--border)" }}>
           {([["matrix", "Matris"], ["list", "Liste"]] as const).map(([val, lbl]) => {
@@ -565,7 +565,7 @@ function PatternTable({ result, mode }: { result: CashflowComputeResult; mode: "
               <tr>
                 <th className="px-3 py-2 text-left font-semibold whitespace-nowrap sticky left-0"
                   style={{ ...thBase, zIndex: 3 }}>
-                  Kaza Yılı
+                  Accident Year
                 </th>
                 {periods.map((p) => (
                   <th key={p} className="px-3 py-2 text-right font-semibold tabular-nums whitespace-nowrap" style={thBase}>
@@ -608,7 +608,7 @@ function PatternTable({ result, mode }: { result: CashflowComputeResult; mode: "
           <table className="text-[12px] border-collapse w-full">
             <thead className="sticky top-0" style={{ background: "var(--surface)", zIndex: 1 }}>
               <tr>
-                {["Kaza Yılı", periodLabel, "Normalize Ağırlık"].map((h) => (
+                {["Accident Year", periodLabel, "Normalized Weight"].map((h) => (
                   <th key={h} className="px-4 py-2 text-left font-semibold whitespace-nowrap" style={thBase}>
                     {h}
                   </th>
@@ -955,7 +955,7 @@ export default function CashflowPage() {
       setResult(r);
       setActiveTab("data");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Hesaplama hatası");
+      setError(e instanceof Error ? e.message : "Calculation error");
     } finally {
       setLoading(false);
       setComputingBranchId(null);
@@ -992,11 +992,11 @@ export default function CashflowPage() {
               <path d="M7 11V7a5 5 0 0 1 10 0v4" />
             </svg>
           </div>
-          <h1 className="text-[20px] font-bold mb-2" style={{ color: "var(--foreground)" }}>Pro üyelik gerekli</h1>
-          <p className="text-[13.5px] leading-relaxed mb-8" style={{ color: "var(--muted-strong)" }}>Nakit Akışı modülü Pro plana dahildir.</p>
+          <h1 className="text-[20px] font-bold mb-2" style={{ color: "var(--foreground)" }}>Pro membership required</h1>
+          <p className="text-[13.5px] leading-relaxed mb-8" style={{ color: "var(--muted-strong)" }}>The Cashflow module is included in the Pro plan.</p>
           <Link href="/onboarding/plan" className="inline-flex items-center gap-2 px-6 py-3 rounded-xl text-[14px] font-semibold text-white"
             style={{ background: "linear-gradient(135deg,#6d28d9,#4f46e5)" }}>
-            Pro&apos;ya yükselt
+            Upgrade to Pro
           </Link>
         </div>
       </div>
@@ -1013,10 +1013,10 @@ export default function CashflowPage() {
             <div className="h-6 w-6 rounded-md bg-[color:var(--primary)] grid place-items-center text-white text-[11px] font-bold">
               N
             </div>
-            <h1 className="text-sm font-semibold">Nakit Akışı</h1>
+            <h1 className="text-sm font-semibold">Cashflow</h1>
           </div>
           <span className="text-[11px] text-[color:var(--muted)] hidden sm:inline">
-            Dönem → Branş → Analiz
+            Period → Branch → Analysis
           </span>
         </div>
       </header>
@@ -1029,7 +1029,7 @@ export default function CashflowPage() {
               ? "font-semibold text-[color:var(--foreground)]"
               : "text-[color:var(--muted)] hover:text-[color:var(--foreground)] hover:bg-[color:var(--surface-alt)]")}>
           <FolderIcon size={14} />
-          Dönemler
+          Periods
         </button>
         {activePeriod && (
           <>
@@ -1055,7 +1055,7 @@ export default function CashflowPage() {
         <div className="ml-auto flex items-center gap-2">
           <button onClick={() => fileRef.current?.click()} disabled={loading}
             className="text-xs text-[color:var(--muted-strong)] hover:text-[color:var(--foreground)] border border-[color:var(--border)] rounded-md px-2.5 py-1 transition hover:bg-[color:var(--surface-alt)] disabled:opacity-50">
-            Dosyadan yükle
+            Load from file
           </button>
           <input ref={fileRef} type="file" accept=".csv,.txt,.xlsx,.xls" className="hidden"
             onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
@@ -1063,7 +1063,7 @@ export default function CashflowPage() {
             <button
               onClick={navLevel === "branch" ? () => goToPeriod(activePeriodId!) : goRoot}
               className="text-xs text-[color:var(--muted)] hover:text-[color:var(--foreground)]">
-              ↑ Yukarı
+              ↑ Up
             </button>
           )}
         </div>
@@ -1129,7 +1129,7 @@ export default function CashflowPage() {
                   </nav>
                   <div className="flex items-center px-3 gap-2 shrink-0">
                     <span className="text-[11px] text-[color:var(--muted)]">
-                      Rapor: {result.report_date} · {result.origin_years.length} kaza yılı
+                      Report: {result.report_date} · {result.origin_years.length} accident years
                     </span>
                   </div>
                 </div>
@@ -1214,7 +1214,7 @@ export default function CashflowPage() {
                     <div className="px-5 py-3 border-b flex items-center justify-between"
                       style={{ borderColor: "var(--border)" }}>
                       <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: "var(--muted)" }}>
-                        Çeyreklik Nakit Akışı Pattern
+                        Quarterly Cashflow Pattern
                       </span>
                       <DownloadXlsxButton onClick={() =>
                         exportPatternXlsx(result!, "quarterly", activeBranch?.name ?? "cashflow")
@@ -1231,7 +1231,7 @@ export default function CashflowPage() {
                     <div className="px-5 py-3 border-b flex items-center justify-between"
                       style={{ borderColor: "var(--border)" }}>
                       <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: "var(--muted)" }}>
-                        Aylık Nakit Akışı Pattern (180 ay)
+                        Monthly Cashflow Pattern (180 months)
                       </span>
                       <DownloadXlsxButton onClick={() =>
                         exportPatternXlsx(result!, "monthly", activeBranch?.name ?? "cashflow")

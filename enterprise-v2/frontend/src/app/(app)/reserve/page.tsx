@@ -18,6 +18,7 @@ import { FolderBrowser } from "@/components/FolderBrowser";
 import { ModelLockBanner } from "@/components/ModelLockBanner";
 import { useModelLock } from "@/lib/use-model-lock";
 import { useBranchSetters, useProject } from "@/lib/project-store";
+import { useDataPremiums } from "@/lib/provision-models";
 import { formatNumber, type SessionState } from "@/lib/api";
 import { exportToExcel } from "@/lib/export";
 import { computeBranchSummary } from "@/lib/reserve-pipeline";
@@ -185,10 +186,19 @@ export default function Home() {
         }
       : activeBranch;
 
+  // DİNAMİK exposure: veri modülündeki prim verisinden canlı türetilir; elle
+  // girilen exposure (pb.premiums) bunun üstüne override olur. Prim sonradan
+  // yüklense de model otomatik yansıtır (veri ↔ model hep ilişkili).
+  const dataPremiums = useDataPremiums(activePeriod?.label, activeBranch?.name);
+  const effectivePremiums = useMemo(
+    () => ({ ...dataPremiums, ...(pb?.premiums ?? {}) }),
+    [dataPremiums, pb?.premiums],
+  );
+
   // export/computeBranchSummary için mevcut segmentin model branch'i
   const modelBranch = useMemo(
-    () => (pb ? { ...pb, triangle, paidTriangle: effPaid, incurredTriangle: effIncurred } : pb),
-    [pb, triangle, effPaid, effIncurred],
+    () => (pb ? { ...pb, premiums: effectivePremiums, triangle, paidTriangle: effPaid, incurredTriangle: effIncurred } : pb),
+    [pb, effectivePremiums, triangle, effPaid, effIncurred],
   );
 
   // LDF hover'ında gösterilen dosya kırılımı — mevcut segmente göre.
@@ -238,7 +248,7 @@ export default function Home() {
 
   const method = (pb?.method ?? "volume_weighted") as LDFMethod;
   const window: Window = pb?.window ?? "all";
-  const premiums = pb?.premiums ?? {};
+  const premiums = effectivePremiums;
   const lrInputPerOrigin = pb?.lrInputPerOrigin ?? {};
   const basisPerOrigin = pb?.basisPerOrigin ?? {};
   const cdfInitial = pb?.cdfInitial ?? {};

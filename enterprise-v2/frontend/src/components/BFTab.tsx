@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { Triangle } from "@/types/triangle";
 import { formatNumber } from "@/lib/api";
 import { cumulativeFactors } from "@/lib/ldf";
-import { LoadPrimsFromDataStore } from "@/components/LoadPrimsFromDataStore";
 
 const DEFAULT_LR = 0.7;
 
@@ -36,9 +35,6 @@ export function BFTab(props: Props) {
     onLRInputChange,
     onCorrectionChange,
   } = props;
-
-  const [loadMsg, setLoadMsg] = useState<string | null>(null);
-  const [showLoadPrims, setShowLoadPrims] = useState(false);
 
   const rows = useMemo(() => {
     if (!triangle) return [];
@@ -150,20 +146,9 @@ export function BFTab(props: Props) {
               Selected LR: sayı (0.7, 70%) veya formül (avg, vw, sum_cl/sum_exp)
             </span>
           </div>
-          <div className="flex items-center gap-2">
-            {loadMsg && (
-              <span className="text-xs text-[color:var(--success)]">{loadMsg}</span>
-            )}
-            <button
-              type="button"
-              onClick={() => setShowLoadPrims(true)}
-              className="btn text-xs"
-              disabled={!triangle}
-              title="Veri modülünden prim verisi yükle"
-            >
-              Veri Modülünden Yükle
-            </button>
-          </div>
+          <span className="text-[11px] text-[color:var(--muted)]">
+            Exposure, veri modülündeki prim verisinden otomatik gelir; hücreye yazarak override edebilirsin.
+          </span>
         </div>
         <div className="overflow-x-auto">
           <table className="text-sm w-full tabular">
@@ -298,17 +283,6 @@ export function BFTab(props: Props) {
       </div>
     </div>
 
-    {showLoadPrims && triangle && (
-      <LoadPrimsFromDataStore
-        originPeriods={triangle.origin_periods}
-        onLoad={(premiums) => {
-          onPremiumsBulk(premiums);
-          setLoadMsg(`${Object.keys(premiums).length} origin için exposure yüklendi.`);
-          setTimeout(() => setLoadMsg(null), 4000);
-        }}
-        onClose={() => setShowLoadPrims(false)}
-      />
-    )}
     </>
   );
 }

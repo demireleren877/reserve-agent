@@ -488,7 +488,7 @@ export function LDFTab(props: Props) {
                 );
               })}
 
-              {/* Kullanıcı-input volume satırı — "Son N" (N serbest) */}
+              {/* Kullanıcı-input volume satırı — "Last N" (N serbest) */}
               {(() => {
                 const rowActive = !isKarmaActive && window === customWindow;
                 return (

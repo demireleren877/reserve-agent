@@ -35,7 +35,7 @@ export async function downloadFile(
       | { ok?: boolean; cancelled?: boolean; error?: string }
       | undefined;
     if (res && res.ok === false && !res.cancelled) {
-      throw new Error(res.error || "Dosya kaydedilemedi");
+      throw new Error(res.error || "Could not save file");
     }
     return;
   }

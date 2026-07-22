@@ -64,11 +64,11 @@ export function FrequencySeverityTab({
     <div className="space-y-4">
       {/* Özet */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Stat label="Toplam Ult Adet" value={TR2.format(result.totals.ultimateCount)} sub="ihbar adedi projeksiyonu" />
-        <Stat label="Toplam Ult Hasar" value={formatNumber(result.totals.ultimateLoss)} sub="adet × ortalama maliyet" />
+        <Stat label="Total Ult Count" value={TR2.format(result.totals.ultimateCount)} sub="reported count projection" />
+        <Stat label="Total Ult Claims" value={formatNumber(result.totals.ultimateLoss)} sub="count × average cost" />
         <Stat label="IBNR (Frequency-Severity)" value={formatNumber(fsIbnr)} sub="ult − latest" />
         <Stat
-          label="CL ile Fark"
+          label="Diff vs CL"
           value={diff != null ? formatNumber(diff) : "—"}
           sub={diffPct != null ? `vs CL IBNR ${TR2.format(diffPct)}%` : "No CL comparison"}
         />
@@ -82,7 +82,7 @@ export function FrequencySeverityTab({
         <table className="text-[12px] border-collapse">
           <tbody>
             <tr>
-              <td className="pr-4 py-1 font-medium text-[color:var(--muted-strong)] whitespace-nowrap">Adet LDF</td>
+              <td className="pr-4 py-1 font-medium text-[color:var(--muted-strong)] whitespace-nowrap">Count LDF</td>
               {result.countLdfs.map((f, i) => (
                 <td key={i} className="px-3 py-1 tabular-nums text-right">{TR4.format(f)}</td>
               ))}

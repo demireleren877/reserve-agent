@@ -81,9 +81,9 @@ export function UltimateTab({ summary, onBasisChange }: Props) {
           label="Total Selected Ultimate"
           value={formatNumber(totals.selectedUlt)}
         />
-        <Stat label="Toplam IBNR" value={formatNumber(totals.ibnr)} accent />
+        <Stat label="Total IBNR" value={formatNumber(totals.ibnr)} accent />
         <Stat
-          label="Toplam ULR"
+          label="Total ULR"
           value={totalULR != null ? `${(totalULR * 100).toFixed(1)}%` : "—"}
         />
       </div>
@@ -160,7 +160,7 @@ export function UltimateTab({ summary, onBasisChange }: Props) {
                 </tr>
               ))}
               <tr className="border-t-2 border-[color:var(--border-strong)] font-semibold bg-[color:var(--surface-alt)]">
-                <td className="px-3 py-2">Toplam</td>
+                <td className="px-3 py-2">Total</td>
                 <td className="text-right px-3 py-2">
                   {formatNumber(totals.latest)}
                 </td>

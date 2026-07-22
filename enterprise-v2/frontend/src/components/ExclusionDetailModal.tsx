@@ -72,7 +72,7 @@ export function ExclusionDetailModal({ impacts, excludedCount, onClose }: Props)
             onClick={onClose}
             className="w-7 h-7 rounded-md text-[18px] flex items-center justify-center hover:bg-[color:var(--surface)] transition shrink-0"
             style={{ color: "var(--muted)" }}
-            aria-label="Kapat"
+            aria-label="Close"
           >
             ×
           </button>
@@ -111,7 +111,7 @@ export function ExclusionDetailModal({ impacts, excludedCount, onClose }: Props)
             <table className="text-[12.5px] w-full tabular">
               <thead className="sticky top-0 bg-[color:var(--surface)]">
                 <tr className="text-[color:var(--muted)] text-[10px] uppercase tracking-wide">
-                  <th className="text-left font-medium px-5 py-2.5">Kaza</th>
+                  <th className="text-left font-medium px-5 py-2.5">Accident</th>
                   <th className="text-left font-medium px-3 py-2.5">Step</th>
                   <th className="text-right font-medium px-3 py-2.5">LDF</th>
                   <th className="text-right font-medium px-3 py-2.5">

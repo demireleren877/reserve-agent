@@ -1227,7 +1227,7 @@ function ToggleToast({
         <button
           onClick={onClose}
           className="text-[color:var(--muted)] hover:text-[color:var(--foreground)] text-sm leading-none -mr-1 -mt-1 px-1"
-          title="Kapat"
+          title="Close"
         >
           ×
         </button>

@@ -146,7 +146,7 @@ export default function UsersPage() {
             disabled={creating}
             className="px-4 py-2 rounded-lg bg-[color:var(--brand)] text-white text-sm font-medium disabled:opacity-50"
           >
-            {creating ? "Ekleniyor..." : "Ekle"}
+            {creating ? "Addniyor..." : "Add"}
           </button>
         </form>
       </div>

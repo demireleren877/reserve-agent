@@ -154,7 +154,7 @@ export function ResultsPanel(props: Props) {
           <table className="text-sm w-full tabular-nums">
             <thead>
               <tr className="text-[color:var(--muted)] text-[11px] uppercase tracking-wide">
-                <th className="text-left px-1 py-1 font-medium">Kaza</th>
+                <th className="text-left px-1 py-1 font-medium">Accident</th>
                 <th className="text-right px-1 py-1 font-medium">Current</th>
                 <th className="text-right px-1 py-1 font-medium">CDF</th>
                 <th className="text-right px-1 py-1 font-medium">Ult.</th>
@@ -180,7 +180,7 @@ export function ResultsPanel(props: Props) {
                 </tr>
               ))}
               <tr className="border-t-2 border-[color:var(--foreground)] font-semibold">
-                <td className="px-1 py-1.5">Toplam</td>
+                <td className="px-1 py-1.5">Total</td>
                 <td className="text-right px-1 py-1.5">
                   {formatNumber(result.total_latest)}
                 </td>

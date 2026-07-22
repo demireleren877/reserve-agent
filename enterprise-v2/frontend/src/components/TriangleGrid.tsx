@@ -102,7 +102,7 @@ export function TriangleGrid(props: Props) {
     // Toplam satırı (sütun toplamları) EN ALTTA — normal satır olarak (pinned
     // yerine) garanti görünür.
     const total: Record<string, number | string | null | boolean> = {
-      header: "Toplam",
+      header: "Total",
       __total: true,
     };
     matrix.totals.forEach((v, j) => {

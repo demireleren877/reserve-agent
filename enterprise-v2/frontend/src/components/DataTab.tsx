@@ -320,7 +320,7 @@ export function DataTab({ paidTriangle, incurredTriangle, viewingLarge, largeAct
               <ViewChip>
                 {view === "development" ? "Development" : "Calendar"}
               </ViewChip>
-              <ViewChip>Kaza {lenLabel(safeOriginLen)}</ViewChip>
+              <ViewChip>Accident {lenLabel(safeOriginLen)}</ViewChip>
               <ViewChip>Development {lenLabel(safeDevLen)}</ViewChip>
               {transposed && <ViewChip>Transpoze</ViewChip>}
             </div>

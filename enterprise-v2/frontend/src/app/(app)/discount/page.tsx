@@ -183,7 +183,7 @@ function SummaryPanel({ result }: { result: DiscountResult }) {
           </tbody>
           <tfoot>
             <tr className="border-t-2 font-semibold" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
-              <td className="px-4 py-3">Toplam</td>
+              <td className="px-4 py-3">Total</td>
               <td className="px-4 py-3 text-right font-mono">{fmt(result.totals.unpaid)}</td>
               <td className="px-4 py-3 text-right font-mono">{fmt(result.totals.bel)}</td>
               <td className="px-4 py-3 text-right font-mono">{fmt(result.totals.unpaid - result.totals.bel)}</td>
@@ -567,7 +567,7 @@ function ComparisonPanel({
           </tbody>
           <tfoot>
             <tr className="border-t-2 font-semibold" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
-              <td className="px-4 py-3">Fark (IFRS 17 − IFRS 4)</td>
+              <td className="px-4 py-3">Difference (IFRS 17 − IFRS 4)</td>
               <td className="px-4 py-3" />
               <td className="px-4 py-3 text-right font-mono" style={{ color: delta > 0 ? "#ef4444" : "#22c55e" }}>
                 {delta > 0 ? "+" : ""}{fmt(delta)}

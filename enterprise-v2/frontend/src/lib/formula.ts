@@ -272,7 +272,7 @@ class Parser {
         cl += this.ctx.clUlt.get(y) ?? 0;
         exp += this.ctx.exposure.get(y) ?? 0;
       }
-      if (exp === 0) throw new Error("Toplam exposure 0");
+      if (exp === 0) throw new Error("Total exposure is 0");
       return cl / exp;
     }
     if (name === "sum_cl") {

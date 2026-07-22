@@ -226,7 +226,7 @@ export function TriangleImportWizard({ onDone, onCancel }: Props) {
           )}
           {step === "preview" && (
             <button onClick={handleConfirm}
-              className="px-4 py-2 text-sm rounded-md bg-[color:var(--primary)] text-white font-medium hover:opacity-90 transition">Kaydet</button>
+              className="px-4 py-2 text-sm rounded-md bg-[color:var(--primary)] text-white font-medium hover:opacity-90 transition">Save</button>
           )}
         </div>
       </div>

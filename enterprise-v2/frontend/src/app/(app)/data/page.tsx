@@ -245,7 +245,7 @@ function DataTypeCard({
                   </div>
                 </div>
                 <div>
-                  <div style={{ color: "var(--muted)" }}>Dosya</div>
+                  <div style={{ color: "var(--muted)" }}>File</div>
                   <div className="font-semibold truncate" style={{ color: "var(--foreground)" }}>
                     {ds.meta.filename}
                   </div>

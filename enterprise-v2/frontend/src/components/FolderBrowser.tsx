@@ -52,7 +52,7 @@ function CopyMoveModal({
 
         {mode === "copy" && (
           <div className="space-y-1.5">
-            <div className="label">Yeni isim</div>
+            <div className="label">New name</div>
             <input
               autoFocus
               value={name}
@@ -578,7 +578,7 @@ function BranchTile({
               <span className="tabular">{nOrigins} origin</span>
             </>
           ) : (
-            <Pill>veri yok</Pill>
+            <Pill>no data</Pill>
           )}
         </div>
       </div>

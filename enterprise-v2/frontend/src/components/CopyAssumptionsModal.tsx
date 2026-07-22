@@ -124,7 +124,7 @@ export function CopyAssumptionsModal({ sourceBranch, allPeriods, onConfirm, onCa
           </>
         )}
         {otherBranches.length === 0 && (
-          <button onClick={onCancel} className="btn w-full">Kapat</button>
+          <button onClick={onCancel} className="btn w-full">Close</button>
         )}
       </div>
     </div>

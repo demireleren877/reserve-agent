@@ -259,7 +259,7 @@ export function ChatPanel({
           {onClose && (
             <>
               <Divider />
-              <HeaderBtn title="Kapat" onClick={onClose}>
+              <HeaderBtn title="Close" onClick={onClose}>
                 <CloseIcon />
               </HeaderBtn>
             </>

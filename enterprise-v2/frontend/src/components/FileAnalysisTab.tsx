@@ -196,7 +196,7 @@ function StatsTab({ triangle, fileData }: { triangle: Triangle; fileData: FileDa
     <div className="space-y-4">
       <div className="grid grid-cols-3 gap-3">
         <KpiCard label="Total Portfolio" value={formatNumber(portfolio)} sub="latest diagonal" />
-        <KpiCard label="Toplam Dosya" value={String(totalFiles)} sub="latest diagonal" />
+        <KpiCard label="Total Files" value={String(totalFiles)} sub="latest diagonal" />
         <KpiCard label="Highest Top-1 Share" value={pct(maxTop1)} accent={maxTop1 > 0.5} />
       </div>
 
@@ -221,8 +221,8 @@ function StatsTab({ triangle, fileData }: { triangle: Triangle; fileData: FileDa
             <thead>
               <tr className="border-b text-[10px] uppercase tracking-wide text-[color:var(--muted-strong)] bg-[color:var(--surface-alt)]">
                 <th className="text-left px-3 py-2">Accident Year</th>
-                <th className="text-right px-3 py-2">Toplam</th>
-                <th className="text-right px-3 py-2">Dosya</th>
+                <th className="text-right px-3 py-2">Total</th>
+                <th className="text-right px-3 py-2">File</th>
                 <th className="text-right px-3 py-2">Ortalama</th>
                 <th className="text-right px-3 py-2">Medyan</th>
                 <th className="text-right px-3 py-2">CoV</th>
@@ -296,7 +296,7 @@ function LargeLossTab({ triangle, fileData }: { triangle: Triangle; fileData: Fi
           value={formatNumber(largeTotal)}
           sub={portfolioTotal > 0 ? `${pct(largeTotal / portfolioTotal)} of portfolio` : undefined}
         />
-        <KpiCard label="Toplam Dosya" value={String(allFiles.length)} />
+        <KpiCard label="Total Files" value={String(allFiles.length)} />
       </div>
 
       <div className="card p-4">
@@ -332,7 +332,7 @@ function LargeLossTab({ triangle, fileData }: { triangle: Triangle; fileData: Fi
             <thead>
               <tr className="border-b text-[10px] uppercase tracking-wide text-[color:var(--muted-strong)] bg-[color:var(--surface-alt)]">
                 <th className="text-right px-3 py-2">#</th>
-                <th className="text-left px-3 py-2">Dosya No</th>
+                <th className="text-left px-3 py-2">Claim No</th>
                 <th className="text-left px-3 py-2">Accident Year</th>
                 <th className="text-right px-3 py-2">Value</th>
                 <th className="text-right px-3 py-2">Portfolio Share</th>
@@ -633,10 +633,10 @@ function CompareTab({
                 <th className="text-right px-3 py-2">Comparison</th>
                 <th className="text-right px-3 py-2">Δ</th>
                 <th className="text-right px-3 py-2">Δ%</th>
-                <th className="text-right px-3 py-2">G. Dosya</th>
-                <th className="text-right px-3 py-2">K. Dosya</th>
-                <th className="text-right px-3 py-2">Yeni</th>
-                <th className="text-right px-3 py-2">Kapanan</th>
+                <th className="text-right px-3 py-2">Cur. Files</th>
+                <th className="text-right px-3 py-2">Comp. Files</th>
+                <th className="text-right px-3 py-2">New</th>
+                <th className="text-right px-3 py-2">Closed</th>
               </tr>
             </thead>
             <tbody>
@@ -667,7 +667,7 @@ function CompareTab({
             </tbody>
             <tfoot>
               <tr className="border-t-2 border-[color:var(--primary)] bg-[color:var(--primary-soft)] font-semibold">
-                <td className="px-3 py-1.5 text-[color:var(--primary)]">Toplam</td>
+                <td className="px-3 py-1.5 text-[color:var(--primary)]">Total</td>
                 <td className="text-right px-3 py-1.5">{formatNumber(totalCurr)}</td>
                 <td className="text-right px-3 py-1.5">{formatNumber(totalComp)}</td>
                 <td className={`text-right px-3 py-1.5 ${totalDelta > 0 ? "text-[color:var(--danger)]" : totalDelta < 0 ? "text-green-600" : ""}`}>

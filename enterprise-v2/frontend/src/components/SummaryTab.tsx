@@ -122,7 +122,7 @@ export function SummaryTab(props: Props) {
   const interventions = useMemo(() => {
     const items: { label: string; value: string; tone?: "muted" | "accent" }[] = [];
     if (String(window) !== String(DEFAULT_WINDOW)) {
-      items.push({ label: "Volume", value: `Son ${window}` });
+      items.push({ label: "Volume", value: `Last ${window}` });
     }
     if (excludedCells.size > 0) {
       items.push({
@@ -146,10 +146,10 @@ export function SummaryTab(props: Props) {
       });
     }
     if (manualLRCount > 0) {
-      items.push({ label: "Manuel LR", value: `${manualLRCount} origin` });
+      items.push({ label: "Manual LR", value: `${manualLRCount} origin` });
     }
     if (bfBasisCount > 0) {
-      items.push({ label: "BF temeli", value: `${bfBasisCount} origin` });
+      items.push({ label: "BF basis", value: `${bfBasisCount} origin` });
     }
     return items;
   }, [
@@ -378,13 +378,13 @@ export function SummaryTab(props: Props) {
             <table className="text-sm w-full tabular">
               <thead>
                 <tr className="text-[color:var(--muted)] text-[10.5px] uppercase tracking-wide">
-                  <th className="text-left font-medium px-4 py-2.5">Kaza</th>
+                  <th className="text-left font-medium px-4 py-2.5">Accident</th>
                   <th className="text-right font-medium px-3 py-2.5">Latest</th>
                   <th className="text-right font-medium px-3 py-2.5">Exposure</th>
                   <th className="text-right font-medium px-3 py-2.5">k</th>
                   <th className="text-right font-medium px-3 py-2.5">CDF</th>
                   <th className="text-right font-medium px-3 py-2.5">% Dev</th>
-                  <th className="text-center font-medium px-3 py-2.5">Temel</th>
+                  <th className="text-center font-medium px-3 py-2.5">Basis</th>
                   <th className="text-right font-medium px-3 py-2.5">Sel. LR</th>
                   <th className="text-right font-medium px-3 py-2.5">Selected Ult</th>
                   <th className="text-right font-medium px-4 py-2.5">IBNR</th>

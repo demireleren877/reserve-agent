@@ -60,7 +60,7 @@ export function UploadForm({ onLoaded }: Props) {
             <option value="inc">Incremental</option>
           </select>
         </Field>
-        <Field label="Kaza">
+        <Field label="Accident">
           <select
             value={originGranularity}
             onChange={(e) => setOriginGranularity(e.target.value as Granularity)}

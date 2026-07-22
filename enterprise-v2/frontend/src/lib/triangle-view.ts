@@ -233,7 +233,7 @@ export function buildDisplayMatrix(base: Triangle, opts: ViewOptions): DisplayMa
     return quarterSeqToLabel(startQ, yearlyBucket);
   });
 
-  return assemble(origins, columns, values, "Kaza", "Takvim", opts.transposed);
+  return assemble(origins, columns, values, "Accident", "Takvim", opts.transposed);
 }
 
 /** origin ekseni için geçerli uzunluk (ay) seçenekleri. */

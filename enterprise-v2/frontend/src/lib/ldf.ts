@@ -7,10 +7,10 @@ export const MODEL_LABELS: Record<number, string> = {
 };
 
 export const WINDOWS: { id: Window; label: string }[] = [
-  { id: 4,     label: "Son 4" },
-  { id: 5,     label: "Son 5" },
-  { id: 6,     label: "Son 6" },
-  { id: 7,     label: "Son 7" },
+  { id: 4,     label: "Last 4" },
+  { id: 5,     label: "Last 5" },
+  { id: 6,     label: "Last 6" },
+  { id: 7,     label: "Last 7" },
   { id: "all", label: "All" },
 ];
 

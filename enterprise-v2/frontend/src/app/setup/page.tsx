@@ -168,7 +168,7 @@ function ConnectionRow({
       <button onClick={onEdit} disabled={busy} className="text-[11.5px] font-semibold px-2 py-1 rounded-md"
         style={{ color: "#45445a", background: "#fff", border: "1px solid #e8e5dd" }}>Edit</button>
       <button onClick={run(onDelete)} disabled={busy} className="text-[11.5px] font-semibold px-2 py-1 rounded-md"
-        style={{ color: "#b91c1c", background: "#fff", border: "1px solid #fecaca" }}>Sil</button>
+        style={{ color: "#b91c1c", background: "#fff", border: "1px solid #fecaca" }}>Delete</button>
     </div>
   );
 }
@@ -328,7 +328,7 @@ function ConnectionForm({
           <button type="submit" disabled={busy}
             className="flex-1 py-2.5 rounded-lg text-[13.5px] font-semibold text-white"
             style={{ background: "linear-gradient(180deg, #2563eb, #1e40af)", boxShadow: "0 4px 12px rgba(37,83,228,0.25)" }}>
-            {editing ? "Kaydet" : "Ekle"}
+            {editing ? "Save" : "Add"}
           </button>
         </div>
       </form>

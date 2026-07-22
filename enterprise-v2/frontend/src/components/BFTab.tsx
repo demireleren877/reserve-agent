@@ -251,7 +251,7 @@ export function BFTab(props: Props) {
         </div>
         <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1 pl-4 list-disc">
           <li>
-            <code className="font-mono">0.75</code> veya{" "}
+            <code className="font-mono">0.75</code> or{" "}
             <code className="font-mono">75%</code> — fixed value
           </li>
           <li>

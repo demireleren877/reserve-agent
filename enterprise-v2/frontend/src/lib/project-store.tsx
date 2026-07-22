@@ -32,6 +32,7 @@ import {
   ApiError as WorkerError,
 } from "@/lib/sync/worker-client";
 import { mergeProjects } from "@/lib/project-merge";
+import { sortByPeriodLabel } from "@/lib/period-order";
 import { CHAT_CHANGED_EVENT } from "@/lib/chat-storage";
 
 const STORAGE_KEY_PREFIX = "reserve-agent-project-v2";
@@ -166,13 +167,15 @@ export function ProjectProvider({ children, userId }: ProjectProviderProps) {
 
       // Project: server wins if present, else fall back to localStorage cache.
       if (serverProject) {
-        setProject(serverProject);
+        setProject({ ...serverProject, periods: sortByPeriodLabel(serverProject.periods) });
       } else {
         try {
           const raw = localStorage.getItem(projectKey);
           if (raw) {
             const parsed = JSON.parse(raw) as Project;
-            if (parsed && Array.isArray(parsed.periods)) setProject(parsed);
+            if (parsed && Array.isArray(parsed.periods)) {
+              setProject({ ...parsed, periods: sortByPeriodLabel(parsed.periods) });
+            }
           }
         } catch {
           /* ignore */
@@ -378,7 +381,7 @@ export function ProjectProvider({ children, userId }: ProjectProviderProps) {
         const p = makePeriod(label);
         setProject((prev) => ({
           ...prev,
-          periods: [...prev.periods, p],
+          periods: sortByPeriodLabel([...prev.periods, p]),
           activePeriodId: p.id,
           activeFrequency: null,
           activeBranchId: null,

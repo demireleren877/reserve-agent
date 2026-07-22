@@ -15,6 +15,7 @@ import { TriangleImportWizard, type TriangleWizardResult } from "@/components/Tr
 import { TriangleGrid } from "@/components/TriangleGrid";
 import { importPrimFile } from "@/lib/api";
 import type { PrimRecord, TriangleRecord } from "@/lib/data-store";
+import { useProvisionModels } from "@/lib/provision-models";
 
 // ─── Yardımcı ─────────────────────────────────────────────────────────────────
 
@@ -437,6 +438,7 @@ type RightView =
 
 function PeriodDetail({ period }: { period: DataPeriod }) {
   const { setDataset, removeDataset, loadDatasetRecords } = useDataStore();
+  const provision = useProvisionModels();
   const [view, setView] = useState<RightView>({ kind: "overview" });
   const [showPrimWizard, setShowPrimWizard] = useState(false);
   const [showTriangleWizard, setShowTriangleWizard] = useState(false);
@@ -465,6 +467,15 @@ function PeriodDetail({ period }: { period: DataPeriod }) {
     };
     // setDataset optimistic update'i hemen uygular; remote hata verse de overview'a dön
     setDataset(period.id, ds).catch(() => {});
+    // Rezervde otomatik model kur (hasar → gross, large → large segment).
+    const recs = result.result.records as import("@/lib/data-store").ClaimRecord[];
+    const og = result.originGranularity;
+    const dg = result.developmentGranularity;
+    if (typeId === "large") {
+      provision.provisionLarge(period.label, recs, result.result.brans_list, og, dg).catch(() => {});
+    } else {
+      provision.provisionHasar(period.label, recs, result.result.brans_list, og, dg).catch(() => {});
+    }
     setView({ kind: "overview" });
   }
 
@@ -485,6 +496,8 @@ function PeriodDetail({ period }: { period: DataPeriod }) {
       records: r.records,
     };
     setDataset(period.id, ds).catch(() => {});
+    // Eşleşen modellere exposure otomatik atanır (branşa göre).
+    provision.provisionPrim(period.label, r.records as import("@/lib/data-store").PrimRecord[]);
     setView({ kind: "overview" });
   }
 
@@ -503,6 +516,8 @@ function PeriodDetail({ period }: { period: DataPeriod }) {
       records: recs,
     };
     setDataset(period.id, ds).catch(() => {});
+    // Hazır üçgenden rezervde model kur (ucgen → gross, large_ucgen → large).
+    provision.provisionTriangle(period.label, recs, triangleWizardType);
     setShowTriangleWizard(false);
   }
 

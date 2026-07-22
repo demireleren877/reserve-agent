@@ -442,6 +442,10 @@ function PreviewStep({
   onBack,
   importing,
   error,
+  originGran,
+  devGran,
+  onOriginGran,
+  onDevGran,
 }: {
   file: File;
   sheetName: string | null;
@@ -450,6 +454,10 @@ function PreviewStep({
   onBack: () => void;
   importing: boolean;
   error: string | null;
+  originGran: "yearly" | "quarterly";
+  devGran: "yearly" | "quarterly";
+  onOriginGran: (g: "yearly" | "quarterly") => void;
+  onDevGran: (g: "yearly" | "quarterly") => void;
 }) {
   return (
     <div className="flex flex-col flex-1 overflow-hidden">
@@ -505,6 +513,52 @@ function PreviewStep({
           </div>
         </div>
 
+        {/* Model kurulumu: rezervde otomatik oluşacak modelin üçgen granülaritesi */}
+        <div
+          className="rounded-xl border overflow-hidden mb-5"
+          style={{ borderColor: "var(--border)" }}
+        >
+          <div
+            className="px-4 py-2.5 border-b text-[12px] font-semibold"
+            style={{ borderColor: "var(--border)", background: "var(--surface-alt)", color: "var(--muted-strong)" }}
+          >
+            Model kurulumu · üçgen granülaritesi
+          </div>
+          <div className="px-4 py-3 grid grid-cols-2 gap-4">
+            <label className="block">
+              <span className="block text-[11.5px] font-medium mb-1" style={{ color: "var(--muted-strong)" }}>
+                Kaza Dönemi
+              </span>
+              <select
+                value={originGran}
+                onChange={(e) => onOriginGran(e.target.value as "yearly" | "quarterly")}
+                className="w-full text-[13px] border rounded-lg px-3 py-2 bg-[color:var(--surface)]"
+                style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
+              >
+                <option value="yearly">Yıllık</option>
+                <option value="quarterly">Çeyreklik</option>
+              </select>
+            </label>
+            <label className="block">
+              <span className="block text-[11.5px] font-medium mb-1" style={{ color: "var(--muted-strong)" }}>
+                Gelişim Dönemi
+              </span>
+              <select
+                value={devGran}
+                onChange={(e) => onDevGran(e.target.value as "yearly" | "quarterly")}
+                className="w-full text-[13px] border rounded-lg px-3 py-2 bg-[color:var(--surface)]"
+                style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
+              >
+                <option value="yearly">Yıllık</option>
+                <option value="quarterly">Çeyreklik</option>
+              </select>
+            </label>
+          </div>
+          <div className="px-4 pb-3 text-[11px]" style={{ color: "var(--muted)" }}>
+            İçe aktarınca rezerv modülünde her branş için model otomatik oluşturulur.
+          </div>
+        </div>
+
         {error && <ErrorBox message={error} className="mb-4" />}
       </div>
 
@@ -539,6 +593,9 @@ function PreviewStep({
 export interface ImportWizardResult {
   filename: string;
   result: import("@/lib/api").DataImportResult;
+  /** Yüklenen hasar verisinden model kurulurken kullanılacak granülarite (rezerve otomatik model). */
+  originGranularity: "yearly" | "quarterly";
+  developmentGranularity: "yearly" | "quarterly";
 }
 
 export function DataImportWizard({
@@ -550,6 +607,9 @@ export function DataImportWizard({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [state, setState] = useState<WizardState | null>(null);
+  // Rezerve otomatik model kurarken kullanılacak granülarite (kaza / gelişim dönemi).
+  const [originGran, setOriginGran] = useState<"yearly" | "quarterly">("yearly");
+  const [devGran, setDevGran] = useState<"yearly" | "quarterly">("quarterly");
 
   const isExcelMultiSheet =
     state !== null &&
@@ -603,7 +663,12 @@ export function DataImportWizard({
     setStep("importing");
     try {
       const result = await importDataFile(state.file, state.selectedSheet, state.mapping);
-      onDone({ filename: state.file.name, result });
+      onDone({
+        filename: state.file.name,
+        result,
+        originGranularity: originGran,
+        developmentGranularity: devGran,
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : "İçeri aktarma hatası");
       setStep("preview");
@@ -659,6 +724,10 @@ export function DataImportWizard({
           onBack={() => setStep("mapping")}
           importing={step === "importing"}
           error={error}
+          originGran={originGran}
+          devGran={devGran}
+          onOriginGran={setOriginGran}
+          onDevGran={setDevGran}
         />
       )}
     </div>

@@ -18,6 +18,7 @@ import {
   getDataset,
   ApiError as WorkerError,
 } from "@/lib/sync/worker-client";
+import { sortByPeriodLabel } from "@/lib/period-order";
 
 // ─── Veri türü tanımları ──────────────────────────────────────────────────────
 
@@ -181,8 +182,9 @@ export function DataStoreProvider({
             })
           ),
         }));
-        setPeriods(loaded);
-        if (loaded.length > 0) setActivePeriodIdState(loaded[0].id);
+        const sorted = sortByPeriodLabel(loaded);
+        setPeriods(sorted);
+        if (sorted.length > 0) setActivePeriodIdState(sorted[0].id);
       })
       .catch(() => {/* offline veya hata — boş başla */})
       .finally(() => {
@@ -199,7 +201,7 @@ export function DataStoreProvider({
       createdAt: new Date().toISOString(),
       datasets: {},
     };
-    setPeriods((prev) => [...prev, period]);
+    setPeriods((prev) => sortByPeriodLabel([...prev, period]));
     setActivePeriodIdState(period.id);
     // D1'e yaz
     await upsertPeriod({ period_id: period.id, label: period.label, created_at: period.createdAt });

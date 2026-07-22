@@ -40,10 +40,9 @@ export function subtractTriangle(
       if (lv != null) last = lv;
       if (g == null) return null;
       const a = g - last;
-      if (a < 0) {
-        negativeCells.push(`${o}|${j}`);
-        return 0;
-      }
+      // SIFIRLAMA YOK: veri neyse o. Negatif çıkarsa (Large > Gross) yalnızca
+      // bilgi amaçlı işaretlenir; değer olduğu gibi bırakılır.
+      if (a < 0) negativeCells.push(`${o}|${j}`);
       return a;
     });
   });
@@ -78,7 +77,7 @@ export function completeLarge(
 export interface AttritionalTriangles {
   paid: Triangle | null;
   incurred: Triangle | null;
-  /** large > gross çıkan hücreler (0'a kırpıldı) — veri kalitesi uyarısı. */
+  /** large > gross çıkan hücreler (negatif attritional) — bilgi amaçlı; değer kırpılmaz. */
   negativeCells: string[];
 }
 

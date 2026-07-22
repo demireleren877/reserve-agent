@@ -243,10 +243,9 @@ export function DataTab({ paidTriangle, incurredTriangle, viewingLarge }: Props)
           </div>
         )}
         {largeOn && largeWarnings.negative > 0 && (
-          <div className="px-3.5 py-1.5 border-b bg-[color:var(--danger-soft)] text-[11px] text-[color:var(--danger)]">
-            ⚠ {largeWarnings.negative} hücrede Large &gt; Gross — attritional 0&apos;a
-            kırpıldı. Gross ve Large aynı yöntemle (ör. ikisi de aynı dönem) yüklendi mi
-            kontrol edin.
+          <div className="px-3.5 py-1.5 border-b bg-[color:var(--warn-soft,#fbf0e2)] text-[11px] text-[color:var(--warning)]">
+            ⓘ {largeWarnings.negative} hücrede Large &gt; Gross — attritional negatif
+            (değer <b>kırpılmadı</b>, olduğu gibi bırakıldı). Gross ve Large aynı kapsamda mı kontrol edin.
           </div>
         )}
 

@@ -59,11 +59,11 @@ describe("subtractTriangle", () => {
     expect(a).toBe(g);
   });
 
-  it("large > gross → 0'a kırpar + flag", () => {
+  it("large > gross → SIFIRLAMA YOK, negatif değer korunur + flag", () => {
     const g = tri([[100, 150, 165]]);
     const l = tri([[120, 40, 10]]); // ilk hücre gross'tan büyük
     const { tri: a, negativeCells } = subtractTriangle(g, l);
-    expect(a.values[0]).toEqual([0, 110, 155]);
+    expect(a.values[0]).toEqual([-20, 110, 155]); // -20 kırpılmadı
     expect(negativeCells).toEqual(["2021|0"]);
   });
 

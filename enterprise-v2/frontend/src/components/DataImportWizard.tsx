@@ -444,6 +444,12 @@ function PreviewStep({
   error,
   frequency,
   onFrequency,
+  largeMode,
+  basePeriodOptions,
+  largeMethod,
+  onLargeMethod,
+  largeBase,
+  onLargeBase,
 }: {
   file: File;
   sheetName: string | null;
@@ -454,6 +460,12 @@ function PreviewStep({
   error: string | null;
   frequency: "yearly" | "quarterly";
   onFrequency: (g: "yearly" | "quarterly") => void;
+  largeMode: boolean;
+  basePeriodOptions: string[];
+  largeMethod: "direct" | "rollforward";
+  onLargeMethod: (m: "direct" | "rollforward") => void;
+  largeBase: string;
+  onLargeBase: (b: string) => void;
 }) {
   return (
     <div className="flex flex-col flex-1 overflow-hidden">
@@ -543,6 +555,64 @@ function PreviewStep({
           </div>
         </div>
 
+        {/* Large yöntemi: modele DİNAMİK uygulanır (EP gibi) */}
+        {largeMode && (
+          <div className="rounded-xl border overflow-hidden mb-5" style={{ borderColor: "var(--border)" }}>
+            <div
+              className="px-4 py-2.5 border-b text-[12px] font-semibold"
+              style={{ borderColor: "var(--border)", background: "var(--surface-alt)", color: "var(--muted-strong)" }}
+            >
+              Large yöntemi
+            </div>
+            <div className="px-4 py-3 space-y-3">
+              <div className="flex rounded-lg overflow-hidden border" style={{ borderColor: "var(--border)" }}>
+                {([["direct", "Doğrudan"], ["rollforward", "Roll-forward"]] as const).map(([val, lbl]) => (
+                  <button
+                    key={val}
+                    type="button"
+                    onClick={() => onLargeMethod(val)}
+                    className="flex-1 py-2 text-[12px] font-medium transition"
+                    style={{
+                      background: largeMethod === val ? "var(--primary)" : "var(--surface)",
+                      color: largeMethod === val ? "#fff" : "var(--muted-strong)",
+                    }}
+                  >
+                    {lbl}
+                  </button>
+                ))}
+              </div>
+              {largeMethod === "rollforward" && (
+                <label className="block">
+                  <span className="block text-[11.5px] font-medium mb-1" style={{ color: "var(--muted-strong)" }}>
+                    Taban (önceki) dönem
+                  </span>
+                  {basePeriodOptions.length === 0 ? (
+                    <span className="text-[11px]" style={{ color: "var(--muted)" }}>
+                      Large&apos;ı olan önceki dönem yok — önce bir döneme large yükleyin ya da Doğrudan seçin.
+                    </span>
+                  ) : (
+                    <select
+                      value={largeBase}
+                      onChange={(e) => onLargeBase(e.target.value)}
+                      className="w-full text-[13px] border rounded-lg px-3 py-2 bg-[color:var(--surface)]"
+                      style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
+                    >
+                      <option value="">— dönem seçin —</option>
+                      {basePeriodOptions.map((lbl) => (
+                        <option key={lbl} value={lbl}>{lbl}</option>
+                      ))}
+                    </select>
+                  )}
+                </label>
+              )}
+            </div>
+            <div className="px-4 pb-3 text-[11px]" style={{ color: "var(--muted)" }}>
+              Doğrudan: tüm large kayıtlarından kümülatif üçgen. Roll-forward: taban dönemin
+              large&apos;ı üzerine bu dönemin hareketi taşınır. Model bu large&apos;ı otomatik yansıtır.
+            </div>
+          </div>
+        )}
+
         {error && <ErrorBox message={error} className="mb-4" />}
       </div>
 
@@ -580,12 +650,21 @@ export interface ImportWizardResult {
   /** Rezervde otomatik oluşacak model iskeletinin frekansı (kaza dönemi). Veri
    *  bağlama/granülarite sonraki adımda (rezerv) kullanıcı tarafından seçilir. */
   frequency: "yearly" | "quarterly";
+  /** Large verisi ise: modele dinamik uygulanacak yöntem + roll-forward tabanı. */
+  largeMethod?: "direct" | "rollforward";
+  largeBasePeriodLabel?: string;
 }
 
 export function DataImportWizard({
   onDone,
+  largeMode = false,
+  basePeriodOptions = [],
 }: {
   onDone: (r: ImportWizardResult) => void;
+  /** Large verisi mi yükleniyor → yöntem (doğrudan/roll-forward) sorulur. */
+  largeMode?: boolean;
+  /** Roll-forward tabanı için seçilebilecek önceki dönem etiketleri. */
+  basePeriodOptions?: string[];
 }) {
   const [step, setStep] = useState<WizardStep>("upload");
   const [loading, setLoading] = useState(false);
@@ -593,6 +672,9 @@ export function DataImportWizard({
   const [state, setState] = useState<WizardState | null>(null);
   // Rezervde otomatik oluşacak model iskeletinin frekansı (kaza dönemi).
   const [frequency, setFrequency] = useState<"yearly" | "quarterly">("yearly");
+  // Large yöntemi (yalnız largeMode): doğrudan / roll-forward + taban dönem.
+  const [largeMethod, setLargeMethod] = useState<"direct" | "rollforward">("direct");
+  const [largeBase, setLargeBase] = useState<string>("");
 
   const isExcelMultiSheet =
     state !== null &&
@@ -646,7 +728,17 @@ export function DataImportWizard({
     setStep("importing");
     try {
       const result = await importDataFile(state.file, state.selectedSheet, state.mapping);
-      onDone({ filename: state.file.name, result, frequency });
+      onDone({
+        filename: state.file.name,
+        result,
+        frequency,
+        ...(largeMode
+          ? {
+              largeMethod,
+              largeBasePeriodLabel: largeMethod === "rollforward" ? largeBase || undefined : undefined,
+            }
+          : {}),
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : "İçeri aktarma hatası");
       setStep("preview");
@@ -704,6 +796,12 @@ export function DataImportWizard({
           error={error}
           frequency={frequency}
           onFrequency={setFrequency}
+          largeMode={largeMode}
+          basePeriodOptions={basePeriodOptions}
+          largeMethod={largeMethod}
+          onLargeMethod={setLargeMethod}
+          largeBase={largeBase}
+          onLargeBase={setLargeBase}
         />
       )}
     </div>

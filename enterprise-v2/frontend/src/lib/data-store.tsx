@@ -110,6 +110,12 @@ export interface DatasetMeta {
   // prim alanları
   donem_list?: string[];
   total_ep?: number;
+  // large alanları — modele DİNAMİK uygulanır (EP gibi). Yöntem yüklemede seçilir.
+  /** "direct" → tüm large kayıtlarından kümülatif üçgen; "rollforward" → taban dönemin
+   *  üzerine bu dönemin hareketi taşınır. large_ucgen daima doğrudandır. */
+  largeMethod?: "direct" | "rollforward";
+  /** Roll-forward için taban (önceki) dönemin etiketi. */
+  largeBasePeriodLabel?: string;
 }
 
 export interface Dataset {

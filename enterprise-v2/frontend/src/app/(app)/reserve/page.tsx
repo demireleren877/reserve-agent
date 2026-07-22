@@ -18,7 +18,7 @@ import { FolderBrowser } from "@/components/FolderBrowser";
 import { ModelLockBanner } from "@/components/ModelLockBanner";
 import { useModelLock } from "@/lib/use-model-lock";
 import { useBranchSetters, useProject } from "@/lib/project-store";
-import { useDataPremiums } from "@/lib/provision-models";
+import { useDataPremiums, useDataLarge } from "@/lib/provision-models";
 import { formatNumber, type SessionState } from "@/lib/api";
 import { exportToExcel } from "@/lib/export";
 import { computeBranchSummary } from "@/lib/reserve-pipeline";
@@ -61,8 +61,31 @@ const TABS: { id: Tab; label: string; sub: string }[] = [
 
 export default function Home() {
   const { project, navLevel, activePeriod, activeBranch, setReadOnly } = useProject();
+
+  // ── DİNAMİK LARGE (veri ↔ model): large segmenti, veri modülündeki large
+  // verisinden (yöntem: doğrudan/roll-forward) CANLI türetilir — EP gibi. Gross
+  // bağlıyken hizalanır. effBranch = activeBranch + türetilmiş large üçgenleri.
+  const grossTri0 =
+    activeBranch?.incurredTriangle ?? activeBranch?.paidTriangle ?? activeBranch?.triangle ?? null;
+  const dataLarge = useDataLarge(
+    activePeriod?.label,
+    activeBranch?.name,
+    grossTri0?.origin_granularity as ("yearly" | "quarterly") | undefined,
+    grossTri0?.development_granularity as ("yearly" | "quarterly") | undefined,
+  );
+  const effBranch = useMemo(() => {
+    if (!activeBranch) return activeBranch;
+    if (!dataLarge?.paid && !dataLarge?.incurred) return activeBranch;
+    return {
+      ...activeBranch,
+      largePaidTriangle: dataLarge.paid,
+      largeIncurredTriangle: dataLarge.incurred,
+      largeFileData: dataLarge.fileData ?? activeBranch.largeFileData,
+    };
+  }, [activeBranch, dataLarge]);
+
   // ── Segment (Gross / Attritional / Large) ──
-  const largeOn = hasLarge(activeBranch);
+  const largeOn = hasLarge(effBranch);
   const [segment, setSegment] = useState<"gross" | "attritional" | "large">("attritional");
   const isLargeSeg = largeOn && segment === "large";
   const isGrossSeg = largeOn && segment === "gross";
@@ -114,24 +137,24 @@ export default function Home() {
   // modeliyle (largeModel) ayrıca modellenir. Segment seçiciyle geçilir.
   // Large yoksa her şey bugünkü gibi (tek segment) — geriye tam uyumlu.
   const attr = useMemo(
-    () => (activeBranch && largeOn ? deriveAttritional(activeBranch) : null),
-    [activeBranch, largeOn],
+    () => (effBranch && largeOn ? deriveAttritional(effBranch) : null),
+    [effBranch, largeOn],
   );
   const largeSummary = useMemo(
-    () => (activeBranch ? computeLargeSummary(activeBranch) : null),
-    [activeBranch],
+    () => (effBranch ? computeLargeSummary(effBranch) : null),
+    [effBranch],
   );
   const attritionalSummary = useMemo(
-    () => (activeBranch && largeOn ? computeAttritionalSummary(activeBranch) : null),
-    [activeBranch, largeOn],
+    () => (effBranch && largeOn ? computeAttritionalSummary(effBranch) : null),
+    [effBranch, largeOn],
   );
 
   const grossTriangle = activeBranch?.triangle ?? null;
   const isPaidType = grossTriangle?.triangle_type === "paid";
   // Large segment üçgenleri GROSS şekline carry-forward ile tamamlanır.
   const largeWork = useMemo(
-    () => (activeBranch && largeOn ? largeWorkingTriangles(activeBranch) : null),
-    [activeBranch, largeOn],
+    () => (effBranch && largeOn ? largeWorkingTriangles(effBranch) : null),
+    [effBranch, largeOn],
   );
   const triangle = useMemo(() => {
     if (!activeBranch) return null;
@@ -139,8 +162,8 @@ export default function Home() {
       return (isPaidType ? largeWork?.paid ?? largeWork?.incurred : largeWork?.incurred ?? largeWork?.paid) ?? null;
     }
     if (isGrossSeg) return grossTriangle;
-    return (largeOn ? attritionalWorkingTriangle(activeBranch) : grossTriangle) ?? null;
-  }, [activeBranch, isLargeSeg, isGrossSeg, largeOn, grossTriangle, isPaidType, largeWork]);
+    return (largeOn ? attritionalWorkingTriangle(effBranch!) : grossTriangle) ?? null;
+  }, [activeBranch, effBranch, isLargeSeg, isGrossSeg, largeOn, grossTriangle, isPaidType, largeWork]);
 
   // Alt-sekme model başına: aktif modelin anahtarıyla sakla/oku. Üçgen yoksa
   // data/file dışı sekmeler kilitli olduğundan güvenli olarak "data"ya düş.
@@ -202,7 +225,7 @@ export default function Home() {
   );
 
   // LDF hover'ında gösterilen dosya kırılımı — mevcut segmente göre.
-  const effFileData = isLargeSeg ? activeBranch?.largeFileData : activeBranch?.fileData;
+  const effFileData = isLargeSeg ? effBranch?.largeFileData : activeBranch?.fileData;
 
   // LDF hover karşılaştırması için önceki dönemin aynı SEGMENT üçgeni (segment
   // uyuşmazlığı olmasın: attritional↔attritional, large↔large).
@@ -1006,6 +1029,8 @@ export default function Home() {
             paidTriangle={effPaid}
             incurredTriangle={effIncurred}
             viewingLarge={isLargeSeg}
+            largeActive={largeOn}
+            largeNegativeCount={attr?.negativeCells.length ?? 0}
           />
         )}
         {tab === "ldf" && (

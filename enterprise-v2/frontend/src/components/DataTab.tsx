@@ -5,8 +5,8 @@ import type { Triangle } from "@/types/triangle";
 import { TriangleGrid } from "@/components/TriangleGrid";
 import { formatNumber } from "@/lib/api";
 import { LoadFromDataStore } from "@/components/LoadFromDataStore";
-import { useBranchSetters, useProject } from "@/lib/project-store";
-import { hasLarge, deriveAttritional } from "@/lib/large-split";
+import { useProject } from "@/lib/project-store";
+import { hasLarge } from "@/lib/large-split";
 import {
   buildDisplayMatrix,
   originLengthOptions,
@@ -28,6 +28,10 @@ interface Props {
   incurredTriangle: Triangle | null;
   /** Reserve sayfasında Large segmenti mi görüntüleniyor (not metni için). */
   viewingLarge?: boolean;
+  /** Large aktif mi (veri modülünden DİNAMİK türetilir). Verilmezse branch'e bakılır. */
+  largeActive?: boolean;
+  /** Large > Gross (negatif attritional) hücre sayısı — bilgi amaçlı uyarı. */
+  largeNegativeCount?: number;
 }
 
 function toMuallak(paid: Triangle, incurred: Triangle): Triangle | null {
@@ -56,21 +60,14 @@ function granLabel(g: "yearly" | "quarterly"): string {
   return g === "quarterly" ? "Çeyreklik" : "Yıllık";
 }
 
-export function DataTab({ paidTriangle, incurredTriangle, viewingLarge }: Props) {
+export function DataTab({ paidTriangle, incurredTriangle, viewingLarge, largeActive, largeNegativeCount }: Props) {
   const [type, setType] = useState<TriType>("paid");
   const [showLoadDialog, setShowLoadDialog] = useState(false);
-  const [showLargeLoad, setShowLargeLoad] = useState(false);
 
   const { activeBranch } = useProject();
-  const setters = useBranchSetters("user");
-  const largeOn = hasLarge(activeBranch);
-
-  // Guard: large > gross (negatif attritional) — veri kalitesi. Large kısa olsa
-  // sorun değil; kümülatif carry-forward ile rapor dönemine taşınır.
-  const largeWarnings = useMemo(() => {
-    if (!largeOn || !activeBranch) return { negative: 0 };
-    return { negative: deriveAttritional(activeBranch).negativeCells.length };
-  }, [largeOn, activeBranch]);
+  // Large artık veri modülünden DİNAMİK türetilir; reserve prop olarak geçer.
+  const largeOn = largeActive ?? hasLarge(activeBranch);
+  const largeWarnings = { negative: largeNegativeCount ?? 0 };
 
   // Görünüm seçenekleri
   const [cumulative, setCumulative] = useState(true);
@@ -202,29 +199,13 @@ export function DataTab({ paidTriangle, incurredTriangle, viewingLarge }: Props)
             })}
           </div>
           <div className="flex items-center gap-2">
-            {largeOn ? (
-              <span className="inline-flex items-center gap-1.5 text-[11px] px-2 py-1 rounded bg-[color:var(--primary-soft)] text-[color:var(--primary)] font-medium">
-                Large yüklü
-                <button
-                  onClick={() => {
-                    if (confirm("Large üçgeni kaldırılsın mı? Ana model tekrar gross olur.")) {
-                      setters.clearLarge();
-                    }
-                  }}
-                  className="hover:underline"
-                  title="Large'ı kaldır"
-                >
-                  ✕
-                </button>
-              </span>
-            ) : (
-              <button
-                onClick={() => setShowLargeLoad(true)}
-                className="text-[11px] px-2 py-1 rounded border border-[color:var(--border)] text-[color:var(--muted-strong)] hover:border-[color:var(--border-strong)] hover:bg-[color:var(--surface)] transition"
-                title="Large-loss üçgenini Veri Modülünden yükle. Ana model Attritional = Gross − Large olur."
+            {largeOn && (
+              <span
+                className="inline-flex items-center gap-1.5 text-[11px] px-2 py-1 rounded bg-[color:var(--primary-soft)] text-[color:var(--primary)] font-medium"
+                title="Large veri modülünden dinamik geliyor (Attritional = Gross − Large)."
               >
-                + Large üçgeni
-              </button>
+                Large (veri modülünden)
+              </span>
             )}
             <span className="text-xs text-[color:var(--muted)] tabular">
               {matrix ? `${matrix.rows.length}×${matrix.columns.length}` : "—"}
@@ -352,13 +333,6 @@ export function DataTab({ paidTriangle, incurredTriangle, viewingLarge }: Props)
         )}
       </div>
 
-      {showLargeLoad && (
-        <LoadFromDataStore
-          target="large"
-          onClose={() => setShowLargeLoad(false)}
-          onLoaded={() => setShowLargeLoad(false)}
-        />
-      )}
     </div>
   );
 }

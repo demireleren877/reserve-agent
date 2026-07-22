@@ -437,8 +437,14 @@ type RightView =
   | { kind: "viewer"; datasetId: string; typeId: string };
 
 function PeriodDetail({ period }: { period: DataPeriod }) {
-  const { setDataset, removeDataset, loadDatasetRecords } = useDataStore();
+  const { setDataset, removeDataset, loadDatasetRecords, periods } = useDataStore();
   const provision = useProvisionModels();
+  // Roll-forward tabanı: large'ı olan DİĞER (önceki) dönem etiketleri.
+  const largeBaseOptions = periods
+    .filter((p) => p.id !== period.id && Object.values(p.datasets).some(
+      (d) => d.typeId === "large" || d.typeId === "large_ucgen",
+    ))
+    .map((p) => p.label);
   const [view, setView] = useState<RightView>({ kind: "overview" });
   const [showPrimWizard, setShowPrimWizard] = useState(false);
   const [showTriangleWizard, setShowTriangleWizard] = useState(false);
@@ -462,6 +468,9 @@ function PeriodDetail({ period }: { period: DataPeriod }) {
         gelisim_tarihi_max: result.result.gelisim_tarihi_max,
         total_odeme: result.result.total_odeme,
         total_muallak: result.result.total_muallak,
+        ...(typeId === "large"
+          ? { largeMethod: result.largeMethod ?? "direct", largeBasePeriodLabel: result.largeBasePeriodLabel }
+          : {}),
       },
       records: result.result.records,
     };
@@ -544,7 +553,11 @@ function PeriodDetail({ period }: { period: DataPeriod }) {
           </div>
         </div>
         <div className="flex-1 overflow-hidden">
-          <DataImportWizard onDone={(r) => handleImportDone(view.typeId, r)} />
+          <DataImportWizard
+            onDone={(r) => handleImportDone(view.typeId, r)}
+            largeMode={view.typeId === "large"}
+            basePeriodOptions={largeBaseOptions}
+          />
         </div>
       </div>
     );

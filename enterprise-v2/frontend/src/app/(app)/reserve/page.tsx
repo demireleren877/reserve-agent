@@ -59,10 +59,11 @@ const TABS: { id: Tab; label: string; sub: string }[] = [
 
 export default function Home() {
   const { project, navLevel, activePeriod, activeBranch, setReadOnly } = useProject();
-  // ── Segment (Attritional / Large) ──
+  // ── Segment (Gross / Attritional / Large) ──
   const largeOn = hasLarge(activeBranch);
-  const [segment, setSegment] = useState<"attritional" | "large">("attritional");
+  const [segment, setSegment] = useState<"gross" | "attritional" | "large">("attritional");
   const isLargeSeg = largeOn && segment === "large";
+  const isGrossSeg = largeOn && segment === "gross";
   // Branch değişince ya da large kalkınca attritional'a dön.
   useEffect(() => {
     setSegment("attritional");
@@ -71,7 +72,10 @@ export default function Home() {
     if (!largeOn) setSegment("attritional");
   }, [largeOn]);
 
-  const setters = useBranchSetters("user", isLargeSeg ? "large" : undefined);
+  const setters = useBranchSetters(
+    "user",
+    isLargeSeg ? "large" : isGrossSeg ? "gross" : undefined,
+  );
 
   const [tab, setTab] = useState<Tab>("data");
 
@@ -130,19 +134,25 @@ export default function Home() {
     if (isLargeSeg) {
       return (isPaidType ? largeWork?.paid ?? largeWork?.incurred : largeWork?.incurred ?? largeWork?.paid) ?? null;
     }
+    if (isGrossSeg) return grossTriangle;
     return (largeOn ? attritionalWorkingTriangle(activeBranch) : grossTriangle) ?? null;
-  }, [activeBranch, isLargeSeg, largeOn, grossTriangle, isPaidType, largeWork]);
+  }, [activeBranch, isLargeSeg, isGrossSeg, largeOn, grossTriangle, isPaidType, largeWork]);
 
   const effPaid = isLargeSeg
     ? largeWork?.paid ?? (isPaidType ? triangle : null)
+    : isGrossSeg
+    ? activeBranch?.paidTriangle ?? (isPaidType ? triangle : null)
     : (largeOn ? attr?.paid : activeBranch?.paidTriangle) ?? (isPaidType ? triangle : null);
   const effIncurred = isLargeSeg
     ? largeWork?.incurred ?? (!isPaidType ? triangle : null)
+    : isGrossSeg
+    ? activeBranch?.incurredTriangle ?? (!isPaidType ? triangle : null)
     : (largeOn ? attr?.incurred : activeBranch?.incurredTriangle) ?? (!isPaidType ? triangle : null);
 
-  // Param kaynağı: Large segmentinde nötr defaults + kaydedilmiş largeModel.
+  // Param kaynağı: Large/Gross segmentinde nötr defaults + kaydedilmiş model (largeModel/grossModel).
+  const segModel = isLargeSeg ? activeBranch?.largeModel : isGrossSeg ? activeBranch?.grossModel : null;
   const pb =
-    isLargeSeg && activeBranch
+    (isLargeSeg || isGrossSeg) && activeBranch
       ? {
           ...activeBranch,
           method: "volume_weighted" as LDFMethod,
@@ -157,7 +167,7 @@ export default function Home() {
           cdfChoicePerPeriod: {},
           cdfModelPerPeriod: {},
           curveIncludePerPeriod: {},
-          ...(activeBranch.largeModel ?? {}),
+          ...(segModel ?? {}),
         }
       : activeBranch;
 
@@ -197,6 +207,9 @@ export default function Home() {
             ? b.largePaidTriangle ?? b.largeIncurredTriangle
             : b.largeIncurredTriangle ?? b.largePaidTriangle) ?? null;
         priorFd = b.largeFileData ?? null;
+      } else if (isGrossSeg) {
+        priorTri = b.triangle; // gross (ayrım yapılmadan)
+        priorFd = b.fileData ?? null;
       } else if (largeOn && hasLarge(b)) {
         const pa = deriveAttritional(b);
         priorTri = (paidType ? pa.paid : pa.incurred) ?? null;
@@ -207,7 +220,7 @@ export default function Home() {
       if (priorTri) return { label: sorted[k].label, triangle: priorTri, fileData: priorFd };
     }
     return null;
-  }, [project.periods, activePeriod, activeBranch, isLargeSeg, largeOn]);
+  }, [project.periods, activePeriod, activeBranch, isLargeSeg, isGrossSeg, largeOn]);
 
   const method = (pb?.method ?? "volume_weighted") as LDFMethod;
   const window: Window = pb?.window ?? "all";
@@ -850,7 +863,7 @@ export default function Home() {
             Segment
           </span>
           <div className="inline-flex h-7 p-0.5 rounded-lg bg-[color:var(--surface-alt)] border border-[color:var(--border)]">
-            {([["attritional", "Attritional"], ["large", "Large"]] as const).map(
+            {([["gross", "Gross"], ["attritional", "Attritional"], ["large", "Large"]] as const).map(
               ([val, lbl]) => {
                 const on = segment === val;
                 return (
@@ -871,7 +884,9 @@ export default function Home() {
             )}
           </div>
           <span className="text-[11px] text-[color:var(--muted)]">
-            {isLargeSeg
+            {isGrossSeg
+              ? "Gross = tüm veri (ayrım yapılmadan) doğrudan modellenir — bağımsız parametreler."
+              : isLargeSeg
               ? "Large segmentini modelliyorsun (bağımsız parametreler)."
               : "Attritional = Gross − Large. Toplam Özet'te."}
           </span>

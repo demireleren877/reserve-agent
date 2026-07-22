@@ -51,6 +51,9 @@ export interface Branch {
   /** LARGE segmentinin BAĞIMSIZ model parametreleri (Faz 2). Attritional ana
    *  parametreleri Branch'in kendi alanlarında; Large kendi setini burada tutar. */
   largeModel?: LargeModel;
+  /** GROSS segmentinin BAĞIMSIZ model parametreleri. Gross = tüm veri (attritional+large
+   *  ayrımı yapılmadan) doğrudan modellenir; Attritional/Large'dan bağımsız param seti. */
+  grossModel?: LargeModel;
 
   /** Roll-forward'da uygulanan dosya-bazlı düzeltmeler (non-destructive, denetlenebilir).
    *  Key = dosya_no. Roll sırasında o dosyanın ödeme/muallağı bu değerlerle değiştirilir. */

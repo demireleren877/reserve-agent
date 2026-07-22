@@ -825,28 +825,31 @@ const LARGE_MODEL_DEFAULT: LargeModel = {
 
 export function useBranchSetters(
   source: ChangeSource = "user",
-  segment?: "large",
+  segment?: "large" | "gross",
 ): BranchSetters {
   const { actions, activeBranch } = useProject();
-  const forLarge = segment === "large";
+  // Bağımsız param seti tutan segmentler: large → largeModel, gross → grossModel.
+  // Attritional (ve tek-segment) top-level Branch alanlarına yazar (modelKey = null).
+  const modelKey: "largeModel" | "grossModel" | null =
+    segment === "large" ? "largeModel" : segment === "gross" ? "grossModel" : null;
 
   return useMemo<BranchSetters>(
     () => {
       // Veri setter'ları (üçgen yükleme vs.) her zaman top-level yazar.
       const updData = actions.updateActiveBranch;
-      // Model-param setter'ları Large segmentinde largeModel'e yönlendirilir.
+      // Model-param setter'ları large/gross segmentinde ilgili model alt-nesnesine yönlendirilir.
       const updModel = (
         mut: (prev: Branch) => Partial<Branch>,
         label: string,
         details?: Record<string, unknown>,
         _src?: ChangeSource,
       ) =>
-        forLarge
+        modelKey
           ? actions.updateActiveBranch(
               (prev) => {
-                const lm = { ...LARGE_MODEL_DEFAULT, ...(prev.largeModel ?? {}) };
-                const patch = mut({ ...prev, ...lm } as Branch);
-                return { largeModel: { ...lm, ...patch } as LargeModel };
+                const m = { ...LARGE_MODEL_DEFAULT, ...(prev[modelKey] ?? {}) };
+                const patch = mut({ ...prev, ...m } as Branch);
+                return { [modelKey]: { ...m, ...patch } as LargeModel };
               },
               label,
               details,
@@ -921,6 +924,7 @@ export function useBranchSetters(
             curveIncludePerPeriod: { ...(base.curveIncludePerPeriod ?? {}) },
             largeWindow: base.largeWindow,
             largeModel: base.largeModel ? { ...base.largeModel } : undefined,
+            grossModel: base.grossModel ? { ...base.grossModel } : undefined,
           }),
           "roll_forward",
           { fileName },
@@ -978,8 +982,8 @@ export function useBranchSetters(
         ),
       toggleCell: (origin, step) => {
         const key = `${origin}|${step}`;
-        const srcCells = forLarge
-          ? activeBranch?.largeModel?.excludedCells
+        const srcCells = modelKey
+          ? activeBranch?.[modelKey]?.excludedCells
           : activeBranch?.excludedCells;
         const wasExcluded = srcCells?.includes(key) ?? false;
         const actionLabel = wasExcluded ? "cell_included" : "cell_excluded";
@@ -1193,6 +1197,6 @@ export function useBranchSetters(
         ),
       };
     },
-    [actions, source, forLarge, activeBranch?.excludedCells, activeBranch?.largeModel?.excludedCells],
+    [actions, source, modelKey, activeBranch?.excludedCells, activeBranch?.largeModel?.excludedCells, activeBranch?.grossModel?.excludedCells],
   );
 }

@@ -78,7 +78,7 @@ export function AppSidebar() {
     >
       {/* Logo */}
       <div className={"border-b h-14 flex items-center gap-2 " + (collapsed ? "justify-center" : "px-4")}>
-        <img src="/favicon.png" alt="Actuarius" className="h-7 w-7 shrink-0" />
+        <img src="/favicon.png" alt="Actuarius" className="h-9 w-9 rounded-md shrink-0" />
         {!collapsed && (
           <div className="leading-tight overflow-hidden">
             <div className="text-[13px] font-semibold whitespace-nowrap">Actuarius</div>

@@ -574,7 +574,7 @@ function BranchTile({
         <div className="text-xs text-[color:var(--muted)] mt-1 flex items-center gap-2">
           {hasData ? (
             <>
-              <Pill ok>veri var</Pill>
+              <Pill ok>has data</Pill>
               <span className="tabular">{nOrigins} origin</span>
             </>
           ) : (

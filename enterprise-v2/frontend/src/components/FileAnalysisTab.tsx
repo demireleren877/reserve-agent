@@ -292,7 +292,7 @@ function LargeLossTab({ triangle, fileData }: { triangle: Triangle; fileData: Fi
       <div className="grid grid-cols-3 gap-3">
         <KpiCard label="Largest File" value={formatNumber(allFiles[0]?.val ?? 0)} sub={allFiles[0]?.orig} />
         <KpiCard
-          label={`Top ${topN} Toplam`}
+          label={`Top ${topN} Total`}
           value={formatNumber(largeTotal)}
           sub={portfolioTotal > 0 ? `${pct(largeTotal / portfolioTotal)} of portfolio` : undefined}
         />

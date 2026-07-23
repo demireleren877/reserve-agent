@@ -391,7 +391,7 @@ export function SummaryTab(props: Props) {
                   {hasExclusionCol && (
                     <th
                       className="text-right font-medium px-3 py-2.5"
-                      title="Bu origin'deki elemelerin net IBNR etkisi"
+                      title="Net IBNR effect of exclusions at this origin"
                     >
                       Eleme
                     </th>

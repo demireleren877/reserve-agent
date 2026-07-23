@@ -257,7 +257,7 @@ function DownloadXlsxButton({ onClick }: { onClick: () => void }) {
   return (
     <button
       onClick={onClick}
-      title="Excel indir"
+      title="Download Excel"
       className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium border transition hover:bg-[color:var(--surface-alt)]"
       style={{ borderColor: "var(--border)", color: "var(--muted-strong)" }}
     >

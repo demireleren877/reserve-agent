@@ -166,7 +166,7 @@ export function LDFTab(props: Props) {
         if (Math.abs(d) < 1) continue;
         const tag =
           pv > 0 && cv === 0 ? "moved to large"
-          : pv === 0 && cv > 0 ? "yeni"
+          : pv === 0 && cv > 0 ? "new"
           : d > 0 ? "increased" : "decreased";
         files.push({ file: f, prev: pv, cur: cv, delta: d, tag });
       }
@@ -657,7 +657,7 @@ export function LDFTab(props: Props) {
                         "shrink-0 px-1 py-px rounded text-[9px] font-semibold " +
                         (f.tag === "moved to large"
                           ? "bg-[color:var(--danger-soft)] text-[color:var(--danger)]"
-                          : f.tag === "yeni"
+                          : f.tag === "new"
                           ? "bg-[color:var(--primary-soft)] text-[color:var(--primary)]"
                           : "bg-[color:var(--surface-alt)] text-[color:var(--muted-strong)]")
                       }

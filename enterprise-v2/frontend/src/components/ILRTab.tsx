@@ -140,7 +140,7 @@ export function ILRTab({ triangle, premiums, correctionPerOrigin, selectedLDFs }
                           color: isObserved ? undefined : "var(--primary)",
                           background: isObserved ? undefined : "var(--primary-soft)",
                         }}
-                        title={isObserved ? undefined : "LDF ile projeksiyon"}>
+                        title={isObserved ? undefined : "Projection with LDF"}>
                         {formatNumber(v)}
                       </td>
                     );

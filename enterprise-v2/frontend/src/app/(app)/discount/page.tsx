@@ -515,7 +515,7 @@ function ComparisonPanel({
       ? `BEL × %${(configs.ifrs17.riskAdjustment.pctOfBel * 100).toFixed(1)}`
       : configs.ifrs17.riskAdjustment.method === "cost_of_capital"
       ? `CoC %${(configs.ifrs17.riskAdjustment.cocRate * 100).toFixed(1)}`
-      : "Yok";
+      : "None";
   const rate4 =
     configs.ifrs4.rateMode === "none"
       ? "Nominal (iskontosuz)"
@@ -844,7 +844,7 @@ export default function DiscountPage() {
                   >
                     <option value="pct_of_bel">% of BEL</option>
                     <option value="cost_of_capital">Cost of Capital</option>
-                    <option value="none">Yok</option>
+                    <option value="none">None</option>
                   </select>
                 </div>
 

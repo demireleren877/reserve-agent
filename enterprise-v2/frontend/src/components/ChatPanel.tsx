@@ -253,7 +253,7 @@ export function ChatPanel({
           >
             <HistoryIcon />
           </HeaderBtn>
-          <HeaderBtn title="Yeni sohbet" onClick={startNewChat}>
+          <HeaderBtn title="New chat" onClick={startNewChat}>
             <NewChatIcon />
           </HeaderBtn>
           {onClose && (

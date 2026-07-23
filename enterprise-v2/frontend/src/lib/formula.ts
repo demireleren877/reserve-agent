@@ -199,7 +199,7 @@ class Parser {
     if (t.type === "lparen") {
       this.eat();
       const v = this.parseAdditive();
-      if (this.peek().type !== "rparen") throw new Error(") bekleniyor");
+      if (this.peek().type !== "rparen") throw new Error("\")\" expected");
       this.eat();
       return v;
     }
@@ -210,7 +210,7 @@ class Parser {
       }
       this.eat();
       const years = this.parseYearArgs();
-      if (this.peek().type !== "rparen") throw new Error(") bekleniyor");
+      if (this.peek().type !== "rparen") throw new Error("\")\" expected");
       this.eat();
       return this.callFunction(t.name, years);
     }
@@ -284,7 +284,7 @@ class Parser {
     if (name === "pattern") {
       if (years.length !== 1) throw new Error("pattern() takes a single year");
       const v = this.ctx.pattern.get(years[0]);
-      if (v == null) throw new Error(`Pattern yok: ${years[0]}`);
+      if (v == null) throw new Error(`No pattern: ${years[0]}`);
       return v;
     }
     throw new Error(`Bilinmeyen fonksiyon: ${name}`);

@@ -185,7 +185,7 @@ export async function exportToExcel(data: ExportData): Promise<void> {
   const totRn = lastData + 2;
   ws.addRow([]);
   const totalRow = ws.addRow([
-    "TOPLAM",
+    "TOTAL",
     { formula: `SUM(B${firstData}:B${lastData})` },
     { formula: `SUM(C${firstData}:C${lastData})` },
     { formula: `SUM(D${firstData}:D${lastData})` },
@@ -355,7 +355,7 @@ export async function exportToExcel(data: ExportData): Promise<void> {
         }),
       ),
     };
-    addTriangleSheet(wb, muallakTri, "Muallak");
+    addTriangleSheet(wb, muallakTri, "Outstanding");
   }
 
   // ── İndir ──

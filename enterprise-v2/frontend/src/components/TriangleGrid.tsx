@@ -62,13 +62,18 @@ export function TriangleGrid(props: Props) {
   }, [matrix.corner, matrix.rows]);
 
   const columnDefs = useMemo<ColDef[]>(() => {
+    const isTotal = (p: { data?: { __total?: boolean } }) => !!p.data?.__total;
     const cols: ColDef[] = [
       {
         headerName: matrix.corner,
         field: "header",
         pinned: "left",
         width: headerWidth,
-        cellStyle: { fontWeight: 500, backgroundColor: "var(--surface-alt)" },
+        cellStyle: (p) => ({
+          // Total satırında etiket de KALIN olsun (satır stili pinned hücreyi ezemiyor).
+          fontWeight: isTotal(p) ? 700 : 500,
+          backgroundColor: "var(--surface-alt)",
+        }),
       },
     ];
     matrix.columns.forEach((label, idx) => {
@@ -83,6 +88,10 @@ export function TriangleGrid(props: Props) {
           textAlign: "right" as const,
           fontVariantNumeric: "tabular-nums",
           textOverflow: "clip",
+          // Total satırı: kalın + hafif dolgu (getRowStyle'a ek garanti — hücre
+          // arka planı satır arka planını ezmesin).
+          fontWeight: isTotal(p) ? 700 : 400,
+          backgroundColor: isTotal(p) ? "var(--surface-alt)" : "transparent",
         }),
         type: "numericColumn",
       });

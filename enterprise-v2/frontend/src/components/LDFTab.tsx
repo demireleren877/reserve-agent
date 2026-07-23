@@ -83,6 +83,8 @@ interface Props {
   onWindowChange: (w: Window) => void;
   onToggleCell: (origin: string, step: number) => void;
   onClearCells: () => void;
+  /** Tüm eleme setini değiştir (kaza yılı satırının toptan elenmesi için). */
+  onSetExcluded?: (next: Set<string>) => void;
   onSetKarmaWindow?: (step: string, w: Window) => void;
   onInitKarma?: (stepCount: number, globalWindow: Window) => void;
   onClearKarma?: () => void;
@@ -100,6 +102,7 @@ export function LDFTab(props: Props) {
     onWindowChange,
     onToggleCell,
     onClearCells,
+    onSetExcluded,
     onSetKarmaWindow,
     onInitKarma,
     onClearKarma,
@@ -125,6 +128,23 @@ export function LDFTab(props: Props) {
     () => (triangle ? developmentRatios(triangle, excludedCells) : []),
     [triangle, excludedCells],
   );
+
+  // Kaza yılı satırındaki tüm (geçerli) hücrelerin eleme durumu.
+  function rowExclusion(o: string, i: number): { steps: number[]; allExcluded: boolean } {
+    const steps: number[] = [];
+    ratios[i]?.forEach((c, j) => { if (c && c.value != null) steps.push(j); });
+    const allExcluded = steps.length > 0 && steps.every((j) => excludedCells.has(cellKey(o, j)));
+    return { steps, allExcluded };
+  }
+  // Kaza yılına tıkla → o yılın tümünü ele / tümünü geri al (toggle).
+  function toggleOrigin(o: string, i: number) {
+    if (!onSetExcluded) return;
+    const { steps, allExcluded } = rowExclusion(o, i);
+    if (!steps.length) return;
+    const next = new Set(excludedCells);
+    steps.forEach((j) => (allExcluded ? next.delete(cellKey(o, j)) : next.add(cellKey(o, j))));
+    onSetExcluded(next);
+  }
 
   // Önceki dönem link-ratio üçgeni (eleme flag'i önemsiz, sadece değerler).
   const priorRatios = useMemo(
@@ -339,12 +359,22 @@ export function LDFTab(props: Props) {
                   Development Ratios (Triangle)
                 </td>
               </tr>
-              {triangle.origin_periods.map((o, i) => (
+              {triangle.origin_periods.map((o, i) => {
+                const rowEx = rowExclusion(o, i);
+                return (
                 <tr
                   key={o}
                   className="border-t border-[color:var(--border)] hover:bg-[color:var(--surface-alt)]/40"
                 >
-                  <td className="px-2 py-0.5 font-medium sticky left-0 bg-[color:var(--surface)] z-[1] leading-tight">
+                  <td
+                    onClick={() => onSetExcluded && rowEx.steps.length > 0 && toggleOrigin(o, i)}
+                    title={rowEx.allExcluded ? "Kaza yılını geri al (tümü)" : "Kaza yılını tümüyle ele"}
+                    className={
+                      "px-2 py-0.5 font-medium sticky left-0 bg-[color:var(--surface)] z-[1] leading-tight select-none " +
+                      (onSetExcluded && rowEx.steps.length > 0 ? "cursor-pointer hover:text-[color:var(--danger)] " : "") +
+                      (rowEx.allExcluded ? "text-[color:var(--danger)] line-through" : "")
+                    }
+                  >
                     {o}
                   </td>
                   {Array.from({ length: steps }).map((_, j) => {
@@ -408,7 +438,8 @@ export function LDFTab(props: Props) {
                     );
                   })}
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
 
             {/* Window summary rows */}

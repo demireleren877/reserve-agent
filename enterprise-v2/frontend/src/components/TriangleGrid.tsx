@@ -124,7 +124,7 @@ export function TriangleGrid(props: Props) {
         getRowStyle={(p) =>
           (p.data as { __total?: boolean } | undefined)?.__total
             ? {
-                fontWeight: 600,
+                fontWeight: 700,
                 background: "var(--surface-alt)",
                 borderTop: "2px solid var(--border-strong)",
               }

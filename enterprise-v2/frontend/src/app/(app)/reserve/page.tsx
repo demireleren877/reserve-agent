@@ -227,9 +227,9 @@ export default function Home() {
   // LDF hover'ında gösterilen dosya kırılımı — mevcut segmente göre.
   const effFileData = isLargeSeg ? effBranch?.largeFileData : activeBranch?.fileData;
 
-  // LDF hover karşılaştırması için önceki dönemin aynı SEGMENT üçgeni (segment
-  // uyuşmazlığı olmasın: attritional↔attritional, large↔large).
-  const priorLDFRef = useMemo(() => {
+  // Önceki dönemin EŞLEŞEN branch'i (large'dan bağımsız bulunur; en yakın önceki
+  // dönemde aynı isim+frekansta üçgeni olan branch).
+  const priorRaw = useMemo(() => {
     if (!activePeriod || !activeBranch) return null;
     const order = (label: string): number => {
       const m = label.match(/^(\d{4})(?:[Qq](\d))?/);
@@ -244,30 +244,60 @@ export default function Home() {
           br.name === activeBranch.name &&
           br.triangle,
       );
-      if (!b?.triangle) continue;
-      const paidType = b.triangle.triangle_type === "paid";
-      let priorTri: typeof b.triangle | null = null;
-      let priorFd = b.fileData ?? null;
-      if (isLargeSeg) {
-        priorTri =
-          (paidType
-            ? b.largePaidTriangle ?? b.largeIncurredTriangle
-            : b.largeIncurredTriangle ?? b.largePaidTriangle) ?? null;
-        priorFd = b.largeFileData ?? null;
-      } else if (isGrossSeg) {
-        priorTri = b.triangle; // gross (ayrım yapılmadan)
-        priorFd = b.fileData ?? null;
-      } else if (largeOn && hasLarge(b)) {
-        const pa = deriveAttritional(b);
-        priorTri = (paidType ? pa.paid : pa.incurred) ?? null;
-        priorFd = b.fileData ?? null;
-      } else {
-        priorTri = b.triangle;
-      }
-      if (priorTri) return { label: sorted[k].label, triangle: priorTri, fileData: priorFd };
+      if (b?.triangle) return { label: sorted[k].label, branch: b };
     }
     return null;
-  }, [project.periods, activePeriod, activeBranch, isLargeSeg, isGrossSeg, largeOn]);
+  }, [project.periods, activePeriod, activeBranch]);
+
+  // Önceki dönemin large'ı da CANLI türetilir (güncel modelle AYNI kaynak).
+  // Böylece prior attritional gerçekten gross−large olur; aksi halde stored large
+  // boş kaldığında prior "attritional" ≡ gross kalıp geçmiş oranlar sahte "değişti"
+  // görünürdü.
+  const priorGross0 = priorRaw?.branch
+    ? priorRaw.branch.incurredTriangle ?? priorRaw.branch.paidTriangle ?? priorRaw.branch.triangle ?? null
+    : null;
+  const priorDataLarge = useDataLarge(
+    priorRaw?.label,
+    priorRaw?.branch?.name,
+    priorGross0?.origin_granularity as ("yearly" | "quarterly") | undefined,
+    priorGross0?.development_granularity as ("yearly" | "quarterly") | undefined,
+  );
+  const priorEffBranch = useMemo(() => {
+    const b = priorRaw?.branch;
+    if (!b) return null;
+    if (!priorDataLarge?.paid && !priorDataLarge?.incurred) return b;
+    return {
+      ...b,
+      largePaidTriangle: priorDataLarge.paid,
+      largeIncurredTriangle: priorDataLarge.incurred,
+      largeFileData: priorDataLarge.fileData ?? b.largeFileData,
+    };
+  }, [priorRaw, priorDataLarge]);
+
+  // LDF hover karşılaştırması için önceki dönemin aynı SEGMENT üçgeni. Güncel
+  // modelle AYNI fonksiyonlarla türetilir (largeWorkingTriangles / attritional-
+  // WorkingTriangle) — carry-forward dahil birebir tutarlı olsun.
+  const priorLDFRef = useMemo(() => {
+    const b = priorEffBranch;
+    if (!b || !b.triangle || !priorRaw) return null;
+    const paidType = b.triangle.triangle_type === "paid";
+    let priorTri: typeof b.triangle | null = null;
+    let priorFd = b.fileData ?? null;
+    if (isLargeSeg) {
+      const lw = largeWorkingTriangles(b);
+      priorTri = (paidType ? lw.paid ?? lw.incurred : lw.incurred ?? lw.paid) ?? null;
+      priorFd = b.largeFileData ?? null;
+    } else if (isGrossSeg) {
+      priorTri = b.triangle; // gross (ayrım yapılmadan)
+      priorFd = b.fileData ?? null;
+    } else if (largeOn && hasLarge(b)) {
+      priorTri = attritionalWorkingTriangle(b);
+      priorFd = b.fileData ?? null;
+    } else {
+      priorTri = b.triangle;
+    }
+    return priorTri ? { label: priorRaw.label, triangle: priorTri, fileData: priorFd } : null;
+  }, [priorEffBranch, priorRaw, isLargeSeg, isGrossSeg, largeOn]);
 
   const method = (pb?.method ?? "volume_weighted") as LDFMethod;
   const window: Window = pb?.window ?? "all";
@@ -1045,6 +1075,7 @@ export default function Home() {
             onWindowChange={guardedSetters.setWindow}
             onToggleCell={toggleCellHandler}
             onClearCells={() => setExcludedCellsHandler(new Set())}
+            onSetExcluded={setExcludedCellsHandler}
             onSetKarmaWindow={guardedSetters.setKarmaWindow}
             onInitKarma={guardedSetters.initKarma}
             onClearKarma={guardedSetters.clearKarma}

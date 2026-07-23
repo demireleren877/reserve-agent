@@ -72,7 +72,11 @@ exe = EXE(
     strip=False,
     upx=False,
     console=False,  # pencere modu — konsol açılmaz
-    icon=os.path.join(FRONTEND_OUT, "favicon.png") if os.path.isfile(os.path.join(FRONTEND_OUT, "favicon.png")) else None,
+    icon=(
+        os.path.join(SPEC_DIR, "actuarius.ico")
+        if os.path.isfile(os.path.join(SPEC_DIR, "actuarius.ico"))
+        else (os.path.join(FRONTEND_OUT, "favicon.png") if os.path.isfile(os.path.join(FRONTEND_OUT, "favicon.png")) else None)
+    ),
 )
 
 coll = COLLECT(

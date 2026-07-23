@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import type { LDFMethod, Triangle, FileData } from "@/types/triangle";
 import { formatNumber } from "@/lib/api";
 import { devDate } from "@/lib/roll-forward-util";
@@ -120,9 +121,11 @@ export function LDFTab(props: Props) {
     });
     return (n: number) => nf.format(n);
   }, [decimals]);
-  const [hover, setHover] = useState<
-    { o: string; i: number; j: number; x: number; y: number } | null
-  >(null);
+  // Kimlik (hangi hücre) ile fare konumunu AYIR: konum her piksel hareketinde
+  // değişir ama hoverInfo (dosya kırılımı hesabı) yalnız kimliğe bağlı olsun —
+  // aksi halde her harekette ağır yeniden-hesap + reflow titremesi olur.
+  const [hover, setHover] = useState<{ o: string; i: number; j: number } | null>(null);
+  const [pos, setPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
 
   const ratios = useMemo(
     () => (triangle ? developmentRatios(triangle, excludedCells) : []),
@@ -406,16 +409,11 @@ export function LDFTab(props: Props) {
                       <td key={j} className="px-0.5 py-0" style={cellHeat}>
                         <button
                           onClick={() => onToggleCell(o, j)}
-                          onMouseEnter={(e) =>
-                            setHover({ o, i, j, x: e.clientX, y: e.clientY })
-                          }
-                          onMouseMove={(e) =>
-                            setHover((h) =>
-                              h && h.o === o && h.j === j
-                                ? { ...h, x: e.clientX, y: e.clientY }
-                                : h,
-                            )
-                          }
+                          onMouseEnter={(e) => {
+                            setHover({ o, i, j });
+                            setPos({ x: e.clientX, y: e.clientY });
+                          }}
+                          onMouseMove={(e) => setPos({ x: e.clientX, y: e.clientY })}
                           onMouseLeave={() => setHover(null)}
                           className={
                             "relative w-full text-right px-1.5 py-0.5 rounded text-[11px] transition leading-tight " +
@@ -617,12 +615,13 @@ export function LDFTab(props: Props) {
         </div>
       </div>
 
-      {hover && hoverInfo && (
+      {hover && hoverInfo && typeof document !== "undefined" &&
+        createPortal(
         <div
           style={{
             position: "fixed",
-            left: Math.min(hover.x + 14, (globalThis.innerWidth || 1200) - 316),
-            top: Math.max(8, Math.min(hover.y + 14, (globalThis.innerHeight || 800) - 240)),
+            left: Math.min(pos.x + 14, (globalThis.innerWidth || 1200) - 316),
+            top: Math.max(8, Math.min(pos.y + 14, (globalThis.innerHeight || 800) - 240)),
             zIndex: 60,
             pointerEvents: "none",
             width: 300,
@@ -708,7 +707,8 @@ export function LDFTab(props: Props) {
                 no change
               </div>
             ) : null)}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

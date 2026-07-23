@@ -260,7 +260,7 @@ export function DataTab({ paidTriangle, incurredTriangle, viewingLarge, largeAct
               value={view}
               options={[
                 { value: "development", label: "Development" },
-                { value: "calendar", label: "Takvim" },
+                { value: "calendar", label: "Calendar" },
               ]}
               onChange={(v) => setView(v as ViewMode)}
             />
@@ -322,7 +322,7 @@ export function DataTab({ paidTriangle, incurredTriangle, viewingLarge, largeAct
               </ViewChip>
               <ViewChip>Accident {lenLabel(safeOriginLen)}</ViewChip>
               <ViewChip>Development {lenLabel(safeDevLen)}</ViewChip>
-              {transposed && <ViewChip>Transpoze</ViewChip>}
+              {transposed && <ViewChip>Transpose</ViewChip>}
             </div>
             <TriangleGrid matrix={matrix} decimals={decimals} />
           </div>
@@ -430,7 +430,7 @@ function TransposeToggle({
       }
     >
       <span className="text-[13px] leading-none">⇄</span>
-      Transpoze
+      Transpose
     </button>
   );
 }

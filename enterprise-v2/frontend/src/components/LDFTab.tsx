@@ -519,7 +519,7 @@ export function LDFTab(props: Props) {
                               : "border-[color:var(--border-strong)]")
                           }
                         />
-                        Son
+                        Last
                         <input
                           type="number"
                           min={1}

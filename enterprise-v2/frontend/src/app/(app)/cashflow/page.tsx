@@ -301,7 +301,7 @@ function HeaderRow({ title, subtitle, count }: { title: string; subtitle?: strin
         {subtitle && <p className="text-sm text-[color:var(--muted)] mt-0.5">{subtitle}</p>}
       </div>
       {count !== undefined && (
-        <span className="text-xs text-[color:var(--muted)] tabular">{count} adet</span>
+        <span className="text-xs text-[color:var(--muted)] tabular">{count}</span>
       )}
     </div>
   );

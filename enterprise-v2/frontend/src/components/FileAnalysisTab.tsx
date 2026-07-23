@@ -223,8 +223,8 @@ function StatsTab({ triangle, fileData }: { triangle: Triangle; fileData: FileDa
                 <th className="text-left px-3 py-2">Accident Year</th>
                 <th className="text-right px-3 py-2">Total</th>
                 <th className="text-right px-3 py-2">File</th>
-                <th className="text-right px-3 py-2">Ortalama</th>
-                <th className="text-right px-3 py-2">Medyan</th>
+                <th className="text-right px-3 py-2">Average</th>
+                <th className="text-right px-3 py-2">Median</th>
                 <th className="text-right px-3 py-2">CoV</th>
                 <th className="text-right px-3 py-2">Top-1 Share</th>
                 <th className="text-right px-3 py-2">Top-3 Share</th>

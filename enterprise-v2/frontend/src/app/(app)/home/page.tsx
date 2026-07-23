@@ -5,7 +5,7 @@ import Link from "next/link";
 const MODULES = [
   {
     href: "/reserve",
-    label: "Rezerv",
+    label: "Reserve",
     desc: "Actuarial IBNR analysis · Chain-Ladder, Bornhuetter–Ferguson, parametric tail fitting.",
     tags: ["Chain-Ladder", "BF", "Tail Fitting", "AI Agent"],
     icon: <StackIcon />,
@@ -41,7 +41,7 @@ export default function AppHome() {
               {m.active && (
                 <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded"
                   style={{ background: "var(--success-soft)", color: "var(--success)" }}>
-                  Aktif
+                  Active
                 </span>
               )}
             </div>

@@ -67,7 +67,7 @@ export function ILRTab({ triangle, premiums, correctionPerOrigin, selectedLDFs }
           <thead>
             <tr className="bg-[color:var(--surface-alt)] text-[color:var(--muted-strong)] text-[10px] uppercase tracking-wide border-b border-[color:var(--border)]">
               <th className="text-left px-3 py-2 font-semibold sticky left-0 bg-[color:var(--surface-alt)] z-10">
-                Kaza
+                Accident
               </th>
               {mode === "ilr" && (
                 <th className="text-right px-3 py-2 font-semibold min-w-[100px] border-r border-[color:var(--border)]">
@@ -202,7 +202,7 @@ function Header({ mode, setMode, triangle }: { mode: Mode; setMode: (m: Mode) =>
                 : "text-[color:var(--muted-strong)] hover:text-[color:var(--foreground)]")
             }
           >
-            Hasar
+            Claims
           </button>
         </div>
       </div>

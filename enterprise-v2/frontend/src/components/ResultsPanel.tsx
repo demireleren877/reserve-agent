@@ -158,7 +158,7 @@ export function ResultsPanel(props: Props) {
                 <th className="text-right px-1 py-1 font-medium">Current</th>
                 <th className="text-right px-1 py-1 font-medium">CDF</th>
                 <th className="text-right px-1 py-1 font-medium">Ult.</th>
-                <th className="text-right px-1 py-1 font-medium">Rezerv</th>
+                <th className="text-right px-1 py-1 font-medium">Reserve</th>
               </tr>
             </thead>
             <tbody>

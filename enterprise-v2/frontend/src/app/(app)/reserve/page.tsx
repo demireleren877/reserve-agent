@@ -1250,7 +1250,7 @@ function Shell({
           <div className="h-6 w-6 rounded-md bg-[color:var(--primary)] grid place-items-center text-white text-[11px] font-bold">
             R
           </div>
-          <h1 className="text-sm font-semibold">Rezerv</h1>
+          <h1 className="text-sm font-semibold">Reserve</h1>
         </div>
         <div className="h-6 w-px bg-[color:var(--border)] shrink-0" />
         {/* Açık modeller — tarayıcı sekmesi gibi */}

@@ -259,8 +259,7 @@ export function BFTab(props: Props) {
             ratio average
           </li>
           <li>
-            <code className="font-mono">avg(2020:2022)</code> — same, range
-            olarak
+            <code className="font-mono">avg(2020:2022)</code> — same, as a range
           </li>
           <li>
             <code className="font-mono">vw(2020:2022)</code> — volume-weighted =
@@ -273,8 +272,7 @@ export function BFTab(props: Props) {
             — explicit form
           </li>
           <li>
-            <code className="font-mono">avg(2020:2022) * 1.1</code> — scaled up
-            ortalama
+            <code className="font-mono">avg(2020:2022) * 1.1</code> — scaled-up
           </li>
           <li>
             Quarterly: <code className="font-mono">avg(2020Q1:2021Q4)</code>

@@ -314,7 +314,7 @@ function CashflowPanel({ result }: { result: DiscountResult }) {
               dataKey="month"
               tick={{ fontSize: 10, fill: "var(--muted)" }}
               axisLine={false} tickLine={false}
-              label={{ value: "Ay", position: "insideBottomRight", offset: -4, fontSize: 10, fill: "var(--muted)" }}
+              label={{ value: "Month", position: "insideBottomRight", offset: -4, fontSize: 10, fill: "var(--muted)" }}
             />
             <YAxis
               tick={{ fontSize: 10, fill: "var(--muted)" }}
@@ -329,7 +329,7 @@ function CashflowPanel({ result }: { result: DiscountResult }) {
               contentStyle={{ background: "var(--surface)", border: "1px solid var(--border)", fontSize: 11, borderRadius: 8 }}
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               formatter={(value: any) => fmt(value as number) as any}
-              labelFormatter={(v) => `Ay ${v}`}
+              labelFormatter={(v) => `Month ${v}`}
             />
             <Legend wrapperStyle={{ fontSize: 11 }} />
             <Area dataKey="A" name={labelA} stroke="#6366f1" fill="url(#nominalGrad)" strokeWidth={1.5} dot={false} />
@@ -378,7 +378,7 @@ function SensitivityPanel({
     for (let bps = -500; bps <= 500; bps += 100) {
       const r = discountWithStandard(rows, monthlyPattern, shockedConfig(config, bps / 10000));
       points.push({
-        rate: bps === 0 ? "Baz" : `${bps > 0 ? "+" : ""}${bps}bp`,
+        rate: bps === 0 ? "Base" : `${bps > 0 ? "+" : ""}${bps}bp`,
         "Discounted Unpaid": Math.round(r.base.totals.bel),
         "Discount Amount": Math.round(r.base.totals.unpaid - r.base.totals.bel),
       });
@@ -426,7 +426,7 @@ function SensitivityPanel({
               formatter={(value: any) => fmt(value as number) as any}
             />
             <Legend wrapperStyle={{ fontSize: 11 }} />
-            <ReferenceLine x="Baz" stroke="var(--muted)" strokeDasharray="4 2" label={{ value: "Baz", fontSize: 10, fill: "var(--muted)" }} />
+            <ReferenceLine x="Base" stroke="var(--muted)" strokeDasharray="4 2" label={{ value: "Base", fontSize: 10, fill: "var(--muted)" }} />
             <Line dataKey="Discounted Unpaid" stroke="#3b82f6" strokeWidth={2} dot={{ r: 3, fill: "#3b82f6" }} />
             <Line dataKey="Discount Amount" stroke="#f97316" strokeWidth={2} dot={{ r: 3, fill: "#f97316" }} />
           </LineChart>
@@ -471,7 +471,7 @@ function SensitivityPanel({
                   }}
                 >
                   <td className="px-4 py-2">
-                    {shock === 0 ? "Baz senaryo" : `${shock > 0 ? "+" : ""}${(shock * 100).toFixed(0)}bp`}
+                    {shock === 0 ? "Base case" : `${shock > 0 ? "+" : ""}${(shock * 100).toFixed(0)}bp`}
                   </td>
                   <td className="px-4 py-2 text-right font-mono">
                     {effectiveRate !== null ? pct(effectiveRate, 1) : "—"}
@@ -909,7 +909,7 @@ export default function DiscountPage() {
             { key: "summary", label: "Summary" },
             { key: "cashflow", label: "Cashflow" },
             ...(config.rateMode !== "none"
-              ? [{ key: "sensitivity" as MainTab, label: "Sensitivite" }]
+              ? [{ key: "sensitivity" as MainTab, label: "Sensitivity" }]
               : []),
             { key: "comparison", label: "IFRS 4 / IFRS 17" },
           ] as { key: MainTab; label: string }[]).map((t) => (

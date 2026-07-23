@@ -156,7 +156,7 @@ export function CurveTab({
               onClick={() => setShowChart(true)}
               className="btn text-[11px] py-1 px-2"
             >
-              Grafik
+              Chart
             </button>
           )}
           {(hasOverrides || hasExcludes) && (

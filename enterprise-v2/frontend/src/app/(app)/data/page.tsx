@@ -680,7 +680,7 @@ export default function DataPage() {
           style={{ borderColor: "var(--border)", background: "var(--surface)" }}
         >
           <div>
-            <div className="text-[14px] font-semibold" style={{ color: "var(--foreground)" }}>Veri</div>
+            <div className="text-[14px] font-semibold" style={{ color: "var(--foreground)" }}>Data</div>
             <div className="text-[11.5px]" style={{ color: "var(--muted)" }}>
               Period-based data management
             </div>

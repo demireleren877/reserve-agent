@@ -417,7 +417,7 @@ function MappingStep({
           className="px-4 py-2 rounded-xl text-[13px] border transition"
           style={{ borderColor: "var(--border)", color: "var(--muted-strong)" }}
         >
-          ← Geri
+          ← Back
         </button>
         <button
           onClick={onNext}
@@ -531,7 +531,7 @@ function PreviewStep({
             className="px-4 py-2.5 border-b text-[12px] font-semibold"
             style={{ borderColor: "var(--border)", background: "var(--surface-alt)", color: "var(--muted-strong)" }}
           >
-            Model iskeleti · frekans
+            Model skeleton · frequency
           </div>
           <div className="px-4 py-3">
             <label className="block max-w-[240px]">
@@ -626,7 +626,7 @@ function PreviewStep({
           className="px-4 py-2 rounded-xl text-[13px] border transition disabled:opacity-40"
           style={{ borderColor: "var(--border)", color: "var(--muted-strong)" }}
         >
-          ← Geri
+          ← Back
         </button>
         <button
           onClick={onImport}

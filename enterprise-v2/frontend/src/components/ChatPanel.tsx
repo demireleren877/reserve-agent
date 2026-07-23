@@ -292,7 +292,7 @@ export function ChatPanel({
               onClick={() => setShowHistory(false)}
               className="text-[11px] text-[color:var(--muted)] hover:text-[color:var(--foreground)] transition flex items-center gap-1"
             >
-              <span>←</span> Geri
+              <span>←</span> Back
             </button>
             <span className="text-sm font-medium">History</span>
             <span className="ml-auto text-[11px] text-[color:var(--muted)]">

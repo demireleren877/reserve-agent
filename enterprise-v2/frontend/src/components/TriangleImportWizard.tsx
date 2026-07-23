@@ -216,7 +216,7 @@ export function TriangleImportWizard({ onDone, onCancel }: Props) {
         <div className="px-5 pb-5 flex justify-end gap-2 flex-shrink-0">
           {step === "preview" && (
             <button onClick={() => setStep("configure")}
-              className="px-4 py-2 text-sm rounded-md border border-[color:var(--border)] text-[color:var(--muted-strong)] hover:text-[color:var(--foreground)] transition">← Geri</button>
+              className="px-4 py-2 text-sm rounded-md border border-[color:var(--border)] text-[color:var(--muted-strong)] hover:text-[color:var(--foreground)] transition">← Back</button>
           )}
           <button onClick={onCancel}
             className="px-4 py-2 text-sm rounded-md border border-[color:var(--border)] text-[color:var(--muted-strong)] hover:text-[color:var(--foreground)] transition">Cancel</button>

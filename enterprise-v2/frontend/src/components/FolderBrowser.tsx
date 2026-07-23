@@ -146,9 +146,9 @@ export function FolderBrowser() {
           <button
             onClick={actions.undo}
             className="inline-flex items-center gap-1.5 text-xs text-[color:var(--muted-strong)] hover:text-[color:var(--foreground)] border border-[color:var(--border)] rounded-md px-2.5 py-1 transition hover:bg-[color:var(--surface-alt)]"
-            title="Geri al (Cmd+Z)"
+            title="Undo (Cmd+Z)"
           >
-            ↩ Geri al
+            ↩ Undo
           </button>
         </div>
       )}

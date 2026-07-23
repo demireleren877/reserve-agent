@@ -324,7 +324,7 @@ function DatasetViewer({
           className="p-1 rounded-lg hover:bg-[color:var(--surface-alt)] transition"
           style={{ color: "var(--muted-strong)" }}
         >
-          ← Geri
+          ← Back
         </button>
         <div className="text-[13px] font-semibold" style={{ color: "var(--foreground)" }}>
           {periodLabel} · {typeLabel}
@@ -546,7 +546,7 @@ function PeriodDetail({ period }: { period: DataPeriod }) {
             className="p-1 rounded-lg hover:bg-[color:var(--surface-alt)] transition"
             style={{ color: "var(--muted-strong)" }}
           >
-            ← Geri
+            ← Back
           </button>
           <div className="text-[13px] font-semibold" style={{ color: "var(--foreground)" }}>
             {period.label} · {typeDef.label}

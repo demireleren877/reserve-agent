@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useDataStore, type PrimRecord, type Dataset } from "@/lib/data-store";
+import { matchPremiumsToOrigins } from "@/lib/provision-models";
 
 // Prim dataset'i typeId ile bulunur (datasetId rastgeledir; sabit "prim" anahtarı yanlış).
 function findPrim(datasets?: Record<string, Dataset>): Dataset | undefined {
@@ -71,7 +72,10 @@ export function LoadPrimsFromDataStore({ originPeriods, onLoad, onClose }: Props
       if (cancelled) return;
       const filtered = records.filter((r) => r.brans === brans);
       const rows = filtered.map((r) => {
-        const matched = originPeriods.find((op) => op === r.donem) ?? null;
+        // Granülarite/format toleranslı: bu kayıt herhangi bir origin'e katkı veriyor mu?
+        const matched = Object.keys(matchPremiumsToOrigins([r], brans, originPeriods)).length > 0
+          ? r.donem
+          : null;
         return { donem: r.donem, ep: r.ep, matched };
       });
       setPreview(rows.sort((a, b) => a.donem.localeCompare(b.donem)));
@@ -100,12 +104,8 @@ export function LoadPrimsFromDataStore({ originPeriods, onLoad, onClose }: Props
       }
     }
 
-    const filtered = records.filter((r) => r.brans === brans);
-    const premiums: Record<string, number> = {};
-    for (const r of filtered) {
-      const matched = originPeriods.find((op) => op === r.donem);
-      if (matched) premiums[matched] = r.ep;
-    }
+    // Granülarite/format toleranslı eşleştirme (yıllık↔çeyreklik dahil).
+    const premiums = matchPremiumsToOrigins(records, brans, originPeriods);
 
     if (!Object.keys(premiums).length) {
       setError("No periods matched. There may be a granularity mismatch.");

@@ -34,6 +34,53 @@ export function sameBrans(a: string | null | undefined, b: string | null | undef
   return normBrans(a) === normBrans(b);
 }
 
+/**
+ * Dönem/origin etiketini kanonik forma indirger: "YYYY" veya "YYYYQn".
+ * Toleranslı: "2023.0", "2023 Q1", "2023-q1", "2023/1", "202301" (yyyyqq/yyyymm).
+ * Backend `_normalize_donem` ile hizalı; origin tarafı da aynı kefeye konur.
+ */
+export function normPeriodLabel(s: string | null | undefined): string {
+  const t = String(s ?? "").trim();
+  const yr = t.match(/^(\d{4})(?:\.0+)?$/);
+  if (yr) return yr[1];
+  const yq = t.match(/^(\d{4})\s*[-/ ]?\s*[Qq]?\s*([1-4])$/);
+  if (yq) return `${yq[1]}Q${yq[2]}`;
+  const six = t.match(/^(\d{4})(\d{2})$/);
+  if (six) {
+    const n = parseInt(six[2], 10);
+    if (n >= 1 && n <= 4) return `${six[1]}Q${n}`; // yyyyqq
+    if (n >= 1 && n <= 12) return `${six[1]}Q${Math.ceil(n / 3)}`; // yyyymm → çeyrek
+  }
+  return t;
+}
+
+/**
+ * Prim (EP) kayıtlarını modelin origin dönemleriyle eşleştirir. SAF fonksiyon
+ * (test edilebilir). Sonuç origin etiketiyle anahtarlanır — BFTab `premiums[origin]`
+ * bunu doğrudan okur.
+ *
+ * Eşleşme:
+ *  - Branş: `sameBrans` (case-insensitive) — EP dosyasında "eren", modelde "EREN" olsa da eşleşir.
+ *  - Dönem: `normPeriodLabel` üzerinden birebir ("2023"=="2023", "2023 Q1"=="2023Q1").
+ * Uydurma dönüşüm (yıllık↔çeyreklik) YOK; granülarite farklıysa eşleştirmez.
+ */
+export function matchPremiumsToOrigins(
+  recs: PrimRecord[],
+  brans: string | null | undefined,
+  originPeriods: string[],
+): Record<string, number> {
+  const byDonem: Record<string, number> = {};
+  for (const r of recs) {
+    if (sameBrans(r.brans, brans)) byDonem[normPeriodLabel(r.donem)] = r.ep;
+  }
+  const out: Record<string, number> = {};
+  for (const o of originPeriods) {
+    const v = byDonem[normPeriodLabel(o)];
+    if (v != null) out[o] = v;
+  }
+  return out;
+}
+
 export function useProvisionModels() {
   const { project, actions } = useProject();
 
@@ -70,22 +117,27 @@ export function useProvisionModels() {
 /**
  * Veri ↔ model DİNAMİK bağ: bir modelin exposure'ını, veri modülündeki prim
  * verisinden CANLI türetir (kopyalamaz). Prim sonradan yüklense/güncellense de
- * model otomatik yansıtır. Eşleşme: dönem etiketi + branş adı; origin = prim dönemi.
+ * model otomatik yansıtır. Eşleşme: branş adı (`sameBrans`, CASE-INSENSITIVE — EP'yi
+ * küçük/büyük harfle yüklemek fark etmez) + dönem (`matchPremiumsToOrigins`).
  * Elle girilen exposure (branch.premiums) bunun ÜSTÜNE override olur.
  */
 export function useDataPremiums(
   periodLabel: string | null | undefined,
   brans: string | null | undefined,
+  originPeriods: string[] | null | undefined,
 ): Record<string, number> {
   const { periods, loadDatasetRecords } = useDataStore();
   const [premiums, setPremiums] = useState<Record<string, number>>({});
+  // Origin dizisinin referansı her render değişmesin diye içeriğe göre sabitle.
+  const originsKey = (originPeriods ?? []).join("|");
 
   useEffect(() => {
-    if (!periodLabel || !brans) {
+    const origins = originsKey ? originsKey.split("|") : [];
+    if (!periodLabel || !brans || origins.length === 0) {
       setPremiums({});
       return;
     }
-    const period = periods.find((p) => p.label === periodLabel);
+    const period = periods.find((p) => p.label.trim() === periodLabel.trim());
     // TÜM prim dataset'leri (ör. her branş ayrı dosyayla yüklenmiş olabilir) —
     // yalnız ilkini almak, ikinci branşın primini görünmez yapardı.
     const primDatasets = period
@@ -97,7 +149,7 @@ export function useDataPremiums(
     }
     let cancelled = false;
     (async () => {
-      const map: Record<string, number> = {};
+      const allRecs: PrimRecord[] = [];
       for (const primDs of primDatasets) {
         let recs = primDs.records as PrimRecord[] | undefined;
         if (!recs?.length) {
@@ -105,15 +157,15 @@ export function useDataPremiums(
           recs = (ds?.records ?? []) as PrimRecord[];
         }
         if (cancelled) return;
-        for (const r of recs) if (sameBrans(r.brans, brans)) map[r.donem] = r.ep;
+        allRecs.push(...recs);
       }
       if (cancelled) return;
-      setPremiums(map);
+      setPremiums(matchPremiumsToOrigins(allRecs, brans, origins));
     })();
     return () => {
       cancelled = true;
     };
-  }, [periodLabel, brans, periods, loadDatasetRecords]);
+  }, [periodLabel, brans, originsKey, periods, loadDatasetRecords]);
 
   return premiums;
 }

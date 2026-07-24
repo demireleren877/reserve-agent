@@ -251,9 +251,15 @@ def build_triangles(
             development_granularity=dev_gran,
         )
 
-    # ── Dosya bazlı kümülatif ödeme (file_data) ───────────────────────────────
-    # {origin_label: {dev_label: {dosya_no: cum_paid}}}
+    # ── Dosya bazlı üçgen (file_data) — dosya bazında INCURRED ─────────────────
+    # Files sekmesi model üçgeniyle (incurred) MUTABIK olsun diye dosya bazında da
+    # incurred saklanır: her hücrede kümülatif ödeme + o gelişim tarihindeki muallak.
+    # (Dosyanın o hücrede kaydı yoksa muallak katkısı 0 — incurred üçgeniyle aynı
+    # kural; böylece Σ file_data[o][d] = incurred[o][d].)
+    # {origin_label: {dev_label: {dosya_no: cum_paid + muallak}}}
     dosya_inc: dict[tuple[str, str], dict[str, float]] = {}
+    # (o_lbl, d_lbl) → {dosya_no: (exact_d_seq, muallak)} — hücredeki stok muallak
+    dosya_os: dict[tuple[str, str], dict[str, tuple[int, float]]] = {}
     dosya_d_seq: dict[tuple[str, str], int] = {}
 
     for r in filtered:
@@ -263,11 +269,21 @@ def build_triangles(
         try:
             o_lbl, _ = _parse_period(str(r["hasar_tarihi"]), orig_gran)
             d_lbl, d_seq = _parse_period(str(r["gelisim_tarihi"]), dev_gran)
+            _, d_seq_exact = _parse_period(str(r["gelisim_tarihi"]), Granularity.QUARTERLY)
         except ValueError:
             continue
         key = (o_lbl, d_lbl)
         cell = dosya_inc.setdefault(key, {})
         cell[dosya_no] = cell.get(dosya_no, 0.0) + float(r.get("odeme") or 0)
+        # muallak (stok): aynı aggregated hücrede en son gelişim tarihinin bakiyesi;
+        # aynı tarih currency kırılımıysa TOPLA (üçgen muallağıyla birebir aynı kural).
+        os_cell = dosya_os.setdefault(key, {})
+        mual_val = float(r.get("muallak") or 0)
+        ex = os_cell.get(dosya_no)
+        if ex is None or d_seq_exact > ex[0]:
+            os_cell[dosya_no] = (d_seq_exact, mual_val)
+        elif d_seq_exact == ex[0]:
+            os_cell[dosya_no] = (d_seq_exact, ex[1] + mual_val)
         dosya_d_seq[key] = d_seq
 
     file_data: dict | None = None
@@ -287,7 +303,12 @@ def build_triangles(
             for d_lbl, _, vals in cells:
                 for dosya_no, inc in vals.items():
                     cum[dosya_no] = cum.get(dosya_no, 0.0) + inc
-                fd[o_lbl][d_lbl] = dict(cum)
+                os_here = dosya_os.get((o_lbl, d_lbl), {})
+                # incurred = kümülatif ödeme + o hücredeki muallak (dosyanın kaydı yoksa 0)
+                fd[o_lbl][d_lbl] = {
+                    dno: cum_paid + (os_here[dno][1] if dno in os_here else 0.0)
+                    for dno, cum_paid in cum.items()
+                }
         file_data = fd
 
     return paid_tri, incurred_tri, count_tri, file_data

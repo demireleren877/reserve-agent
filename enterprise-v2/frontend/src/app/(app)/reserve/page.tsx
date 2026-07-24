@@ -212,7 +212,7 @@ export default function Home() {
   // DİNAMİK exposure: veri modülündeki prim verisinden canlı türetilir; elle
   // girilen exposure (pb.premiums) bunun üstüne override olur. Prim sonradan
   // yüklense de model otomatik yansıtır (veri ↔ model hep ilişkili).
-  const dataPremiums = useDataPremiums(activePeriod?.label, activeBranch?.name);
+  const dataPremiums = useDataPremiums(activePeriod?.label, activeBranch?.name, triangle?.origin_periods);
   const effectivePremiums = useMemo(
     () => ({ ...dataPremiums, ...(pb?.premiums ?? {}) }),
     [dataPremiums, pb?.premiums],

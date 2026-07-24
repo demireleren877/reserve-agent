@@ -86,23 +86,28 @@ export function useDataPremiums(
       return;
     }
     const period = periods.find((p) => p.label === periodLabel);
-    const primDs = period
-      ? Object.values(period.datasets).find((d) => d.typeId === "prim")
-      : undefined;
-    if (!period || !primDs) {
+    // TÜM prim dataset'leri (ör. her branş ayrı dosyayla yüklenmiş olabilir) —
+    // yalnız ilkini almak, ikinci branşın primini görünmez yapardı.
+    const primDatasets = period
+      ? Object.values(period.datasets).filter((d) => d.typeId === "prim")
+      : [];
+    if (!period || primDatasets.length === 0) {
       setPremiums({});
       return;
     }
     let cancelled = false;
     (async () => {
-      let recs = primDs.records as PrimRecord[] | undefined;
-      if (!recs?.length) {
-        const ds = await loadDatasetRecords(period.id, primDs.datasetId);
-        recs = (ds?.records ?? []) as PrimRecord[];
+      const map: Record<string, number> = {};
+      for (const primDs of primDatasets) {
+        let recs = primDs.records as PrimRecord[] | undefined;
+        if (!recs?.length) {
+          const ds = await loadDatasetRecords(period.id, primDs.datasetId);
+          recs = (ds?.records ?? []) as PrimRecord[];
+        }
+        if (cancelled) return;
+        for (const r of recs) if (sameBrans(r.brans, brans)) map[r.donem] = r.ep;
       }
       if (cancelled) return;
-      const map: Record<string, number> = {};
-      for (const r of recs) if (sameBrans(r.brans, brans)) map[r.donem] = r.ep;
       setPremiums(map);
     })();
     return () => {
@@ -159,15 +164,21 @@ async function resolveLargeTriangles(
   if (!period) return null;
   const datasets = Object.values(period.datasets);
 
-  // Hazır large üçgeni (large_ucgen) → daima doğrudan.
-  const ucgenDs = datasets.find((d) => d.typeId === "large_ucgen");
-  if (ucgenDs) {
-    const recs = (await recordsOf(ucgenDs, period.id, load)) as TriangleRecord[];
+  // Hazır large üçgeni (large_ucgen) → daima doğrudan. Her large_ucgen dataset'i
+  // TEK branş içerir (data page: brans_list=[recs[0].brans]). İlk large_ucgen'i
+  // körlemesine almak, bu branşın large'ı yokken BAŞKA branşın large'ını sızdırırdı.
+  // Bu branşa AİT dataset'i seç; yoksa large yok (null) — asla başka branşa düşme.
+  const ucgenDatasets = datasets.filter((d) => d.typeId === "large_ucgen");
+  for (const ds of ucgenDatasets) {
+    const list = ds.meta.brans_list ?? [];
+    // brans_list doluysa ve bu branşı içermiyorsa yükleme yapmadan ele.
+    if (list.length && !list.some((b) => sameBrans(b, brans))) continue;
+    const recs = (await recordsOf(ds, period.id, load)) as TriangleRecord[];
     const forBrans = recs.filter((r) => sameBrans(r.brans, brans));
-    const pool = forBrans.length ? forBrans : recs;
-    const paidRec = pool.find((r) => r.triangle_type === "paid");
-    const incRec = pool.find((r) => r.triangle_type === "incurred");
-    if (!paidRec && !incRec) return null;
+    if (!forBrans.length) continue;
+    const paidRec = forBrans.find((r) => r.triangle_type === "paid");
+    const incRec = forBrans.find((r) => r.triangle_type === "incurred");
+    if (!paidRec && !incRec) continue;
     return {
       paid: paidRec ? triFromRecord(paidRec) : null,
       incurred: incRec ? triFromRecord(incRec) : null,
@@ -175,8 +186,12 @@ async function resolveLargeTriangles(
     };
   }
 
-  // Dosya bazlı large (large) → yöntem: doğrudan / roll-forward.
-  const largeDs = datasets.find((d) => d.typeId === "large");
+  // Dosya bazlı large (large) → yöntem: doğrudan / roll-forward. Bir large dataset'i
+  // ÇOK branş içerebilir; bu branşı içereni seç (ilkini değil).
+  const largeDs =
+    datasets.find(
+      (d) => d.typeId === "large" && (d.meta.brans_list ?? []).some((b) => sameBrans(b, brans)),
+    ) ?? datasets.find((d) => d.typeId === "large" && !(d.meta.brans_list?.length));
   if (!largeDs) return null;
   const recs = (await recordsOf(largeDs, period.id, load)) as ClaimRecord[];
   const method = largeDs.meta.largeMethod ?? "direct";

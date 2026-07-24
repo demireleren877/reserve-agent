@@ -56,7 +56,11 @@ async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
     throw new ApiError(res.status, code, message);
   }
 
-  return (await res.json()) as T;
+  // 204 / boş gövde (ör. DELETE): res.json() boş string'i parse edemez ve WebKit'te
+  // "The string did not match the expected pattern" fırlatır. Metni oku, doluysa parse et.
+  if (res.status === 204) return undefined as T;
+  const text = await res.text();
+  return (text ? JSON.parse(text) : undefined) as T;
 }
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
@@ -110,7 +114,10 @@ async function _reqJson<T>(path: string, method: string, body?: unknown): Promis
     const b = (await res.json().catch(() => ({}))) as { detail?: string };
     throw new ApiError(res.status, b.detail ?? `http_${res.status}`);
   }
-  return res.json() as Promise<T>;
+  // 204 / boş gövde: WebKit'te res.json() boş gövdede patlar.
+  if (res.status === 204) return undefined as T;
+  const text = await res.text();
+  return (text ? JSON.parse(text) : undefined) as T;
 }
 
 export async function getConnections(): Promise<ConnectionsList> {

@@ -21,6 +21,11 @@ _pool: oracledb.AsyncConnectionPool | None = None
 def _create_pool(conn: desktop_config.Connection) -> "oracledb.AsyncConnectionPool":
     import oracledb
 
+    # CLOB/BLOB'ları locator yerine DOĞRUDAN str/bytes olarak getir. LOB locator'ı
+    # bağlantı ömrüne bağlıdır; bağlantı havuza döndükten sonra okunursa protokol
+    # bozulur (DPY-5000). fetch_lobs=False ile değer fetch anında okunur → güvenli.
+    oracledb.defaults.fetch_lobs = False
+
     return oracledb.create_pool_async(
         user=conn.user,
         password=conn.password,

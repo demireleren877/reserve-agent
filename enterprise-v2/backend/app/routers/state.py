@@ -55,13 +55,13 @@ async def get_state(_user: CurrentUser) -> StateResponse:
                 "FROM team_state WHERE id = 1"
             )
             row = await cur.fetchone()
+            if not row:
+                return StateResponse(project=None, chat=None, version=0, updated_at=0)
+            # CLOB'ları bağlantı AÇIKKEN oku (havuza dönünce LOB.read() → DPY-5000, donma).
+            proj_json, chat_json, version, updated_at, updated_by_name = row
+            proj = await _read_clob(proj_json)
+            chat = await _read_clob(chat_json)
 
-    if not row:
-        return StateResponse(project=None, chat=None, version=0, updated_at=0)
-
-    proj_json, chat_json, version, updated_at, updated_by_name = row
-    proj = await _read_clob(proj_json)
-    chat = await _read_clob(chat_json)
     ts = int(updated_at.timestamp() * 1000) if updated_at else 0
     return StateResponse(
         project=proj,

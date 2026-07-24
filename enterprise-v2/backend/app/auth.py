@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
 from datetime import datetime, timedelta, timezone
 from typing import Annotated
@@ -12,6 +13,10 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 _SECRET = os.environ.get("JWT_SECRET", "change-me-in-production")
+# HMAC-SHA256 anahtarı en az 32 byte olmalı (RFC 7518 §3.2). Yapılandırılan secret
+# kısa olsa da (masaüstü varsayılanı 23 byte) SHA-256 ile 32 byte'a türetilir:
+# InsecureKeyLengthWarning kalkar, deterministik olduğu için restart'ta token geçerli kalır.
+_SIGNING_KEY = hashlib.sha256(_SECRET.encode()).digest()
 _ALGO = "HS256"
 _TTL_HOURS = int(os.environ.get("JWT_TTL_HOURS", "12"))
 
@@ -33,12 +38,12 @@ def create_token(user_id: int, username: str, role: str) -> str:
         "role": role,
         "exp": datetime.now(timezone.utc) + timedelta(hours=_TTL_HOURS),
     }
-    return jwt.encode(payload, _SECRET, algorithm=_ALGO)
+    return jwt.encode(payload, _SIGNING_KEY, algorithm=_ALGO)
 
 
 def _decode(token: str) -> dict:
     try:
-        return jwt.decode(token, _SECRET, algorithms=[_ALGO])
+        return jwt.decode(token, _SIGNING_KEY, algorithms=[_ALGO])
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="token_expired")
     except jwt.InvalidTokenError:

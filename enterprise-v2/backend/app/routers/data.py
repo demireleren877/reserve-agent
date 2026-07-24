@@ -108,16 +108,16 @@ async def get_dataset(period_id: str, dataset_id: str, _user: CurrentUser) -> di
                 [period_id, dataset_id],
             )
             row = await cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="dataset_not_found")
+            # CLOB'ları bağlantı AÇIKKEN oku. Bağlantı havuza döndükten (async with
+            # bittikten) sonra LOB.read() çağırmak protokolü bozar → DPY-5000
+            # "unknown protocol message type" ve havuz kilitlenip uygulama donar.
+            type_id, meta_json, records_json = row
+            meta = await _read_clob(meta_json)
+            records = await _read_clob(records_json)
 
-    if not row:
-        raise HTTPException(status_code=404, detail="dataset_not_found")
-
-    type_id, meta_json, records_json = row
-    return {
-        "typeId": type_id,
-        "meta": await _read_clob(meta_json),
-        "records": await _read_clob(records_json),
-    }
+    return {"typeId": type_id, "meta": meta, "records": records}
 
 
 class PutDatasetRequest(BaseModel):

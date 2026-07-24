@@ -232,7 +232,12 @@ def main() -> None:
         else:
             win.load_html(ERROR_HTML)
 
-    webview.start(_on_ready, window)  # pencere kapanana kadar bloklar
+    # Teşhis modu: exe yanında 'debug.txt' varsa (veya ACTUARIUS_DEBUG=1) WebView
+    # devtools açılır → sağ tık → Inspect ile konsol/network hatalarını gör.
+    _app_dir = Path(sys.executable).resolve().parent if _frozen() else Path(__file__).resolve().parent
+    _debug = os.environ.get("ACTUARIUS_DEBUG") == "1" or (_app_dir / "debug.txt").is_file()
+
+    webview.start(_on_ready, window, debug=_debug)  # pencere kapanana kadar bloklar
 
     server.should_exit = True
     thread.join(timeout=5)

@@ -77,18 +77,36 @@ def health() -> dict[str, str]:
 # API /v1 ve /health üstte tanımlı; geri kalan her yol statik dosya/SPA fallback.
 _static_dir = os.environ.get("DESKTOP_STATIC_DIR")
 if _static_dir and Path(_static_dir).is_dir():
+    import mimetypes
+
     from fastapi.responses import FileResponse
     from fastapi.staticfiles import StaticFiles
+
+    # KRİTİK (Windows): Python mimetypes registry'den .js için yanlış tip
+    # (text/plain / application/x-javascript) okuyabilir; Chromium/WebView2 script'i
+    # reddedince hydration çöker (arayüz görünür ama tıklama çalışmaz). Doğru tipleri zorla.
+    mimetypes.add_type("text/javascript", ".js")
+    mimetypes.add_type("text/javascript", ".mjs")
+    mimetypes.add_type("text/css", ".css")
+    mimetypes.add_type("application/json", ".json")
+    mimetypes.add_type("image/svg+xml", ".svg")
+    mimetypes.add_type("font/woff2", ".woff2")
 
     _static_root = Path(_static_dir)
 
     class _SpaStatic(StaticFiles):
-        """Bulunamayan yolları uygun index.html'e düşür (trailingSlash export)."""
+        """Bulunamayan ROUTE yollarını index.html'e düşür (trailingSlash export).
+        Statik VARLIK (uzantılı: *.js, *.css, *.txt ...) bulunamazsa GERÇEK 404 dön —
+        aksi halde eksik JS chunk'ına HTML dönüp hydration sessizce çöker."""
 
         async def get_response(self, path: str, scope):  # type: ignore[override]
             try:
                 return await super().get_response(path, scope)
             except Exception:
+                last = path.rsplit("/", 1)[-1]
+                if "." in last:
+                    # Dosya gibi (uzantılı) → SPA fallback YAPMA, gerçek 404'ü koru.
+                    raise
                 # /login → /login/index.html, kök → /index.html
                 candidate = _static_root / path / "index.html"
                 if candidate.is_file():

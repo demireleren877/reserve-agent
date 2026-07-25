@@ -16,6 +16,7 @@ import {
   type RawMessage,
 } from "@/lib/api";
 import { AgentSettings } from "@/components/AgentSettings";
+import { useAgentConfig, isAgentConfigured } from "@/lib/agent/agent-config";
 import {
   loadSessions,
   saveSession,
@@ -64,6 +65,10 @@ export function ChatPanel({
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [cfg] = useAgentConfig();
+  // Agent "aktif" = kullanıcı Ayarlar'da lokal LLM'i (base URL + model) tanımladıysa.
+  // /v1/models değil (lokal endpoint model listesi sunmaz).
+  const notConfigured = !isAgentConfigured(cfg);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -210,8 +215,9 @@ export function ChatPanel({
           <span className="text-sm font-semibold tracking-tight">Actuarius</span>
         </div>
         <div className="flex items-center gap-1 shrink-0">
-          {/* Model selector */}
-          {!modelsError && (
+          {/* Model selector — yalnız backend model listesi sunarsa. Lokal endpoint'te
+              model Agent Ayarları'ndan gelir, /v1/models boştur → gizle. */}
+          {!modelsError && models.length > 0 && (
             <select
               value={model}
               onChange={(e) => setModel(e.target.value)}
@@ -347,18 +353,21 @@ export function ChatPanel({
       ) : (
         /* ── Messages ── */
         <div ref={scrollRef} className="flex-1 overflow-y-auto">
-          {!modelsLoading && models.length === 0 ? (
-            /* Agent placeholder — not active yet */
+          {notConfigured ? (
+            /* Agent yapılandırılmadı — Ayarlar'a yönlendir */
             <div className="flex flex-col items-center justify-center h-full px-8 gap-4 text-center">
               <div className="h-11 w-11 rounded-2xl grid place-items-center" style={{ background: "var(--surface-alt)", border: "1px solid var(--border)" }}>
                 <AgentIconLg />
               </div>
               <div>
-                <div className="text-sm font-semibold">Agent is not active</div>
+                <div className="text-sm font-semibold">Agent not configured</div>
                 <div className="text-xs text-[color:var(--muted)] mt-1 leading-relaxed">
-                  The AI assistant will be available soon.
+                  Set your local LLM (Base URL + Model) in Agent Settings to start.
                 </div>
               </div>
+              <button onClick={() => setShowSettings(true)} className="btn btn-primary text-xs px-3">
+                Open settings
+              </button>
             </div>
           ) : messages.length === 0 ? (
             /* Empty state */
@@ -397,15 +406,15 @@ export function ChatPanel({
             value={input}
             onChange={(e) => { setInput(e.target.value); resizeTextarea(); }}
             onKeyDown={handleKeyDown}
-            placeholder={!modelsLoading && models.length === 0 ? "Agent not active" : "Type a message…"}
-            disabled={loading || (!modelsLoading && models.length === 0)}
+            placeholder={notConfigured ? "Configure the agent in settings…" : "Type a message…"}
+            disabled={loading || notConfigured}
             rows={1}
             className="flex-1 input-base resize-none leading-relaxed overflow-y-auto"
             style={{ minHeight: "38px", maxHeight: "128px" }}
           />
           <button
             onClick={() => dispatchSend(input)}
-            disabled={loading || !input.trim() || (!modelsLoading && models.length === 0)}
+            disabled={loading || !input.trim() || notConfigured}
             className="btn btn-primary shrink-0 h-[38px] w-[38px] p-0 rounded-lg"
             title="Send (Enter)"
           >

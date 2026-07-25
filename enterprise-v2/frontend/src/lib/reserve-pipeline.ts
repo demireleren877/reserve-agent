@@ -8,6 +8,7 @@
 import type { Branch } from "@/types/project";
 import {
   aggregateLDFs,
+  applyAvgPairs,
   cascadeCDFs,
   cumulativeFactors,
   developmentRatios,
@@ -91,8 +92,13 @@ export function computeBranchSummary(branch: Branch): BranchSummary {
   }
 
   const excluded = new Set(branch.excludedCells ?? []);
-  const r = developmentRatios(triangle, excluded);
-  // Reserve sayfasıyla aynı method kullanılmalı (aksi halde Ultimate/IBNR ile tutmaz).
+  // Reserve sayfasıyla AYNI ratio'lar: eleme + LDF ortalama çiftleri (avgPairs)
+  // uygulanmalı, aksi halde Ultimate/IBNR ile tutmaz.
+  const r = applyAvgPairs(
+    developmentRatios(triangle, excluded),
+    new Set(branch.ldfAvgPairs ?? []),
+    triangle.origin_periods,
+  );
   const ldfs = aggregateLDFs(triangle, r, branch.window, branch.method ?? "volume_weighted");
   // Curve sekmesindeki eğri modeli (exp/inverse-power/power/weibull) ve CDF
   // override'ları Özet'te de uygulanmalı — aksi halde Ultimate/IBNR ile tutmaz.

@@ -141,6 +141,8 @@ class ChatResponse(BaseModel):
     # Bu tura ait raw OpenAI mesajları (tool çağrısı + sonuçları + final assistant).
     # Frontend biriktirir ve sonraki turda full_history olarak geri gönderir.
     raw_additions: list[dict] = []
+    # ask_user ile istenen yapısal form (doluysa chat'te tıklanabilir gösterilir).
+    form: dict | None = None
 
 
 class ModelOption(BaseModel):

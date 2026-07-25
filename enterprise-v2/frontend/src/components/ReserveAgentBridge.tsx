@@ -15,7 +15,10 @@
 import { useEffect, useMemo } from "react";
 import { useAgentRegistry } from "@/lib/agent-registry";
 import { useBranchSetters, useProject } from "@/lib/project-store";
+import { useDataPremiums, useDataLarge } from "@/lib/provision-models";
+import type { LargeTriangles } from "@/lib/provision-models";
 import { computeBranchSummary } from "@/lib/reserve-pipeline";
+import { computeAttritionalSummary, attritionalWorkingTriangle, hasLarge } from "@/lib/large-split";
 import type { AgentAction } from "@/types/triangle";
 import type { Branch, Period } from "@/types/project";
 
@@ -24,10 +27,55 @@ export function ReserveAgentBridge() {
   const agentReg = useAgentRegistry();
   const agentSetters = useBranchSetters("agent");
 
+  // Aktif branşın DİNAMİK exposure'ı (Data modülü prim verisinden) — reserve/page ile
+  // aynı. Bridge ham branch.premiums'ı kullanırsa BF exposure eksik/yanlış olur ve
+  // Ultimate/IBNR yanlış çıkar. Bunu aktif branşa merge ederiz.
+  const dataPremiums = useDataPremiums(
+    activePeriod?.label,
+    activeBranch?.name,
+    activeBranch?.triangle?.origin_periods,
+  );
+
+  // Aktif branşın DİNAMİK large ayrımı (Data modülü large verisinden) — reserve/page
+  // ile aynı (effBranch). Model attritional (gross − large) üzerinde çalışıyorsa agent
+  // da attritional Ultimate/IBNR görmeli; ham gross'u kullanırsa sayılar UI ile SAPAR.
+  const grossTri0 =
+    activeBranch?.incurredTriangle ??
+    activeBranch?.paidTriangle ??
+    activeBranch?.triangle ??
+    null;
+  const dataLarge = useDataLarge(
+    activePeriod?.label,
+    activeBranch?.name,
+    grossTri0?.origin_granularity as ("yearly" | "quarterly") | undefined,
+    grossTri0?.development_granularity as ("yearly" | "quarterly") | undefined,
+  );
+
+  // Aktif branşın EFEKTİF çalışma üçgeni — large ayrımı varsa ATTRITIONAL (gross −
+  // large), yoksa ham üçgen. Legacy triangle payload'u + senaryo tool'ları bunu kullanır.
+  const activeTriangle = useMemo(() => {
+    if (!activeBranch) return null;
+    const eff =
+      dataLarge?.paid || dataLarge?.incurred
+        ? {
+            ...activeBranch,
+            largePaidTriangle: dataLarge.paid ?? activeBranch.largePaidTriangle,
+            largeIncurredTriangle: dataLarge.incurred ?? activeBranch.largeIncurredTriangle,
+          }
+        : activeBranch;
+    return hasLarge(eff) ? attritionalWorkingTriangle(eff) : activeBranch.triangle ?? null;
+  }, [activeBranch, dataLarge]);
+
   // Tüm branşların full snapshot'ı
   const snapshot = useMemo(() => {
-    return buildProjectSnapshot(project.periods, activePeriod, activeBranch);
-  }, [project.periods, activePeriod, activeBranch]);
+    return buildProjectSnapshot(
+      project.periods,
+      activePeriod,
+      activeBranch,
+      dataPremiums,
+      dataLarge,
+    );
+  }, [project.periods, activePeriod, activeBranch, dataPremiums, dataLarge]);
 
   // Modül payload'u: triangle (aktif) + session_state (full snapshot + legacy
   // aktif branş alanları)
@@ -70,7 +118,7 @@ export function ReserveAgentBridge() {
 
     return {
       triangle:
-        (activeBranch?.triangle as unknown as Record<string, unknown>) ?? null,
+        (activeTriangle as unknown as Record<string, unknown>) ?? null,
       session_state: {
         // Full project tree (yeni tool'lar için)
         active: snapshot.active,
@@ -80,7 +128,7 @@ export function ReserveAgentBridge() {
         ...legacyFields,
       },
     };
-  }, [snapshot, activeBranch]);
+  }, [snapshot, activeBranch, activeTriangle]);
 
   const { registerSnapshot, registerActionHandler, unregisterActionHandler } =
     agentReg;
@@ -217,6 +265,8 @@ function buildProjectSnapshot(
   periods: Period[],
   activePeriod: Period | null,
   activeBranch: Branch | null,
+  dataPremiums: Record<string, number> = {},
+  dataLarge: LargeTriangles | null = null,
 ): ProjectSnapshot {
   const periodSnaps: PeriodSnapshot[] = [];
   let withData = 0;
@@ -228,12 +278,29 @@ function buildProjectSnapshot(
     const branchSnaps: BranchSnapshot[] = [];
     for (const b of p.branches) {
       totalBranches += 1;
-      const summary = computeBranchSummary(b);
+      const isActive = activeBranch?.id === b.id;
+      // Aktif branşta dinamik exposure + dinamik large'ı merge et — reserve/page ile
+      // aynı (effBranch + effectivePremiums). Manuel premiums ÜSTTE override eder.
+      let cb: Branch = b;
+      if (isActive) {
+        if (Object.keys(dataPremiums).length) {
+          cb = { ...cb, premiums: { ...dataPremiums, ...(b.premiums ?? {}) } };
+        }
+        if (dataLarge?.paid || dataLarge?.incurred) {
+          cb = {
+            ...cb,
+            largePaidTriangle: dataLarge.paid ?? cb.largePaidTriangle,
+            largeIncurredTriangle: dataLarge.incurred ?? cb.largeIncurredTriangle,
+            largeFileData: dataLarge.fileData ?? cb.largeFileData,
+          };
+        }
+      }
+      // Large ayrımı VARSA model ATTRITIONAL (gross − large) üzerinde çalışır — UI'de
+      // varsayılan segment budur. computeAttritionalSummary large yoksa düz özete düşer.
+      const summary = computeAttritionalSummary(cb) ?? computeBranchSummary(cb);
       if (summary.has_triangle) withData += 1;
       totalIbnr += summary.totals.ibnr;
       totalSelectedUlt += summary.totals.selected_ultimate;
-
-      const isActive = activeBranch?.id === b.id;
       const t = b.triangle;
       let filledCells = 0;
       let totalCells = 0;

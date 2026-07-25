@@ -218,6 +218,7 @@ def agent_chat(req: ChatRequest, _auth: dict = Depends(verify_firebase_token)) -
         actions=[AgentAction(**a) for a in result.actions],
         stopped_reason=result.stopped_reason,
         raw_additions=result.raw_additions,
+        form=result.form,
     )
 
 

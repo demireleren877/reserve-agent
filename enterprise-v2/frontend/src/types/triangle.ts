@@ -63,12 +63,34 @@ export interface AgentAction {
   payload: Record<string, unknown>;
 }
 
+export interface AgentFormOption {
+  value: string;
+  label: string;
+}
+
+export interface AgentFormField {
+  id: string;
+  label: string;
+  type: "select" | "multiselect" | "text" | "number";
+  options?: AgentFormOption[];
+  default?: string | string[] | number | null;
+  hint?: string;
+}
+
+export interface AgentForm {
+  title: string;
+  submit_label?: string;
+  fields: AgentFormField[];
+}
+
 export interface ChatResponse {
   assistant_message: string;
   tool_invocations: ToolInvocation[];
   actions: AgentAction[];
   stopped_reason: string;
   raw_additions: Record<string, unknown>[];
+  // ask_user ile istenen yapısal form — doluysa chat'te tıklanabilir gösterilir.
+  form?: AgentForm | null;
 }
 
 export interface ModelOption {

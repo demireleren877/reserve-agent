@@ -7,6 +7,8 @@ import {
   resetSystemPrompt,
   isAgentConfigured,
   PROVIDER_DEFAULT_BASE_URL,
+  CLOUD_PROVIDERS,
+  DEFAULT_MODEL,
   type LLMProvider,
 } from "@/lib/agent/agent-config";
 import {
@@ -15,10 +17,12 @@ import {
   type ToolModule,
 } from "@/lib/agent/tools-manifest";
 
-// Desktop offline → yalnız lokal, OpenAI-uyumlu endpoint.
+// Lokal (offline) + test/geliştirme için bulut OpenAI-uyumlu sağlayıcılar.
 const PROVIDERS: { id: LLMProvider; label: string; hint: string }[] = [
   { id: "local", label: "Local (Ollama / LM Studio)", hint: "llama3.1  ·  qwen2.5" },
   { id: "custom", label: "Custom endpoint", hint: "model-id" },
+  { id: "openrouter", label: "OpenRouter (bulut)", hint: "anthropic/claude-sonnet-4.6" },
+  { id: "openai", label: "OpenAI (bulut)", hint: "gpt-4.1" },
 ];
 
 type Section = "api" | "prompt" | "tools";
@@ -27,6 +31,7 @@ export function AgentSettings({ onClose }: { onClose: () => void }) {
   const [cfg, update] = useAgentConfig();
   const [section, setSection] = useState<Section>("api");
   const [showKey, setShowKey] = useState(false);
+  const [advanced, setAdvanced] = useState(false);
 
   const grouped = useMemo(() => {
     const g: Record<ToolModule, typeof AGENT_TOOLS> = { reserve: [], cashflow: [], discount: [], data: [], global: [] };
@@ -48,6 +53,7 @@ export function AgentSettings({ onClose }: { onClose: () => void }) {
 
   const providerHint = PROVIDERS.find((p) => p.id === cfg.provider)?.hint ?? "";
   const configured = isAgentConfigured(cfg);
+  const isCloud = CLOUD_PROVIDERS.includes(cfg.provider);
 
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
@@ -78,47 +84,63 @@ export function AgentSettings({ onClose }: { onClose: () => void }) {
           {section === "api" && (
             <>
               <div className="rounded-md border border-[color:var(--border)] bg-[color:var(--surface-alt)]/40 px-3 py-2 text-[10.5px] text-[color:var(--muted)] leading-relaxed">
-                Offline çalışır — LLM makinende/LAN'da OpenAI-uyumlu bir yerel sunucudur
-                (Ollama, LM Studio, llama.cpp). Yalnız <b>Base URL</b> + <b>Model</b> yeterli; API anahtarı çoğu yerel sunucuda opsiyoneldir.
+                {cfg.provider === "openrouter" ? (
+                  <>OpenRouter üzerinden <code>{cfg.model}</code> hazır. Sadece <b>OpenRouter API anahtarını</b> gir.
+                  (İnternet gerekir; anahtar bu cihazda saklanır.)</>
+                ) : isCloud ? (
+                  <>Bulut sağlayıcı (internet gerekir). <b>API anahtarı zorunlu</b>; modeli sağlayıcı formatında gir.</>
+                ) : (
+                  <>Offline — makinendeki/LAN'daki OpenAI-uyumlu yerel sunucu (Ollama, LM Studio). Base URL + Model yeterli; anahtar opsiyonel.</>
+                )}
               </div>
 
-              <Field label="Provider">
-                <div className="grid grid-cols-2 gap-2">
-                  {PROVIDERS.map((p) => (
-                    <button key={p.id} onClick={() => update({ provider: p.id })}
-                      className={`py-2 rounded-md border text-xs font-medium transition ${cfg.provider === p.id ? "border-[color:var(--primary)] bg-[color:var(--primary-soft)] text-[color:var(--primary)]" : "border-[color:var(--border)] hover:bg-[color:var(--surface-alt)]"}`}>
-                      {p.label}
-                    </button>
-                  ))}
-                </div>
-              </Field>
-
-              <Field label="Base URL" hint={`Boş = ${PROVIDER_DEFAULT_BASE_URL[cfg.provider] || "endpoint gir"}`}>
-                <input value={cfg.baseUrl} onChange={(e) => update({ baseUrl: e.target.value })}
-                  placeholder={PROVIDER_DEFAULT_BASE_URL[cfg.provider] || "http://localhost:1234/v1"}
-                  className="input-base w-full font-mono text-xs" />
-              </Field>
-
-              <Field label="API key" hint="Opsiyonel (yerel sunucular genelde istemez). Bu cihazda saklanır.">
+              {/* Ana alan: API key */}
+              <Field label={isCloud ? "API key" : "API key (opsiyonel)"} hint="Bu cihazda saklanır.">
                 <div className="flex gap-2">
                   <input type={showKey ? "text" : "password"} value={cfg.apiKey} onChange={(e) => update({ apiKey: e.target.value })}
-                    placeholder="(boş bırakılabilir)" autoComplete="off"
+                    placeholder={cfg.provider === "openrouter" ? "sk-or-v1-…" : isCloud ? "sk-…" : "(boş bırakılabilir)"} autoComplete="off"
                     className="input-base flex-1 font-mono text-xs" />
                   <button onClick={() => setShowKey((v) => !v)} className="btn text-xs px-3">{showKey ? "Hide" : "Show"}</button>
                 </div>
               </Field>
 
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Model" hint={`ör. ${providerHint}`}>
-                  <input value={cfg.model} onChange={(e) => update({ model: e.target.value })}
-                    placeholder={providerHint} className="input-base w-full font-mono text-xs" />
-                </Field>
-                <Field label="Temperature">
-                  <input type="number" min={0} max={2} step={0.1} value={cfg.temperature}
-                    onChange={(e) => update({ temperature: Number(e.target.value) })}
-                    className="input-base w-full text-xs" />
-                </Field>
+              <div className="text-[11px] text-[color:var(--muted-strong)]">
+                Model: <span className="font-mono text-[color:var(--foreground)]">{cfg.model || "—"}</span>
+                <button onClick={() => setAdvanced((v) => !v)} className="ml-3 underline text-[color:var(--muted)] hover:text-[color:var(--foreground)]">
+                  {advanced ? "Hide advanced" : "Advanced (provider · model · base URL)"}
+                </button>
               </div>
+
+              {advanced && (
+                <div className="space-y-4 border-t pt-4">
+                  <Field label="Provider">
+                    <div className="grid grid-cols-2 gap-2">
+                      {PROVIDERS.map((p) => (
+                        <button key={p.id} onClick={() => update({ provider: p.id, ...(p.id === "openrouter" && !cfg.model.trim() ? { model: DEFAULT_MODEL } : {}) })}
+                          className={`py-2 rounded-md border text-xs font-medium transition ${cfg.provider === p.id ? "border-[color:var(--primary)] bg-[color:var(--primary-soft)] text-[color:var(--primary)]" : "border-[color:var(--border)] hover:bg-[color:var(--surface-alt)]"}`}>
+                          {p.label}
+                        </button>
+                      ))}
+                    </div>
+                  </Field>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="Model" hint={`ör. ${providerHint}`}>
+                      <input value={cfg.model} onChange={(e) => update({ model: e.target.value })}
+                        placeholder={providerHint} className="input-base w-full font-mono text-xs" />
+                    </Field>
+                    <Field label="Temperature">
+                      <input type="number" min={0} max={2} step={0.1} value={cfg.temperature}
+                        onChange={(e) => update({ temperature: Number(e.target.value) })}
+                        className="input-base w-full text-xs" />
+                    </Field>
+                  </div>
+                  <Field label="Base URL" hint={`Boş = ${PROVIDER_DEFAULT_BASE_URL[cfg.provider] || "endpoint gir"}`}>
+                    <input value={cfg.baseUrl} onChange={(e) => update({ baseUrl: e.target.value })}
+                      placeholder={PROVIDER_DEFAULT_BASE_URL[cfg.provider] || "http://localhost:1234/v1"}
+                      className="input-base w-full font-mono text-xs" />
+                  </Field>
+                </div>
+              )}
             </>
           )}
 

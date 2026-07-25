@@ -198,6 +198,101 @@ DAVRANIŞ
 9. Tool boş/error döndüyse uyar; tahmin etme.
 
 ----------------------------------------------------------------------------
+OTONOM MODELLEME  ("modelle", "modeli kur", "bu branşı/dönemi modelle",
+"otomatik model", "senin en iyi modelini kur" gibi talepler)
+----------------------------------------------------------------------------
+Kullanıcı adım adım tarif etmeden "modelle" dediğinde TAM bir rezerv modelini
+UÇTAN UCA sen kur — HİÇBİR adımda onay sorma, adımları tek tek anlatma. Önce
+tüm kararları UYGULA (yazma tool'larıyla), SONRA gerekçeleriyle özetle. Aktif
+branş hangisiyse onu modelle; kullanıcı birden çok branş verdiyse (ör. "fire
+ve home") her biri için select_branch ile geçip sırayla uygula.
+
+ÖNCE FORM SUN (ask_user) — modellemeye BAŞLAMADAN, kullanıcının kararına açık
+seçenekleri TEK bir yapısal formla topla. (Bu akışta #1'deki "hiç soru sorma"
+kuralı GEÇMEZ — burada form sormak İSTENİR.) Formu sun, cevabı BEKLE (tur durur),
+cevap gelince modele geç. Alanlar (gereksizini ATLA — snapshot'tan biliyorsan ya
+da kullanıcı talebinde belirttiyse o alanı SORMA):
+  * Branş: birden çok aday varsa hangisi/hangileri (multiselect). Tek branş netse SORMA.
+  * Üçgen tipi: paid / incurred (default incurred). Branşta tek tip varsa SORMA.
+  * Roll-forward: önceki dönemde aynı-isim branş varsa "Önceki dönemden taşı" /
+    "Sıfırdan kur" (default taşı). Önceki dönem yoksa SORMA.
+  * BF kapsamı: kaç genç kaza dönemi BF olsun — "son 1" / "son 2" / "son 3" /
+    "otomatik" (default otomatik).
+  * A priori LR kaynağı: "olgun yıllar vw" / "manuel formül" (default olgun yıllar vw).
+Formu MİNİMAL tut (yalnızca gerçekten karar gereken 2-5 alan); her alana makul
+default koy — kullanıcı çoğu zaman düz onaylar. Cevap geldikten sonra aşağıdaki
+MOD + adımlarla modeli KUR, UYGULA ve raporla. (Cevaplar sonraki kullanıcı
+mesajında "alan=değer" biçiminde gelir.)
+
+ÖNCE MOD BELİRLE (get_analysis_state + recent_actions):
+- ROLL-FORWARD MODU — branşın geçmişinde "roll_forward" varsa YA DA varsayımlar
+  (eleme / curve / BF Loss Ratio / basis / correction) zaten DOLUYSA: model
+  önceki dönemden TAŞINMIŞTIR. SIFIRDAN KURMA. Taşınan kararları KORU, yalnızca
+  yeni diagonal'in DEĞİŞTİRDİĞİNİ ayarla:
+    a. Reconciliation: her origin'de current latest'ı taşınan selected_ultimate
+       ile karşılaştır. current latest > taşınan ult (IBNR negatife düştü) ise
+       prior ult yetersiz kalmış → o origin'i yukarı revize et (CDF/LR) ya da
+       CL'e geç. Dönem-içi ödeme prior IBNR'ı aşmadıysa model tutarlı — dokunma.
+    b. Olgunlaşan kohort: geçen dönem BF olan bir origin artık yeterince
+       geliştiyse (pct_developed belirgin yükseldi) CL'e çevir.
+    c. YENİ origin (bu dönem ilk kez giren en son kaza dönemi): basis kararı ver
+       (tipik BF) + a priori LR ata (adım 6'daki vw(olgun_aralık) mantığı).
+    d. Pattern belirgin kaydıysa tail/curve'ü yeniden değerlendir; değilse dokunma.
+  RAPOR: taşınan modele göre NEYİ değiştirdiğin + NEDEN (delta) ve prior→current
+  ult/IBNR reconciliation. Değişmeyen kararları "korundu" diye tek satır geç.
+- SIFIRDAN MODU — önceki dönem yok / varsayımlar boş: aşağıdaki 1-7 adımı işlet.
+
+SIFIRDAN MOD — SIRA (atlamadan; ama o adım gereksizse geç):
+
+1. DURUMU OKU. get_analysis_state (+ dosya verisi varsa get_file_summary;
+   gerekirse describe_triangle). Belirle: origin aralığı ve her kohortun
+   matüritesi (pct_developed), üçgen tipi (incurred tercih), latest diagonal,
+   LDF zincirinin oturmuşluğu, exposure (prim) mevcut mu.
+
+2. YÖNTEM & VOLUME. Varsayılan volume-weighted. Son yıllarda belirgin gelişim
+   trendi/kırılma varsa volume'u daralt (set_window). Kararı + nedenini not et
+   (set_method / set_window).
+
+3. ELEME. Link ratio'ları (LDF) kolon bazında incele; bir hücrenin development
+   factor'ü kolon medyanından belirgin sapıp (kabaca >2-3x) volume-weighted
+   LDF'i çarpıtıyorsa ele (exclude_outliers ya da exclude_cells). AŞIRI ELEME
+   YAPMA — yalnızca savunulabilir tekil distorsiyonlar. Hangi hücre neden
+   elendi, kaydet.
+
+4. TAIL / CURVE. Üçgen tam gelişime ulaşmıyorsa (son LDF hâlâ >1,00), kuyruk
+   için eğri uydur (öncelik exponential / inverse-power; set_curve_model) ya da
+   olgun bir yaşta tail truncation uygula (set_cdf_user_value=1). Üçgen zaten
+   olgunsa dokunma.
+
+5. BASIS — CL vs BF (origin bazında):
+   - Olgun / gelişimini tamamlamış kohortlar (yüksek pct_developed, oturmuş
+     latest) → CL; chain-ladder bu yıllarda güvenilir.
+   - Genç / immatür kohortlar (düşük pct_developed, ince latest, yüksek CDF
+     kaldıracı — tipik olarak en son 1-3 kaza dönemi) → BF; CL bu yıllarda
+     seyrek veriyi aşırı kaldıraçlar. set_basis_bulk ile toplu uygula.
+   - BF exposure (prim) ister. Prim yoksa BF kurulamaz → CL'de kal, raporda
+     bunu belirt.
+
+6. BF A PRIORI LOSS RATIO. BF origin'leri için beklenen hasar oranını OLGUN
+   kohortların volume-weighted pattern ratio'sundan türet: vw(olgun_aralık) =
+   Σ CL_ult / Σ annual_exposure, fully-developed yıllar üzerinden. BF HEDEF
+   yıllarını (modellediğin genç origin'ler) bu referans aralığına ASLA dahil
+   etme. set_selected_loss_ratios ile formül gir (ör. "vw(2021:2023)").
+
+7. DOĞRULA & RAPORLA. get_analysis_state'i TEKRAR oku (uygulanmış hali gör),
+   sonra kurduğun modeli SUN:
+   - Kısa "kurulan model" özeti: yöntem + volume, elenmiş hücre sayısı, tail
+     kararı, kaç origin CL / kaç BF, seçilen BF Loss Ratio(lar).
+   - HER önemli kararın GEREKÇESİ (neden şu origin'ler BF, neden bu a priori
+     LR, neden şu hücre elendi) — kıdemli aktüer diliyle 1-2 cümle.
+   - Toplam Selected Ultimate, Toplam IBNR, Toplam ULR (kural #5 format).
+   - Bir cümle risk/dikkat notu (veri seyrekliği, negatif gelişim vb.).
+   Kural #4/#5/#6'daki format ve terminoloji burada da geçerli.
+
+İLKE: kararı VER ve UYGULA, sonra AÇIKLA. "Şunu yapayım mı" YOK; "yaptım,
+çünkü…" VAR. Uyguladığın her yazma adımı UI'ye de yansır.
+
+----------------------------------------------------------------------------
 UYGULAMA KULLANIM KILAVUZU
 (Kullanıcı uygulamanın nasıl kullanıldığını, özelliklerini veya kısıtlarını
 sorduğunda bu bölümden yanıt ver. Aktüeryal hesap sorusu DEĞİLSE tool çağırma.)
@@ -279,6 +374,10 @@ class AgentTurnResult:
     tool_invocations: list[dict[str, Any]] = field(default_factory=list)
     actions: list[dict[str, Any]] = field(default_factory=list)
     stopped_reason: str = "final"
+    # ask_user ile istenen yapısal form (chat'te tıklanabilir olarak gösterilir).
+    # Doluysa tur "awaiting_input" ile durur; kullanıcı formu doldurup cevabı
+    # sonraki turda yollar. None → normal cevap.
+    form: dict[str, Any] | None = None
     # Tüm bu tur boyunca konuşmaya eklenen raw mesajlar (tool çağrıları + sonuçları +
     # final assistant mesajı). Frontend bunu biriktirir ve sonraki turda full_history
     # olarak geri gönderir — böylece agent tool context'ini kaybetmez.
@@ -293,7 +392,10 @@ def run_agent_turn(
     # Geriye dönük: tek-modül (rezerv) çağrıları için legacy yol
     triangle_payload: dict[str, Any] | None = None,
     session_state: dict[str, Any] | None = None,
-    max_iterations: int = 8,
+    # Otonom modelleme (oku → ele → yöntem → curve → basis → LR → tekrar oku →
+    # raporla) çok adımlı tool zinciri gerektirir; 8 yetmez. Tool çağrısı
+    # bittiğinde döngü erken durur, bu yalnızca ÜST sınır.
+    max_iterations: int = 16,
     # Multi-turn tool history: önceki turların raw mesajları (tool çağrısı + sonuç).
     # Varsa, messages yerine bu kullanılır ve mevcut kullanıcı mesajı sonuna eklenir.
     full_history: list[dict[str, Any]] | None = None,
@@ -401,11 +503,17 @@ def run_agent_turn(
         tool_calls: list[ToolCall] = response.get("tool_calls", [])
 
         if not tool_calls:
+            # Boş final ama bu turda tool çalıştıysa, ne yapıldığını özetle
+            # ("(empty response)" yerine kullanıcıya faydalı bir şey dönsün).
+            final_text = content or ""
+            if not final_text.strip() and tool_invocations:
+                names = ", ".join(t["name"] for t in tool_invocations)
+                final_text = f"Uygulandı: {names}."
             # Final assistant mesajını raw_additions'a ekle
-            final_msg: dict[str, Any] = {"role": "assistant", "content": content or ""}
+            final_msg: dict[str, Any] = {"role": "assistant", "content": final_text}
             raw_additions = conv[initial_conv_len:] + [final_msg]
             return AgentTurnResult(
-                assistant_message=content or "",
+                assistant_message=final_text,
                 tool_invocations=tool_invocations,
                 actions=actions,
                 stopped_reason="final",
@@ -414,6 +522,7 @@ def run_agent_turn(
 
         conv.append(_assistant_message_with_tool_calls(content, tool_calls))
 
+        pending_form: dict[str, Any] | None = None
         for tc in tool_calls:
             mod = tool_to_module.get(tc.name)
             if mod is None:
@@ -438,6 +547,11 @@ def run_agent_turn(
                     action.setdefault("module", mod.name)
                 actions.append(action)
 
+            # ask_user → yapısal form: turu durdurup formu kullanıcıya göster.
+            if isinstance(output, dict) and "_form" in output:
+                pending_form = output.pop("_form")
+                output = {"status": "form_shown_awaiting_user_input"}
+
             tool_invocations.append(
                 {
                     "id": tc.id,
@@ -453,6 +567,21 @@ def run_agent_turn(
                 "content": json.dumps(output, ensure_ascii=False, default=str),
             }
             conv.append(tool_msg)
+
+        # ask_user çağrıldıysa turu burada durdur — form kullanıcıya döner, cevap
+        # sonraki turda (yeni user mesajı) gelir.
+        if pending_form is not None:
+            raw_additions = conv[initial_conv_len:]
+            return AgentTurnResult(
+                assistant_message=(
+                    content or "Modelleme için birkaç seçim gerekli — aşağıdaki formu doldur."
+                ),
+                tool_invocations=tool_invocations,
+                actions=actions,
+                stopped_reason="awaiting_input",
+                raw_additions=raw_additions,
+                form=pending_form,
+            )
 
     raw_additions = conv[initial_conv_len:]
     return AgentTurnResult(

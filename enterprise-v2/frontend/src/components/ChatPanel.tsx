@@ -8,7 +8,7 @@ import {
   type ReactNode,
   type KeyboardEvent,
 } from "react";
-import type { AgentAction, ChatMessage, ModelOption } from "@/types/triangle";
+import type { AgentAction, ChatMessage, ModelOption, AgentForm } from "@/types/triangle";
 import {
   chatWithAgent,
   listModels,
@@ -58,6 +58,8 @@ export function ChatPanel({
   const [error, setError] = useState<string | null>(null);
   const [models, setModels] = useState<ModelOption[]>([]);
   const [model, setModel] = useState<string>("");
+  // ask_user ile gelen aktif form (doldurulup gönderilene kadar chat'te durur).
+  const [pendingForm, setPendingForm] = useState<AgentForm | null>(null);
   const [modelsLoading, setModelsLoading] = useState(true);
   const [modelsError, setModelsError] = useState<string | null>(null);
   const [fullHistory, setFullHistory] = useState<RawMessage[]>([]);
@@ -147,6 +149,7 @@ export function ChatPanel({
   async function dispatchSend(prompt: string) {
     if (!prompt.trim() || loading) return;
     setError(null);
+    setPendingForm(null); // yeni mesaj → varsa eski formu kapat
     const userMsg: ChatMessage = { role: "user", content: prompt };
     const newMessages = [...messages, userMsg];
     setMessages(newMessages);
@@ -172,6 +175,8 @@ export function ChatPanel({
         { role: "assistant", content: body.trim() },
       ];
       setMessages(finalMessages);
+      // ask_user formu geldiyse chat'te tıklanabilir olarak göster.
+      if (resp.form?.fields?.length) setPendingForm(resp.form);
 
       let nextHist = fullHistory;
       if (resp.raw_additions?.length) {
@@ -195,6 +200,20 @@ export function ChatPanel({
       e.preventDefault();
       dispatchSend(input);
     }
+  }
+
+  // Form gönderildi → cevapları okunur bir mesaja çevir, agent modele devam etsin.
+  function submitAgentForm(
+    form: AgentForm,
+    answers: Record<string, string | string[]>,
+  ) {
+    const lines = form.fields.map((f) => {
+      const v = answers[f.id];
+      const disp = Array.isArray(v) ? v.join(", ") : v ?? "";
+      return `- ${f.label} (${f.id}): ${disp}`;
+    });
+    setPendingForm(null);
+    dispatchSend(`Form yanıtları:\n${lines.join("\n")}`);
   }
 
   const freqLabel =
@@ -387,6 +406,13 @@ export function ChatPanel({
               {messages.map((m, i) => (
                 <MessageBubble key={i} message={m} />
               ))}
+              {pendingForm && !loading && (
+                <AgentFormCard
+                  key={pendingForm.title + pendingForm.fields.length}
+                  form={pendingForm}
+                  onSubmit={(ans) => submitAgentForm(pendingForm, ans)}
+                />
+              )}
               {loading && <TypingIndicator />}
               {error && (
                 <div className="text-xs text-[color:var(--danger)] bg-[color:var(--danger-soft)] border border-[color:var(--danger-soft)] rounded-lg px-3 py-2">
@@ -430,6 +456,106 @@ export function ChatPanel({
 }
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
+
+// ask_user formu — chat içi tıklanabilir seçim/giriş kartı.
+function AgentFormCard({
+  form,
+  onSubmit,
+}: {
+  form: AgentForm;
+  onSubmit: (answers: Record<string, string | string[]>) => void;
+}) {
+  const [vals, setVals] = useState<Record<string, string | string[]>>(() => {
+    const init: Record<string, string | string[]> = {};
+    for (const f of form.fields) {
+      if (f.type === "multiselect") {
+        init[f.id] = Array.isArray(f.default)
+          ? f.default.map(String)
+          : f.default != null
+          ? [String(f.default)]
+          : [];
+      } else if (f.default != null) {
+        init[f.id] = String(f.default);
+      } else {
+        init[f.id] = f.type === "select" && f.options?.length ? f.options[0].value : "";
+      }
+    }
+    return init;
+  });
+  const [submitted, setSubmitted] = useState(false);
+
+  const setVal = (id: string, v: string | string[]) =>
+    setVals((prev) => ({ ...prev, [id]: v }));
+  const toggleMulti = (id: string, v: string) =>
+    setVals((prev) => {
+      const cur = Array.isArray(prev[id]) ? (prev[id] as string[]) : [];
+      return { ...prev, [id]: cur.includes(v) ? cur.filter((x) => x !== v) : [...cur, v] };
+    });
+
+  return (
+    <div className="rounded-2xl border border-[color:var(--border)] bg-[color:var(--surface-alt)] px-4 py-3 space-y-3">
+      <div className="text-sm font-semibold">{form.title}</div>
+      {form.fields.map((f) => (
+        <div key={f.id} className="space-y-1.5">
+          <div className="text-xs font-medium text-[color:var(--muted)]">{f.label}</div>
+          {f.hint && <div className="text-[11px] text-[color:var(--muted)]">{f.hint}</div>}
+
+          {(f.type === "select" || f.type === "multiselect") && f.options && (
+            <div className="flex flex-wrap gap-1.5">
+              {f.options.map((o) => {
+                const active =
+                  f.type === "multiselect"
+                    ? Array.isArray(vals[f.id]) && (vals[f.id] as string[]).includes(o.value)
+                    : vals[f.id] === o.value;
+                return (
+                  <button
+                    key={o.value}
+                    type="button"
+                    disabled={submitted}
+                    onClick={() =>
+                      f.type === "multiselect"
+                        ? toggleMulti(f.id, o.value)
+                        : setVal(f.id, o.value)
+                    }
+                    className={
+                      "text-xs px-3 py-1.5 rounded-full border transition-colors " +
+                      (active
+                        ? "bg-[color:var(--primary)] text-white border-[color:var(--primary)]"
+                        : "bg-[color:var(--surface)] border-[color:var(--border)] hover:border-[color:var(--primary)]")
+                    }
+                  >
+                    {o.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {(f.type === "text" || f.type === "number") && (
+            <input
+              type={f.type === "number" ? "number" : "text"}
+              disabled={submitted}
+              value={(vals[f.id] as string) ?? ""}
+              onChange={(e) => setVal(f.id, e.target.value)}
+              className="input-base text-sm w-full"
+            />
+          )}
+        </div>
+      ))}
+      <button
+        type="button"
+        disabled={submitted}
+        onClick={() => {
+          setSubmitted(true);
+          onSubmit(vals);
+        }}
+        className="btn btn-primary text-xs px-4 py-1.5"
+      >
+        {form.submit_label || "Gönder"}
+      </button>
+    </div>
+  );
+}
 
 function MessageBubble({ message }: { message: ChatMessage }) {
   const isUser = message.role === "user";

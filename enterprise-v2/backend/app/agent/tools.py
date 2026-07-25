@@ -625,7 +625,11 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
         "function": {
             "name": "run_chain_ladder",
             "description": (
-                "SENARYO: CL alternatif parametrelerle. Mevcut seçimi değiştirmez."
+                "CL ultimate/reserve. Parametre VERMEZSEN kullanıcının YAPILANDIRDIĞI "
+                "modeli döndürür (curve modeli / CDF override / cascade / hücre-eleme "
+                "dahil) — UI'de görünenle aynı; 'ultimate/IBNR ne' sorusunda bunu kullan. "
+                "method/n_years/excluded_origins/ldf_override verirsen ALTERNATİF senaryo "
+                "hesaplar (ham CL, mevcut seçimi değiştirmez)."
             ),
             "parameters": {
                 "type": "object",
@@ -1048,6 +1052,56 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "ask_user",
+            "description": (
+                "Kullanıcıdan YAPISAL girdi iste — chat'te tıklanabilir form olarak "
+                "gösterilir (radio / çoklu-seçim / açılır liste / metin). Formu "
+                "gönderene kadar tur DURUR; cevaplar sonraki kullanıcı mesajında gelir. "
+                "SADECE gerçekten kullanıcı kararı gereken şeyleri sor (hangi branş(lar), "
+                "üçgen tipi paid/incurred, roll-forward kaynağı, BF kapsamı/oranı gibi). "
+                "Otonom karar verebileceğin şeyi SORMA. En fazla 5-6 alan. Her alana makul "
+                "bir 'default' koy ki kullanıcı hızlı onaylasın."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string", "description": "Form başlığı, ör. 'Home Q2 — Modelleme ayarları'"},
+                    "submit_label": {"type": "string", "description": "Gönder butonu metni, ör. 'Modellemeye başla'"},
+                    "fields": {
+                        "type": "array",
+                        "description": "Sorulacak alanlar (en fazla 6).",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "id": {"type": "string", "description": "Makine anahtarı, ör. 'triangle_type'"},
+                                "label": {"type": "string", "description": "Kullanıcıya görünen etiket"},
+                                "type": {"type": "string", "enum": ["select", "multiselect", "text", "number"]},
+                                "options": {
+                                    "type": "array",
+                                    "description": "select/multiselect için seçenekler",
+                                    "items": {
+                                        "type": "object",
+                                        "properties": {
+                                            "value": {"type": "string"},
+                                            "label": {"type": "string"},
+                                        },
+                                        "required": ["value", "label"],
+                                    },
+                                },
+                                "default": {"description": "Varsayılan değer (string | string[] | number)"},
+                                "hint": {"type": "string", "description": "Opsiyonel kısa açıklama"},
+                            },
+                            "required": ["id", "label", "type"],
+                        },
+                    },
+                },
+                "required": ["title", "fields"],
+            },
+        },
+    },
 ]
 
 
@@ -1350,7 +1404,7 @@ def dispatch_tool(
     if name == "simulate_bf_formula":
         return _simulate_bf_formula(session_state, args)
     if name == "run_chain_ladder":
-        return _run_chain_ladder(triangle, args)
+        return _run_chain_ladder(triangle, args, session_state)
     if name == "simulate_frequency_severity":
         return _simulate_frequency_severity(triangle, count_triangle, args)  # type: ignore[arg-type]
     if name == "get_ilr_triangle":
@@ -1439,6 +1493,8 @@ def dispatch_tool(
         if module not in valid:
             return {"error": f"Geçersiz module: {module}. Seçenekler: {valid}"}
         return {"module": module, "_action": {"type": "navigate_to", "payload": {"module": module}, "module": "navigation"}}
+    if name == "ask_user":
+        return _ask_user(args)
     raise KeyError(f"Tool bulunamadı: {name}")
 
 
@@ -2581,7 +2637,105 @@ def _simulate_frequency_severity(
     return result.summary()
 
 
-def _run_chain_ladder(triangle: Triangle, args: dict[str, Any]) -> dict[str, Any]:
+_ASK_FIELD_TYPES = {"select", "multiselect", "text", "number"}
+
+
+def _ask_user(args: dict[str, Any]) -> dict[str, Any]:
+    """Yapısal form isteğini doğrula ve `_form` olarak döndür — loop turu durdurur."""
+    title = str(args.get("title", "") or "").strip() or "Seçim gerekli"
+    submit_label = str(args.get("submit_label", "") or "").strip() or "Gönder"
+    raw_fields = args.get("fields")
+    if not isinstance(raw_fields, list) or not raw_fields:
+        return {"error": "ask_user: en az bir alan (fields) gerekli."}
+
+    fields: list[dict[str, Any]] = []
+    for i, f in enumerate(raw_fields):
+        if not isinstance(f, dict):
+            continue
+        fid = str(f.get("id", "") or "").strip() or f"field_{i}"
+        label = str(f.get("label", "") or "").strip() or fid
+        ftype = str(f.get("type", "") or "").strip()
+        if ftype not in _ASK_FIELD_TYPES:
+            ftype = "text"
+        clean: dict[str, Any] = {"id": fid, "label": label, "type": ftype}
+        if ftype in ("select", "multiselect"):
+            opts: list[dict[str, str]] = []
+            for o in f.get("options", []) or []:
+                if isinstance(o, dict) and o.get("value") is not None:
+                    opts.append(
+                        {"value": str(o.get("value")), "label": str(o.get("label", o.get("value")))}
+                    )
+                elif o is not None:  # düz string listesi de kabul et
+                    opts.append({"value": str(o), "label": str(o)})
+            if not opts:  # seçenek yoksa metne düş
+                clean["type"] = "text"
+            else:
+                clean["options"] = opts
+        if f.get("default") is not None:
+            clean["default"] = f["default"]
+        if f.get("hint"):
+            clean["hint"] = str(f["hint"])
+        fields.append(clean)
+
+    if not fields:
+        return {"error": "ask_user: geçerli alan yok."}
+
+    return {"_form": {"title": title, "submit_label": submit_label, "fields": fields[:6]}}
+
+
+def _run_chain_ladder(
+    triangle: Triangle | None,
+    args: dict[str, Any],
+    session_state: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    # ── VARSAYILAN: kullanıcının YAPILANDIRDIĞI modeli döndür ──
+    # Parametre verilmezse, agent "mevcut ultimate/IBNR ne" demek istiyordur.
+    # Ham triangle'dan yeniden hesap curve modeli / CDF override / cascade / karma /
+    # hücre-eleme AYARLARINI GÖRMEZDEN gelir → UI'de görünen sayılarla SAPMA olur
+    # ("ultimate full yanlış"). Snapshot (per_origin) bu ayarların HEPSİNİ içerir:
+    # cdf = efektif kümülatif faktör, cl_ultimate = latest × efektif cdf.
+    has_scenario = any(
+        args.get(k) is not None
+        for k in ("method", "n_years", "excluded_origins", "ldf_override")
+    )
+    per = (session_state or {}).get("per_origin") or []
+    if not has_scenario and per:
+        origins: list[str] = []
+        latest_per_origin: list[float] = []
+        cdfs: list[float] = []
+        ultimate_per_origin: list[float] = []
+        for row in per:
+            lat = float(row.get("latest", 0) or 0)
+            cdf = float(row.get("cdf", 1) or 1)
+            cl_raw = row.get("cl_ultimate", row.get("cl_ult"))
+            cl = float(cl_raw) if cl_raw is not None else lat * cdf
+            origins.append(str(row.get("origin", "")))
+            latest_per_origin.append(lat)
+            cdfs.append(cdf)
+            ultimate_per_origin.append(cl)
+        reserve_per_origin = [u - l for u, l in zip(ultimate_per_origin, latest_per_origin, strict=True)]
+        return {
+            "method": "configured",
+            "source": "configured_model",
+            "note": (
+                "Kullanıcının yapılandırdığı model (curve modeli / CDF override / "
+                "cascade / hücre-eleme dahil) — UI'de görünenle aynı. Alternatif "
+                "senaryo için method/n_years/excluded_origins/ldf_override ver."
+            ),
+            "n_origins": len(origins),
+            "origin_periods": origins,
+            "latest_per_origin": latest_per_origin,
+            "cdfs": cdfs,
+            "ultimate_per_origin": ultimate_per_origin,
+            "reserve_per_origin": reserve_per_origin,
+            "total_latest": sum(latest_per_origin),
+            "total_ultimate": sum(ultimate_per_origin),
+            "total_reserve": sum(reserve_per_origin),
+        }
+
+    # ── SENARYO: alternatif parametrelerle ham CL (mevcut seçimi değiştirmez) ──
+    if triangle is None:
+        return {"error": "Aktif branş yok — senaryo için üçgen gerekli."}
     method_str = args.get("method", LDFMethod.VOLUME_WEIGHTED.value)
     try:
         method = LDFMethod(method_str)
@@ -2601,4 +2755,6 @@ def _run_chain_ladder(triangle: Triangle, args: dict[str, Any]) -> dict[str, Any
     except ValueError as e:
         return {"error": str(e)}
 
-    return result.summary()
+    out = result.summary()
+    out["source"] = "scenario_recompute"
+    return out

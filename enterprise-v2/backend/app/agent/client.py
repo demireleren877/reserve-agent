@@ -60,7 +60,12 @@ class AgentClient:
             payload["tools"] = tools
             payload["tool_choice"] = "auto"
 
-        headers = {"Content-Type": "application/json"}
+        headers = {
+            "Content-Type": "application/json",
+            # OpenRouter opsiyonel metadata (zararsız; diğer sunucular yok sayar)
+            "HTTP-Referer": "http://localhost",
+            "X-Title": "Actuarius Enterprise",
+        }
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
 
@@ -68,7 +73,25 @@ class AgentClient:
             resp = client.post(
                 f"{self.base_url}/chat/completions", json=payload, headers=headers
             )
-            resp.raise_for_status()
+            if resp.status_code >= 400:
+                # Gerçek sebep yanıt gövdesindedir. OpenRouter alttaki sağlayıcı
+                # hatasını error.metadata.raw içinde saklar ("Provider returned error").
+                detail: Any = resp.text
+                try:
+                    j = resp.json()
+                    err = j.get("error")
+                    if isinstance(err, dict):
+                        msg = str(err.get("message") or "")
+                        meta = err.get("metadata") or {}
+                        raw = ""
+                        if isinstance(meta, dict):
+                            raw = str(meta.get("raw") or meta.get("provider_name") or "")
+                        detail = f"{msg} — {raw}".strip(" —") if raw else (msg or err)
+                    elif err:
+                        detail = err
+                except Exception:
+                    pass
+                raise RuntimeError(f"LLM {resp.status_code}: {str(detail)[:800]}")
             data = resp.json()
 
         choices = data.get("choices") or []
@@ -76,6 +99,18 @@ class AgentClient:
             return {"content": None, "tool_calls": []}
         msg = choices[0].get("message") or {}
         content = msg.get("content")
+        # Bazı sağlayıcılar (ör. Gemini) content'i parça listesi döndürebilir.
+        if isinstance(content, list):
+            content = "".join(
+                p.get("text", "") for p in content if isinstance(p, dict)
+            )
+        # Reasoning modelleri (DeepSeek vb.) cevabı reasoning alanında dönebilir → düş.
+        if not content:
+            content = (
+                msg.get("reasoning_content")
+                or msg.get("reasoning")
+                or choices[0].get("reasoning")
+            )
 
         tool_calls: list[ToolCall] = []
         for tc in msg.get("tool_calls") or []:

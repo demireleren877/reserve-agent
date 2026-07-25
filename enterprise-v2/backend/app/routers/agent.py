@@ -44,11 +44,15 @@ class ChatRequest(BaseModel):
 
 
 class ChatResponse(BaseModel):
-    message: str
+    # NOT: frontend `assistant_message` alanını okur (web ile aynı şema) — `message` DEĞİL.
+    assistant_message: str
     actions: list[dict[str, Any]] = []
     tool_invocations: list[dict[str, Any]] = []
+    stopped_reason: str = "final"
     # Frontend biriktirip sonraki turda full_history olarak geri gönderir.
     raw_additions: list[dict[str, Any]] = []
+    # ask_user ile istenen yapısal form (doluysa chat'te tıklanabilir gösterilir).
+    form: dict[str, Any] | None = None
 
 
 @router.post("/agent/chat", response_model=ChatResponse)
@@ -80,10 +84,12 @@ def agent_chat(body: ChatRequest, _user: CurrentUser) -> ChatResponse:
         raise HTTPException(status_code=502, detail=f"agent_error: {e}") from e
 
     return ChatResponse(
-        message=result.assistant_message,
+        assistant_message=result.assistant_message,
         actions=result.actions,
         tool_invocations=result.tool_invocations,
+        stopped_reason=result.stopped_reason,
         raw_additions=result.raw_additions,
+        form=result.form,
     )
 
 

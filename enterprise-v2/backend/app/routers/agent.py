@@ -62,6 +62,7 @@ def agent_chat(body: ChatRequest, _user: CurrentUser) -> ChatResponse:
         api_key=cfg.api_key.strip() or "local",
         model=cfg.model.strip(),
         base_url=cfg.base_url.strip() or None,
+        temperature=cfg.temperature,
     )
 
     try:

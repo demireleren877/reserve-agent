@@ -12,9 +12,9 @@ import { SummaryTab } from "@/components/SummaryTab";
 import { ILRTab } from "@/components/ILRTab";
 import { FrequencySeverityTab } from "@/components/FrequencySeverityTab";
 import { FileAnalysisTab } from "@/components/FileAnalysisTab";
-import { Breadcrumb } from "@/components/ProjectNav";
+import { BranchLogsButton } from "@/components/ProjectNav";
 import { ModelTabs } from "@/components/ModelTabs";
-import { FolderBrowser } from "@/components/FolderBrowser";
+import { ProjectSidebar } from "@/components/ProjectSidebar";
 import { ModelLockBanner } from "@/components/ModelLockBanner";
 import { useModelLock } from "@/lib/use-model-lock";
 import { useBranchSetters, useProject } from "@/lib/project-store";
@@ -32,6 +32,7 @@ import {
 } from "@/lib/large-split";
 import {
   aggregateLDFs,
+  applyAvgPairs,
   cascadeCDFs,
   cumulativeFactors,
   developmentRatios,
@@ -301,6 +302,15 @@ export default function Home() {
 
   const method = (pb?.method ?? "volume_weighted") as LDFMethod;
   const window: Window = pb?.window ?? "all";
+
+  // Önceki dönemin CDF'leri (Curve sayfasında referans kolon). Prior üçgen + GÜNCEL
+  // window/method ile seçili LDF → kümülatif; aynı seçim tabanında pattern kıyası.
+  const priorCDFs = useMemo(() => {
+    const t = priorLDFRef?.triangle;
+    if (!t) return null;
+    return cumulativeFactors(aggregateLDFs(t, developmentRatios(t, new Set<string>()), window, method));
+  }, [priorLDFRef, window, method]);
+
   const premiums = effectivePremiums;
   const lrInputPerOrigin = pb?.lrInputPerOrigin ?? {};
   const basisPerOrigin = pb?.basisPerOrigin ?? {};
@@ -340,9 +350,12 @@ export default function Home() {
     guardedSetters.setExcludedCells(excludedCells);
   }, [triangle, activeBranch, rawExcluded, excludedCells, guardedSetters]);
 
+  // LDF yumuşatma çiftleri (aynı satırda j,j+1 ortalaması) — segment-farkında, versiyonlu.
+  const avgPairs = useMemo(() => new Set(pb?.ldfAvgPairs ?? []), [pb?.ldfAvgPairs]);
+
   const ratios = useMemo(
-    () => (triangle ? developmentRatios(triangle, excludedCells) : []),
-    [triangle, excludedCells],
+    () => (triangle ? applyAvgPairs(developmentRatios(triangle, excludedCells), avgPairs, triangle.origin_periods) : []),
+    [triangle, excludedCells, avgPairs],
   );
 
   const selectedLDFs = useMemo(() => {
@@ -924,9 +937,14 @@ export default function Home() {
   if (navLevel !== "branch" || !activeBranch) {
     return (
       <Shell>
-        <main className="p-6">
-          <FolderBrowser />
-        </main>
+        <div className="h-[calc(100vh-3.5rem)] grid place-items-center text-center px-6">
+          <div className="max-w-sm">
+            <div className="text-sm font-medium text-[color:var(--foreground)]">Select a model</div>
+            <p className="text-xs text-[color:var(--muted)] mt-1.5 leading-relaxed">
+              Pick a version from the left, or create a period / branch / version to start.
+            </p>
+          </div>
+        </div>
       </Shell>
     );
   }
@@ -1068,12 +1086,14 @@ export default function Home() {
             triangle={triangle}
             window={window}
             excludedCells={excludedCells}
+            avgPairs={avgPairs}
             cdfsOverride={initialCDFs}
             karmaWindowPerStep={pb?.karmaWindowPerStep ?? {}}
             fileData={effFileData}
             prior={priorLDFRef}
             onWindowChange={guardedSetters.setWindow}
             onToggleCell={toggleCellHandler}
+            onToggleAvgPair={guardedSetters.toggleAvgPair}
             onClearCells={() => setExcludedCellsHandler(new Set())}
             onSetExcluded={setExcludedCellsHandler}
             onSetKarmaWindow={guardedSetters.setKarmaWindow}
@@ -1087,6 +1107,8 @@ export default function Home() {
             initialCDFs={initialCDFs}
             effectiveCdfs={cascade.effective}
             selectedLDFs={selectedLDFs}
+            priorCDFs={priorCDFs}
+            priorLabel={priorLDFRef?.label}
             cdfInitial={cdfInitial}
             cdfModelPerPeriod={cdfModelPerPeriod}
             curveIncludePerPeriod={curveIncludePerPeriod}
@@ -1267,9 +1289,24 @@ function ToggleToast({
   );
 }
 
+/** Reserve modülü sidebar'ı — store'un aktif model durumunu sürer. */
+function ReserveSidebar() {
+  const { activePeriod, activeBranch, activeVersion, navLevel, actions } = useProject();
+  return (
+    <ProjectSidebar
+      nav={{
+        selectedPeriodId: activePeriod?.id ?? null,
+        selectedBranchId: activeBranch?.id ?? null,
+        selectedVersionId: activeVersion?.id ?? null,
+        branchActive: navLevel === "branch",
+        onOpen: (p, b, v) => actions.openVersion(p, b, v),
+      }}
+    />
+  );
+}
+
 function Shell({
   children,
-  onUploaded,
 }: {
   children: React.ReactNode;
   onUploaded?: () => void;
@@ -1286,9 +1323,15 @@ function Shell({
         <div className="h-6 w-px bg-[color:var(--border)] shrink-0" />
         {/* Açık modeller — tarayıcı sekmesi gibi */}
         <ModelTabs />
+        {/* Aktif model logları (breadcrumb kaldırıldı; sidebar yolu gösteriyor) */}
+        <div className="ml-auto flex items-center">
+          <BranchLogsButton />
+        </div>
       </header>
-      <Breadcrumb onUploaded={onUploaded} />
-      {children}
+      <div className="flex">
+        <ReserveSidebar />
+        <div className="flex-1 min-w-0">{children}</div>
+      </div>
     </div>
   );
 }

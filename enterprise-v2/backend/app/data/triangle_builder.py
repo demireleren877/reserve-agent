@@ -251,10 +251,16 @@ def build_triangles(
             development_granularity=dev_gran,
         )
 
-    # ── Dosya bazlı kümülatif ödeme (file_data) ───────────────────────────────
-    # {origin_label: {dev_label: {dosya_no: cum_paid}}}
+    # ── Dosya bazlı kümülatif ödeme + güncel muallak (file_data) ───────────────
+    # {origin_label: {dev_label: {dosya_no: {"p": cum_paid, "o": muallak}}}}
+    # Geriye uyum: eski istemcilerde leaf sadece sayı (cum_paid) olabilir; frontend
+    # her iki şekli de okur (filePaid/fileOs).
     dosya_inc: dict[tuple[str, str], dict[str, float]] = {}
     dosya_d_seq: dict[tuple[str, str], int] = {}
+    # (o_lbl, d_lbl) → {dosya: (exact_d_seq, muallak)}: hücrede dosyanın EN SON (exact
+    # tarih) muallağı; aynı exact tarihte (ör. currency kırılımı) TOPLANIR — cell muallak
+    # mantığıyla (_latest_muallak) tutarlı.
+    dosya_os: dict[tuple[str, str], dict[str, tuple[int, float]]] = {}
 
     for r in filtered:
         dosya_no = str(r.get("dosya_no", "")).strip()
@@ -263,16 +269,24 @@ def build_triangles(
         try:
             o_lbl, _ = _parse_period(str(r["hasar_tarihi"]), orig_gran)
             d_lbl, d_seq = _parse_period(str(r["gelisim_tarihi"]), dev_gran)
+            _, d_seq_exact = _parse_period(str(r["gelisim_tarihi"]), Granularity.QUARTERLY)
         except ValueError:
             continue
         key = (o_lbl, d_lbl)
         cell = dosya_inc.setdefault(key, {})
         cell[dosya_no] = cell.get(dosya_no, 0.0) + float(r.get("odeme") or 0)
         dosya_d_seq[key] = d_seq
+        os_cell = dosya_os.setdefault(key, {})
+        mual_val = float(r.get("muallak") or 0)
+        prev = os_cell.get(dosya_no)
+        if prev is None or d_seq_exact > prev[0]:
+            os_cell[dosya_no] = (d_seq_exact, mual_val)
+        elif d_seq_exact == prev[0]:
+            os_cell[dosya_no] = (prev[0], prev[1] + mual_val)
 
     file_data: dict | None = None
     if dosya_inc:
-        fd: dict[str, dict[str, dict[str, float]]] = {}
+        fd: dict[str, dict[str, dict[str, dict[str, float]]]] = {}
         for o_lbl in origin_periods:
             cells = sorted(
                 (
@@ -282,12 +296,18 @@ def build_triangles(
                 ),
                 key=lambda x: x[1],
             )
-            cum: dict[str, float] = {}
+            cum: dict[str, float] = {}      # kümülatif ödeme
+            cur_os: dict[str, float] = {}   # dosyanın en son bildirilen muallağı (stok)
             fd[o_lbl] = {}
             for d_lbl, _, vals in cells:
                 for dosya_no, inc in vals.items():
                     cum[dosya_no] = cum.get(dosya_no, 0.0) + inc
-                fd[o_lbl][d_lbl] = dict(cum)
+                for dosya_no, (_, mual) in dosya_os.get((o_lbl, d_lbl), {}).items():
+                    cur_os[dosya_no] = mual
+                fd[o_lbl][d_lbl] = {
+                    dosya_no: {"p": cum[dosya_no], "o": cur_os.get(dosya_no, 0.0)}
+                    for dosya_no in cum
+                }
         file_data = fd
 
     return paid_tri, incurred_tri, count_tri, file_data
@@ -455,7 +475,21 @@ def roll_forward(
     new_paid_tri = _extend(prior_paid, new_paid_val)
     new_incurred_tri = _extend(prior_incurred, new_incurred_val) if prior_incurred else None
 
-    # Yeni diagonalin dosya kırılımı (artımsal ödeme) — frontend dev etiketiyle eşler
-    new_diagonal_files = {o: dict(d) for o, d in file_new.items() if d} or None
+    # Yeni diagonalin dosya kırılımı: {origin: {dosya: {"p": artımsal ödeme, "o": güncel muallak}}}
+    # Frontend bunu base kümülatif snapshot'ına ekler (p += artımsal, o = güncel stok).
+    # Ödemesi olmayıp yalnız muallağı olan dosyalar da dahil (latest_mual birleşimi).
+    new_diagonal_files_po: dict[str, dict[str, dict[str, float]]] = {}
+    for o in set(file_new) | set(latest_mual):
+        keys = set(file_new.get(o, {})) | set(latest_mual.get(o, {}))
+        cell = {
+            dosya: {
+                "p": file_new.get(o, {}).get(dosya, 0.0),
+                "o": latest_mual.get(o, {}).get(dosya, (0, 0.0))[1],
+            }
+            for dosya in keys
+        }
+        if cell:
+            new_diagonal_files_po[o] = cell
+    new_diagonal_files = new_diagonal_files_po or None
 
     return new_paid_tri, new_incurred_tri, new_diagonal_files

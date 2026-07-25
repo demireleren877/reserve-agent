@@ -12,6 +12,9 @@ interface Props {
   initialCDFs: number[];
   effectiveCdfs?: number[];
   selectedLDFs: number[];
+  /** Önceki dönemin CDF'leri (referans kolon). Dev step index'ine göre hizalanır. */
+  priorCDFs?: number[] | null;
+  priorLabel?: string;
   cdfInitial: Record<string, number>;
   cdfModelPerPeriod: Record<string, 1 | 2 | 3 | 4 | 5 | 6>;
   curveIncludePerPeriod: Record<string, boolean>;
@@ -32,6 +35,8 @@ export function CurveTab({
   initialCDFs,
   effectiveCdfs,
   selectedLDFs,
+  priorCDFs,
+  priorLabel,
   cdfInitial,
   cdfModelPerPeriod,
   curveIncludePerPeriod,
@@ -214,6 +219,12 @@ export function CurveTab({
                 <th className="text-right px-2 py-1.5 font-semibold w-[90px]">User Value</th>
                 <th className="text-right px-2 py-1.5 font-semibold w-[90px]">Selected</th>
                 <th className="text-right px-2 py-1.5 font-semibold w-[90px]">Cumul CDF</th>
+                {priorCDFs && (
+                  <th className="text-right px-2 py-1.5 font-semibold w-[90px] text-[color:var(--muted)]"
+                    title={priorLabel ? `Prior period: ${priorLabel}` : undefined}>
+                    Prior CDF{priorLabel ? ` · ${priorLabel}` : ""}
+                  </th>
+                )}
                 <th className="text-right px-2 py-1.5 font-semibold w-[70px]">Cumul%</th>
                 <th className="text-right px-2 py-1.5 font-semibold w-[70px]">Incr%</th>
               </tr>
@@ -276,6 +287,13 @@ export function CurveTab({
                   <td className="text-right px-2 py-0.5 text-[12px]">
                     {formatFactor(displayCdfs[rowIdx])}
                   </td>
+
+                  {/* Prior CDF (referans) */}
+                  {priorCDFs && (
+                    <td className="text-right px-2 py-0.5 text-[11px] text-[color:var(--muted)]">
+                      {priorCDFs[r.i] != null ? formatFactor(priorCDFs[r.i]) : "—"}
+                    </td>
+                  )}
 
                   {/* Cumul% */}
                   <td className="text-right px-2 py-0.5 text-[11px] text-[color:var(--muted-strong)]">

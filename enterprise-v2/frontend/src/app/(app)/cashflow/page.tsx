@@ -8,6 +8,7 @@ import { useUserPlan } from "@/lib/auth/user-plan-context";
 import { useProject } from "@/lib/project-store";
 import { useModelLock } from "@/lib/use-model-lock";
 import { ModelLockBanner } from "@/components/ModelLockBanner";
+import { ProjectSidebar, type SidebarNav } from "@/components/ProjectSidebar";
 import type { Branch, Period } from "@/types/project";
 import type { Triangle } from "@/types/triangle";
 import { LDFTab } from "@/components/LDFTab";
@@ -937,18 +938,21 @@ export default function CashflowPage() {
     setError(null);
   }
 
-  async function goToBranch(branchId: string) {
-    const period = periodsWithPaid.find((p) => p.id === activePeriodId);
+  /** Sidebar'dan: dönem+branş+versiyonu aç. Versiyon verilirse o branşın versiyonuna geçer
+   *  (cashflow assumption'ları da o versiyondan gelir), sonra paid üçgeninden hesaplar. */
+  async function openCashflowBranch(periodId: string, branchId: string, versionId?: string) {
+    const period = periodsWithPaid.find((p) => p.id === periodId);
     const branch = period?.paidBranches.find((b) => b.id === branchId);
     if (!branch?.paidTriangle) return;
+    if (versionId) actions.switchBranchVersion(periodId, branchId, versionId);
 
+    setActivePeriodId(periodId);
     setActiveBranchId(branchId);
     setNavLevel("branch");
     setComputingBranchId(branchId);
     setLoading(true);
     setError(null);
     setResult(null);
-    // LDF state useEffect ile localStorage'dan yükleniyor
     try {
       const reportDate = period?.label ? periodLabelToReportDate(period.label) : undefined;
       const r = await computeCashflowFromTriangle(branch.paidTriangle, 5, reportDate);
@@ -1003,6 +1007,15 @@ export default function CashflowPage() {
     );
   }
 
+  const cashflowNav: SidebarNav = {
+    selectedPeriodId: activePeriodId,
+    selectedBranchId: activeBranchId,
+    selectedVersionId: activeBranch?.activeVersionId ?? null,
+    branchActive: navLevel === "branch",
+    onOpen: (p, b, v) => { void openCashflowBranch(p, b, v); },
+    branchFilter: (b) => b.paidTriangle != null,
+  };
+
   return (
     <div className="min-h-screen">
       <ModelLockBanner state={lockState} onForceAcquire={forceAcquire} />
@@ -1016,71 +1029,31 @@ export default function CashflowPage() {
             <h1 className="text-sm font-semibold">Cashflow</h1>
           </div>
           <span className="text-[11px] text-[color:var(--muted)] hidden sm:inline">
-            Period → Branch → Analysis
+            Branch → Version → Analysis
           </span>
         </div>
-      </header>
-
-      {/* Breadcrumb */}
-      <div className="bg-[color:var(--surface)] border-b px-6 h-10 flex items-center gap-1 text-sm sticky top-14 z-30">
-        <button onClick={goRoot}
-          className={"px-2 py-1 rounded-md transition flex items-center gap-1 " +
-            (navLevel === "root"
-              ? "font-semibold text-[color:var(--foreground)]"
-              : "text-[color:var(--muted)] hover:text-[color:var(--foreground)] hover:bg-[color:var(--surface-alt)]")}>
-          <FolderIcon size={14} />
-          Periods
-        </button>
-        {activePeriod && (
-          <>
-            <Sep />
-            <button onClick={() => goToPeriod(activePeriod.id)}
-              className={"px-2 py-1 rounded-md transition " +
-                (navLevel === "period"
-                  ? "font-semibold text-[color:var(--foreground)]"
-                  : "text-[color:var(--muted)] hover:text-[color:var(--foreground)] hover:bg-[color:var(--surface-alt)]")}>
-              {activePeriod.label}
-            </button>
-          </>
-        )}
-        {activeBranch && (
-          <>
-            <Sep />
-            <span className="px-2 py-1 font-semibold text-[color:var(--foreground)]">
-              {activeBranch.name}
-            </span>
-          </>
-        )}
-
-        <div className="ml-auto flex items-center gap-2">
+        <div className="flex items-center gap-2">
           <button onClick={() => fileRef.current?.click()} disabled={loading}
             className="text-xs text-[color:var(--muted-strong)] hover:text-[color:var(--foreground)] border border-[color:var(--border)] rounded-md px-2.5 py-1 transition hover:bg-[color:var(--surface-alt)] disabled:opacity-50">
             Load from file
           </button>
           <input ref={fileRef} type="file" accept=".csv,.txt,.xlsx,.xls" className="hidden"
             onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
-          {navLevel !== "root" && (
-            <button
-              onClick={navLevel === "branch" ? () => goToPeriod(activePeriodId!) : goRoot}
-              className="text-xs text-[color:var(--muted)] hover:text-[color:var(--foreground)]">
-              ↑ Up
-            </button>
-          )}
         </div>
-      </div>
+      </header>
 
-      {/* Content */}
-      {navLevel === "root" && (
-        <RootView periods={periodsWithPaid} onOpen={goToPeriod} />
-      )}
-
-      {navLevel === "period" && activePeriod && (
-        <PeriodView
-          period={activePeriod}
-          onOpen={goToBranch}
-          loading={loading}
-          computingBranchId={computingBranchId}
-        />
+      <div className="flex">
+        <ProjectSidebar nav={cashflowNav} />
+        <div className="flex-1 min-w-0">
+      {navLevel !== "branch" && (
+        <div className="h-[calc(100vh-3.5rem)] grid place-items-center text-center px-6">
+          <div className="max-w-sm">
+            <div className="text-sm font-medium text-[color:var(--foreground)]">Select a model</div>
+            <p className="text-xs text-[color:var(--muted)] mt-1.5 leading-relaxed">
+              Pick a version from the left, or load a file. Cashflow uses branches that have a paid triangle.
+            </p>
+          </div>
+        </div>
       )}
 
       {navLevel === "branch" && (
@@ -1103,7 +1076,7 @@ export default function CashflowPage() {
           {!loading && result && (
             <>
               {/* Tab bar — birebir rezerv modülü */}
-              <div className="border-b bg-[color:var(--surface)] sticky top-[calc(3.5rem+2.5rem)] z-20">
+              <div className="border-b bg-[color:var(--surface)] sticky top-14 z-20">
                 <div className="flex items-stretch">
                   <nav className="flex px-4 overflow-x-auto flex-1" role="tablist">
                     {TABS.map((t, i) => {
@@ -1247,6 +1220,8 @@ export default function CashflowPage() {
           )}
         </>
       )}
+        </div>
+      </div>
     </div>
   );
 }

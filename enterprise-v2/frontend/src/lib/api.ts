@@ -2,12 +2,14 @@ import type {
   ChatMessage,
   ChatResponse,
   ComputeResponse,
+  FileData,
   LDFMethod,
   ModelsResponse,
   Triangle,
   UploadOptions,
 } from "@/types/triangle";
 import { getToken } from "@/lib/auth/jwt";
+import { getAgentConfig, PROVIDER_DEFAULT_BASE_URL } from "@/lib/agent/agent-config";
 
 // Boş string ("") = aynı origin (masaüstü: frontend+API tek sunucudan).
 export const API_BASE =
@@ -24,7 +26,7 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
 export async function uploadExcel(
   file: File,
   opts: UploadOptions,
-): Promise<{ triangle: Triangle; warnings: string[]; file_data?: Record<string, Record<string, Record<string, number>>> | null }> {
+): Promise<{ triangle: Triangle; warnings: string[]; file_data?: FileData | null }> {
   if (file.size > MAX_UPLOAD_BYTES) throw new Error("File exceeds the 10 MB limit");
   const buffer = await file.arrayBuffer();
   const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer)));
@@ -138,6 +140,17 @@ export async function chatWithAgent(
   if (fullHistory && fullHistory.length > 0) {
     body.full_history = fullHistory;
   }
+  // Agent Ayarları config'i (lokal LLM endpoint + system prompt + açık araçlar).
+  const cfg = getAgentConfig();
+  body.config = {
+    base_url: cfg.baseUrl.trim() || PROVIDER_DEFAULT_BASE_URL[cfg.provider] || "",
+    api_key: cfg.apiKey,
+    model: model ?? cfg.model,
+    // Boş → backend'in yerleşik GLOBAL_PROMPT'u (web ile birebir). Doluysa override.
+    system_prompt: cfg.systemPrompt.trim() ? cfg.systemPrompt : null,
+    enabled_tools: cfg.enabledToolIds,
+    temperature: cfg.temperature,
+  };
 
   const authHeaders = await getAuthHeaders();
   const res = await fetch(`${API_BASE}/v1/agent/chat`, {
@@ -150,6 +163,15 @@ export async function chatWithAgent(
     throw new Error(err.detail || `HTTP ${res.status}`);
   }
   return res.json();
+}
+
+/** Sunucudaki yerleşik GLOBAL sistem promptu (Ayarlar > 'varsayılanı yükle'). */
+export async function getAgentDefaultPrompt(): Promise<string> {
+  const authHeaders = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/v1/agent/prompt`, { headers: authHeaders });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const d = await res.json();
+  return (d.system_prompt as string) ?? "";
 }
 
 export async function uploadPremiums(
@@ -448,7 +470,7 @@ export async function buildTriangleFromRecords(
   brans: string,
   originGranularity: "yearly" | "quarterly",
   developmentGranularity: "yearly" | "quarterly",
-): Promise<{ paidTriangle: Triangle; incurredTriangle: Triangle; countTriangle?: Triangle | null; fileData?: Record<string, Record<string, Record<string, number>>> | null }> {
+): Promise<{ paidTriangle: Triangle; incurredTriangle: Triangle; countTriangle?: Triangle | null; fileData?: FileData | null }> {
   const authHeaders = await getAuthHeaders();
   const res = await fetch(`${API_BASE}/v1/data/build-triangle`, {
     method: "POST",
@@ -483,7 +505,8 @@ export async function rollForwardTriangle(
 ): Promise<{
   paidTriangle: Triangle;
   incurredTriangle: Triangle | null;
-  newDiagonalFiles: Record<string, Record<string, number>> | null;
+  // Yeni backend: {origin: {dosya: {p: artımsal ödeme, o: güncel muallak}}}. Eski: sayı (ödeme).
+  newDiagonalFiles: Record<string, Record<string, number | { p: number; o: number }>> | null;
 }> {
   const authHeaders = await getAuthHeaders();
   const res = await fetch(`${API_BASE}/v1/data/roll-forward`, {

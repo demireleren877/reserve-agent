@@ -43,6 +43,33 @@ export function developmentRatios(
   return rows;
 }
 
+/**
+ * Aynı kaza yılı (satır) içinde YAN YANA iki link ratio'yu (j ve j+1) ortalamasıyla
+ * değiştirir. `avgPairs` anahtarı `origin|j` = çiftin SOL hücresi. Elemeye alternatif
+ * bir yumuşatma; her iki hücre de (r[j]+r[j+1])/2 olur. Girdiyi mutasyona uğratmaz.
+ */
+export function applyAvgPairs(
+  ratios: RatioCell[][],
+  avgPairs: Set<string>,
+  origins: string[],
+): RatioCell[][] {
+  if (!avgPairs || avgPairs.size === 0) return ratios;
+  const out = ratios.map((row) => row.slice());
+  for (let i = 0; i < out.length; i++) {
+    const o = origins[i];
+    for (let j = 0; j < out[i].length - 1; j++) {
+      if (!avgPairs.has(cellKey(o, j))) continue;
+      const c1 = out[i][j];
+      const c2 = out[i][j + 1];
+      if (c1?.value == null || c2?.value == null) continue;
+      const avg = (c1.value + c2.value) / 2;
+      out[i][j] = { ...c1, value: avg };
+      out[i][j + 1] = { ...c2, value: avg };
+    }
+  }
+  return out;
+}
+
 export function aggregateLDFs(
   triangle: Triangle,
   ratios: RatioCell[][],
@@ -61,7 +88,9 @@ export function aggregateLDFs(
       const cell = ratios[i][j];
       if (cell.value == null || cell.excluded) continue;
       const a = triangle.values[i][j] as number;
-      const b = triangle.values[i][j + 1] as number;
+      // b'yi ratio.value'dan türet (b = a·value). Override'sız hücrede a·(b/a)=b (birebir);
+      // ortalama override'ında (applyAvgPairs) yumuşatılmış değer volume-weighted'a da akar.
+      const b = a * (cell.value as number);
       pairs.push({ a, b });
       if (typeof stepWindow === "number" && pairs.length >= stepWindow) break;
     }

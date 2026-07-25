@@ -1,13 +1,15 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import type { LDFMethod, Triangle, FileData } from "@/types/triangle";
+import { filePaid } from "@/types/triangle";
 import { formatNumber } from "@/lib/api";
 import { devDate } from "@/lib/roll-forward-util";
 import {
   WINDOWS,
   type Window,
   aggregateLDFs,
+  applyAvgPairs,
   cellKey,
   cumulativeFactors,
   developmentRatios,
@@ -80,8 +82,12 @@ interface Props {
   cdfsOverride?: number[];
   /** Karma volume: her dev step için ayrı window. Key = step index string. */
   karmaWindowPerStep?: Record<string, Window>;
+  /** LDF yumuşatma çiftleri (anahtar `origin|j` = çiftin sol hücresi). */
+  avgPairs?: Set<string>;
   onWindowChange: (w: Window) => void;
   onToggleCell: (origin: string, step: number) => void;
+  /** Long-press: aynı satırda (j, j+1) çiftini ortalamaya al / geri al. */
+  onToggleAvgPair?: (origin: string, step: number) => void;
   onClearCells: () => void;
   /** Tüm eleme setini değiştir (kaza yılı satırının toptan elenmesi için). */
   onSetExcluded?: (next: Set<string>) => void;
@@ -97,10 +103,12 @@ export function LDFTab(props: Props) {
     triangle,
     window,
     excludedCells,
+    avgPairs,
     cdfsOverride,
     karmaWindowPerStep,
     onWindowChange,
     onToggleCell,
+    onToggleAvgPair,
     onClearCells,
     onSetExcluded,
     onSetKarmaWindow,
@@ -125,9 +133,25 @@ export function LDFTab(props: Props) {
   >(null);
 
   const ratios = useMemo(
-    () => (triangle ? developmentRatios(triangle, excludedCells) : []),
-    [triangle, excludedCells],
+    () => (triangle ? applyAvgPairs(developmentRatios(triangle, excludedCells), avgPairs ?? new Set<string>(), triangle.origin_periods) : []),
+    [triangle, excludedCells, avgPairs],
   );
+
+  // Long-press ayrımı: kısa tık = eleme (onToggleCell); basılı tut = ortalama çifti (onToggleAvgPair).
+  const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const didLongPress = useRef(false);
+  const HOLD_MS = 350;
+  function startHold(o: string, j: number, hasNext: boolean) {
+    didLongPress.current = false;
+    if (!onToggleAvgPair || !hasNext) return;
+    holdTimer.current = setTimeout(() => {
+      didLongPress.current = true;
+      onToggleAvgPair(o, j); // (j, j+1) çiftini aç/kapat
+    }, HOLD_MS);
+  }
+  function cancelHold() {
+    if (holdTimer.current) { clearTimeout(holdTimer.current); holdTimer.current = null; }
+  }
 
   // Kaza yılı satırındaki tüm (geçerli) hücrelerin eleme durumu.
   function rowExclusion(o: string, i: number): { steps: number[]; allExcluded: boolean } {
@@ -180,8 +204,8 @@ export function LDFTab(props: Props) {
       const curF = fileData[o]?.[devLabel] ?? {};
       const prevF = prior.fileData[o]?.[devLabel] ?? {};
       for (const f of new Set([...Object.keys(curF), ...Object.keys(prevF)])) {
-        const pv = prevF[f] ?? 0;
-        const cv = curF[f] ?? 0;
+        const pv = filePaid(prevF[f]);
+        const cv = filePaid(curF[f]);
         const d = cv - pv;
         if (Math.abs(d) < 1) continue;
         const tag =
@@ -402,10 +426,16 @@ export function LDFTab(props: Props) {
                       priorVal != null &&
                       cell.value != null &&
                       Math.abs(cell.value - priorVal) >= 0.001;
+                    // Ortalama çiftinin parçası mı? (sol hücre o|j, sağ hücre o|j-1)
+                    const isAvg = !!avgPairs && (avgPairs.has(key) || avgPairs.has(cellKey(o, j - 1)));
+                    const hasNext = j + 1 < steps && ratios[i]?.[j + 1]?.value != null;
                     return (
                       <td key={j} className="px-0.5 py-0" style={cellHeat}>
                         <button
-                          onClick={() => onToggleCell(o, j)}
+                          onClick={() => { if (didLongPress.current) { didLongPress.current = false; return; } onToggleCell(o, j); }}
+                          onPointerDown={() => startHold(o, j, hasNext)}
+                          onPointerUp={cancelHold}
+                          onPointerLeave={() => { cancelHold(); setHover(null); }}
                           onMouseEnter={(e) =>
                             setHover({ o, i, j, x: e.clientX, y: e.clientY })
                           }
@@ -417,16 +447,21 @@ export function LDFTab(props: Props) {
                             )
                           }
                           onMouseLeave={() => setHover(null)}
+                          title={hasNext ? "Long-press to average with the next ratio" : undefined}
                           className={
                             "relative w-full text-right px-1.5 py-0.5 rounded text-[11px] transition leading-tight " +
                             (cell.excluded
                               ? "bg-[color:var(--danger-soft)] text-[color:var(--danger)] line-through"
+                              : isAvg
+                              ? "font-semibold text-[color:var(--primary)] ring-1 ring-[color:var(--primary)]/50"
                               : changed
                               ? "font-semibold ring-1 ring-[color:var(--warning)] text-[color:var(--warning)]"
                               : "hover:ring-1 hover:ring-[color:var(--primary)]/40")
                           }
                           style={
-                            changed && !cell.excluded
+                            isAvg && !cell.excluded
+                              ? { background: "var(--primary-soft)" }
+                              : changed && !cell.excluded
                               ? { background: "var(--accent-cell)" }
                               : undefined
                           }

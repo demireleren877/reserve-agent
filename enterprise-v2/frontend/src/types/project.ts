@@ -69,6 +69,9 @@ export interface Branch {
   method: LDFMethod;
   window: Window;
   excludedCells: string[];
+  /** LDF yumuşatma: aynı kaza yılında yan yana iki oranı (j, j+1) ortalamayla değiştir.
+   *  Anahtar `origin|j` = çiftin sol hücresi. Elemeden bağımsız; long-press ile aç/kapat. */
+  ldfAvgPairs?: string[];
 
   premiums: Record<string, number>;
   lrInputPerOrigin: Record<string, string>;
@@ -114,6 +117,55 @@ export interface Branch {
   /** Cashflow'dan hesaplanan aylık dağılım — iskonto için kullanılır.
    *  Key: origin period string. Value: { month (1-based offset), weight }[] sums to 1. */
   cashflowMonthlyPattern?: Record<string, { month: number; weight: number }[]>;
+
+  /** Model VERSİYONLARI (senaryolar). Her versiyon assumption alanlarının adlandırılmış
+   *  bir snapshot'ıdır; VERİ (üçgen/fileData/rollAdjustments) tüm versiyonlarca paylaşılır.
+   *  Yaşayan branch alanları = AKTİF versiyonun çalışma durumu. Versiyon değiştirince
+   *  yaşayan assumption alanları hedef versiyonun snapshot'ıyla değişir (veri korunur).
+   *  Yoksa (eski proje) tek örtük versiyon gibi davranılır; yüklemede "Base" oluşturulur. */
+  versions?: ModelVersion[];
+  activeVersionId?: string;
+}
+
+/** Bir versiyonun (senaryonun) sakladığı assumption alan kümesi — Branch alt-kümesi.
+ *  VERİ alanları (üçgen, fileData, rollAdjustments) buraya dahil DEĞİL (paylaşılır). */
+export const ASSUMPTION_KEYS = [
+  "method", "window", "excludedCells", "ldfAvgPairs",
+  "premiums", "lrInputPerOrigin", "basisPerOrigin", "correctionPerOrigin",
+  "cdfInitial", "cdfChoicePerPeriod", "cdfModelPerPeriod", "curveIncludePerPeriod",
+  "karmaWindowPerStep", "largeWindow", "largeModel", "grossModel",
+  "cashflowLdfWindow", "cashflowLdfExcludedCells", "cashflowKarmaWindowPerStep",
+  "cashflowCdfModelPerPeriod", "cashflowCurveIncludePerPeriod", "cashflowCdfInitial",
+  "cashflowMonthlyPattern",
+] as const satisfies readonly (keyof Branch)[];
+
+export type AssumptionKey = (typeof ASSUMPTION_KEYS)[number];
+export type Assumptions = Pick<Branch, AssumptionKey>;
+
+export interface ModelVersion extends Assumptions {
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Bir branch'ten yaşayan assumption alanlarının snapshot'ını alır. */
+export function snapshotAssumptions(branch: Branch): Assumptions {
+  const out = {} as Record<AssumptionKey, unknown>;
+  for (const k of ASSUMPTION_KEYS) out[k] = branch[k];
+  return out as Assumptions;
+}
+
+/** Yaşayan assumption alanlarını bir versiyonun snapshot'ıyla değiştirmek için partial üretir. */
+export function assumptionsFromVersion(v: Assumptions): Partial<Branch> {
+  const out: Partial<Branch> = {};
+  for (const k of ASSUMPTION_KEYS) (out as Record<string, unknown>)[k] = v[k];
+  return out;
+}
+
+export function makeVersion(name: string, base: Assumptions): ModelVersion {
+  const now = new Date().toISOString();
+  return { id: newId(), name, createdAt: now, updatedAt: now, ...base };
 }
 
 /** Roll-forward'da bir dosyaya (claim) uygulanan düzeltme. Alan verilmezse orijinal kalır. */
@@ -131,6 +183,7 @@ export interface LargeModel {
   method?: LDFMethod;
   window?: Window;
   excludedCells?: string[];
+  ldfAvgPairs?: string[];
   karmaWindowPerStep?: Record<string, Window>;
   premiums?: Record<string, number>;
   lrInputPerOrigin?: Record<string, string>;
@@ -164,7 +217,7 @@ export function newId(): string {
 
 export function makeBranch(name: string, frequency: Frequency): Branch {
   const now = new Date().toISOString();
-  return {
+  const b: Branch = {
     id: newId(),
     name,
     frequency,
@@ -200,6 +253,22 @@ export function makeBranch(name: string, frequency: Frequency): Branch {
       },
     ],
   };
+  const base = makeVersion("Base", snapshotAssumptions(b));
+  b.versions = [base];
+  b.activeVersionId = base.id;
+  return b;
+}
+
+/** Eski/versiyonsuz branch'e Base versiyon ekler (idempotent). Migrasyon + güvenlik ağı. */
+export function ensureBranchVersions(branch: Branch): Branch {
+  if (branch.versions && branch.versions.length > 0) {
+    if (branch.activeVersionId && branch.versions.some((v) => v.id === branch.activeVersionId)) {
+      return branch;
+    }
+    return { ...branch, activeVersionId: branch.versions[0].id };
+  }
+  const base = makeVersion("Base", snapshotAssumptions(branch));
+  return { ...branch, versions: [base], activeVersionId: base.id };
 }
 
 export function makePeriod(label: string): Period {

@@ -104,6 +104,22 @@ export function ReserveAgentBridge() {
           }
           continue;
         }
+        // Versiyon (senaryo) aksiyonları — aktif branş üzerinde çalışır.
+        if (a.type === "create_version") {
+          const name = (a.payload?.name as string) || "New version";
+          if (activePeriod && activeBranch) actions.createVersion(activePeriod.id, activeBranch.id, name);
+          continue;
+        }
+        if (a.type === "switch_version") {
+          const name = a.payload?.name as string | undefined;
+          if (name && activePeriod && activeBranch) {
+            const v = (activeBranch.versions ?? []).find(
+              (x) => x.name.toLowerCase() === name.toLowerCase(),
+            );
+            if (v) actions.switchBranchVersion(activePeriod.id, activeBranch.id, v.id);
+          }
+          continue;
+        }
         // Standart write action'lar — varsa hedef branşa geç
         const targetBranchId = a.payload?.branch_id as string | undefined;
         const targetPeriodId = a.payload?.period_id as string | undefined;
@@ -124,6 +140,8 @@ export function ReserveAgentBridge() {
     unregisterActionHandler,
     agentSetters,
     actions,
+    activePeriod,
+    activeBranch,
   ]);
 
   return null;
@@ -406,5 +424,23 @@ function applyReserveAction(
     }
   } else if (a.type === "reset_curve") {
     s.resetCdfInitial();
+  } else if (a.type === "set_curve_model") {
+    const dev = a.payload?.dev_period as string | undefined;
+    const model = Number(a.payload?.model);
+    if (dev && [1, 2, 3, 4, 5, 6].includes(model)) s.setCdfModel(dev, model as 1 | 2 | 3 | 4 | 5 | 6);
+  } else if (a.type === "set_curve_include") {
+    const dev = a.payload?.dev_period as string | undefined;
+    const include = a.payload?.include;
+    if (dev && typeof include === "boolean") s.setCurveInclude(dev, include);
+  } else if (a.type === "set_karma_window") {
+    const step = a.payload?.step as string | number | undefined;
+    const w = a.payload?.window as string | undefined;
+    if (step != null && w) s.setKarmaWindow(String(step), w === "all" ? "all" : Number(w));
+  } else if (a.type === "clear_karma") {
+    s.clearKarma();
+  } else if (a.type === "average_ldf_pair") {
+    const origin = a.payload?.origin as string | undefined;
+    const step = Number(a.payload?.step);
+    if (origin && Number.isFinite(step)) s.toggleAvgPair(origin, step);
   }
 }

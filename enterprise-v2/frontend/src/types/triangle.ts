@@ -2,7 +2,24 @@ export type TriangleType = "paid" | "incurred";
 export type Granularity = "yearly" | "quarterly";
 export type LDFMethod = "volume_weighted" | "simple_average" | "geometric_average";
 
-export type FileData = Record<string, Record<string, Record<string, number>>>;
+/** Dosya kırılımı leaf'i. Yeni backend: {p: ödeme, o: muallak}. Eski veri/roll-forward:
+ *  sadece sayı (ödeme). Okurken filePaid/fileOs/fileIncurred kullan — ikisini de kabul eder. */
+export interface FileLeafPO {
+  p: number;
+  o: number;
+}
+export type FileLeaf = number | FileLeafPO;
+export type FileData = Record<string, Record<string, Record<string, FileLeaf>>>;
+
+export function filePaid(v: FileLeaf | undefined): number {
+  return typeof v === "number" ? v : v?.p ?? 0;
+}
+export function fileOs(v: FileLeaf | undefined): number {
+  return typeof v === "number" ? 0 : v?.o ?? 0;
+}
+export function fileIncurred(v: FileLeaf | undefined): number {
+  return filePaid(v) + fileOs(v);
+}
 
 export interface Triangle {
   origin_periods: string[];

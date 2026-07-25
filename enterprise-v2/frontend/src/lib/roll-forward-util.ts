@@ -40,16 +40,27 @@ export function lastDate(orig: string, tri: Triangle): string {
   return "";
 }
 
-/** Roll-forward sonrası yeni diagonalin dosya kırılımını FileData'ya çevirir. */
+/**
+ * Roll-forward yeni köşegeninin (= GÜNCEL DÖNEMİN) dosya kırılımını FileData'ya çevirir.
+ * Sonuç bu dönemin verisidir: {p: dönem içi (artımsal) ödeme, o: güncel muallak}.
+ * KÜMÜLE ETMEZ — File analizi Statistics'i "bu dönemde ne varsa" onu göstermeli
+ * (ör. Q2'yi Q1'den roll-forward etsek de Q2'nin kendi verisi görünür).
+ * Eski backend sayı (paid-only) dönerse o=0 kabul edilir.
+ */
 export function newDiagonalToFileData(
   triangle: Triangle,
-  newDiagonalFiles: Record<string, Record<string, number>>,
+  newDiagonalFiles: Record<string, Record<string, number | { p: number; o: number }>>,
 ): FileData {
   const fd: FileData = {};
   for (const [origin, files] of Object.entries(newDiagonalFiles)) {
     if (!files || Object.keys(files).length === 0) continue;
     const d = lastDate(origin, triangle);
-    if (d) fd[origin] = { [d]: { ...files } };
+    if (!d) continue;
+    const cell: Record<string, { p: number; o: number }> = {};
+    for (const [dosya, mv] of Object.entries(files)) {
+      cell[dosya] = typeof mv === "number" ? { p: mv, o: 0 } : { p: mv.p, o: mv.o };
+    }
+    fd[origin] = { [d]: cell };
   }
   return fd;
 }

@@ -116,7 +116,7 @@ const ACTION_LABELS: Record<string, string> = {
   curve_reset: "Curve reset",
 };
 
-function BranchLogsButton() {
+export function BranchLogsButton() {
   const { activeBranch, activePeriod } = useProject();
   const popoverRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
@@ -131,6 +131,9 @@ function BranchLogsButton() {
     document.addEventListener("mousedown", onDown);
     return () => document.removeEventListener("mousedown", onDown);
   }, [open]);
+
+  // Sadece bir model açıkken göster (breadcrumb kaldırıldı; header'da yaşar).
+  if (!activeBranch) return null;
 
   return (
     <div className="relative" ref={popoverRef}>

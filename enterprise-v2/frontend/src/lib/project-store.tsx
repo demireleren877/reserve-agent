@@ -17,14 +17,19 @@ import {
   type Frequency,
   type HistoryEntry,
   type LargeModel,
+  type ModelVersion,
   type NavLevel,
   type Period,
   type Project,
   type UploadSettings,
   type Window,
+  assumptionsFromVersion,
+  ensureBranchVersions,
   makeBranch,
   makePeriod,
+  makeVersion,
   newId,
+  snapshotAssumptions,
 } from "@/types/project";
 import {
   fetchState,
@@ -46,6 +51,42 @@ const EMPTY: Project = {
   activeFrequency: null,
   activeBranchId: null,
 };
+
+/** Belirli bir branch'i (periodId+branchId) verilen dönüşümden geçirir. */
+function transformBranchById(prev: Project, periodId: string, branchId: string, fn: (b: Branch) => Branch): Project {
+  return {
+    ...prev,
+    periods: prev.periods.map((p) =>
+      p.id !== periodId
+        ? p
+        : { ...p, branches: p.branches.map((b) => (b.id === branchId ? fn(b) : b)) },
+    ),
+  };
+}
+
+/** Bir branch'te versiyon değiştirir: mevcut çalışma durumu aktif versiyona kaydedilir,
+ *  hedef versiyonun assumption'ları yaşayan alanlara yüklenir (veri korunur). */
+function applyVersionSwitch(b: Branch, versionId: string): Branch {
+  const versions = b.versions ?? [];
+  const target = versions.find((v) => v.id === versionId);
+  if (!target || versionId === b.activeVersionId) return b;
+  const now = new Date().toISOString();
+  const saved = versions.map((v) =>
+    v.id === b.activeVersionId ? { ...v, ...snapshotAssumptions(b), updatedAt: now } : v,
+  );
+  return { ...b, ...assumptionsFromVersion(target), versions: saved, activeVersionId: versionId, updatedAt: now };
+}
+
+/** Her branch'in en az bir versiyonu (Base) olduğundan emin ol — eski projeleri migrate eder. */
+function migrateProject(p: Project): Project {
+  return {
+    ...p,
+    periods: p.periods.map((per) => ({
+      ...per,
+      branches: per.branches.map(ensureBranchVersions),
+    })),
+  };
+}
 
 export interface CopyAssumptionsOptions {
   excludedCells?: boolean;
@@ -72,6 +113,8 @@ interface ProjectActions {
   goToBranch(branchId: string): void;
   /** Bir branşı dönemiyle birlikte doğrudan aç (sekme geçişi için — dönem farklı olabilir). */
   openBranch(periodId: string, branchId: string): void;
+  /** Dönem+branş+versiyonu tek seferde aç (sidebar): gerekiyorsa versiyona geçer. */
+  openVersion(periodId: string, branchId: string, versionId: string): void;
   goUp(): void;
   updateActiveBranch(
     updater: (prev: Branch) => Partial<Branch>,
@@ -87,6 +130,12 @@ interface ProjectActions {
     source?: ChangeSource,
   ): void;
   copyAssumptions(sourceBranchId: string, targetBranchId: string, opts: CopyAssumptionsOptions): void;
+  /** Bir branşta mevcut çalışma durumunu kopyalayan yeni versiyon oluşturup ona geçer (id-tabanlı). */
+  createVersion(periodId: string, branchId: string, name: string): string;
+  /** Bir branşın versiyonunu değiştir (store aktifini DEĞİŞTİRMEZ — cashflow lokal nav için). */
+  switchBranchVersion(periodId: string, branchId: string, versionId: string): void;
+  renameVersion(periodId: string, branchId: string, versionId: string, name: string): void;
+  deleteVersion(periodId: string, branchId: string, versionId: string): void;
   clearAll(): void;
   undo(): void;
   canUndo: boolean;
@@ -97,6 +146,8 @@ interface Ctx {
   navLevel: NavLevel;
   activePeriod: Period | null;
   activeBranch: Branch | null;
+  /** Aktif branch'in aktif versiyonu (senaryo). Yaşayan branch alanları bu versiyona karşılık gelir. */
+  activeVersion: ModelVersion | null;
   branchesForActiveFrequency: Branch[];
   actions: ProjectActions;
   canUndo: boolean;
@@ -167,14 +218,14 @@ export function ProjectProvider({ children, userId }: ProjectProviderProps) {
 
       // Project: server wins if present, else fall back to localStorage cache.
       if (serverProject) {
-        setProject({ ...serverProject, periods: sortByPeriodLabel(serverProject.periods) });
+        setProject(migrateProject({ ...serverProject, periods: sortByPeriodLabel(serverProject.periods) }));
       } else {
         try {
           const raw = localStorage.getItem(projectKey);
           if (raw) {
             const parsed = JSON.parse(raw) as Project;
             if (parsed && Array.isArray(parsed.periods)) {
-              setProject({ ...parsed, periods: sortByPeriodLabel(parsed.periods) });
+              setProject(migrateProject({ ...parsed, periods: sortByPeriodLabel(parsed.periods) }));
             }
           }
         } catch {
@@ -260,7 +311,7 @@ export function ProjectProvider({ children, userId }: ProjectProviderProps) {
           }
           const mergedStr = JSON.stringify(merged);
           lastSerializedRef.current = mergedStr;
-          setProject(merged); // başkasının değişikliklerini de ekranıma getir
+          setProject(migrateProject(merged)); // başkasının değişikliklerini de ekranıma getir
         } else {
           console.error("worker push failed", e);
         }
@@ -284,7 +335,7 @@ export function ProjectProvider({ children, userId }: ProjectProviderProps) {
       baseRef.current = theirs;
       versionRef.current = remote.version;
       if (JSON.stringify(merged) !== localStr) {
-        setProject(merged); // yerelde değişiklik varsa persist efekti geri push'lar
+        setProject(migrateProject(merged)); // yerelde değişiklik varsa persist efekti geri push'lar
       }
     } catch {
       /* geçici hata — sonraki tur */
@@ -362,6 +413,12 @@ export function ProjectProvider({ children, userId }: ProjectProviderProps) {
         : null,
     [activePeriod, project.activeBranchId],
   );
+
+  const activeVersion = useMemo<ModelVersion | null>(() => {
+    if (!activeBranch) return null;
+    const vs = activeBranch.versions ?? [];
+    return vs.find((v) => v.id === activeBranch.activeVersionId) ?? vs[0] ?? null;
+  }, [activeBranch]);
 
   const navLevel: NavLevel = useMemo(() => {
     if (project.activeBranchId && activeBranch) return "branch";
@@ -576,6 +633,22 @@ export function ProjectProvider({ children, userId }: ProjectProviderProps) {
           };
         });
       },
+      openVersion(periodId, branchId, versionId) {
+        setProject((prev) => {
+          const period = prev.periods.find((p) => p.id === periodId);
+          const branch = period?.branches.find((b) => b.id === branchId);
+          if (!branch) return prev;
+          const withSwitch = versionId && !readOnlyRef.current
+            ? transformBranchById(prev, periodId, branchId, (b) => applyVersionSwitch(b, versionId))
+            : prev;
+          return {
+            ...withSwitch,
+            activePeriodId: periodId,
+            activeFrequency: branch.frequency,
+            activeBranchId: branchId,
+          };
+        });
+      },
       goUp() {
         setProject((prev) => {
           if (prev.activeBranchId)
@@ -735,6 +808,66 @@ export function ProjectProvider({ children, userId }: ProjectProviderProps) {
           };
         });
       },
+      createVersion(periodId, branchId, name) {
+        const newVerId = newId();
+        if (readOnlyRef.current) return newVerId;
+        setProject((prev) =>
+          transformBranchById(prev, periodId, branchId, (b) => {
+            const now = new Date().toISOString();
+            const versions = b.versions ?? [];
+            // Mevcut çalışma durumunu aktif versiyona kaydet (kaybolmasın)
+            const saved = versions.map((v) =>
+              v.id === b.activeVersionId ? { ...v, ...snapshotAssumptions(b), updatedAt: now } : v,
+            );
+            const nv: ModelVersion = {
+              id: newVerId,
+              name: name.trim() || "New version",
+              createdAt: now,
+              updatedAt: now,
+              ...snapshotAssumptions(b), // fork = mevcudun kopyası
+            };
+            // Yaşayan alanlar değişmez (fork mevcutla aynı başlar); sadece aktif versiyon = yeni.
+            return { ...b, versions: [...saved, nv], activeVersionId: newVerId, updatedAt: now };
+          }),
+        );
+        return newVerId;
+      },
+      switchBranchVersion(periodId, branchId, versionId) {
+        if (readOnlyRef.current) return;
+        setProject((prev) => transformBranchById(prev, periodId, branchId, (b) => applyVersionSwitch(b, versionId)));
+      },
+      renameVersion(periodId, branchId, versionId, name) {
+        setProject((prev) =>
+          transformBranchById(prev, periodId, branchId, (b) => ({
+            ...b,
+            versions: (b.versions ?? []).map((v) =>
+              v.id === versionId ? { ...v, name: name.trim() || v.name, updatedAt: new Date().toISOString() } : v,
+            ),
+          })),
+        );
+      },
+      deleteVersion(periodId, branchId, versionId) {
+        if (readOnlyRef.current) return;
+        setProjectWithUndo((prev) =>
+          transformBranchById(prev, periodId, branchId, (b) => {
+            const versions = b.versions ?? [];
+            if (versions.length <= 1) return b; // son versiyon silinemez
+            const remaining = versions.filter((v) => v.id !== versionId);
+            if (b.activeVersionId === versionId) {
+              // Aktif versiyon silindi → ilk kalanı yükle
+              const target = remaining[0];
+              return {
+                ...b,
+                ...assumptionsFromVersion(target),
+                versions: remaining,
+                activeVersionId: target.id,
+                updatedAt: new Date().toISOString(),
+              };
+            }
+            return { ...b, versions: remaining };
+          }),
+        );
+      },
       clearAll() {
         setProject(EMPTY);
       },
@@ -761,6 +894,7 @@ export function ProjectProvider({ children, userId }: ProjectProviderProps) {
         navLevel,
         activePeriod,
         activeBranch,
+        activeVersion,
         branchesForActiveFrequency,
         actions,
         canUndo,
@@ -799,6 +933,8 @@ export interface BranchSetters {
   setWindow: (w: Window) => void;
   setExcludedCells: (next: Set<string>) => void;
   toggleCell: (origin: string, step: number) => void;
+  /** LDF yumuşatma: aynı satırda (j, j+1) çiftini ortalamaya al / geri al (long-press). */
+  toggleAvgPair: (origin: string, step: number) => void;
   clearExclusions: () => void;
   setKarmaWindow: (step: string, w: Window) => void;
   initKarma: (stepCount: number, globalWindow: Window) => void;
@@ -1024,6 +1160,20 @@ export function useBranchSetters(
           undefined,
           source,
         ),
+      toggleAvgPair: (origin, step) => {
+        const key = `${origin}|${step}`;
+        updModel(
+          (prev) => {
+            const set = new Set(prev.ldfAvgPairs ?? []);
+            if (set.has(key)) set.delete(key);
+            else set.add(key);
+            return { ldfAvgPairs: Array.from(set) };
+          },
+          "ldf_avg_pair_toggled",
+          { origin, step },
+          source,
+        );
+      },
       setKarmaWindow: (step, w) =>
         updModel(
           (prev) => ({

@@ -97,6 +97,9 @@ export const AGENT_TOOLS: ToolDef[] = [
 
   // ── Global ──────────────────────────────────────────────────────────────────
   { id: "navigate_to", module: "global", kind: "action", impl: "ready", title: "Navigate", description: "Bir modüle (reserve/cashflow/discount/data) yönlendirir." },
+  { id: "roll_forward", module: "reserve", kind: "action", impl: "ready", title: "Roll-forward", description: "Önceki dönemin aynı-isim branşındaki model varsayımlarını (eleme/curve/BF/LR/basis/correction) mevcut branşa taşır." },
+  { id: "load_triangle_from_data", module: "reserve", kind: "action", impl: "ready", title: "Load triangle from data", description: "Veri modülündeki hasar kayıtlarından aktif branşın üçgenini kurar (sıfırdan veya önceki dönemden roll-forward)." },
+  { id: "ask_user", module: "global", kind: "action", impl: "ready", title: "Ask user", description: "Kullanıcıya chat içi seçilebilir form sunar (modelleme ayarlarını toplamak için)." },
 ];
 
 /** Varsayılan olarak açık araç id'leri (tümü). */

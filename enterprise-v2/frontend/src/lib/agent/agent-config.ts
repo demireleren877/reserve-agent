@@ -50,6 +50,9 @@ export const DEFAULT_SYSTEM_PROMPT = "";
 
 const STORAGE_KEY = "reserve-agent-config-v1";
 
+// Sonradan eklenen "ready" araçlar — geriye dönük configlerde otomatik AÇILIR.
+const NEW_TOOL_IDS = ["roll_forward", "ask_user", "load_triangle_from_data"];
+
 // Hazır entegre varsayılan: OpenRouter + gemini flash-lite. Kullanıcı yalnız API key girer.
 export const DEFAULT_MODEL = "google/gemini-3.1-flash-lite-preview";
 
@@ -75,6 +78,17 @@ function read(): AgentConfig {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     cache = raw ? { ...defaults(), ...(JSON.parse(raw) as Partial<AgentConfig>) } : defaults();
+    // Geriye dönük: bu sürümde eklenen yeni "ready" araçlar, kayıtlı config'te
+    // yoksa AÇIK gelsin (yokluğunda LLM'e hiç gönderilmez → özellik çalışmaz).
+    // Yalnız yeni id'ler eklenir; kullanıcının kapattığı eski araçlara dokunulmaz.
+    if (raw) {
+      const set = new Set(cache.enabledToolIds ?? []);
+      let changed = false;
+      for (const id of NEW_TOOL_IDS) {
+        if (!set.has(id)) { set.add(id); changed = true; }
+      }
+      if (changed) cache = { ...cache, enabledToolIds: [...set] };
+    }
   } catch {
     cache = defaults();
   }

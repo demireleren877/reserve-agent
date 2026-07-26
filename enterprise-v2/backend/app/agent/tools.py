@@ -1102,6 +1102,53 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "roll_forward",
+            "description": (
+                "Önceki dönemin AYNI-İSİM branşındaki model varsayımlarını (hücre eleme / "
+                "volume / prim / BF Loss Ratio / correction / basis / curve) mevcut branşa "
+                "TAŞIR — yeni dönemin üçgen şekline (origin/gelişim) hizalanır. Roll-forward "
+                "modunda 'kararları önceki dönemden getir' için kullan; sonra yalnızca yeni "
+                "diagonal'in değiştirdiğini ayarla. from_period vermezsen bir önceki dönem "
+                "otomatik seçilir. branch_id vermezsen aktif branş."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "branch_id": {"type": "string", "description": "Hedef branş (yoksa aktif)"},
+                    "from_period": {"type": "string", "description": "Kaynak dönem etiketi, ör. '2025Q1' (yoksa bir önceki dönem)"},
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "load_triangle_from_data",
+            "description": (
+                "Veri modülündeki hasar kayıtlarından aktif branşın ÜÇGENİNİ kurar "
+                "(Rezerv'e çeker). source='direct' → sıfırdan; source='roll_forward' → "
+                "önceki dönemin aynı-isim branşından roll-forward eder (yeni diagonal "
+                "eklenir + TÜM model varsayımları da taşınır). Üçgen YOKKEN "
+                "(get_analysis_state / has_triangle boş) modellemeden ÖNCE bunu çağır. "
+                "ÖNEMLİ: üçgen ASYNC yüklenir, bu turun snapshot'ında GÖRÜNMEZ — "
+                "çağırdıktan sonra kullanıcıya 'üçgeni yükledim; modellemeye devam edeyim "
+                "mi?' de ve DUR. Kullanıcı onaylayınca (yeni snapshot'ta üçgen görünür) "
+                "modele geç."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "source": {"type": "string", "enum": ["direct", "roll_forward"]},
+                    "from_period": {"type": "string", "description": "roll_forward için kaynak dönem (yoksa bir önceki)"},
+                },
+                "required": ["source"],
+            },
+        },
+    },
 ]
 
 
@@ -1495,6 +1542,33 @@ def dispatch_tool(
         return {"module": module, "_action": {"type": "navigate_to", "payload": {"module": module}, "module": "navigation"}}
     if name == "ask_user":
         return _ask_user(args)
+    if name == "roll_forward":
+        payload: dict[str, Any] = {}
+        if args.get("branch_id"):
+            payload["branch_id"] = str(args["branch_id"])
+        if args.get("from_period"):
+            payload["from_period"] = str(args["from_period"])
+        return {
+            "rolled_forward": True,
+            "note": "Önceki dönemin varsayımları taşındı (frontend uygular). Sonra yeni diagonal'e göre ayarla.",
+            "_action": {"type": "roll_forward", "payload": payload, "module": "reserve"},
+        }
+    if name == "load_triangle_from_data":
+        src = str(args.get("source", "direct"))
+        if src not in ("direct", "roll_forward"):
+            src = "direct"
+        payload = {"source": src}
+        if args.get("from_period"):
+            payload["from_period"] = str(args["from_period"])
+        return {
+            "loading": True,
+            "note": (
+                "Üçgen veri modülünden yükleniyor (async — bu turun snapshot'ında "
+                "görünmez). Kullanıcıya 'üçgeni yükledim; devam edeyim mi?' de ve DUR; "
+                "onaylayınca modele geç."
+            ),
+            "_action": {"type": "load_triangle_from_data", "payload": payload, "module": "reserve"},
+        }
     raise KeyError(f"Tool bulunamadı: {name}")
 
 

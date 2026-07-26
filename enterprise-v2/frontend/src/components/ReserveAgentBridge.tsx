@@ -19,6 +19,13 @@ import { useDataPremiums, useDataLarge } from "@/lib/provision-models";
 import type { LargeTriangles } from "@/lib/provision-models";
 import { computeBranchSummary } from "@/lib/reserve-pipeline";
 import { computeAttritionalSummary, attritionalWorkingTriangle, hasLarge } from "@/lib/large-split";
+import { useDataStore } from "@/lib/data-store";
+import {
+  buildTriangleFromRecords,
+  rollForwardTriangle,
+  type ClaimRecord,
+} from "@/lib/api";
+import { newDiagonalToFileData, mergeFileData } from "@/lib/roll-forward-util";
 import type { AgentAction } from "@/types/triangle";
 import type { Branch, Period } from "@/types/project";
 
@@ -26,6 +33,7 @@ export function ReserveAgentBridge() {
   const { project, activePeriod, activeBranch, actions } = useProject();
   const agentReg = useAgentRegistry();
   const agentSetters = useBranchSetters("agent");
+  const dataStore = useDataStore();
 
   // Aktif branşın DİNAMİK exposure'ı (Data modülü prim verisinden) — reserve/page ile
   // aynı. Bridge ham branch.premiums'ı kullanırsa BF exposure eksik/yanlış olur ve
@@ -140,8 +148,22 @@ export function ReserveAgentBridge() {
   // Action handler — tüm rezerv action'larını uygula. Hedef branş action'da
   // belirtilmişse oraya geç, yoksa aktif branş üzerinde çalış.
   useEffect(() => {
-    const handler = (received: AgentAction[]) => {
+    const handler = async (received: AgentAction[]) => {
       for (const a of received) {
+        // Veriden üçgen kur/roll-forward et — async (buildTriangleFromRecords /
+        // rollForwardTriangle backend çağrısı). Aktif branşa yazar.
+        if (a.type === "load_triangle_from_data") {
+          if (activeBranch && activePeriod) {
+            await loadTriangleFromData(a.payload ?? {}, {
+              store: dataStore,
+              periods: project.periods,
+              activeBranch,
+              activePeriod,
+              setters: agentSetters,
+            });
+          }
+          continue;
+        }
         // Cross-branch read tools veya navigasyon için özel işlem
         if (a.type === "select_branch") {
           const periodId = a.payload?.period_id as string | undefined;
@@ -150,6 +172,59 @@ export function ReserveAgentBridge() {
             if (periodId) actions.goToPeriod(periodId);
             actions.goToBranch(branchId);
           }
+          continue;
+        }
+        // Roll-forward: önceki dönemin aynı-isim branşındaki model varsayımlarını
+        // (eleme/window/premium/LR/correction/basis/curve) mevcut branşa taşı.
+        // copyAssumptions origin/dev hizalamasını yapar — yeni dönemin üçgen şekline uyarlar.
+        if (a.type === "roll_forward") {
+          const targetBranchId =
+            (a.payload?.branch_id as string | undefined) || activeBranch?.id;
+          if (!targetBranchId) continue;
+          let targetPeriod: Period | undefined;
+          let targetBranch: Branch | undefined;
+          for (const p of project.periods) {
+            const b = p.branches.find((x) => x.id === targetBranchId);
+            if (b) {
+              targetPeriod = p;
+              targetBranch = b;
+              break;
+            }
+          }
+          if (!targetPeriod || !targetBranch) continue;
+          const fromLabel = a.payload?.from_period as string | undefined;
+          const tOrder = periodOrderLabel(targetPeriod.label);
+          let source: { period: Period; branch: Branch } | null = null;
+          for (const p of project.periods) {
+            if (p.id === targetPeriod.id) continue;
+            const b = p.branches.find((x) => x.name === targetBranch!.name);
+            if (!b) continue;
+            if (fromLabel) {
+              if (p.label === fromLabel) {
+                source = { period: p, branch: b };
+                break;
+              }
+            } else {
+              const o = periodOrderLabel(p.label);
+              if (o < tOrder && (!source || o > periodOrderLabel(source.period.label))) {
+                source = { period: p, branch: b };
+              }
+            }
+          }
+          if (!source) continue;
+          if (targetBranchId !== activeBranch?.id) {
+            actions.goToPeriod(targetPeriod.id);
+            actions.goToBranch(targetBranchId);
+          }
+          actions.copyAssumptions(source.branch.id, targetBranchId, {
+            excludedCells: true,
+            window: true,
+            premiums: true,
+            lrFormulas: true,
+            corrections: true,
+            basis: true,
+            curve: true,
+          });
           continue;
         }
         // Versiyon (senaryo) aksiyonları — aktif branş üzerinde çalışır.
@@ -190,9 +265,107 @@ export function ReserveAgentBridge() {
     actions,
     activePeriod,
     activeBranch,
+    project,
+    dataStore,
   ]);
 
   return null;
+}
+
+// Dönem etiketini sıralanabilir sayıya çevir: "2025Q1"→8101, "2025"→8100.
+function periodOrderLabel(label: string): number {
+  const m = /^(\d{4})(?:Q([1-4]))?$/.exec((label ?? "").trim());
+  if (!m) return 0;
+  return parseInt(m[1], 10) * 4 + (m[2] ? parseInt(m[2], 10) : 0);
+}
+
+// Agent aksiyonu: Veri modülündeki hasar kayıtlarından aktif branşın üçgenini kurar.
+// source="direct" → buildTriangleFromRecords (sıfırdan).
+// source="roll_forward" → önceki dönemin aynı-isim branşından rollForwardTriangle
+//   (yeni diagonal eklenir) + setRolledForward TÜM varsayımları da taşır.
+// NOT: aksiyon async uygulanır; üçgen SONRAKİ snapshot'ta görünür (agent bir sonraki
+// turda modele geçer). LoadFromDataStore ile aynı backend çağrıları kullanılır.
+async function loadTriangleFromData(
+  payload: Record<string, unknown>,
+  ctx: {
+    store: ReturnType<typeof useDataStore>;
+    periods: Period[];
+    activeBranch: Branch;
+    activePeriod: Period;
+    setters: ReturnType<typeof useBranchSetters>;
+  },
+): Promise<void> {
+  const { store, periods, activeBranch, activePeriod, setters } = ctx;
+  const source = payload.source === "roll_forward" ? "roll_forward" : "direct";
+  const brans = activeBranch.name;
+
+  // 1. Veri modülünde aynı etiketli dönem + hasar dataset'i
+  const dataPeriod = store.periods.find((p) => p.label === activePeriod.label);
+  if (!dataPeriod) return;
+  const hasarDs = Object.values(dataPeriod.datasets).find((d) => d.typeId === "hasar");
+  if (!hasarDs) return;
+
+  // 2. Kayıtları yükle (lazy)
+  let ds = hasarDs;
+  if (!ds.records?.length) {
+    ds = (await store.loadDatasetRecords(dataPeriod.id, hasarDs.datasetId)) ?? hasarDs;
+  }
+  const records = (ds.records ?? []) as ClaimRecord[];
+  if (!records.length) return;
+
+  if (source === "roll_forward") {
+    // 3a. Önceki dönemin aynı-isim branşı (paid+incurred üçgeni olan en yakını)
+    const tOrder = periodOrderLabel(activePeriod.label);
+    let base: Branch | null = null;
+    let baseOrder = -Infinity;
+    const fromLabel = payload.from_period as string | undefined;
+    for (const p of periods) {
+      if (p.id === activePeriod.id) continue;
+      const b = p.branches.find((x) => x.name === brans);
+      if (!b?.paidTriangle || !b.incurredTriangle) continue;
+      const o = periodOrderLabel(p.label);
+      if (fromLabel ? p.label === fromLabel : o < tOrder && o > baseOrder) {
+        base = b;
+        baseOrder = o;
+        if (fromLabel) break;
+      }
+    }
+    if (!base?.paidTriangle) return;
+    const og = (base.paidTriangle.origin_granularity ?? "yearly") as "yearly" | "quarterly";
+    const dg = (base.paidTriangle.development_granularity ?? "yearly") as "yearly" | "quarterly";
+    const { paidTriangle, incurredTriangle, newDiagonalFiles } = await rollForwardTriangle(
+      base.paidTriangle,
+      base.incurredTriangle ?? null,
+      records,
+      brans,
+      og,
+      dg,
+    );
+    const newDiagFd = newDiagonalFiles
+      ? newDiagonalToFileData(paidTriangle, newDiagonalFiles)
+      : null;
+    const fd = mergeFileData(base.fileData, newDiagFd);
+    setters.setRolledForward(
+      paidTriangle,
+      incurredTriangle ?? paidTriangle,
+      `${activePeriod.label} – ${brans} (roll-forward)`,
+      fd,
+      base,
+    );
+  } else {
+    // 3b. Sıfırdan kur — granülariteyi branş frekansından türet
+    const gran: "yearly" | "quarterly" =
+      activeBranch.frequency === "quarterly" ? "quarterly" : "yearly";
+    const { paidTriangle, incurredTriangle, countTriangle, fileData } =
+      await buildTriangleFromRecords(records, brans, gran, gran);
+    setters.setBothTriangles(
+      paidTriangle,
+      incurredTriangle,
+      `${activePeriod.label} – ${brans}`,
+      fileData,
+      countTriangle,
+    );
+  }
 }
 
 // ---------------------- snapshot builder -------------------------------------

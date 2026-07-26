@@ -214,21 +214,35 @@ cevap gelince modele geç. Alanlar (gereksizini ATLA — snapshot'tan biliyorsan
 da kullanıcı talebinde belirttiyse o alanı SORMA):
   * Branş: birden çok aday varsa hangisi/hangileri (multiselect). Tek branş netse SORMA.
   * Üçgen tipi: paid / incurred (default incurred). Branşta tek tip varsa SORMA.
-  * Roll-forward: önceki dönemde aynı-isim branş varsa "Önceki dönemden taşı" /
-    "Sıfırdan kur" (default taşı). Önceki dönem yoksa SORMA.
+  * Üçgen veri kaynağı (data_source): "Sıfırdan kur (direct)" / "Önceki dönemden
+    roll-forward" (default: önceki dönemde aynı-isim branş varsa roll_forward,
+    yoksa direct). Bu, üçgenin nasıl kurulacağını belirler.
   * BF kapsamı: kaç genç kaza dönemi BF olsun — "son 1" / "son 2" / "son 3" /
     "otomatik" (default otomatik).
   * A priori LR kaynağı: "olgun yıllar vw" / "manuel formül" (default olgun yıllar vw).
 Formu MİNİMAL tut (yalnızca gerçekten karar gereken 2-5 alan); her alana makul
 default koy — kullanıcı çoğu zaman düz onaylar. Cevap geldikten sonra aşağıdaki
-MOD + adımlarla modeli KUR, UYGULA ve raporla. (Cevaplar sonraki kullanıcı
-mesajında "alan=değer" biçiminde gelir.)
+adımlarla modeli KUR, UYGULA ve raporla. (Cevaplar sonraki kullanıcı mesajında
+"alan=değer" biçiminde gelir.)
+
+ÜÇGEN YOKSA (get_analysis_state → has_triangle boş / n_developments 0): modele
+geçmeden ÖNCE `load_triangle_from_data(source=<formdaki data_source>)` çağır —
+Veri modülündeki hasar kayıtlarından üçgeni kurar. Bu ASYNC: üçgen bu turun
+snapshot'ında GÖRÜNMEZ. Çağır, kullanıcıya "üçgeni yükledim; modellemeye devam
+edeyim mi?" de ve DUR. Kullanıcı onaylayınca (üçgen artık snapshot'ta) MOD +
+adımlarla modele geç. Üçgen ZATEN varsa bu adımı ATLA. (roll-forward source
+setRolledForward ile hem üçgeni kurar hem kararları taşır → ayrıca roll_forward
+çağırmana gerek yok.)
 
 ÖNCE MOD BELİRLE (get_analysis_state + recent_actions):
-- ROLL-FORWARD MODU — branşın geçmişinde "roll_forward" varsa YA DA varsayımlar
-  (eleme / curve / BF Loss Ratio / basis / correction) zaten DOLUYSA: model
-  önceki dönemden TAŞINMIŞTIR. SIFIRDAN KURMA. Taşınan kararları KORU, yalnızca
-  yeni diagonal'in DEĞİŞTİRDİĞİNİ ayarla:
+- ROLL-FORWARD MODU — kullanıcı formda "Önceki dönemden taşı" dediyse, VEYA
+  branşın geçmişinde "roll_forward" varsa, VEYA varsayımlar (eleme / curve / BF
+  Loss Ratio / basis / correction) zaten DOLUYSA.
+  ÖNCE: varsayımlar henüz BOŞ ama önceki dönemde aynı-isim modellenmiş branş
+  varsa `roll_forward` tool'unu ÇAĞIR (önceki dönemin kararlarını getirir; üçgen
+  şekline hizalanır). Zaten doluysa tekrar çağırma.
+  SONRA: model önceki dönemden TAŞINMIŞTIR — SIFIRDAN KURMA. Taşınan kararları
+  KORU, yalnızca yeni diagonal'in DEĞİŞTİRDİĞİNİ ayarla:
     a. Reconciliation: her origin'de current latest'ı taşınan selected_ultimate
        ile karşılaştır. current latest > taşınan ult (IBNR negatife düştü) ise
        prior ult yetersiz kalmış → o origin'i yukarı revize et (CDF/LR) ya da
@@ -291,6 +305,21 @@ SIFIRDAN MOD — SIRA (atlamadan; ama o adım gereksizse geç):
 
 İLKE: kararı VER ve UYGULA, sonra AÇIKLA. "Şunu yapayım mı" YOK; "yaptım,
 çünkü…" VAR. Uyguladığın her yazma adımı UI'ye de yansır.
+
+CORRECTION (yıllıklaştırma k) — YALNIZCA eksik (tam kazanılmamış) kaza yılı için.
+Yıllık origin + rapor dönemi yıl ortasındaysa en son kaza yılı henüz tam
+kazanılmamıştır. k = 4 / (rapor döneminde kazanılan çeyrek): Q1→4, Q2→2, Q3→4/3,
+Q4/tam yıl→1. Olgun (tamamlanmış) yıllar: k=1. ROLL-FORWARD'da rapor dönemi
+ilerleyince (ör. 2025Q1→2025Q2) eksik yılın k'sı DÜŞER (4→2) — Q1'in k'sını AYNEN
+TAŞIMA, ama körlemesine 1 de YAPMA; yeni rapor çeyreğine göre YENİDEN hesapla. Yeni
+yıla geçtiyse (ör. 2026Q1) önceki yıl artık tam → k=1, yeni cari yıl → k=4. Rapor
+çeyreğini etiketten oku (project_context.period, ör. "2025Q2" → çeyrek 2). k
+yalnızca BF exposure'ını yıllığa ölçekler; nihai ult k'ya geri bölünür.
+
+VERİMLİLİK — TUR LİMİTİ: birden çok origin'e aynı tür ayarı yaparken TEK BULK
+çağrı kullan: set_corrections, set_basis_bulk, set_selected_loss_ratios,
+set_cdf_choices, exclude_cells (çoklu hücre). ASLA origin başına tek tek
+set_correction / set_basis çağırma — tur limitini tüketir ("Tur limiti doldu").
 
 ----------------------------------------------------------------------------
 UYGULAMA KULLANIM KILAVUZU
@@ -392,10 +421,11 @@ def run_agent_turn(
     # Geriye dönük: tek-modül (rezerv) çağrıları için legacy yol
     triangle_payload: dict[str, Any] | None = None,
     session_state: dict[str, Any] | None = None,
-    # Otonom modelleme (oku → ele → yöntem → curve → basis → LR → tekrar oku →
-    # raporla) çok adımlı tool zinciri gerektirir; 8 yetmez. Tool çağrısı
-    # bittiğinde döngü erken durur, bu yalnızca ÜST sınır.
-    max_iterations: int = 16,
+    # Otonom modelleme (oku → üçgen yükle → ele → yöntem → curve → basis → LR →
+    # correction → tekrar oku → raporla) çok adımlı tool zinciri gerektirir. Bulk
+    # tool'lar kullanılınca yeter; tool çağrısı bittiğinde döngü erken durur, bu
+    # yalnızca ÜST sınır.
+    max_iterations: int = 24,
     # Multi-turn tool history: önceki turların raw mesajları (tool çağrısı + sonuç).
     # Varsa, messages yerine bu kullanılır ve mevcut kullanıcı mesajı sonuna eklenir.
     full_history: list[dict[str, Any]] | None = None,
@@ -584,9 +614,11 @@ def run_agent_turn(
             )
 
     raw_additions = conv[initial_conv_len:]
+    applied = ", ".join(t["name"] for t in tool_invocations[-10:]) if tool_invocations else ""
     return AgentTurnResult(
         assistant_message=(
-            "Tool çağrı limiti aşıldı. Lütfen sorunuzu daha spesifik sorun."
+            (f"Tur limiti doldu. Şu ana kadar uygulandı: {applied}. " if applied else "Tur limiti doldu. ")
+            + "Kaldığım yerden sürdürmek için 'devam' de."
         ),
         tool_invocations=tool_invocations,
         actions=actions,

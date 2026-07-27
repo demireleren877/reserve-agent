@@ -35,9 +35,20 @@ interface ActiveContext {
   frequency: string;
 }
 
+// Agent yazma yaptığı turda snapshot ESKİ kalır (aksiyonlar tur bitince uygulanır).
+// Bu yüzden aksiyonlar uygulanıp snapshot güncellenince GİZLİ bir "devam" turu atarız;
+// agent taze veriyle devam eder / nihai toplamları okuyup verir. Bu metin kullanıcıya
+// gösterilmez — yalnız history'e girer.
+const AUTO_CONTINUE_TEXT =
+  "(Sistem) Önceki aksiyonlar uygulandı ve güncel snapshot artık hazır. Kaldığın " +
+  "yerden DEVAM ET: gereken sonraki modelleme adımlarını uygula. Model tamamsa YENİ " +
+  "değişiklik yapma; get_analysis_state'ten OKUYARAK nihai Toplam Ultimate / IBNR / " +
+  "ULR'yi ve kısa gerekçeyi ver. Kullanıcıya soru sorma, onay isteme.";
+const MAX_AUTO_CONTINUE = 6;
+
 interface Props {
   modulesPayload: ModulesPayload;
-  onActions?: (actions: AgentAction[]) => void;
+  onActions?: (actions: AgentAction[]) => void | Promise<void>;
   onClose?: () => void;
   activeContext?: ActiveContext | null;
 }
@@ -60,6 +71,10 @@ export function ChatPanel({
   const [model, setModel] = useState<string>("");
   // ask_user ile gelen aktif form (doldurulup gönderilene kadar chat'te durur).
   const [pendingForm, setPendingForm] = useState<AgentForm | null>(null);
+  // Her render'da güncel modulesPayload'a işaret eder — otomatik "devam" turunda
+  // aksiyonlar uygulandıktan sonraki TAZE snapshot'ı okumak için.
+  const modulesPayloadRef = useRef(modulesPayload);
+  modulesPayloadRef.current = modulesPayload;
   const [modelsLoading, setModelsLoading] = useState(true);
   const [modelsError, setModelsError] = useState<string | null>(null);
   const [fullHistory, setFullHistory] = useState<RawMessage[]>([]);
@@ -146,48 +161,89 @@ export function ChatPanel({
     setSessions(loadSessions(uid));
   }
 
+  // modulesPayloadRef önceki referanstan değişene (snapshot yeniden kurulana) kadar
+  // bekle — otomatik "devam" turu TAZE veriyle çalışsın. Zaman aşımı güvenlik.
+  async function waitForSnapshot(prev: unknown, timeoutMs = 5000) {
+    const start = Date.now();
+    while (modulesPayloadRef.current === prev && Date.now() - start < timeoutMs) {
+      await new Promise((r) => setTimeout(r, 40));
+    }
+  }
+
   async function dispatchSend(prompt: string) {
     if (!prompt.trim() || loading) return;
     setError(null);
     setPendingForm(null); // yeni mesaj → varsa eski formu kapat
     const userMsg: ChatMessage = { role: "user", content: prompt };
-    const newMessages = [...messages, userMsg];
-    setMessages(newMessages);
+    let msgs: ChatMessage[] = [...messages, userMsg];
+    setMessages(msgs);
     setInput("");
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
     }
     setLoading(true);
-    try {
-      const resp = await chatWithAgent(
-        newMessages,
-        modulesPayload,
-        model || null,
-        null,
-        fullHistory,
-      );
-      if (resp.actions?.length && onActions) onActions(resp.actions);
-      const body = resp.actions?.length
-        ? `${resp.assistant_message || ""}\n\n✓ ${resp.actions.length} actions applied.`
-        : resp.assistant_message || "(empty response)";
-      const finalMessages: ChatMessage[] = [
-        ...newMessages,
-        { role: "assistant", content: body.trim() },
-      ];
-      setMessages(finalMessages);
-      // ask_user formu geldiyse chat'te tıklanabilir olarak göster.
-      if (resp.form?.fields?.length) setPendingForm(resp.form);
 
-      let nextHist = fullHistory;
-      if (resp.raw_additions?.length) {
-        nextHist = [
-          ...fullHistory,
-          { role: "user", content: userMsg.content } as RawMessage,
-          ...resp.raw_additions,
-        ];
-        setFullHistory(nextHist);
+    let hist = fullHistory;
+    let turnUserContent = prompt; // bu turda history'e yazılacak "user" içeriği
+    let extraUserMsg: ChatMessage | null = null; // otomatik turda backend'e ek (görünmez) user mesajı
+    let auto = 0;
+
+    try {
+      // Otomatik-devam döngüsü: agent YAZMA yaptıysa (actions), aksiyonlar uygulanıp
+      // snapshot güncellenene kadar bekle ve GİZLİ bir "devam" turu at → agent taze
+      // snapshot'ta modele devam eder / nihai toplamları OKUYUP verir. Kullanıcı
+      // tekrar bir şey yazmak zorunda kalmaz. Yazma bitince (actions=0) döngü durur.
+      for (;;) {
+        const sendMessages = extraUserMsg ? [...msgs, extraUserMsg] : msgs;
+        const prevSnap = modulesPayloadRef.current;
+        const resp = await chatWithAgent(
+          sendMessages,
+          prevSnap,
+          model || null,
+          null,
+          hist,
+        );
+
+        // 1) Aksiyonları uygula + güncel snapshot'ı bekle
+        if (resp.actions?.length && onActions) {
+          await onActions(resp.actions);
+          await waitForSnapshot(prevSnap);
+        }
+
+        const shouldContinue =
+          !!resp.actions?.length && !resp.form && auto < MAX_AUTO_CONTINUE;
+
+        // 2) Görünür assistant mesajı (boş+ara turlarda "…" ile kirletme)
+        const text = resp.assistant_message?.trim() ?? "";
+        if (text) {
+          msgs = [...msgs, { role: "assistant", content: text }];
+          setMessages(msgs);
+        } else if (!shouldContinue) {
+          msgs = [
+            ...msgs,
+            { role: "assistant", content: resp.actions?.length ? "Uygulandı." : "(empty response)" },
+          ];
+          setMessages(msgs);
+        }
+        if (resp.form?.fields?.length) setPendingForm(resp.form);
+
+        // 3) History (görünmez otomatik user mesajı da dahil)
+        if (resp.raw_additions?.length) {
+          hist = [
+            ...hist,
+            { role: "user", content: turnUserContent } as RawMessage,
+            ...resp.raw_additions,
+          ];
+          setFullHistory(hist);
+        }
+
+        if (!shouldContinue) break;
+        // 4) Gizli otomatik "devam" turu hazırla
+        auto++;
+        extraUserMsg = { role: "user", content: AUTO_CONTINUE_TEXT };
+        turnUserContent = AUTO_CONTINUE_TEXT;
       }
-      if (uid) saveSession(uid, buildSession(finalMessages, nextHist));
+      if (uid) saveSession(uid, buildSession(msgs, hist));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Agent error");
     } finally {

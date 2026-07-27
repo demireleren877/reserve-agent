@@ -22,14 +22,15 @@ import {
 import type { AgentAction } from "@/types/triangle";
 
 type ModuleSnapshot = Record<string, unknown>;
-type ActionHandler = (actions: AgentAction[]) => void;
+type ActionHandler = (actions: AgentAction[]) => void | Promise<void>;
 
 interface AgentRegistry {
   modulesPayload: Record<string, ModuleSnapshot>;
   registerSnapshot: (moduleName: string, snapshot: ModuleSnapshot | null) => void;
   registerActionHandler: (moduleName: string, handler: ActionHandler) => void;
   unregisterActionHandler: (moduleName: string) => void;
-  dispatchActions: (actions: AgentAction[]) => void;
+  /** Handler'lar (async olabilir — ör. üçgen yükleme) tamamlanınca resolve eder. */
+  dispatchActions: (actions: AgentAction[]) => Promise<void>;
   panelOpen: boolean;
   setPanelOpen: (open: boolean) => void;
   togglePanel: () => void;
@@ -73,7 +74,7 @@ export function AgentRegistryProvider({ children }: { children: ReactNode }) {
     delete handlersRef.current[moduleName];
   }, []);
 
-  const dispatchActions = useCallback((actions: AgentAction[]) => {
+  const dispatchActions = useCallback(async (actions: AgentAction[]) => {
     const byModule = new Map<string, AgentAction[]>();
     for (const a of actions) {
       const m = a.module || "reserve"; // legacy fallback
@@ -81,10 +82,12 @@ export function AgentRegistryProvider({ children }: { children: ReactNode }) {
       if (list) list.push(a);
       else byModule.set(m, [a]);
     }
+    const proms: (void | Promise<void>)[] = [];
     for (const [name, list] of byModule.entries()) {
       const handler = handlersRef.current[name];
-      if (handler) handler(list);
+      if (handler) proms.push(handler(list));
     }
+    await Promise.all(proms);
   }, []);
 
   const togglePanel = useCallback(() => setPanelOpen((v) => !v), []);

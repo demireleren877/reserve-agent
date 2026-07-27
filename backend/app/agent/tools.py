@@ -1041,9 +1041,8 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                 "eklenir + TÜM model varsayımları da taşınır). Üçgen YOKKEN "
                 "(get_analysis_state / has_triangle boş) modellemeden ÖNCE bunu çağır. "
                 "ÖNEMLİ: üçgen ASYNC yüklenir, bu turun snapshot'ında GÖRÜNMEZ — "
-                "çağırdıktan sonra kullanıcıya 'üçgeni yükledim; modellemeye devam edeyim "
-                "mi?' de ve DUR. Kullanıcı onaylayınca (yeni snapshot'ta üçgen görünür) "
-                "modele geç."
+                "çağır ve turu bitir; kullanıcıya SORMA (sistem otomatik devam eder). "
+                "Bir sonraki turda üçgen snapshot'ta olur, o zaman modele geç."
             ),
             "parameters": {
                 "type": "object",

@@ -29,6 +29,7 @@ import {
   largeWorkingTriangles,
   computeLargeSummary,
   computeAttritionalSummary,
+  subtractFileData,
 } from "@/lib/large-split";
 import {
   aggregateLDFs,
@@ -226,7 +227,16 @@ export default function Home() {
   );
 
   // LDF hover'ında gösterilen dosya kırılımı — mevcut segmente göre.
-  const effFileData = isLargeSeg ? effBranch?.largeFileData : activeBranch?.fileData;
+  // Segmente göre dosya kırılımı. Attritional segmentte gross DEĞİL, gross−large
+  // (dosya bazında) kullanılır — aksi halde large'dan çıkan dosyalar LDF popup'ında
+  // görünmez (gross'ta değişmemiş gibi durur).
+  const effFileData = isLargeSeg
+    ? effBranch?.largeFileData
+    : isGrossSeg
+    ? activeBranch?.fileData
+    : largeOn
+    ? subtractFileData(activeBranch?.fileData, effBranch?.largeFileData)
+    : activeBranch?.fileData;
 
   // Önceki dönemin EŞLEŞEN branch'i (large'dan bağımsız bulunur; en yakın önceki
   // dönemde aynı isim+frekansta üçgeni olan branch).
@@ -293,7 +303,7 @@ export default function Home() {
       priorFd = b.fileData ?? null;
     } else if (largeOn && hasLarge(b)) {
       priorTri = attritionalWorkingTriangle(b);
-      priorFd = b.fileData ?? null;
+      priorFd = subtractFileData(b.fileData, b.largeFileData); // attritional dosya kırılımı
     } else {
       priorTri = b.triangle;
     }
@@ -305,11 +315,15 @@ export default function Home() {
 
   // Önceki dönemin CDF'leri (Curve sayfasında referans kolon). Prior üçgen + GÜNCEL
   // window/method ile seçili LDF → kümülatif; aynı seçim tabanında pattern kıyası.
+  // Prior CDF: önceki dönem modelinin GERÇEK efektif CDF zinciri — kendi window/
+  // method/eleme/curve/CDF override'larıyla (mevcut ayarlarla ham yeniden hesap DEĞİL).
+  // Böylece Curve sekmesinde prior olarak, o dönemin kendi Curve'ünde gördüğü değerler çıkar.
   const priorCDFs = useMemo(() => {
     const t = priorLDFRef?.triangle;
-    if (!t) return null;
-    return cumulativeFactors(aggregateLDFs(t, developmentRatios(t, new Set<string>()), window, method));
-  }, [priorLDFRef, window, method]);
+    const pb = priorEffBranch ?? priorRaw?.branch;
+    if (!t || !pb) return null;
+    return computeBranchSummary({ ...pb, triangle: t }).effective_cdfs;
+  }, [priorLDFRef, priorEffBranch, priorRaw]);
 
   const premiums = effectivePremiums;
   const lrInputPerOrigin = pb?.lrInputPerOrigin ?? {};
@@ -1092,6 +1106,8 @@ export default function Home() {
             fileData={effFileData}
             prior={priorLDFRef}
             onWindowChange={guardedSetters.setWindow}
+            windowPresets={pb?.ldfWindowPresets}
+            onWindowPresetsChange={guardedSetters.setLdfWindowPresets}
             onToggleCell={toggleCellHandler}
             onToggleAvgPair={guardedSetters.toggleAvgPair}
             onClearCells={() => setExcludedCellsHandler(new Set())}

@@ -4,6 +4,8 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth/auth-context";
+import { useProject } from "@/lib/project-store";
+import { useAgentRegistry } from "@/lib/agent-registry";
 
 interface ModuleItem {
   href: string;
@@ -18,6 +20,7 @@ const MODULES: ModuleItem[] = [
   { href: "/reserve", label: "Reserve", icon: <StackIcon /> },
   { href: "/cashflow", label: "Cashflow", icon: <CashflowIcon /> },
   { href: "/discount", label: "Discount", icon: <DiscountIcon /> },
+  { href: "/guide", label: "Guide", icon: <GuideIcon /> },
   { href: "/admin/users", label: "Users", icon: <UsersIcon />, adminOnly: true },
 ];
 
@@ -27,6 +30,8 @@ export function AppSidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const { user, logout } = useAuth();
+  const { actions, canUndo } = useProject();
+  const { panelOpen, togglePanel } = useAgentRegistry();
 
   const [collapsed, setCollapsed] = useState(false);
   const [hydrated, setHydrated] = useState(false);
@@ -118,10 +123,47 @@ export function AppSidebar() {
             );
           })}
         </ul>
+
+        {/* Agent — panel aç/kapa (sağ üstteki sticky buton yerine) */}
+        <div className="mt-2 pt-2 border-t border-[color:var(--border)]">
+          <button
+            onClick={togglePanel}
+            title={collapsed ? "Agent" : undefined}
+            className={
+              "w-full flex items-center gap-2 rounded-md text-[13px] transition " +
+              (collapsed ? "justify-center py-2" : "px-2.5 py-1.5") +
+              " " +
+              (panelOpen
+                ? "bg-[color:var(--primary-soft)] text-[color:var(--primary)] font-medium"
+                : "text-[color:var(--muted-strong)] hover:bg-[color:var(--surface-alt)] hover:text-[color:var(--foreground)]")
+            }
+          >
+            <span className="opacity-80 shrink-0"><AgentSparkIcon /></span>
+            {!collapsed && <span className="flex-1 truncate text-left">Agent</span>}
+          </button>
+        </div>
       </nav>
 
       {/* Profile section */}
       <div className="border-t p-2 space-y-1">
+        {/* Undo — yanlışlıkla yapılan değişikliği geri al (proje geneli) */}
+        <button
+          onClick={() => actions.undo()}
+          disabled={!canUndo}
+          title={collapsed ? "Undo" : "Undo last change"}
+          className={
+            "w-full inline-flex items-center gap-2 rounded-md py-1.5 text-[11px] transition " +
+            (collapsed ? "justify-center px-0" : "px-2") +
+            " " +
+            (canUndo
+              ? "text-[color:var(--muted-strong)] hover:bg-[color:var(--surface-alt)] hover:text-[color:var(--foreground)]"
+              : "text-[color:var(--muted)] opacity-40 cursor-not-allowed")
+          }
+        >
+          <UndoIcon />
+          {!collapsed && <span>Undo</span>}
+        </button>
+
         <div ref={profileRef} className="relative">
           {profileOpen && (
             <div
@@ -227,6 +269,15 @@ function DiscountIcon() {
 }
 function UsersIcon() {
   return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>;
+}
+function GuideIcon() {
+  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" /></svg>;
+}
+function AgentSparkIcon() {
+  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l1.8 4.6L18 9l-4.2 1.4L12 15l-1.8-4.6L6 9l4.2-1.4z" /><path d="M19 15l1 2.4L22 18l-2 .6L19 21l-1-2.4L16 18l2-.6z" /></svg>;
+}
+function UndoIcon() {
+  return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7v6h6" /><path d="M3 13a9 9 0 1 0 3-7.7L3 8" /></svg>;
 }
 function ChevronLeftIcon() {
   return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>;

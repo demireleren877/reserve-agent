@@ -68,6 +68,9 @@ export interface Branch {
 
   method: LDFMethod;
   window: Window;
+  /** LDF tablosundaki düzenlenebilir volume presetleri (varsayılan [4,5,6,7]).
+   *  Branşa özel — cihaz değil. "All" ayrı, sabit. */
+  ldfWindowPresets?: number[];
   excludedCells: string[];
   /** LDF yumuşatma: aynı kaza yılında yan yana iki oranı (j, j+1) ortalamayla değiştir.
    *  Anahtar `origin|j` = çiftin sol hücresi. Elemeden bağımsız; long-press ile aç/kapat. */

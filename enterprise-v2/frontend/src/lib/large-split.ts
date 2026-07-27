@@ -6,13 +6,54 @@
  * Bu modül SADECE saf hesap yapar (veri değiştirmez, UI bilmez) — kolay test.
  */
 
-import type { Triangle } from "@/types/triangle";
+import type { Triangle, FileData } from "@/types/triangle";
+import { filePaid, fileOs } from "@/types/triangle";
 import type { Branch, Window } from "@/types/project";
 import { computeBranchSummary, type BranchSummary } from "@/lib/reserve-pipeline";
 
 /** Branch large veri içeriyor mu? */
 export function hasLarge(branch: Branch | null | undefined): boolean {
   return !!(branch?.largePaidTriangle || branch?.largeIncurredTriangle);
+}
+
+/**
+ * ATTRITIONAL dosya kırılımı = gross − large, DOSYA BAZINDA. LDF popup'ının
+ * doğru sebep dosyaları göstermesi için gerekir: bir dosya bir dönem LARGE
+ * (attritional'da 0), sonraki dönem large'dan çıkıp attritional'a girerse, gross
+ * fileData'da iki dönemde de aynı görünür (değişmez) — oysa ATTRITIONAL üçgende
+ * büyük değişim yaratır. Bu fonksiyon her dosyanın attritional payını (gross_paid
+ * − large_paid, gross_os − large_os) verir; large > gross olsa da (veri hatası)
+ * KIRPILMAZ — subtractTriangle ile aynı felsefe.
+ */
+export function subtractFileData(
+  gross: FileData | null | undefined,
+  large: FileData | null | undefined,
+): FileData {
+  const g = gross ?? {};
+  const l = large ?? {};
+  const out: FileData = {};
+  // gross ∪ large — SADECE gross'u gezmek yetmez: large'da olup gross'ta OLMAYAN
+  // (ör. gross triangle-import edilmiş, breakdown yok ama large dosya-bazlı) dosyalar
+  // aksi halde kaybolur; oysa large'dan çıkınca attritional'ı bunlar değiştirir.
+  const origins = new Set([...Object.keys(g), ...Object.keys(l)]);
+  for (const origin of origins) {
+    const gDev = g[origin] ?? {};
+    const lDev = l[origin] ?? {};
+    out[origin] = {};
+    const devs = new Set([...Object.keys(gDev), ...Object.keys(lDev)]);
+    for (const dev of devs) {
+      const gf = gDev[dev] ?? {};
+      const lf = lDev[dev] ?? {};
+      const cell: Record<string, { p: number; o: number }> = {};
+      for (const f of new Set([...Object.keys(gf), ...Object.keys(lf)])) {
+        // p<0 olabilir (dosya large'da var, gross'ta yok) — bu, "large'dan çıkınca
+        // att'a girecek tutar"ı temsil eder; KIRPILMAZ.
+        cell[f] = { p: filePaid(gf[f]) - filePaid(lf[f]), o: fileOs(gf[f]) - fileOs(lf[f]) };
+      }
+      out[origin][dev] = cell;
+    }
+  }
+  return out;
 }
 
 /**

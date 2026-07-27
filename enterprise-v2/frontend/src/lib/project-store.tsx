@@ -931,6 +931,8 @@ export interface BranchSetters {
   setLargeWindow: (w: Window) => void;
   setMethod: (m: LDFMethod) => void;
   setWindow: (w: Window) => void;
+  /** LDF volume presetlerini (düzenlenebilir Last-N satırları) branşa kaydet. */
+  setLdfWindowPresets: (next: number[]) => void;
   setExcludedCells: (next: Set<string>) => void;
   toggleCell: (origin: string, step: number) => void;
   /** LDF yumuşatma: aynı satırda (j, j+1) çiftini ortalamaya al / geri al (long-press). */
@@ -1125,6 +1127,13 @@ export function useBranchSetters(
           () => ({ window: w }),
           "set_window",
           { window: w },
+          source,
+        ),
+      setLdfWindowPresets: (next) =>
+        updModel(
+          () => ({ ldfWindowPresets: next }),
+          "ldf_presets",
+          { presets: next },
           source,
         ),
       setExcludedCells: (next) =>

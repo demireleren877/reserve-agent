@@ -109,15 +109,13 @@ function PeriodList({
   return (
     <div
       className="flex flex-col border-r flex-shrink-0"
-      style={{ width: 200, borderColor: "var(--border)", background: "var(--surface)" }}
+      style={{ width: 220, borderColor: "var(--border)", background: "var(--surface)" }}
     >
       <div
-        className="px-3 py-3 border-b"
+        className="h-12 px-3 flex items-center border-b"
         style={{ borderColor: "var(--border)" }}
       >
-        <div className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--muted)" }}>
-          Periods
-        </div>
+        <div className="text-[11px] font-semibold uppercase tracking-wide flex-1" style={{ color: "var(--muted-strong)" }}>Valuation periods</div><span className="text-[11px] tabular" style={{ color: "var(--muted)" }}>{periods.length}</span>
       </div>
 
       <div className="flex-1 overflow-y-auto py-1.5">
@@ -133,11 +131,15 @@ function PeriodList({
             <div
               key={p.id}
               onClick={() => onSelect(p.id)}
-              className="group flex items-center gap-1 mx-1.5 px-2.5 py-2 rounded-lg cursor-pointer transition"
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(p.id); } }}
+              role="button"
+              tabIndex={0}
+              className="group flex w-[calc(100%-12px)] items-center gap-2 mx-1.5 px-2.5 py-2 rounded-md cursor-pointer transition text-left focus:outline-none focus:ring-2 focus:ring-[color:var(--primary)]"
               style={{
                 background: active ? "var(--primary-soft)" : "transparent",
               }}
             >
+              <span className="h-2 w-2 rounded-full" style={{ background: datasetCount ? "var(--success)" : "var(--border-strong)" }} />
               <div className="flex-1 min-w-0">
                 <div
                   className="text-[13px] font-medium truncate"
@@ -187,108 +189,14 @@ function DataTypeCard({
   onRemove: (datasetId: string) => void;
 }) {
   return (
-    <div
-      className="rounded-xl border p-4 flex flex-col gap-3"
-      style={{ borderColor: "var(--border)", background: "var(--surface)" }}
-    >
-      <div className="flex items-start gap-3">
-        <div
-          className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5"
-          style={{ background: datasets.length > 0 ? "var(--primary-soft)" : "var(--surface-alt)" }}
-        >
-          <TableIcon color={datasets.length > 0 ? "var(--primary)" : "var(--muted)"} />
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="text-[13.5px] font-semibold" style={{ color: "var(--foreground)" }}>
-              {def.label}
-            </span>
-            {datasets.length > 0 && (
-              <span
-                className="text-[10.5px] font-semibold px-1.5 py-0.5 rounded-full"
-                style={{ background: "#dcfce7", color: "#15803d" }}
-              >
-                {datasets.length} datasets
-              </span>
-            )}
-          </div>
-          <div className="text-[12px] mt-0.5" style={{ color: "var(--muted-strong)" }}>
-            {def.description}
-          </div>
-          <div className="flex flex-wrap gap-1 mt-1.5">
-            {def.columns.map((c) => (
-              <span
-                key={c}
-                className="text-[10.5px] px-1.5 py-0.5 rounded-md font-mono"
-                style={{ background: "var(--surface-alt)", color: "var(--muted-strong)", border: "1px solid var(--border)" }}
-              >
-                {c}
-              </span>
-            ))}
-          </div>
-        </div>
+    <div className="border-b last:border-b-0" style={{ borderColor: "var(--border)" }}>
+      <div className="grid grid-cols-[minmax(190px,1.35fr)_minmax(120px,.75fr)_110px_104px] items-center gap-4 px-5 py-4">
+        <div className="min-w-0"><div className="flex items-center gap-2"><TableIcon color={datasets.length ? "var(--primary)" : "var(--muted)"} /><span className="text-[13px] font-semibold">{def.label}</span></div><p className="mt-1 truncate text-[11.5px]" style={{ color: "var(--muted-strong)" }}>{def.description}</p></div>
+        <div className="min-w-0 text-[11.5px]" style={{ color: "var(--muted-strong)" }}>{datasets.length ? <span className="truncate block">{datasets[0].meta.filename}</span> : <span style={{ color: "var(--muted)" }}>No source loaded</span>}</div>
+        <div className="text-right text-[12px] tabular" style={{ color: datasets.length ? "var(--foreground)" : "var(--muted)" }}>{fmt0(datasets.reduce((sum, ds) => sum + ds.meta.record_count, 0))}</div>
+        <div className="text-right"><button onClick={onImport} className={datasets.length ? "btn text-[11.5px]" : "btn btn-primary text-[11.5px]"}>{datasets.length ? "Add data" : "Load"}</button></div>
       </div>
-
-      {datasets.length > 0 && (
-        <div className="flex flex-col gap-1.5">
-          {datasets.map((ds) => (
-            <div
-              key={ds.datasetId}
-              className="rounded-lg px-3 py-2 text-[12px] flex items-center gap-2"
-              style={{ background: "var(--surface-alt)" }}
-            >
-              <div className="flex-1 min-w-0 grid grid-cols-3 gap-2">
-                <div>
-                  <div style={{ color: "var(--muted)" }}>Records</div>
-                  <div className="font-semibold" style={{ color: "var(--foreground)" }}>
-                    {fmt0(ds.meta.record_count)}
-                  </div>
-                </div>
-                <div>
-                  <div style={{ color: "var(--muted)" }}>File</div>
-                  <div className="font-semibold truncate" style={{ color: "var(--foreground)" }}>
-                    {ds.meta.filename}
-                  </div>
-                </div>
-                <div>
-                  <div style={{ color: "var(--muted)" }}>Uploaded</div>
-                  <div className="font-semibold" style={{ color: "var(--foreground)" }}>
-                    {new Date(ds.meta.uploadedAt).toLocaleDateString("tr-TR")}
-                  </div>
-                </div>
-              </div>
-              <div className="flex gap-1 flex-shrink-0">
-                <button
-                  onClick={() => onView(ds.datasetId)}
-                  className="px-2.5 py-1 rounded-lg text-[11.5px] border transition"
-                  style={{ borderColor: "var(--border)", color: "var(--muted-strong)" }}
-                >
-                  View
-                </button>
-                <button
-                  onClick={() => onRemove(ds.datasetId)}
-                  className="px-2.5 py-1 rounded-lg text-[11.5px] border transition hover:bg-red-50"
-                  style={{ borderColor: "var(--border)", color: "#dc2626" }}
-                >
-                  Sil
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <button
-        onClick={onImport}
-        className="py-1.5 rounded-lg text-[12.5px] font-semibold border transition"
-        style={{
-          borderColor: "var(--primary)",
-          background: datasets.length > 0 ? "transparent" : "var(--primary)",
-          color: datasets.length > 0 ? "var(--primary)" : "#fff",
-        }}
-      >
-        {datasets.length > 0 ? "+ Add new" : "Upload data"}
-      </button>
+      {datasets.length > 0 && <div className="border-t px-5 py-2" style={{ borderColor: "var(--border)", background: "var(--surface-alt)" }}>{datasets.map((ds) => <div key={ds.datasetId} className="flex items-center gap-3 py-1 text-[11px]"><span className="min-w-0 flex-1 truncate" style={{ color: "var(--muted-strong)" }}>{ds.meta.filename}</span><span className="tabular" style={{ color: "var(--muted)" }}>{fmt0(ds.meta.record_count)} records</span><button onClick={() => onView(ds.datasetId)} className="font-medium" style={{ color: "var(--primary)" }}>View</button><button onClick={() => onRemove(ds.datasetId)} className="font-medium" style={{ color: "var(--danger)" }}>Remove</button></div>)}</div>}
     </div>
   );
 }
@@ -585,14 +493,9 @@ function PeriodDetail({ period }: { period: DataPeriod }) {
   // Overview
   return (
     <div className="flex-1 overflow-auto p-6">
-      <div className="mb-5">
-        <div className="text-[18px] font-bold" style={{ color: "var(--foreground)" }}>{period.label}</div>
-        <div className="text-[12.5px] mt-0.5" style={{ color: "var(--muted)" }}>
-          Created: {new Date(period.createdAt).toLocaleDateString("en-GB")}
-        </div>
-      </div>
-
-      <div className="grid gap-3 md:grid-cols-2">
+      <div className="mb-5 flex items-start justify-between gap-4"><div><h1 className="text-[18px] font-semibold">{period.label}</h1><p className="mt-1 text-[12px]" style={{ color: "var(--muted-strong)" }}>Data sources and imported datasets for this valuation period.</p></div><div className="text-right"><div className="text-[11px] font-medium" style={{ color: "var(--muted-strong)" }}>Oracle source</div><div className="mt-0.5 text-[11px]" style={{ color: "var(--success)" }}>● Connected</div></div></div>
+      <div className="card overflow-hidden">
+        <div className="grid grid-cols-[minmax(190px,1.35fr)_minmax(120px,.75fr)_110px_104px] gap-4 border-b px-5 py-2.5 text-[10px] font-semibold uppercase tracking-wide" style={{ borderColor: "var(--border)", background: "var(--surface-alt)", color: "var(--muted-strong)" }}><span>Dataset</span><span>Source</span><span className="text-right">Records</span><span className="text-right">Action</span></div>
         {DATA_TYPES.map((def) => {
           const typeDatasets = Object.values(period.datasets).filter((d) => d.typeId === def.id);
           return (
@@ -662,7 +565,7 @@ export default function DataPage() {
     useDataStore();
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex h-full min-h-0 overflow-hidden">
       {/* Sol: dönem listesi */}
       <PeriodList
         periods={periods}
@@ -680,10 +583,7 @@ export default function DataPage() {
           style={{ borderColor: "var(--border)", background: "var(--surface)" }}
         >
           <div>
-            <div className="text-[14px] font-semibold" style={{ color: "var(--foreground)" }}>Data</div>
-            <div className="text-[11.5px]" style={{ color: "var(--muted)" }}>
-              Period-based data management
-            </div>
+            <div className="text-[14px] font-semibold" style={{ color: "var(--foreground)" }}>Data</div><div className="text-[11.5px]" style={{ color: "var(--muted)" }}>Period-based data management</div>
           </div>
         </div>
 

@@ -359,6 +359,67 @@ export interface DataImportResult {
   }[];
 }
 
+export interface OracleObject {
+  owner: string;
+  name: string;
+  type: "TABLE" | "VIEW";
+  qualified: string;
+}
+
+export interface OraclePreviewResult {
+  columns: string[];
+  rows: unknown[][];
+  row_count: number;
+}
+
+export interface OracleFetchResult {
+  columns: string[];
+  records: Record<string, unknown>[];
+  count: number;
+}
+
+/** Lists the tables and views available through the active desktop Oracle connection. */
+export async function listOracleObjects(search = ""): Promise<OracleObject[]> {
+  const authHeaders = await getAuthHeaders();
+  const params = new URLSearchParams({ limit: "300" });
+  if (search.trim()) params.set("search", search.trim());
+  const res = await fetch(`${API_BASE}/v1/data/oracle/tables?${params}`, { headers: authHeaders });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ detail: "Could not load Oracle objects" }));
+    throw new Error(body.detail || `HTTP ${res.status}`);
+  }
+  const data = await res.json();
+  return data.tables as OracleObject[];
+}
+
+export async function previewOracleObject(table: string): Promise<OraclePreviewResult> {
+  const authHeaders = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/v1/data/oracle/preview`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders },
+    body: JSON.stringify({ table, limit: 25 }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ detail: "Could not preview Oracle object" }));
+    throw new Error(body.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function fetchOracleObject(table: string): Promise<OracleFetchResult> {
+  const authHeaders = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/v1/data/oracle/fetch`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders },
+    body: JSON.stringify({ table, max_rows: 500000 }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ detail: "Could not fetch Oracle data" }));
+    throw new Error(body.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
 export async function inspectDataFile(file: File): Promise<DataInspectResult> {
   if (file.size > 50 * 1024 * 1024) throw new Error("File exceeds the 50 MB limit");
   const base64 = bufferToBase64(await file.arrayBuffer());

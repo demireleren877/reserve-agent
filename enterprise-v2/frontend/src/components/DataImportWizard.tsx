@@ -4,12 +4,17 @@
  * Import wizard: Yükle → Sheet Seç → Sütun Eşleştir → Preview → İçeri Aktar
  */
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  fetchOracleObject,
   inspectDataFile,
   importDataFile,
+  listOracleObjects,
+  previewOracleObject,
   type DataInspectResult,
   type DataImportResult,
+  type OracleObject,
+  type OraclePreviewResult,
 } from "@/lib/api";
 
 // ─── Sabitler ─────────────────────────────────────────────────────────────────
@@ -23,7 +28,7 @@ export const REQUIRED_FIELDS: { key: string; label: string; hint: string }[] = [
   { key: "muallak",        label: "Outstanding",      hint: "Case reserve" },
 ];
 
-type WizardStep = "upload" | "sheet" | "mapping" | "preview" | "importing";
+type WizardStep = "source" | "upload" | "oracle" | "sheet" | "mapping" | "preview" | "importing";
 
 interface WizardState {
   file: File;
@@ -63,17 +68,21 @@ function resolveSuggested(inspect: DataInspectResult, sheet: string | null): Rec
 // ─── Adım göstergesi ──────────────────────────────────────────────────────────
 
 const STEP_LABELS: Record<WizardStep, string> = {
+  source:    "Source",
   upload:    "Upload",
+  oracle:    "Oracle",
   sheet:     "Sheet",
   mapping:   "Columns",
   preview:   "Preview",
   importing: "Preview",
 };
 
-function StepIndicator({ current, hasSheet }: { current: WizardStep; hasSheet: boolean }) {
-  const steps: WizardStep[] = hasSheet
-    ? ["upload", "sheet", "mapping", "preview"]
-    : ["upload", "mapping", "preview"];
+function StepIndicator({ current, hasSheet, oracle }: { current: WizardStep; hasSheet: boolean; oracle: boolean }) {
+  const steps: WizardStep[] = oracle
+    ? ["source", "oracle", "mapping", "preview"]
+    : hasSheet
+    ? ["source", "upload", "sheet", "mapping", "preview"]
+    : ["source", "upload", "mapping", "preview"];
 
   const idx = steps.indexOf(current === "importing" ? "preview" : current);
 
@@ -112,6 +121,59 @@ function StepIndicator({ current, hasSheet }: { current: WizardStep; hasSheet: b
       ))}
     </div>
   );
+}
+
+function SourceStep({ onOracle, onFile }: { onOracle: () => void; onFile: () => void }) {
+  return (
+    <div className="flex flex-1 items-center justify-center px-6 py-8">
+      <div className="w-full max-w-xl">
+        <h2 className="text-[17px] font-semibold">Select source</h2>
+        <p className="mt-1 text-[12.5px]" style={{ color: "var(--muted-strong)" }}>Choose where this dataset should be loaded from.</p>
+        <div className="mt-5 overflow-hidden rounded-lg border" style={{ borderColor: "var(--border)" }}>
+          <button onClick={onOracle} className="flex w-full items-center gap-3 border-b px-4 py-4 text-left transition hover:bg-[color:var(--surface-alt)]" style={{ borderColor: "var(--border)" }}><span className="flex h-8 w-8 items-center justify-center rounded-md" style={{ background: "var(--primary-soft)", color: "var(--primary)" }}><DatabaseIcon /></span><span className="flex-1"><span className="block text-[13px] font-semibold">Oracle</span><span className="mt-0.5 block text-[11.5px]" style={{ color: "var(--muted-strong)" }}>Browse tables and views from the active connection.</span></span><span className="text-[13px]" style={{ color: "var(--muted)" }}>›</span></button>
+          <button onClick={onFile} className="flex w-full items-center gap-3 px-4 py-4 text-left transition hover:bg-[color:var(--surface-alt)]"><span className="flex h-8 w-8 items-center justify-center rounded-md" style={{ background: "var(--surface-alt)", color: "var(--muted-strong)" }}><UploadIcon /></span><span className="flex-1"><span className="block text-[13px] font-semibold">File upload</span><span className="mt-0.5 block text-[11.5px]" style={{ color: "var(--muted-strong)" }}>CSV or Excel workbook.</span></span><span className="text-[13px]" style={{ color: "var(--muted)" }}>›</span></button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function OracleStep({ onSelected, onBack }: { onSelected: (object: OracleObject, preview: OraclePreviewResult) => void; onBack: () => void }) {
+  const [objects, setObjects] = useState<OracleObject[]>([]);
+  const [query, setQuery] = useState("");
+  const [selected, setSelected] = useState<OracleObject | null>(null);
+  const [preview, setPreview] = useState<OraclePreviewResult | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [previewing, setPreviewing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let stale = false;
+    setLoading(true);
+    const timer = window.setTimeout(() => {
+      listOracleObjects(query).then((items) => { if (!stale) setObjects(items); }).catch((e) => { if (!stale) setError(e instanceof Error ? e.message : "Could not load Oracle objects"); }).finally(() => { if (!stale) setLoading(false); });
+    }, query ? 220 : 0);
+    return () => { stale = true; window.clearTimeout(timer); };
+  }, [query]);
+
+  async function choose(object: OracleObject) {
+    setSelected(object); setPreview(null); setError(null); setPreviewing(true);
+    try { setPreview(await previewOracleObject(object.qualified)); }
+    catch (e) { setError(e instanceof Error ? e.message : "Could not preview the selected object"); }
+    finally { setPreviewing(false); }
+  }
+
+  return <div className="flex min-h-0 flex-1 flex-col">
+    <div className="border-b px-6 py-5" style={{ borderColor: "var(--border)" }}>
+      <div className="flex items-start justify-between gap-4"><div><h2 className="text-[17px] font-bold">Oracle source</h2><p className="mt-1 text-[12.5px]" style={{ color: "var(--muted-strong)" }}>Select a table or view available to the active desktop connection.</p></div><button onClick={onBack} className="btn min-h-10">← Back</button></div>
+      <label className="relative mt-4 block"><span className="sr-only">Search Oracle objects</span><input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search owner, table or view…" className="input-base h-11 pl-10"/><span className="pointer-events-none absolute left-3 top-3" style={{ color: "var(--muted)" }}><SearchIcon /></span></label>
+    </div>
+    <div className="grid min-h-0 flex-1 md:grid-cols-[minmax(260px,.8fr)_minmax(0,1.2fr)]">
+      <div className="min-h-0 overflow-auto border-r p-3" style={{ borderColor: "var(--border)" }}>
+        {loading ? <div className="p-5 text-center text-[12px]" style={{ color: "var(--muted)" }}>Loading Oracle objects…</div> : objects.length === 0 ? <div className="p-5 text-center text-[12px]" style={{ color: "var(--muted)" }}>No table or view matches this search.</div> : objects.map((object) => <button key={object.qualified} onClick={() => choose(object)} className="mb-1 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition" style={{ background: selected?.qualified === object.qualified ? "var(--primary-soft)" : "transparent", color: "var(--foreground)" }}><span className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ background: selected?.qualified === object.qualified ? "#fff" : "var(--surface-alt)", color: "var(--primary)" }}><DatabaseIcon /></span><span className="min-w-0 flex-1"><span className="block truncate text-[12.5px] font-semibold">{object.name}</span><span className="block truncate text-[10.5px]" style={{ color: "var(--muted)" }}>{object.owner} · {object.type.toLowerCase()}</span></span></button>)}</div>
+      <div className="min-h-0 overflow-auto p-5">{!selected ? <div className="flex h-full flex-col items-center justify-center text-center"><span className="flex h-12 w-12 items-center justify-center rounded-2xl" style={{ background: "var(--surface-alt)", color: "var(--muted)" }}><DatabaseIcon /></span><p className="mt-3 text-[13px] font-semibold">Choose an Oracle object</p><p className="mt-1 max-w-xs text-[12px]" style={{ color: "var(--muted)" }}>Its columns and a sample of rows will appear here.</p></div> : previewing ? <div className="flex h-full items-center justify-center gap-3 text-[12px]" style={{ color: "var(--muted)" }}><Spinner small /> Loading preview…</div> : preview ? <div><div className="flex items-start justify-between gap-3"><div><span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--primary)" }}>{selected.type}</span><h3 className="mt-1 text-[15px] font-bold">{selected.qualified}</h3><p className="mt-1 text-[11px]" style={{ color: "var(--muted)" }}>{preview.columns.length} columns · {preview.row_count} preview rows</p></div><button onClick={() => onSelected(selected, preview)} className="btn btn-primary min-h-10">Use this source →</button></div><div className="mt-5 overflow-auto rounded-xl border" style={{ borderColor: "var(--border)", maxHeight: 340 }}><table className="w-full border-collapse text-left text-[11px]"><thead><tr style={{ background: "var(--surface-alt)" }}>{preview.columns.map((c) => <th key={c} className="whitespace-nowrap border-b px-3 py-2 font-semibold" style={{ borderColor: "var(--border)", color: "var(--muted-strong)" }}>{c}</th>)}</tr></thead><tbody>{preview.rows.map((row, i) => <tr key={i}>{row.map((value, j) => <td key={j} className="max-w-[180px] truncate border-b px-3 py-2" style={{ borderColor: "var(--border)" }}>{String(value ?? "—")}</td>)}</tr>)}</tbody></table></div></div> : null}{error && <ErrorBox message={error} className="mt-4" />}</div>
+    </div>
+  </div>;
 }
 
 // ─── Adım 1: Yükle ────────────────────────────────────────────────────────────
@@ -435,8 +497,8 @@ function MappingStep({
 // ─── Adım 4: Önizle & İçeri Aktar ────────────────────────────────────────────
 
 function PreviewStep({
-  file,
-  sheetName,
+  sourceName,
+  sourceDetail,
   mapping,
   onImport,
   onBack,
@@ -451,8 +513,8 @@ function PreviewStep({
   largeBase,
   onLargeBase,
 }: {
-  file: File;
-  sheetName: string | null;
+  sourceName: string;
+  sourceDetail: string;
   mapping: Record<string, string>;
   onImport: () => void;
   onBack: () => void;
@@ -484,11 +546,8 @@ function PreviewStep({
         >
           <FileIcon />
           <div>
-            <div className="text-[13px] font-semibold" style={{ color: "var(--foreground)" }}>{file.name}</div>
-            <div className="text-[11.5px]" style={{ color: "var(--muted)" }}>
-              {(file.size / 1024).toFixed(0)} KB
-              {sheetName && ` · Sayfa: ${sheetName}`}
-            </div>
+            <div className="text-[13px] font-semibold" style={{ color: "var(--foreground)" }}>{sourceName}</div>
+            <div className="text-[11.5px]" style={{ color: "var(--muted)" }}>{sourceDetail}</div>
           </div>
         </div>
 
@@ -666,10 +725,11 @@ export function DataImportWizard({
   /** Roll-forward tabanı için seçilebilecek önceki dönem etiketleri. */
   basePeriodOptions?: string[];
 }) {
-  const [step, setStep] = useState<WizardStep>("upload");
+  const [step, setStep] = useState<WizardStep>("source");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [state, setState] = useState<WizardState | null>(null);
+  const [oracle, setOracle] = useState<{ object: OracleObject; preview: OraclePreviewResult; mapping: Record<string, string> } | null>(null);
   // Rezervde otomatik oluşacak model iskeletinin frekansı (kaza dönemi).
   const [frequency, setFrequency] = useState<"yearly" | "quarterly">("yearly");
   // Large yöntemi (yalnız largeMode): doğrudan / roll-forward + taban dönem.
@@ -680,6 +740,8 @@ export function DataImportWizard({
     state !== null &&
     state.inspect.sheets.length > 1 &&
     state.inspect.sheets[0] !== null;
+
+  const isOracle = oracle !== null;
 
   // Yükle
   async function handleFile(file: File) {
@@ -696,6 +758,7 @@ export function DataImportWizard({
         selectedSheet: initialSheet,
         mapping: resolveSuggested(inspect, initialSheet),
       });
+      setOracle(null);
       setStep(multiSheet ? "sheet" : "mapping");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not read file");
@@ -716,20 +779,42 @@ export function DataImportWizard({
 
   // Mapping güncelle
   function handleMapping(m: Record<string, string>) {
-    if (!state) return;
-    setState({ ...state, mapping: m });
+    if (oracle) { setOracle({ ...oracle, mapping: m }); return; }
+    if (state) setState({ ...state, mapping: m });
   }
 
   // Import
   async function handleImport() {
-    if (!state) return;
+    if (!state && !oracle) return;
     setError(null);
     setLoading(true);
     setStep("importing");
     try {
-      const result = await importDataFile(state.file, state.selectedSheet, state.mapping);
+      let result: DataImportResult;
+      let filename: string;
+      if (oracle) {
+        const fetched = await fetchOracleObject(oracle.object.qualified);
+        const rows = fetched.records.map((record) => ({
+          dosya_no: String(record[oracle.mapping.dosya_no] ?? "").trim(),
+          brans: String(record[oracle.mapping.brans] ?? "").trim(),
+          hasar_tarihi: String(record[oracle.mapping.hasar_tarihi] ?? "").slice(0, 10),
+          gelisim_tarihi: String(record[oracle.mapping.gelisim_tarihi] ?? "").slice(0, 10),
+          odeme: Number(record[oracle.mapping.odeme] ?? 0),
+          muallak: Number(record[oracle.mapping.muallak] ?? 0),
+        }));
+        if (rows.some((r) => !r.dosya_no || !r.brans || !r.hasar_tarihi || !r.gelisim_tarihi || !Number.isFinite(r.odeme) || !Number.isFinite(r.muallak))) {
+          throw new Error("Oracle source has empty or invalid values in one or more mapped required columns.");
+        }
+        const dates = rows.map((r) => r.hasar_tarihi);
+        const developments = rows.map((r) => r.gelisim_tarihi);
+        result = { record_count: rows.length, brans_list: [...new Set(rows.map((r) => r.brans))].sort(), hasar_tarihi_min: dates.sort()[0] ?? "", hasar_tarihi_max: dates.sort().at(-1) ?? "", gelisim_tarihi_min: developments.sort()[0] ?? "", gelisim_tarihi_max: developments.sort().at(-1) ?? "", total_odeme: rows.reduce((sum, r) => sum + r.odeme, 0), total_muallak: rows.reduce((sum, r) => sum + r.muallak, 0), records: rows };
+        filename = `Oracle · ${oracle.object.qualified}`;
+      } else {
+        result = await importDataFile(state!.file, state!.selectedSheet, state!.mapping);
+        filename = state!.file.name;
+      }
       onDone({
-        filename: state.file.name,
+        filename,
         result,
         frequency,
         ...(largeMode
@@ -748,22 +833,28 @@ export function DataImportWizard({
   }
 
   function currentHeaders(): string[] {
+    if (oracle) return oracle.preview.columns;
     if (!state) return [];
     return resolveHeaders(state.inspect, state.selectedSheet);
   }
 
   function currentPreview(): string[][] {
+    if (oracle) return oracle.preview.rows.map((row) => row.map((value) => String(value ?? "")));
     if (!state) return [];
     return resolvePreview(state.inspect, state.selectedSheet);
   }
 
   return (
     <div className="flex flex-col h-full">
-      <StepIndicator current={step} hasSheet={isExcelMultiSheet} />
+      <StepIndicator current={step} hasSheet={isExcelMultiSheet} oracle={isOracle} />
+
+      {step === "source" && <SourceStep onOracle={() => setStep("oracle")} onFile={() => { setOracle(null); setStep("upload"); }} />}
 
       {step === "upload" && (
         <UploadStep onFile={handleFile} loading={loading} error={error} />
       )}
+
+      {step === "oracle" && <OracleStep onBack={() => setStep("source")} onSelected={(object, preview) => { setOracle({ object, preview, mapping: {} }); setState(null); setStep("mapping"); }} />}
 
       {step === "sheet" && state && (
         <SheetStep
@@ -774,22 +865,22 @@ export function DataImportWizard({
         />
       )}
 
-      {step === "mapping" && state && (
+      {step === "mapping" && (state || oracle) && (
         <MappingStep
           headers={currentHeaders()}
-          mapping={state.mapping}
+          mapping={oracle?.mapping ?? state!.mapping}
           preview={currentPreview()}
           onMapping={handleMapping}
           onNext={() => setStep("preview")}
-          onBack={() => setStep(isExcelMultiSheet ? "sheet" : "upload")}
+          onBack={() => setStep(oracle ? "oracle" : isExcelMultiSheet ? "sheet" : "upload")}
         />
       )}
 
-      {(step === "preview" || step === "importing") && state && (
+      {(step === "preview" || step === "importing") && (state || oracle) && (
         <PreviewStep
-          file={state.file}
-          sheetName={state.selectedSheet}
-          mapping={state.mapping}
+          sourceName={oracle ? oracle.object.qualified : state!.file.name}
+          sourceDetail={oracle ? `Oracle ${oracle.object.type.toLowerCase()} · ${oracle.preview.row_count} preview rows` : `${(state!.file.size / 1024).toFixed(0)} KB${state!.selectedSheet ? ` · Sheet: ${state!.selectedSheet}` : ""}`}
+          mapping={oracle?.mapping ?? state!.mapping}
           onImport={handleImport}
           onBack={() => setStep("mapping")}
           importing={step === "importing"}
@@ -857,4 +948,12 @@ function FileIcon() {
       <polyline points="14 2 14 8 20 8" />
     </svg>
   );
+}
+
+function DatabaseIcon() {
+  return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><ellipse cx="12" cy="5" rx="8" ry="3" /><path d="M4 5v7c0 1.7 3.6 3 8 3s8-1.3 8-3V5" /><path d="M4 12v7c0 1.7 3.6 3 8 3s8-1.3 8-3v-7" /></svg>;
+}
+
+function SearchIcon() {
+  return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5" /><path d="m16 16 4 4" /></svg>;
 }

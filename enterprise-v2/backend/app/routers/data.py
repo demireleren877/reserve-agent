@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import datetime as _dt
 import json
+import re
+from decimal import Decimal
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -170,3 +173,131 @@ async def delete_dataset(period_id: str, dataset_id: str, _user: CurrentUser) ->
             )
         await conn.commit()
     return {"ok": True}
+
+
+# ── Oracle: doğrudan tablo/view'dan veri çekme ────────────────────────────────
+# Kullanıcı Excel yerine Oracle'daki bir tabloyu/view'ı seçip aynı import
+# sihirbazından (sütun eşleme) geçirebilsin diye. Tablo adları identifier olduğu
+# için parametreleştirilemez → sıkı doğrula + çift-tırnakla; ayrıca sistem
+# şemalarını gizle.
+
+_ORA_IDENT = re.compile(r"^[A-Za-z0-9_$#]{1,128}$")
+_ORA_SYS_SCHEMAS = (
+    "SYS", "SYSTEM", "CTXSYS", "MDSYS", "XDB", "OUTLN", "DBSNMP", "APPQOSSYS",
+    "ORDSYS", "ORDDATA", "WMSYS", "LBACSYS", "OLAPSYS", "DVSYS", "AUDSYS",
+    "GSMADMIN_INTERNAL", "REMOTE_SCHEDULER_AGENT",
+)
+
+
+def _validate_table(qualified: str) -> tuple[str | None, str]:
+    """'OWNER.TABLE' veya 'TABLE' → doğrulanmış (owner, table). Hatalıysa 400."""
+    q = (qualified or "").strip().strip('"')
+    parts = q.split(".")
+    if len(parts) == 1:
+        owner, table = None, parts[0]
+    elif len(parts) == 2:
+        owner, table = parts[0].strip('"'), parts[1].strip('"')
+    else:
+        raise HTTPException(status_code=400, detail="invalid_table")
+    if (owner is not None and not _ORA_IDENT.match(owner)) or not _ORA_IDENT.match(table):
+        raise HTTPException(status_code=400, detail="invalid_table_name")
+    return owner, table
+
+
+def _quoted(owner: str | None, table: str) -> str:
+    return f'"{owner}"."{table}"' if owner else f'"{table}"'
+
+
+def _ser(v: Any) -> Any:
+    """Oracle değerini JSON-güvenli hale getir."""
+    if v is None:
+        return None
+    if isinstance(v, Decimal):
+        f = float(v)
+        return int(f) if f.is_integer() else f
+    if isinstance(v, (_dt.datetime, _dt.date)):
+        return v.isoformat()
+    if isinstance(v, bytes):
+        try:
+            return v.decode("utf-8", "replace")
+        except Exception:
+            return str(v)
+    return v
+
+
+class OracleTableRequest(BaseModel):
+    table: str
+    limit: int | None = None
+    max_rows: int | None = None
+
+
+@router.get("/oracle/tables")
+async def oracle_tables(_user: CurrentUser, search: str = "", limit: int = 300) -> dict:
+    """Erişilebilir tablo + view listesi (sistem şemaları hariç). search = owner.name filtresi."""
+    limit = max(1, min(int(limit or 300), 2000))
+    like = f"%{search.upper().strip()}%" if search else "%"
+    sys_list = ",".join(f"'{s}'" for s in _ORA_SYS_SCHEMAS)
+    sql = f"""
+        SELECT owner, object_name, object_type FROM (
+            SELECT owner, table_name AS object_name, 'TABLE' AS object_type
+              FROM all_tables WHERE owner NOT IN ({sys_list})
+            UNION ALL
+            SELECT owner, view_name AS object_name, 'VIEW' AS object_type
+              FROM all_views WHERE owner NOT IN ({sys_list})
+        ) WHERE UPPER(owner || '.' || object_name) LIKE :1
+        ORDER BY owner, object_name
+        FETCH FIRST {limit} ROWS ONLY
+    """
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        with conn.cursor() as cur:
+            await cur.execute(sql, [like])
+            rows = await cur.fetchall()
+    return {
+        "tables": [
+            {"owner": o, "name": n, "type": t, "qualified": f"{o}.{n}"}
+            for (o, n, t) in rows
+        ],
+        "count": len(rows),
+    }
+
+
+@router.post("/oracle/preview")
+async def oracle_preview(body: OracleTableRequest, _user: CurrentUser) -> dict:
+    """Seçilen tablonun sütunları + ilk N satırı (önizleme + eşleme için)."""
+    owner, table = _validate_table(body.table)
+    limit = max(1, min(int(body.limit or 50), 500))
+    qname = _quoted(owner, table)
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        with conn.cursor() as cur:
+            await cur.execute(f"SELECT * FROM {qname} FETCH FIRST {limit} ROWS ONLY")
+            columns = [d[0] for d in cur.description]
+            rows = await cur.fetchall()
+    return {
+        "columns": columns,
+        "rows": [[_ser(v) for v in r] for r in rows],
+        "row_count": len(rows),
+    }
+
+
+@router.post("/oracle/fetch")
+async def oracle_fetch(body: OracleTableRequest, _user: CurrentUser) -> dict:
+    """Tablonun tüm satırlarını (üst sınıra kadar) kayıt (dict) listesi olarak döndür —
+    frontend eşlemeyle claim/prim/üçgen record'una çevirir."""
+    owner, table = _validate_table(body.table)
+    max_rows = max(1, min(int(body.max_rows or 500_000), 2_000_000))
+    qname = _quoted(owner, table)
+    pool = await get_pool()
+    records: list[dict[str, Any]] = []
+    async with pool.acquire() as conn:
+        with conn.cursor() as cur:
+            await cur.execute(f"SELECT * FROM {qname} FETCH FIRST {max_rows} ROWS ONLY")
+            columns = [d[0] for d in cur.description]
+            while True:
+                batch = await cur.fetchmany(5000)
+                if not batch:
+                    break
+                for r in batch:
+                    records.append({columns[i]: _ser(r[i]) for i in range(len(columns))})
+    return {"columns": columns, "records": records, "count": len(records)}

@@ -226,17 +226,19 @@ export default function Home() {
     [pb, effectivePremiums, triangle, effPaid, effIncurred],
   );
 
-  // LDF hover'ında gösterilen dosya kırılımı — mevcut segmente göre.
-  // Segmente göre dosya kırılımı. Attritional segmentte gross DEĞİL, gross−large
-  // (dosya bazında) kullanılır — aksi halde large'dan çıkan dosyalar LDF popup'ında
-  // görünmez (gross'ta değişmemiş gibi durur).
-  const effFileData = isLargeSeg
-    ? effBranch?.largeFileData
-    : isGrossSeg
-    ? activeBranch?.fileData
-    : largeOn
-    ? subtractFileData(activeBranch?.fileData, effBranch?.largeFileData)
-    : activeBranch?.fileData;
+  // File sekmesi + genel: segmentin HAM dosya kırılımı — attritional/gross'ta gross
+  // claims, large segmentinde large dosyalar. (İstatistikler bunu kullanır; gross−large
+  // ÇIKARMASI YAPILMAZ — aksi halde tutarlar negatif/yanlış çıkar.)
+  const effFileData = isLargeSeg ? effBranch?.largeFileData : activeBranch?.fileData;
+
+  // SADECE LDF popup'ı için: attritional segmentte gross−large (dosya bazında) —
+  // large'dan çıkan dosyaların attritional LDF'i nasıl değiştirdiğini göstermek için.
+  const ldfFileData = useMemo(() => {
+    if (isLargeSeg) return effBranch?.largeFileData;
+    if (isGrossSeg) return activeBranch?.fileData;
+    if (largeOn) return subtractFileData(activeBranch?.fileData, effBranch?.largeFileData);
+    return activeBranch?.fileData;
+  }, [isLargeSeg, isGrossSeg, largeOn, activeBranch, effBranch]);
 
   // Önceki dönemin EŞLEŞEN branch'i (large'dan bağımsız bulunur; en yakın önceki
   // dönemde aynı isim+frekansta üçgeni olan branch).
@@ -1103,7 +1105,7 @@ export default function Home() {
             avgPairs={avgPairs}
             cdfsOverride={initialCDFs}
             karmaWindowPerStep={pb?.karmaWindowPerStep ?? {}}
-            fileData={effFileData}
+            fileData={ldfFileData}
             prior={priorLDFRef}
             onWindowChange={guardedSetters.setWindow}
             windowPresets={pb?.ldfWindowPresets}

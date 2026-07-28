@@ -15,7 +15,7 @@ const OPTION_LABELS: { key: keyof CopyAssumptionsOptions; label: string }[] = [
   { key: "excludedCells", label: "Cell Exclusions" },
   { key: "window", label: "Volume (window)" },
   { key: "curve", label: "Curve Settings" },
-  { key: "premiums", label: "Primler (Exposure)" },
+  { key: "premiums", label: "Premiums (Exposure)" },
   { key: "lrFormulas", label: "Loss Ratio Formulas" },
   { key: "corrections", label: "Correction Factors (k)" },
   { key: "basis", label: "Basis Selections (CL/BF)" },

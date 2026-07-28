@@ -40,15 +40,15 @@ export function ResultsPanel(props: Props) {
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 gap-2">
-        <Field label="Metod">
+        <Field label="Method">
           <select
             value={method}
             onChange={(e) => onMethodChange(e.target.value as LDFMethod)}
             className="input"
           >
             <option value="volume_weighted">Volume Weighted</option>
-            <option value="simple_average">Basit Ortalama</option>
-            <option value="geometric_average">Geometrik Ortalama</option>
+            <option value="simple_average">Simple Average</option>
+            <option value="geometric_average">Geometric Average</option>
           </select>
         </Field>
         <Field label="Last N periods">
@@ -76,7 +76,7 @@ export function ResultsPanel(props: Props) {
               onClick={() => excludedOrigins.forEach(onToggleExclusion)}
               className="text-[11px] text-[color:var(--muted)] hover:text-[color:var(--foreground)]"
             >
-              temizle
+              Clear
             </button>
           )}
         </div>

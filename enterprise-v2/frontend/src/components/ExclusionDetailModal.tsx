@@ -78,13 +78,13 @@ export function ExclusionDetailModal({ impacts, excludedCount, onClose }: Props)
           </button>
         </div>
 
-        {/* Net özet */}
+        {/* Net summary */}
         <div
           className="px-5 py-3 flex items-center justify-between gap-4 shrink-0"
           style={{ borderBottom: "1px solid var(--border)" }}
         >
           <span className="text-[11px] uppercase tracking-wide text-[color:var(--muted)]">
-            Elemelerin net IBNR etkisi
+            Net IBNR impact of exclusions
           </span>
           <span
             className={
@@ -117,9 +117,9 @@ export function ExclusionDetailModal({ impacts, excludedCount, onClose }: Props)
                   <th className="text-right font-medium px-3 py-2.5">
                     Column median
                   </th>
-                  <th className="text-right font-medium px-3 py-2.5">Sapma</th>
+                  <th className="text-right font-medium px-3 py-2.5">Deviation</th>
                   <th className="text-right font-medium px-5 py-2.5">
-                    IBNR&apos;a etkisi
+                    IBNR impact
                   </th>
                 </tr>
               </thead>

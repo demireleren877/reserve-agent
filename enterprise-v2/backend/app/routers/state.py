@@ -6,6 +6,7 @@ import json
 from datetime import datetime, timezone
 from typing import Annotated, Any
 
+import oracledb
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
@@ -43,6 +44,61 @@ async def _read_clob(val: Any) -> Any:
     if raw is None:
         return None
     return json.loads(raw)
+
+
+async def _append_audit_events(cur: Any, project: Any, user: dict[str, Any]) -> None:
+    """Project history görünümünü sunucuda değiştirilemez audit kaydı olarak sakla.
+
+    Actor bilgisi istemciden alınmaz; token'daki kullanıcı ile yazılır. Aynı history
+    kaydı her state senkronunda tekrar gelse dahi event_id birincil anahtarı sayesinde
+    tek kayda dönüşür.
+    """
+    if not isinstance(project, dict):
+        return
+    for period in project.get("periods", []):
+        if not isinstance(period, dict):
+            continue
+        for branch in period.get("branches", []):
+            if not isinstance(branch, dict):
+                continue
+            branch_id = str(branch.get("id", "")) or None
+            for event in branch.get("history", []):
+                if not isinstance(event, dict):
+                    continue
+                event_id = event.get("id")
+                action = event.get("action")
+                timestamp = event.get("timestamp")
+                if not isinstance(event_id, str) or not isinstance(action, str) or not isinstance(timestamp, str):
+                    continue
+                try:
+                    occurred_at = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+                except ValueError:
+                    occurred_at = datetime.now(timezone.utc)
+                try:
+                    details = event.get("details")
+                    safe_details = dict(details) if isinstance(details, dict) else {}
+                    safe_details.setdefault("module", "cashflow" if action.startswith("cashflow_") else "reserve")
+                    safe_details.setdefault("branch_name", branch.get("name") or branch_id)
+                    await cur.execute(
+                        "INSERT INTO audit_events "
+                        "(event_id, occurred_at, actor_id, actor_name, source, action, branch_id, details_json) "
+                        "VALUES (:1, :2, :3, :4, :5, :6, :7, :8)",
+                        [
+                            event_id,
+                            occurred_at,
+                            int(user["sub"]),
+                            user["username"],
+                            "agent" if event.get("source") == "agent" else "user",
+                            action[:100],
+                            branch_id,
+                            json.dumps(safe_details),
+                        ],
+                    )
+                except oracledb.IntegrityError as exc:
+                    # ORA-00001: Aynı event sync/retry sırasında zaten yazılmış.
+                    code = getattr(exc.args[0], "code", None)
+                    if code != 1:
+                        raise
 
 
 @router.get("", response_model=StateResponse)
@@ -124,6 +180,9 @@ async def put_state(body: PutStateRequest, user: CurrentUser) -> PutStateRespons
                         new_version, now, uid, uname,
                     ],
                 )
+            # State satırı yeni ya da mevcut olsun, görünüm logundaki yeni event'leri
+            # sunucudaki append-only audit tablosuna yaz.
+            await _append_audit_events(cur, body.project, user)
         await conn.commit()
 
     return PutStateResponse(version=new_version, updated_at=now_ts)

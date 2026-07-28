@@ -85,20 +85,20 @@ export function AgentSettings({ onClose }: { onClose: () => void }) {
             <>
               <div className="rounded-md border border-[color:var(--border)] bg-[color:var(--surface-alt)]/40 px-3 py-2 text-[10.5px] text-[color:var(--muted)] leading-relaxed">
                 {cfg.provider === "openrouter" ? (
-                  <>OpenRouter üzerinden <code>{cfg.model}</code> hazır. Sadece <b>OpenRouter API anahtarını</b> gir.
-                  (İnternet gerekir; anahtar bu cihazda saklanır.)</>
+                  <>OpenRouter is ready with <code>{cfg.model}</code>. Enter your <b>OpenRouter API key</b>.
+                  (Internet is required; the key is stored on this device.)</>
                 ) : isCloud ? (
-                  <>Bulut sağlayıcı (internet gerekir). <b>API anahtarı zorunlu</b>; modeli sağlayıcı formatında gir.</>
+                  <>Cloud provider (internet required). An <b>API key is required</b>; enter the model in the provider's format.</>
                 ) : (
                   <>Offline — makinendeki/LAN'daki OpenAI-uyumlu yerel sunucu (Ollama, LM Studio). Base URL + Model yeterli; anahtar opsiyonel.</>
                 )}
               </div>
 
               {/* Ana alan: API key */}
-              <Field label={isCloud ? "API key" : "API key (opsiyonel)"} hint="Bu cihazda saklanır.">
+              <Field label={isCloud ? "API key" : "API key (optional)"} hint="Stored on this device.">
                 <div className="flex gap-2">
                   <input type={showKey ? "text" : "password"} value={cfg.apiKey} onChange={(e) => update({ apiKey: e.target.value })}
-                    placeholder={cfg.provider === "openrouter" ? "sk-or-v1-…" : isCloud ? "sk-…" : "(boş bırakılabilir)"} autoComplete="off"
+                    placeholder={cfg.provider === "openrouter" ? "sk-or-v1-…" : isCloud ? "sk-…" : "(optional)"} autoComplete="off"
                     className="input-base flex-1 font-mono text-xs" />
                   <button onClick={() => setShowKey((v) => !v)} className="btn text-xs px-3">{showKey ? "Hide" : "Show"}</button>
                 </div>
@@ -124,7 +124,7 @@ export function AgentSettings({ onClose }: { onClose: () => void }) {
                     </div>
                   </Field>
                   <div className="grid grid-cols-2 gap-3">
-                    <Field label="Model" hint={`ör. ${providerHint}`}>
+                    <Field label="Model" hint={`e.g. ${providerHint}`}>
                       <input value={cfg.model} onChange={(e) => update({ model: e.target.value })}
                         placeholder={providerHint} className="input-base w-full font-mono text-xs" />
                     </Field>
@@ -134,7 +134,7 @@ export function AgentSettings({ onClose }: { onClose: () => void }) {
                         className="input-base w-full text-xs" />
                     </Field>
                   </div>
-                  <Field label="Base URL" hint={`Boş = ${PROVIDER_DEFAULT_BASE_URL[cfg.provider] || "endpoint gir"}`}>
+                  <Field label="Base URL" hint={`Empty = ${PROVIDER_DEFAULT_BASE_URL[cfg.provider] || "enter endpoint"}`}>
                     <input value={cfg.baseUrl} onChange={(e) => update({ baseUrl: e.target.value })}
                       placeholder={PROVIDER_DEFAULT_BASE_URL[cfg.provider] || "http://localhost:1234/v1"}
                       className="input-base w-full font-mono text-xs" />
@@ -145,9 +145,9 @@ export function AgentSettings({ onClose }: { onClose: () => void }) {
           )}
 
           {section === "prompt" && (
-            <Field label="System prompt" hint="Boş = sunucudaki yerleşik varsayılan (web ile birebir). Doldurursan GLOBAL kısmı override eder; modül prompt'ları yine eklenir.">
+            <Field label="System prompt" hint="Empty = built-in server default (same as web). If filled, it overrides GLOBAL; module prompts are still appended.">
               <textarea value={cfg.systemPrompt} onChange={(e) => update({ systemPrompt: e.target.value })}
-                rows={14} placeholder="(boş) — yerleşik varsayılan kullanılıyor. Özelleştirmek için 'Load default' ile getirip düzenle."
+                rows={14} placeholder="(empty) — using the built-in default. Use 'Load default' to load and edit it."
                 className="input-base w-full text-xs leading-relaxed font-mono" />
               <div className="mt-2 flex items-center gap-3">
                 <button
@@ -168,7 +168,7 @@ export function AgentSettings({ onClose }: { onClose: () => void }) {
           {section === "tools" && (
             <div className="space-y-4">
               <p className="text-[11px] text-[color:var(--muted)] leading-relaxed">
-                LLM'in kullanabileceği araçlar. Kapatılanlar LLM'e gönderilmez. <span className="text-[color:var(--warning-strong,#b45309)]">planned</span> = henüz uçtan uca bağlı değil.
+                Tools available to the LLM. Disabled tools are not sent to the LLM. <span className="text-[color:var(--warning-strong,#b45309)]">planned</span> = not connected end-to-end yet.
               </p>
               {(Object.keys(grouped) as ToolModule[]).map((mod) => {
                 const tools = grouped[mod];
@@ -206,7 +206,7 @@ export function AgentSettings({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="px-5 py-3 border-t flex items-center justify-between">
-          <span className="text-[10px] text-[color:var(--muted)]">Değişiklikler otomatik kaydedilir.</span>
+          <span className="text-[10px] text-[color:var(--muted)]">Changes are saved automatically.</span>
           <button onClick={onClose} className="btn btn-primary text-xs px-4">Done</button>
         </div>
       </div>

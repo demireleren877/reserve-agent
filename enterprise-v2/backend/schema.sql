@@ -49,3 +49,17 @@ CREATE TABLE model_locks (
     locked_at        TIMESTAMP      DEFAULT CURRENT_TIMESTAMP NOT NULL,
     expires_at       TIMESTAMP      NOT NULL
 );
+
+-- Değiştirilemez denetim günlüğü. Proje JSON'undaki görünüm logundan bağımsızdır;
+-- aynı event_id ikinci kez yazılamaz ve kayıtlar hiçbir state güncellemesinde silinmez.
+CREATE TABLE audit_events (
+    event_id          VARCHAR2(64)   NOT NULL PRIMARY KEY,
+    occurred_at       TIMESTAMP      NOT NULL,
+    actor_id          NUMBER         NOT NULL REFERENCES users(id),
+    actor_name        VARCHAR2(100)  NOT NULL,
+    source            VARCHAR2(20)   NOT NULL,
+    action            VARCHAR2(100)  NOT NULL,
+    branch_id         VARCHAR2(64),
+    details_json      CLOB
+);
+CREATE INDEX ix_audit_events_branch_time ON audit_events (branch_id, occurred_at);

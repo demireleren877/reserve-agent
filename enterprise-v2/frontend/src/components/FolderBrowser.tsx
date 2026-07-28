@@ -445,7 +445,7 @@ function PeriodTile({
           }}
           className="opacity-0 group-hover:opacity-100 text-xs text-[color:var(--muted)] hover:text-[color:var(--danger)] transition"
         >
-          Sil
+          Delete
         </button>
       </div>
       <div>
@@ -538,9 +538,9 @@ function BranchTile({
             <button
               onClick={(e) => { e.stopPropagation(); onCopy(); }}
               className="text-xs text-[color:var(--muted)] hover:text-[color:var(--primary)] transition"
-              title="Kopyala"
+              title="Copy"
             >
-              Kopyala
+              Copy
             </button>
           )}
           {onMove && (
@@ -558,14 +558,14 @@ function BranchTile({
               className="text-xs text-[color:var(--muted)] hover:text-[color:var(--primary)] transition"
               title="Copy assumptions"
             >
-              Aktar
+              Copy assumptions
             </button>
           )}
           <button
             onClick={(e) => { e.stopPropagation(); onDelete(); }}
             className="text-xs text-[color:var(--muted)] hover:text-[color:var(--danger)] transition"
           >
-            Sil
+            Delete
           </button>
         </div>
       </div>

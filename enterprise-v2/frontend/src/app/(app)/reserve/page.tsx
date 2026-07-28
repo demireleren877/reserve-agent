@@ -11,6 +11,7 @@ import { UltimateTab } from "@/components/UltimateTab";
 import { SummaryTab } from "@/components/SummaryTab";
 import { ILRTab } from "@/components/ILRTab";
 import { FrequencySeverityTab } from "@/components/FrequencySeverityTab";
+import { ActualVsExpectedTab } from "@/components/ActualVsExpectedTab";
 import { FileAnalysisTab } from "@/components/FileAnalysisTab";
 import { BranchLogsButton } from "@/components/ProjectNav";
 import { ModelTabs } from "@/components/ModelTabs";
@@ -46,8 +47,10 @@ import {
   type TailFit,
 } from "@/lib/tail-fit";
 import { evalFormula, type FormulaContext } from "@/lib/formula";
+import { analyzeLDFDiagnostics } from "@/lib/ldf-diagnostics";
+import { calculateActualVsExpected } from "@/lib/actual-vs-expected";
 
-type Tab = "data" | "file" | "ldf" | "curve" | "ilr" | "bf" | "freq" | "ultimate" | "summary";
+type Tab = "data" | "file" | "ldf" | "curve" | "ilr" | "bf" | "freq" | "ave" | "ultimate" | "summary";
 
 const TABS: { id: Tab; label: string; sub: string }[] = [
   { id: "data",     label: "Data",          sub: "Triangle preview" },
@@ -57,6 +60,7 @@ const TABS: { id: Tab; label: string; sub: string }[] = [
   { id: "ilr",      label: "ILR",           sub: "Loss ratio triangle" },
   { id: "bf",       label: "BF",            sub: "Bornhuetter–Ferguson" },
   { id: "freq",     label: "Freq-Severity", sub: "Count × avg. cost" },
+  { id: "ave",      label: "AvE",           sub: "Actual vs Expected" },
   { id: "ultimate", label: "Ultimate/IBNR", sub: "Reserve projection" },
   { id: "summary",  label: "Summary",       sub: "Model report" },
 ];
@@ -166,6 +170,51 @@ export default function Home() {
     if (isGrossSeg) return grossTriangle;
     return (largeOn ? attritionalWorkingTriangle(effBranch!) : grossTriangle) ?? null;
   }, [activeBranch, effBranch, isLargeSeg, isGrossSeg, largeOn, grossTriangle, isPaidType, largeWork]);
+
+  const avePrior = useMemo(() => {
+    if (!activePeriod || !activeBranch) return null;
+    const index = project.periods.findIndex((period) => period.id === activePeriod.id);
+    for (let i = index - 1; i >= 0; i--) {
+      const match = project.periods[i].branches.find((branch) => branch.name === activeBranch.name && branch.frequency === activeBranch.frequency);
+      if (match && (match.triangle || match.paidTriangle || match.incurredTriangle)) return { branch: match, label: project.periods[i].label };
+    }
+    return null;
+  }, [project.periods, activePeriod, activeBranch]);
+  const avePriorGrossTriangle = avePrior?.branch.incurredTriangle ?? avePrior?.branch.paidTriangle ?? avePrior?.branch.triangle ?? null;
+  // Büyük hasar üçgenleri veri modülünde dinamik tutulabildiği için geçmiş dönem
+  // AvE'sinde de aynı kaynaktan çekilir; aksi halde güncel attritional ile geçmiş
+  // gross/eskimiş large verisi karşılaştırılmış olur.
+  const avePriorDataLarge = useDataLarge(
+    avePrior?.label,
+    avePrior?.branch.name,
+    avePriorGrossTriangle?.origin_granularity as ("yearly" | "quarterly") | undefined,
+    avePriorGrossTriangle?.development_granularity as ("yearly" | "quarterly") | undefined,
+  );
+  const avePriorBranch = useMemo(() => {
+    if (!avePrior) return null;
+    return avePriorDataLarge?.paid || avePriorDataLarge?.incurred
+      ? { ...avePrior.branch, largePaidTriangle: avePriorDataLarge.paid, largeIncurredTriangle: avePriorDataLarge.incurred }
+      : avePrior.branch;
+  }, [avePrior, avePriorDataLarge]);
+  const aveComparison = useMemo(() => {
+    if (!avePriorBranch || !triangle) return null;
+    const prior = avePriorBranch;
+    if (isLargeSeg) {
+      const work = largeWorkingTriangles(prior);
+      const priorTriangle = triangle.triangle_type === "paid" ? work?.paid : work?.incurred;
+      const model = { ...prior, ...(prior.largeModel ?? {}), triangle: priorTriangle ?? null, paidTriangle: null, incurredTriangle: null };
+      return priorTriangle ? { branch: model, triangle: priorTriangle, basis: "Large" } : null;
+    }
+    if (isGrossSeg) {
+      const priorTriangle = prior.triangle;
+      const model = { ...prior, ...(prior.grossModel ?? {}), triangle: priorTriangle, paidTriangle: null, incurredTriangle: null };
+      return priorTriangle ? { branch: model, triangle: priorTriangle, basis: "Gross" } : null;
+    }
+    const priorTriangle = attritionalWorkingTriangle(prior);
+    const model = { ...prior, triangle: priorTriangle, paidTriangle: null, incurredTriangle: null };
+    return priorTriangle ? { branch: model, triangle: priorTriangle, basis: largeOn ? "Attritional" : "Gross" } : null;
+  }, [avePriorBranch, triangle, isLargeSeg, isGrossSeg, largeOn]);
+  const aveResult = useMemo(() => aveComparison && triangle ? calculateActualVsExpected(aveComparison.branch, triangle, aveComparison.triangle) : null, [aveComparison, triangle]);
 
   // Alt-sekme model başına: aktif modelin anahtarıyla sakla/oku. Üçgen yoksa
   // data/file dışı sekmeler kilitli olduğundan güvenli olarak "data"ya düş.
@@ -309,7 +358,13 @@ export default function Home() {
     } else {
       priorTri = b.triangle;
     }
-    return priorTri ? { label: priorRaw.label, triangle: priorTri, fileData: priorFd } : null;
+    return priorTri ? {
+      label: priorRaw.label,
+      triangle: priorTri,
+      fileData: priorFd,
+      grossFileData: b.fileData ?? null,
+      largeFileData: b.largeFileData ?? null,
+    } : null;
   }, [priorEffBranch, priorRaw, isLargeSeg, isGrossSeg, largeOn]);
 
   const method = (pb?.method ?? "volume_weighted") as LDFMethod;
@@ -813,6 +868,31 @@ export default function Home() {
     [runPipeline, excludedCells],
   );
 
+  // LDF inceleme önerileri: her dahil hücre için leave-one-out IBNR simülasyonu.
+  // Sonuç yalnızca öneridir; hiçbir hücre burada otomatik olarak elenmez.
+  const ldfDiagnostics = useMemo(() => {
+    if (!triangle || !summary) return [];
+    const impactByCell = new Map<string, number>();
+    for (let i = 0; i < triangle.origin_periods.length; i++) {
+      const origin = triangle.origin_periods[i];
+      for (let step = 0; step < triangle.development_periods.length - 1; step++) {
+        const a = triangle.values[i]?.[step];
+        const b = triangle.values[i]?.[step + 1];
+        const key = `${origin}|${step}`;
+        if (a == null || b == null || a === 0 || excludedCells.has(key)) continue;
+        const alternative = new Set(excludedCells);
+        alternative.add(key);
+        const altIbnr = runPipeline(alternative)?.totals.ibnr;
+        if (altIbnr != null) impactByCell.set(key, altIbnr - summary.totals.ibnr);
+      }
+    }
+    return analyzeLDFDiagnostics(triangle, ratios, excludedCells, {
+      baseIbnr: summary.totals.ibnr,
+      totalLatest: summary.totals.latest,
+      impactByCell,
+    });
+  }, [triangle, summary, excludedCells, ratios, runPipeline]);
+
   // Per-exclusion impact: bu hücre eleme uygulanmasaydı IBNR ne kadar değişirdi
   const exclusionImpacts = useMemo(() => {
     if (!triangle || !summary) return [];
@@ -1107,6 +1187,11 @@ export default function Home() {
             karmaWindowPerStep={pb?.karmaWindowPerStep ?? {}}
             fileData={ldfFileData}
             prior={priorLDFRef}
+            components={largeOn && !isLargeSeg && !isGrossSeg ? {
+              grossFileData: activeBranch.fileData,
+              largeFileData: effBranch?.largeFileData,
+            } : null}
+            diagnostics={ldfDiagnostics}
             onWindowChange={guardedSetters.setWindow}
             windowPresets={pb?.ldfWindowPresets}
             onWindowPresetsChange={guardedSetters.setLdfWindowPresets}
@@ -1222,6 +1307,7 @@ export default function Home() {
             clIbnr={summary?.totals.ibnr ?? null}
           />
         )}
+        {tab === "ave" && <ActualVsExpectedTab result={aveResult} priorLabel={avePrior?.label ?? null} basis={aveComparison?.basis ?? null} />}
         {tab === "file" && (
           <FileAnalysisTab
             triangle={triangle}
@@ -1353,4 +1439,3 @@ function Shell({
     </div>
   );
 }
-

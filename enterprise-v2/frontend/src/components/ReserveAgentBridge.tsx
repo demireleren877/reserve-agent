@@ -342,7 +342,7 @@ async function loadTriangleFromData(
       dg,
     );
     const newDiagFd = newDiagonalFiles
-      ? newDiagonalToFileData(paidTriangle, newDiagonalFiles)
+      ? newDiagonalToFileData(paidTriangle, newDiagonalFiles, base.fileData)
       : null;
     const fd = mergeFileData(base.fileData, newDiagFd);
     setters.setRolledForward(

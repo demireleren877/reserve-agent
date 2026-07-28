@@ -15,7 +15,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <AuthGate>
       {(me) => (
-        <ProjectProvider userId={me.uid}>
+        <ProjectProvider userId={me.uid} userName={me.username}>
         <DataStoreProvider userId={me.uid}>
           <AgentRegistryProvider>
             <ReserveAgentBridge />

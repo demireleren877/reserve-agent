@@ -15,13 +15,13 @@ interface ModuleItem {
 }
 
 const MODULES: ModuleItem[] = [
-  { href: "/home", label: "Home", icon: <HomeIcon /> },
   { href: "/data", label: "Data", icon: <DatabaseIcon /> },
   { href: "/reserve", label: "Reserve", icon: <StackIcon /> },
+  { href: "/development", label: "Development", icon: <TrendIcon /> },
   { href: "/cashflow", label: "Cashflow", icon: <CashflowIcon /> },
   { href: "/discount", label: "Discount", icon: <DiscountIcon /> },
-  { href: "/guide", label: "Guide", icon: <GuideIcon /> },
   { href: "/admin/users", label: "Users", icon: <UsersIcon />, adminOnly: true },
+  { href: "/admin/audit", label: "Audit Log", icon: <AuditIcon />, adminOnly: true },
 ];
 
 const STORAGE_KEY = "app-sidebar-collapsed";
@@ -141,6 +141,21 @@ export function AppSidebar() {
             <span className="opacity-80 shrink-0"><AgentSparkIcon /></span>
             {!collapsed && <span className="flex-1 truncate text-left">Agent</span>}
           </button>
+          <Link
+            href="/guide"
+            title={collapsed ? "Guide" : undefined}
+            className={
+              "mt-0.5 flex items-center gap-2 rounded-md text-[13px] transition " +
+              (collapsed ? "justify-center py-2" : "px-2.5 py-1.5") +
+              " " +
+              (pathname === "/guide" || pathname.startsWith("/guide/")
+                ? "bg-[color:var(--primary-soft)] text-[color:var(--primary)] font-medium"
+                : "text-[color:var(--muted-strong)] hover:bg-[color:var(--surface-alt)] hover:text-[color:var(--foreground)]")
+            }
+          >
+            <span className="opacity-80 shrink-0"><GuideIcon /></span>
+            {!collapsed && <span className="flex-1 truncate text-left">Guide</span>}
+          </Link>
         </div>
       </nav>
 
@@ -252,9 +267,6 @@ function Avatar({ initials, size, active }: { initials: string; size: number; ac
   );
 }
 
-function HomeIcon() {
-  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9.5 12 3l9 6.5V21a1 1 0 0 1-1 1h-5v-7h-6v7H4a1 1 0 0 1-1-1z" /></svg>;
-}
 function StackIcon() {
   return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3 2 8l10 5 10-5z" /><path d="M2 13l10 5 10-5" /><path d="M2 18l10 5 10-5" /></svg>;
 }
@@ -264,6 +276,9 @@ function DatabaseIcon() {
 function CashflowIcon() {
   return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 7h20M2 12h20M2 17h20" /><path d="M6 3v18M18 3v18" /></svg>;
 }
+function TrendIcon() {
+  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18" /><path d="m7 15 4-4 3 3 5-7" /></svg>;
+}
 function DiscountIcon() {
   return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 5 5 19" /><circle cx="6.5" cy="6.5" r="2.5" /><circle cx="17.5" cy="17.5" r="2.5" /></svg>;
 }
@@ -272,6 +287,9 @@ function UsersIcon() {
 }
 function GuideIcon() {
   return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" /></svg>;
+}
+function AuditIcon() {
+  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="4" width="14" height="17" rx="2" /><path d="M9 4V2h6v2M9 10h6M9 14h3" /><path d="m14 17 1.5 1.5L19 15" /></svg>;
 }
 function AgentSparkIcon() {
   return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l1.8 4.6L18 9l-4.2 1.4L12 15l-1.8-4.6L6 9l4.2-1.4z" /><path d="M19 15l1 2.4L22 18l-2 .6L19 21l-1-2.4L16 18l2-.6z" /></svg>;

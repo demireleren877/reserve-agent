@@ -168,6 +168,22 @@ export async function deleteState(): Promise<void> {
   await call<{ ok: boolean }>("/v1/state", { method: "DELETE" });
 }
 
+export interface AuditEvent {
+  id: string;
+  timestamp: string | null;
+  actor: string;
+  source: string;
+  action: string;
+  branch_id: string | null;
+  branch_name?: string | null;
+  details: Record<string, unknown> | null;
+}
+
+export async function fetchAuditEvents(limit = 200): Promise<AuditEvent[]> {
+  const res = await call<{ events: AuditEvent[] }>(`/v1/audit?limit=${limit}`, { method: "GET" });
+  return res.events;
+}
+
 // ─── Data periods ─────────────────────────────────────────────────────────────
 
 export interface RemotePeriod {

@@ -1,10 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { LDFMethod, Triangle, FileData } from "@/types/triangle";
+import type { LDFMethod, Triangle, FileData, FileLeaf } from "@/types/triangle";
 import { filePaid, fileIncurred } from "@/types/triangle";
 import { formatNumber } from "@/lib/api";
-import { devDate } from "@/lib/roll-forward-util";
+import { devDate, reconcileFileDataSnapshots } from "@/lib/roll-forward-util";
+import { periodOrder } from "@/lib/period-order";
 import {
   type Window,
   aggregateLDFs,
@@ -13,6 +14,7 @@ import {
   cumulativeFactors,
   developmentRatios,
 } from "@/lib/ldf";
+import type { LDFDiagnostic, LDFDiagnosticKind } from "@/lib/ldf-diagnostics";
 
 interface ColStats {
   median: number;
@@ -66,6 +68,9 @@ export interface LDFPriorRef {
   label: string;
   triangle: Triangle;
   fileData?: FileData | null;
+  /** Attritional açıklaması için prior Gross/Large bileşenleri. */
+  grossFileData?: FileData | null;
+  largeFileData?: FileData | null;
 }
 
 interface Props {
@@ -76,6 +81,10 @@ interface Props {
   fileData?: FileData | null;
   /** Önceki dönem — hover'da değişim ve sebep dosyalar için. */
   prior?: LDFPriorRef | null;
+  /** Attritional dosya hareketini Gross ve Large üyeliğinden doğrudan çözmek için. */
+  components?: { grossFileData?: FileData | null; largeFileData?: FileData | null } | null;
+  /** Açıklanabilir inceleme sinyalleri; hiçbir öneri otomatik uygulanmaz. */
+  diagnostics?: LDFDiagnostic[];
   /** Curve cascade uygulanmış CDF zinciri. Verilirse CDF satırında
    *  bu değerler gösterilir. */
   cdfsOverride?: number[];
@@ -120,9 +129,13 @@ export function LDFTab(props: Props) {
     onClearKarma,
     fileData,
     prior,
+    components,
+    diagnostics = [],
   } = props;
 
   const [heatmap, setHeatmap] = useState(false);
+  const [diagnosticsOpen, setDiagnosticsOpen] = useState(true);
+  const [selectedDiagnostic, setSelectedDiagnostic] = useState<string | null>(null);
   const [decimals, setDecimals] = useState(4);
   // Düzenlenebilir volume presetleri — BRANŞA özel (varsayılan 4,5,6,7). "All" sabit.
   // onWindowPresetsChange verilirse branşa yazılır; yoksa yerel (oturumluk) fallback.
@@ -198,6 +211,52 @@ export function LDFTab(props: Props) {
     prior?.triangle?.origin_periods.forEach((o, i) => m.set(o, i));
     return m;
   }, [prior?.triangle]);
+  // Gelişim kolonlarını indeksle değil gerçek dönem çiftiyle eşleştir. Önceki
+  // üçgenin kolon sayısı farklıysa aynı indeks başka bir development step olabilir.
+  const priorStepByPair = useMemo(() => {
+    const m = new Map<string, number>();
+    const devs = prior?.triangle?.development_periods ?? [];
+    for (let j = 0; j < devs.length - 1; j++) m.set(`${devs[j]}→${devs[j + 1]}`, j);
+    return m;
+  }, [prior?.triangle]);
+  const comparableFileData = useMemo(
+    () => triangle ? reconcileFileDataSnapshots(triangle, fileData) : {},
+    [triangle, fileData],
+  );
+  const comparablePriorFileData = useMemo(
+    () => prior?.triangle ? reconcileFileDataSnapshots(prior.triangle, prior.fileData) : {},
+    [prior],
+  );
+
+  function componentSnapshot(
+    source: FileData | null | undefined,
+    tri: Triangle,
+    origin: string,
+    rowIndex: number,
+    step: number,
+  ): Record<string, FileLeaf> {
+    const byDate = source?.[origin] ?? {};
+    const exact = byDate[devDate(origin, step, tri)];
+    if (exact) return exact;
+    const observableIndex = tri.values[rowIndex].slice(0, step + 1).filter((value) => value != null).length - 1;
+    const dates = Object.keys(byDate).sort((a, b) => periodOrder(a) - periodOrder(b));
+    return byDate[dates[observableIndex]] ?? {};
+  }
+
+  function componentMembershipSnapshot(
+    source: FileData | null | undefined,
+    origin: string,
+  ): Record<string, FileLeaf> {
+    const byDate = source?.[origin] ?? {};
+    const dates = Object.keys(byDate).sort((a, b) => periodOrder(a) - periodOrder(b));
+    const membership: Record<string, FileLeaf> = {};
+    // Large dataset üyeliği tek bir hücreye bağlı değildir. Dosya dönemin Large
+    // datasının HERHANGİ bir snapshot'ında varsa üyedir; son görülen tutarı sakla.
+    for (const date of dates) {
+      for (const [file, leaf] of Object.entries(byDate[date])) membership[file] = leaf;
+    }
+    return membership;
+  }
 
   const columnStats = useMemo(() => {
     if (!triangle) return [] as ColStats[];
@@ -212,8 +271,14 @@ export function LDFTab(props: Props) {
       const cur = ratios[i]?.[j]?.value ?? null;
       const median = columnStats[j]?.median ?? null;
       const pIdx = priorIdxByLabel.get(o);
-      const hasPrior = !!prior && pIdx != null;
-      const priorVal = hasPrior ? priorRatios[pIdx as number]?.[j]?.value ?? null : null;
+      const pair = `${triangle.development_periods[j]}→${triangle.development_periods[j + 1]}`;
+      const pStep = priorStepByPair.get(pair);
+      // Aynı origin + aynı dev çifti önceki üçgende gözlenmişse karşılaştırılabilir.
+      // Yeni diagonal numerator'ı önceki dönemde null olduğundan buraya GİRMEZ.
+      const priorVal = pIdx != null && pStep != null
+        ? priorRatios[pIdx]?.[pStep]?.value ?? null
+        : null;
+      const hasPrior = priorVal != null;
       const delta = cur != null && priorVal != null ? cur - priorVal : null;
 
       type FileRow = { file: string; prev: number; cur: number; delta: number; tag: string; side: string };
@@ -226,10 +291,9 @@ export function LDFTab(props: Props) {
       const fileVal = triangle.triangle_type === "incurred" ? fileIncurred : filePaid;
       // Oran = num/den. Değişim iki taraftan da gelebilir; bu yüzden HEM numerator
       // (dev j+1) HEM denominator (dev j) hücresinin dosya değişimlerini tara.
-      const cfd = fileData ?? {};
-      const pfd = prior?.fileData ?? {};
-      if ((fileData || prior?.fileData) && pIdx != null) {
-        const seen = new Set<string>();
+      const cfd = comparableFileData;
+      const pfd = comparablePriorFileData;
+      if (hasPrior && (fileData || prior?.fileData) && pIdx != null && pStep != null) {
         const sides: [string, string][] = [
           [devDate(o, j + 1, triangle), "numerator"],
           [devDate(o, j, triangle), "denominator"],
@@ -237,21 +301,81 @@ export function LDFTab(props: Props) {
         for (const [devLabel, side] of sides) {
           const curF = cfd[o]?.[devLabel] ?? {};
           const prevF = pfd[o]?.[devLabel] ?? {};
-          for (const f of new Set([...Object.keys(curF), ...Object.keys(prevF)])) {
-            const pv = fileVal(prevF[f]);
-            const cv = fileVal(curF[f]);
+          const step = side === "numerator" ? j + 1 : j;
+          const priorStep = side === "numerator" ? pStep + 1 : pStep;
+          const curGross = components
+            ? componentSnapshot(components.grossFileData, triangle, o, i, step)
+            : {};
+          const curLarge = components
+            ? componentSnapshot(components.largeFileData, triangle, o, i, step)
+            : {};
+          const priorGross = components && prior
+            ? componentSnapshot(prior.grossFileData, prior.triangle, o, pIdx, priorStep)
+            : {};
+          const priorLarge = components && prior
+            ? componentSnapshot(prior.largeFileData, prior.triangle, o, pIdx, priorStep)
+            : {};
+          // Segment üyeliği hücre snapshot'ından değil dönemin son Large
+          // snapshot'ından okunur. Dosya Q1 Large'da olup Q2'de tamamen yoksa
+          // ilgili hücrede boş olsa bile Large → Attritional geçişi yakalanır.
+          const currentLargeMembership = components
+            ? componentMembershipSnapshot(components.largeFileData, o)
+            : {};
+          const priorLargeMembership = components && prior
+            ? componentMembershipSnapshot(prior.largeFileData, o)
+            : {};
+          const currentGrossMembership = components
+            ? componentMembershipSnapshot(components.grossFileData, o)
+            : {};
+          const priorGrossMembership = components && prior
+            ? componentMembershipSnapshot(prior.grossFileData, o)
+            : {};
+          const keys = new Set([
+            ...Object.keys(curF), ...Object.keys(prevF),
+            ...Object.keys(curGross), ...Object.keys(curLarge),
+            ...Object.keys(priorGross), ...Object.keys(priorLarge),
+            ...Object.keys(currentLargeMembership), ...Object.keys(priorLargeMembership),
+          ]);
+          for (const f of keys) {
+            const componentBased = !!components;
+            let pv = componentBased
+              ? fileVal(priorGross[f]) - fileVal(priorLarge[f])
+              : fileVal(prevF[f]);
+            let cv = componentBased
+              ? fileVal(curGross[f]) - fileVal(curLarge[f])
+              : fileVal(curF[f]);
+            const wasLarge = Math.abs(fileVal(priorLarge[f])) >= 1;
+            const isLargeNow = Object.prototype.hasOwnProperty.call(currentLargeMembership, f);
+            const wasLargeInPrior = Object.prototype.hasOwnProperty.call(priorLargeMembership, f);
+            // Attritional açıklamasında yeni diagonal/gross hareketlerini gösterme;
+            // yalnız gerçek segment sınıfı değişen dosyalar kullanıcı için anlamlı.
+            if (componentBased && wasLargeInPrior === isLargeNow) continue;
+            // Segment kümesi değiştiyse dosyayı MUTLAKA göster. Seçili hücrede
+            // snapshot bulunamazsa dönemdeki son Gross/Large tutarıyla açıklayıcı
+            // fallback üret; küme geçişini hücre tutarı filtresiyle kaybetme.
+            if (componentBased && Math.abs(cv - pv) < 1) {
+              if (side !== "numerator") continue;
+              if (wasLargeInPrior && !isLargeNow) {
+                pv = 0;
+                cv = fileVal(currentGrossMembership[f]) || fileVal(priorLargeMembership[f]);
+              } else {
+                pv = fileVal(priorGrossMembership[f]) || fileVal(currentLargeMembership[f]);
+                cv = 0;
+              }
+            }
             if (side === "numerator") {
               sumPrev += pv;
               sumCur += cv;
             }
-            if (seen.has(f)) continue; // dosyayı bir kez göster (numerator öncelik)
             const d = cv - pv;
-            if (Math.abs(d) < 1) continue;
-            seen.add(f);
+            if (!componentBased && Math.abs(d) < 1) continue;
             // Negatif attritional pay = dosya o dönem LARGE'da (gross−large<0). İşaret
             // değişimi large ↔ attritional geçişini gösterir.
             const tag =
-              pv < 0 && cv >= 0 ? "from large"        // large'dan çıktı → att'a girdi
+              wasLargeInPrior && !isLargeNow ? "from large"
+              : !wasLargeInPrior && isLargeNow ? "to large"
+              : wasLarge && !isLargeNow ? "from large"
+              : pv < 0 && cv >= 0 ? "from large"        // large'dan çıktı → att'a girdi
               : pv >= 0 && cv < 0 ? "to large"         // att'tan çıktı → large'a girdi
               : pv > 0 && cv === 0 ? "moved to large"
               : pv === 0 && cv > 0 ? "new"
@@ -263,7 +387,7 @@ export function LDFTab(props: Props) {
       }
       return { o, j, cur, priorVal, delta, median, files, hasPrior, sumPrev, sumCur };
     },
-    [triangle, ratios, columnStats, prior, priorRatios, priorIdxByLabel, fileData],
+    [triangle, ratios, columnStats, prior, priorRatios, priorIdxByLabel, priorStepByPair, fileData, comparableFileData, comparablePriorFileData, components],
   );
 
   const hoverInfo = useMemo(
@@ -315,6 +439,13 @@ export function LDFTab(props: Props) {
     cdfsOverride && cdfsOverride.length >= localCDFs.length
       ? cdfsOverride.slice(0, localCDFs.length)
       : localCDFs;
+
+  function focusDiagnostic(item: LDFDiagnostic) {
+    setSelectedDiagnostic(item.key);
+    const target = document.querySelector<HTMLElement>(`[data-key="${item.key}"]`);
+    target?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
+    target?.focus({ preventScroll: true });
+  }
 
   if (!triangle) {
     return <EmptyState />;
@@ -412,6 +543,15 @@ export function LDFTab(props: Props) {
         </div>
       </div>
 
+      <DiagnosticPanel
+        items={diagnostics}
+        open={diagnosticsOpen}
+        selectedKey={selectedDiagnostic}
+        onToggle={() => setDiagnosticsOpen((value) => !value)}
+        onFocus={focusDiagnostic}
+        onExclude={(item) => onToggleCell(item.origin, item.step)}
+      />
+
       {/* Combined horizontal-scroll panel: LDF triangle + window rows + CDFs */}
       <div className="card p-0 overflow-hidden">
         <div className="flex items-center justify-between px-4 py-3 border-b bg-[color:var(--surface-alt)]">
@@ -461,7 +601,7 @@ export function LDFTab(props: Props) {
                 >
                   <td
                     onClick={() => onSetExcluded && rowEx.steps.length > 0 && toggleOrigin(o, i)}
-                    title={rowEx.allExcluded ? "Kaza yılını geri al (tümü)" : "Kaza yılını tümüyle ele"}
+                    title={rowEx.allExcluded ? "Restore entire accident year" : "Exclude entire accident year"}
                     className={
                       "px-2 py-0.5 font-medium sticky left-0 bg-[color:var(--surface)] z-[1] leading-tight select-none " +
                       (onSetExcluded && rowEx.steps.length > 0 ? "cursor-pointer hover:text-[color:var(--danger)] " : "") +
@@ -489,8 +629,11 @@ export function LDFTab(props: Props) {
                         : heatmapStyle(cell.value, columnStats[j]);
                     // Geçen döneme göre değişti mi? (uyarı vurgusu)
                     const pIdx = priorIdxByLabel.get(o);
-                    const priorVal =
-                      prior && pIdx != null ? priorRatios[pIdx]?.[j]?.value ?? null : null;
+                    const pair = `${triangle.development_periods[j]}→${triangle.development_periods[j + 1]}`;
+                    const pStep = priorStepByPair.get(pair);
+                    const priorVal = prior && pIdx != null && pStep != null
+                      ? priorRatios[pIdx]?.[pStep]?.value ?? null
+                      : null;
                     const changed =
                       priorVal != null &&
                       cell.value != null &&
@@ -505,9 +648,7 @@ export function LDFTab(props: Props) {
                           onPointerDown={(e) => { if (e.button === 0) startHold(o, j, hasNext); }}
                           onPointerUp={cancelHold}
                           onPointerLeave={() => { cancelHold(); setHover(null); }}
-                          onMouseEnter={(e) =>
-                            setHover({ o, i, j, x: e.clientX, y: e.clientY })
-                          }
+                          onMouseEnter={(e) => changed && setHover({ o, i, j, x: e.clientX, y: e.clientY })}
                           onMouseMove={(e) =>
                             setHover((h) =>
                               h && h.o === o && h.j === j
@@ -518,10 +659,13 @@ export function LDFTab(props: Props) {
                           onMouseLeave={() => setHover(null)}
                           onContextMenu={(e) => {
                             e.preventDefault();
+                            if (!changed) return;
                             setHover(null);
                             setPinned({ o, i, j, x: e.clientX, y: e.clientY });
                           }}
-                          title={hasNext ? "Long-press to average · right-click for change details" : "Right-click for change details"}
+                          title={changed
+                            ? (hasNext ? "Long-press to average · right-click for change details" : "Right-click for change details")
+                            : (hasNext ? "Long-press to average" : undefined)}
                           className={
                             "relative w-full text-right px-1.5 py-0.5 rounded text-[11px] transition leading-tight " +
                             (cell.excluded
@@ -779,11 +923,11 @@ export function LDFTab(props: Props) {
             (hoverInfo.files.length > 0 ? (
               <div className="border-t border-[color:var(--border)] mt-1.5 pt-1.5">
                 <div className="text-[9px] uppercase tracking-wide text-[color:var(--muted)] mb-1">
-                  Files causing the change · {fileBasis}
+                  {components ? "Large ↔ Attritional transitions" : "Files causing the change"} · {fileBasis}
                 </div>
                 {hoverInfo.files.slice(0, 6).map((f) => (
                   <div
-                    key={f.file}
+                    key={`${f.file}:${f.side}`}
                     className="flex items-center justify-between gap-2 py-0.5"
                   >
                     <span className="font-medium truncate max-w-[96px]">{f.file}</span>
@@ -814,7 +958,13 @@ export function LDFTab(props: Props) {
               <div className="border-t border-[color:var(--border)] mt-1.5 pt-1.5 text-[color:var(--muted)]">
                 no change
               </div>
-            ) : null)}
+            ) : (
+              <div className="border-t border-[color:var(--border)] mt-1.5 pt-1.5 text-[color:var(--muted)]">
+                {components
+                  ? "The factor changed, but no Large ↔ Attritional segment transition was found in this cell."
+                  : "The factor changed, but no matching file movement was found across the two periods for this cell."}
+              </div>
+            ))}
         </div>
       )}
 
@@ -896,13 +1046,13 @@ export function LDFTab(props: Props) {
           ) : (
             <>
               <div className="px-3 pt-2 pb-1 flex items-center justify-between text-[9px] uppercase tracking-wide text-[color:var(--muted)]">
-                <span>Files causing the change · {fileBasis}</span>
+                <span>{components ? "Large ↔ Attritional transitions" : "Files causing the change"} · {fileBasis}</span>
                 <span>{pinnedInfo.files.length}</span>
               </div>
               <div className="overflow-y-auto px-2 pb-1">
                 {pinnedInfo.files.map((f) => (
                   <div
-                    key={f.file}
+                    key={`${f.file}:${f.side}`}
                     className="flex items-center gap-2 px-1 py-1 rounded hover:bg-[color:var(--surface-alt)]/60"
                   >
                     <span className="font-medium truncate flex-1 min-w-0" title={f.file}>
@@ -944,7 +1094,7 @@ export function LDFTab(props: Props) {
                 ))}
               </div>
               <div className="px-3 py-1.5 border-t border-[color:var(--border)] flex items-center justify-between text-[10px]">
-                <span className="text-[color:var(--muted)]">Numerator {fileBasis} total</span>
+                <span className="text-[color:var(--muted)]">{components ? "Segment-transition numerator total" : `Numerator ${fileBasis} total`}</span>
                 <span className="tabular">
                   {formatNumber(pinnedInfo.sumPrev)}→{formatNumber(pinnedInfo.sumCur)}{" "}
                   <span
@@ -965,6 +1115,118 @@ export function LDFTab(props: Props) {
         </div>
       )}
     </div>
+  );
+}
+
+const DIAGNOSTIC_META: Record<LDFDiagnosticKind, { label: string; dot: string; tone: string }> = {
+  outlier_material: {
+    label: "Outlier and material",
+    dot: "bg-[color:var(--danger)]",
+    tone: "text-[color:var(--danger)] bg-[color:var(--danger-soft)]",
+  },
+  outlier_low_impact: {
+    label: "Outlier but immaterial",
+    dot: "bg-[color:var(--primary)]",
+    tone: "text-[color:var(--primary)] bg-[color:var(--primary-soft)]",
+  },
+};
+
+function DiagnosticPanel({
+  items,
+  open,
+  selectedKey,
+  onToggle,
+  onFocus,
+  onExclude,
+}: {
+  items: LDFDiagnostic[];
+  open: boolean;
+  selectedKey: string | null;
+  onToggle: () => void;
+  onFocus: (item: LDFDiagnostic) => void;
+  onExclude: (item: LDFDiagnostic) => void;
+}) {
+  const counts = items.reduce<Partial<Record<LDFDiagnosticKind, number>>>((acc, item) => {
+    acc[item.kind] = (acc[item.kind] ?? 0) + 1;
+    return acc;
+  }, {});
+
+  return (
+    <section className="card overflow-hidden" aria-labelledby="ldf-diagnostics-title">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-[color:var(--surface-alt)] transition-colors"
+      >
+        <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-[color:var(--primary-soft)] text-[color:var(--primary)] font-semibold" aria-hidden="true">
+          {items.length}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span id="ldf-diagnostics-title" className="block text-sm font-semibold">Outlier LDF exclusion suggestions</span>
+          <span className="block text-[11px] text-[color:var(--muted)]">
+            Only statistical outliers are listed · no automatic exclusions are applied
+          </span>
+        </span>
+        <span className="text-xs text-[color:var(--muted-strong)]">{open ? "Hide" : "Show"}</span>
+      </button>
+
+      {open && (
+        <div className="border-t border-[color:var(--border)]">
+          {items.length === 0 ? (
+            <div className="px-4 py-4 text-xs text-[color:var(--muted-strong)]">
+              No LDF cells require review at the current thresholds.
+            </div>
+          ) : (
+            <>
+              <div className="flex flex-wrap gap-x-4 gap-y-1 px-4 py-2 bg-[color:var(--surface-alt)] border-b border-[color:var(--border)]">
+                {(Object.keys(DIAGNOSTIC_META) as LDFDiagnosticKind[]).map((kind) => {
+                  const count = counts[kind] ?? 0;
+                  if (!count) return null;
+                  const meta = DIAGNOSTIC_META[kind];
+                  return (
+                    <span key={kind} className="inline-flex items-center gap-1.5 text-[11px] text-[color:var(--muted-strong)]">
+                      <span className={`h-2 w-2 rounded-full ${meta.dot}`} />
+                      {meta.label} <b className="text-[color:var(--foreground)]">{count}</b>
+                    </span>
+                  );
+                })}
+              </div>
+              <div className="divide-y divide-[color:var(--border)] max-h-[300px] overflow-y-auto">
+                {items.map((item) => {
+                  const meta = DIAGNOSTIC_META[item.kind];
+                  return (
+                    <div
+                      key={item.key}
+                      className={`flex flex-wrap items-center gap-3 px-4 py-2.5 ${selectedKey === item.key ? "bg-[color:var(--primary-soft)]" : "hover:bg-[color:var(--surface-alt)]"}`}
+                    >
+                      <button type="button" onClick={() => onFocus(item)} className="min-w-[124px] text-left">
+                        <span className="block text-xs font-semibold">{item.origin} · {item.step + 1}→{item.step + 2}</span>
+                        <span className="block text-[10px] text-[color:var(--muted)] tabular">
+                          LDF {item.ldfValue == null ? "—" : item.ldfValue.toLocaleString("tr-TR", { maximumFractionDigits: 4 })}
+                        </span>
+                      </button>
+                      <div className="min-w-[220px] flex-1">
+                        <span className={`inline-flex rounded px-1.5 py-0.5 text-[10px] font-semibold ${meta.tone}`}>{meta.label}</span>
+                        <p className="mt-1 text-[11px] text-[color:var(--muted-strong)]">{item.reason}</p>
+                      </div>
+                      <div className="min-w-[130px] text-right text-[10px] text-[color:var(--muted)] tabular">
+                        <div>IBNR Δ <b className="text-[color:var(--foreground)]">{item.ibnrImpact == null ? "—" : formatNumber(item.ibnrImpact)}</b></div>
+                        <div>Volume share {item.volumeShare == null ? "—" : `%${(item.volumeShare * 100).toFixed(1)}`}</div>
+                      </div>
+                      <div className="flex gap-1.5">
+                        <button type="button" onClick={() => onFocus(item)} className="btn px-2 py-1 text-[11px]">Go to cell</button>
+                        <button type="button" onClick={() => onExclude(item)} className="btn px-2 py-1 text-[11px] text-[color:var(--danger)]">Apply exclusion</button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </section>
   );
 }
 

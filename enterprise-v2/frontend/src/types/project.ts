@@ -17,6 +17,8 @@ export interface HistoryEntry {
   timestamp: string;
   action: string;
   source?: ChangeSource;
+  /** İşlemi başlatan oturum kullanıcısı; agent işleminde agent'ı çalıştıran kişi. */
+  actorName?: string;
   details?: Record<string, unknown>;
 }
 

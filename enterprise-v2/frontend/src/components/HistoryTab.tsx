@@ -25,6 +25,9 @@ const ACTION_LABELS: Record<string, string> = {
   curve_choice_bulk: "Curve selection (bulk)",
   curve_seeded: "Curve seed",
   curve_reset: "Curve reset",
+  version_created: "Version created",
+  version_renamed: "Version renamed",
+  version_deleted: "Version deleted",
 };
 
 export function HistoryTab() {
@@ -77,13 +80,13 @@ export function HistoryTab() {
                   <th className="text-left px-3 py-2 font-semibold w-[160px]">
                     Zaman
                   </th>
-                  <th className="text-left px-3 py-2 font-semibold w-[80px]">
+                  <th className="text-left px-3 py-2 font-semibold w-[130px]">
                     Operator
                   </th>
                   <th className="text-left px-3 py-2 font-semibold w-[200px]">
                     Action
                   </th>
-                  <th className="text-left px-3 py-2 font-semibold">Detay</th>
+                  <th className="text-left px-3 py-2 font-semibold">Details</th>
                 </tr>
               </thead>
               <tbody>
@@ -96,7 +99,7 @@ export function HistoryTab() {
                       {fmt(e.timestamp)}
                     </td>
                     <td className="px-3 py-1.5">
-                      <SourceBadge source={e.source} />
+                      <SourceBadge source={e.source} actorName={e.actorName} />
                     </td>
                     <td className="px-3 py-1.5 font-medium">
                       {ACTION_LABELS[e.action] ?? e.action}
@@ -115,18 +118,19 @@ export function HistoryTab() {
   );
 }
 
-function SourceBadge({ source }: { source?: "user" | "agent" }) {
+function SourceBadge({ source, actorName }: { source?: "user" | "agent"; actorName?: string }) {
+  const actor = actorName ?? "Unknown";
   if (source === "agent") {
     return (
-      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[color:var(--primary-soft)] text-[color:var(--primary)] border border-[color:var(--primary-border)]">
-        Agent
+      <span title={`Agent · ${actor}`} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[color:var(--primary-soft)] text-[color:var(--primary)] border border-[color:var(--primary-border)]">
+        Agent <span className="font-normal">· {actor}</span>
       </span>
     );
   }
   if (source === "user") {
     return (
-      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[color:var(--surface-alt)] text-[color:var(--muted-strong)]">
-        Sen
+      <span title={actor} className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[color:var(--surface-alt)] text-[color:var(--muted-strong)]">
+        {actor}
       </span>
     );
   }

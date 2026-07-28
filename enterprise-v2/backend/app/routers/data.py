@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 from app.auth import get_current_user
 from app.db import get_pool
+from app.audit import append_audit_event
 
 router = APIRouter(prefix="/v1/data", tags=["data"])
 
@@ -68,7 +69,7 @@ async def list_periods(_user: CurrentUser) -> list[PeriodOut]:
 
 
 @router.post("/periods", status_code=200)
-async def upsert_period(body: UpsertPeriodRequest, _user: CurrentUser) -> dict:
+async def upsert_period(body: UpsertPeriodRequest, user: CurrentUser) -> dict:
     pool = await get_pool()
     async with pool.acquire() as conn:
         with conn.cursor() as cur:
@@ -87,16 +88,18 @@ async def upsert_period(body: UpsertPeriodRequest, _user: CurrentUser) -> dict:
                     [body.period_id, body.label, body.created_at],
                 )
         await conn.commit()
+    await append_audit_event(user=user, action="data.period_saved", details={"module": "data", "target": body.label})
     return {"ok": True}
 
 
 @router.delete("/periods/{period_id}", status_code=200)
-async def delete_period(period_id: str, _user: CurrentUser) -> dict:
+async def delete_period(period_id: str, user: CurrentUser) -> dict:
     pool = await get_pool()
     async with pool.acquire() as conn:
         with conn.cursor() as cur:
             await cur.execute("DELETE FROM periods WHERE period_id = :1", [period_id])
         await conn.commit()
+    await append_audit_event(user=user, action="data.period_deleted", details={"module": "data", "target": "Değerleme dönemi"})
     return {"ok": True}
 
 
@@ -131,7 +134,7 @@ class PutDatasetRequest(BaseModel):
 
 @router.put("/periods/{period_id}/datasets/{dataset_id}", status_code=200)
 async def put_dataset(
-    period_id: str, dataset_id: str, body: PutDatasetRequest, _user: CurrentUser
+    period_id: str, dataset_id: str, body: PutDatasetRequest, user: CurrentUser
 ) -> dict:
     pool = await get_pool()
     async with pool.acquire() as conn:
@@ -159,11 +162,12 @@ async def put_dataset(
                      json.dumps(body.meta), json.dumps(body.records)],
                 )
         await conn.commit()
+    await append_audit_event(user=user, action="data.dataset_saved", details={"module": "data", "target": body.meta.get("filename", "Dataset") if isinstance(body.meta, dict) else "Dataset", "record_count": len(body.records) if isinstance(body.records, list) else None})
     return {"ok": True}
 
 
 @router.delete("/periods/{period_id}/datasets/{dataset_id}", status_code=200)
-async def delete_dataset(period_id: str, dataset_id: str, _user: CurrentUser) -> dict:
+async def delete_dataset(period_id: str, dataset_id: str, user: CurrentUser) -> dict:
     pool = await get_pool()
     async with pool.acquire() as conn:
         with conn.cursor() as cur:
@@ -172,6 +176,7 @@ async def delete_dataset(period_id: str, dataset_id: str, _user: CurrentUser) ->
                 [period_id, dataset_id],
             )
         await conn.commit()
+    await append_audit_event(user=user, action="data.dataset_deleted", details={"module": "data", "target": "Dataset"})
     return {"ok": True}
 
 

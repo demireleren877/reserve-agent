@@ -139,7 +139,7 @@ export function BranchLogsButton() {
     <div className="relative" ref={popoverRef}>
       <button
         onClick={() => setOpen((v) => !v)}
-        title="Loglar"
+        title="Logs"
         className={
           "p-1 rounded transition text-[color:var(--muted)] hover:text-[color:var(--foreground)] hover:bg-[color:var(--surface-alt)] " +
           (open ? "text-[color:var(--primary)]" : "")
@@ -151,7 +151,7 @@ export function BranchLogsButton() {
       {open && (
         <div className="absolute right-0 top-full mt-1.5 card shadow-xl border z-[40] w-[520px] flex flex-col max-h-[420px]">
           <div className="flex items-center gap-2 px-3 py-2.5 border-b bg-[color:var(--surface-alt)]">
-            <span className="text-xs font-semibold flex-1">Loglar</span>
+            <span className="text-xs font-semibold flex-1">Logs</span>
             {activeBranch && (
               <span className="text-[10px] text-[color:var(--muted)]">
                 {activePeriod?.label} / {activeBranch.name}
@@ -169,10 +169,10 @@ export function BranchLogsButton() {
                 <table className="text-[11px] w-full tabular">
                   <thead className="sticky top-0 bg-[color:var(--surface-alt)] z-10">
                     <tr className="border-b text-[10px] uppercase tracking-wide text-[color:var(--muted-strong)]">
-                      <th className="text-left px-3 py-1.5 font-semibold">Zaman</th>
-                      <th className="text-left px-3 py-1.5 font-semibold">Op.</th>
+                      <th className="text-left px-3 py-1.5 font-semibold">Time</th>
+                      <th className="text-left px-3 py-1.5 font-semibold">Operation</th>
                       <th className="text-left px-3 py-1.5 font-semibold">Action</th>
-                      <th className="text-left px-3 py-1.5 font-semibold">Detay</th>
+                      <th className="text-left px-3 py-1.5 font-semibold">Details</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -183,8 +183,8 @@ export function BranchLogsButton() {
                         </td>
                         <td className="px-3 py-1 whitespace-nowrap">
                           {e.source === "agent"
-                            ? <span className="px-1 py-0.5 rounded text-[9px] font-semibold bg-[color:var(--primary-soft)] text-[color:var(--primary)]">Agent</span>
-                            : <span className="text-[color:var(--muted)] text-[10px]">Sen</span>}
+                            ? <span title={`Agent · ${e.actorName ?? "Unknown"}`} className="px-1 py-0.5 rounded text-[9px] font-semibold bg-[color:var(--primary-soft)] text-[color:var(--primary)]">Agent · {e.actorName ?? "Unknown"}</span>
+                            : <span title={e.actorName ?? "Unknown"} className="text-[color:var(--muted)] text-[10px]">{e.actorName ?? "Unknown"}</span>}
                         </td>
                         <td className="px-3 py-1 font-medium whitespace-nowrap">{ACTION_LABELS[e.action] ?? e.action}</td>
                         <td className="px-3 py-1 text-[color:var(--muted-strong)] font-mono truncate max-w-[160px]">

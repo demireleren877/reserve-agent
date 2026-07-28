@@ -372,7 +372,8 @@ export function LoadFromDataStore({ onClose, onLoaded, target = "gross" }: Props
 
       const fileName = `${selectedPeriod?.label ?? ""} – ${brans} (roll-forward)`;
 
-      const newDiagFd = newDiagonalFiles ? newDiagonalToFileData(paidTriangle, newDiagonalFiles) : null;
+      const baseFd = isLarge ? base.largeFileData : base.fileData;
+      const newDiagFd = newDiagonalFiles ? newDiagonalToFileData(paidTriangle, newDiagonalFiles, baseFd) : null;
 
       if (isLarge) {
         // Large segment üçgenleri (gross'tan bağımsız). largeModel korunur (dokunulmaz).

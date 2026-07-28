@@ -81,6 +81,29 @@ export function matchPremiumsToOrigins(
   return out;
 }
 
+/** Dashboard/rapor gibi birden fazla modeli aynı anda hesaplayan ekranlar için
+ * useDataPremiums'in hook olmayan karşılığı. Veri modülündeki tüm prim
+ * datasetlerini yükler ve model origin'leriyle aynı kurallarla eşleştirir. */
+export async function loadDataPremiumsForModel(
+  periodLabel: string,
+  brans: string,
+  originPeriods: string[],
+  periods: DataPeriod[],
+  loadDatasetRecords: LoadRecords,
+): Promise<Record<string, number>> {
+  const period = periods.find((p) => p.label.trim() === periodLabel.trim());
+  if (!period || originPeriods.length === 0) return {};
+  const datasets = Object.values(period.datasets).filter((d) => d.typeId === "prim");
+  const records: PrimRecord[] = [];
+  for (const dataset of datasets) {
+    const loaded = dataset.records?.length
+      ? dataset
+      : await loadDatasetRecords(period.id, dataset.datasetId);
+    records.push(...((loaded?.records ?? []) as PrimRecord[]));
+  }
+  return matchPremiumsToOrigins(records, brans, originPeriods);
+}
+
 export function useProvisionModels() {
   const { project, actions } = useProject();
 
@@ -263,7 +286,7 @@ async function resolveLargeTriangles(
         og,
         dg,
       );
-      const newFd = newDiagonalFiles ? newDiagonalToFileData(paidTriangle, newDiagonalFiles) : null;
+      const newFd = newDiagonalFiles ? newDiagonalToFileData(paidTriangle, newDiagonalFiles, base.fileData) : null;
       return {
         paid: paidTriangle,
         incurred: incurredTriangle ?? paidTriangle,
@@ -275,6 +298,32 @@ async function resolveLargeTriangles(
 
   const t = await buildTriangleFromRecords(recs, actualBrans, og, dg);
   return { paid: t.paidTriangle, incurred: t.incurredTriangle, fileData: t.fileData ?? null };
+}
+
+/** useDataLarge'ın hook olmayan karşılığı; dönemsel dashboard aynı canlı Large
+ * kaynağını kullanabilsin diye dışa açılmış güvenli giriş noktası. */
+export async function loadDataLargeForModel(
+  periodLabel: string,
+  brans: string,
+  og: Frequency,
+  dg: Frequency,
+  periods: DataPeriod[],
+  loadDatasetRecords: LoadRecords,
+): Promise<LargeTriangles | null> {
+  const period = periods.find((p) => p.label === periodLabel);
+  const exists = !!period && Object.values(period.datasets).some(
+    (dataset) => dataset.typeId === "large" || dataset.typeId === "large_ucgen",
+  );
+  if (!exists) return null;
+  return resolveLargeTriangles(
+    periodLabel,
+    brans,
+    og,
+    dg,
+    periods,
+    loadDatasetRecords,
+    new Set(),
+  );
 }
 
 /**

@@ -163,9 +163,11 @@ interface ProjectProviderProps {
   children: ReactNode;
   /** Required — scopes localStorage cache and Worker sync to a single user. */
   userId: string;
+  /** Audit kaydında gösterilecek oturum kullanıcı adı. */
+  userName: string;
 }
 
-export function ProjectProvider({ children, userId }: ProjectProviderProps) {
+export function ProjectProvider({ children, userId, userName }: ProjectProviderProps) {
   const [project, setProject] = useState<Project>(EMPTY);
   const [hydrated, setHydrated] = useState(false);
   const undoStackRef = useRef<Project[]>([]);
@@ -183,6 +185,15 @@ export function ProjectProvider({ children, userId }: ProjectProviderProps) {
   // Model kilidi başkasındaysa aktif branch'e yazma engellenir (salt okunur)
   const readOnlyRef = useRef<boolean>(false);
   const setReadOnly = useCallback((v: boolean) => { readOnlyRef.current = v; }, []);
+
+  const historyEntry = useCallback((action: string, details?: Record<string, unknown>, source: ChangeSource = "user"): HistoryEntry => ({
+    id: newId(),
+    timestamp: new Date().toISOString(),
+    action,
+    source,
+    actorName: userName,
+    details,
+  }), [userName]);
 
   // Wrap setProject to push undo snapshots for destructive ops
   function setProjectWithUndo(updater: (prev: Project) => Project) {
@@ -468,6 +479,7 @@ export function ProjectProvider({ children, userId }: ProjectProviderProps) {
       },
       createBranch(periodId, frequency, name) {
         const b = makeBranch(name, frequency);
+        b.history = b.history.map((entry) => ({ ...entry, actorName: userName }));
         setProject((prev) => ({
           ...prev,
           periods: prev.periods.map((p) =>
@@ -525,13 +537,7 @@ export function ProjectProvider({ children, userId }: ProjectProviderProps) {
             frequency: targetFrequency ?? src.frequency,
             createdAt: now,
             updatedAt: now,
-            history: [{
-              id: newId(),
-              timestamp: now,
-              action: "branch_copied",
-              source: "user",
-              details: { from: src.name, originalId: src.id },
-            }],
+            history: [{ ...historyEntry("branch_copied", { from: src.name, originalId: src.id }), timestamp: now }],
           };
           return {
             ...prev,
@@ -674,13 +680,7 @@ export function ProjectProvider({ children, userId }: ProjectProviderProps) {
                 branches: p.branches.map((b) => {
                   if (b.id !== prev.activeBranchId) return b;
                   const patch = updater(b);
-                  const entry: HistoryEntry = {
-                    id: newId(),
-                    timestamp: new Date().toISOString(),
-                    action,
-                    source: source ?? "user",
-                    details,
-                  };
+                  const entry = historyEntry(action, details, source ?? "user");
                   const history = [...b.history, entry].slice(-MAX_HISTORY);
                   return {
                     ...b,
@@ -702,13 +702,7 @@ export function ProjectProvider({ children, userId }: ProjectProviderProps) {
             branches: p.branches.map((b) => {
               if (b.id !== branchId) return b;
               const patch = updater(b);
-              const entry: HistoryEntry = {
-                id: newId(),
-                timestamp: new Date().toISOString(),
-                action,
-                source: source ?? "user",
-                details,
-              };
+              const entry = historyEntry(action, details, source ?? "user");
               const history = [...b.history, entry].slice(-MAX_HISTORY);
               return { ...b, ...patch, history, updatedAt: entry.timestamp };
             }),
@@ -788,13 +782,7 @@ export function ProjectProvider({ children, userId }: ProjectProviderProps) {
             patch.cdfInitial = translatedInitial;
           }
           const now = new Date().toISOString();
-          const entry = {
-            id: Math.random().toString(36).slice(2),
-            timestamp: now,
-            action: "assumptions_copied",
-            source: "user" as const,
-            details: { from: sourceBranchId },
-          };
+          const entry = { ...historyEntry("assumptions_copied", { from: sourceBranchId }), timestamp: now };
           return {
             ...prev,
             periods: prev.periods.map((p) => ({
@@ -827,7 +815,14 @@ export function ProjectProvider({ children, userId }: ProjectProviderProps) {
               ...snapshotAssumptions(b), // fork = mevcudun kopyası
             };
             // Yaşayan alanlar değişmez (fork mevcutla aynı başlar); sadece aktif versiyon = yeni.
-            return { ...b, versions: [...saved, nv], activeVersionId: newVerId, updatedAt: now };
+            const entry = { ...historyEntry("version_created", { versionId: newVerId, name: nv.name }), timestamp: now };
+            return {
+              ...b,
+              versions: [...saved, nv],
+              activeVersionId: newVerId,
+              updatedAt: now,
+              history: [...b.history, entry].slice(-MAX_HISTORY),
+            };
           }),
         );
         return newVerId;
@@ -838,12 +833,19 @@ export function ProjectProvider({ children, userId }: ProjectProviderProps) {
       },
       renameVersion(periodId, branchId, versionId, name) {
         setProject((prev) =>
-          transformBranchById(prev, periodId, branchId, (b) => ({
-            ...b,
-            versions: (b.versions ?? []).map((v) =>
-              v.id === versionId ? { ...v, name: name.trim() || v.name, updatedAt: new Date().toISOString() } : v,
-            ),
-          })),
+          transformBranchById(prev, periodId, branchId, (b) => {
+            const current = (b.versions ?? []).find((v) => v.id === versionId);
+            if (!current) return b;
+            const now = new Date().toISOString();
+            const nextName = name.trim() || current.name;
+            const entry = { ...historyEntry("version_renamed", { versionId, from: current.name, to: nextName }), timestamp: now };
+            return {
+              ...b,
+              versions: (b.versions ?? []).map((v) => v.id === versionId ? { ...v, name: nextName, updatedAt: now } : v),
+              updatedAt: now,
+              history: [...b.history, entry].slice(-MAX_HISTORY),
+            };
+          }),
         );
       },
       deleteVersion(periodId, branchId, versionId) {
@@ -852,7 +854,11 @@ export function ProjectProvider({ children, userId }: ProjectProviderProps) {
           transformBranchById(prev, periodId, branchId, (b) => {
             const versions = b.versions ?? [];
             if (versions.length <= 1) return b; // son versiyon silinemez
+            const deleted = versions.find((v) => v.id === versionId);
             const remaining = versions.filter((v) => v.id !== versionId);
+            if (remaining.length === versions.length) return b;
+            const now = new Date().toISOString();
+            const entry = { ...historyEntry("version_deleted", { versionId, name: deleted?.name ?? versionId }), timestamp: now };
             if (b.activeVersionId === versionId) {
               // Aktif versiyon silindi → ilk kalanı yükle
               const target = remaining[0];
@@ -861,10 +867,11 @@ export function ProjectProvider({ children, userId }: ProjectProviderProps) {
                 ...assumptionsFromVersion(target),
                 versions: remaining,
                 activeVersionId: target.id,
-                updatedAt: new Date().toISOString(),
+                updatedAt: now,
+                history: [...b.history, entry].slice(-MAX_HISTORY),
               };
             }
-            return { ...b, versions: remaining };
+            return { ...b, versions: remaining, updatedAt: now, history: [...b.history, entry].slice(-MAX_HISTORY) };
           }),
         );
       },

@@ -159,7 +159,7 @@ export function RollForwardTab() {
           sub="cumulative increase"
         />
         <KpiCard
-          label="Beklenen IBNR"
+          label="Expected IBNR"
           value={formatNumber(totalExpected)}
           sub="= prior ult – current latest"
         />

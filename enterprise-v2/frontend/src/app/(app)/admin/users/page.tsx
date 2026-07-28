@@ -29,7 +29,7 @@ export default function UsersPage() {
 
   useEffect(() => {
     if (!isAdmin()) {
-      router.replace("/home");
+      router.replace("/reserve");
       return;
     }
     load();
@@ -74,7 +74,7 @@ export default function UsersPage() {
   }
 
   async function handleDelete(u: UserRecord) {
-    if (!confirm(`${u.username} silinsin mi?`)) return;
+    if (!confirm(`Delete ${u.username}?`)) return;
     try {
       await deleteUser(u.id);
       await load();
@@ -131,7 +131,7 @@ export default function UsersPage() {
             />
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-xs text-[color:var(--muted-strong)]">Rol</label>
+            <label className="text-xs text-[color:var(--muted-strong)]">Role</label>
             <select
               className="border rounded-lg px-3 py-2 text-sm bg-[color:var(--background)]"
               value={newRole}
@@ -146,7 +146,7 @@ export default function UsersPage() {
             disabled={creating}
             className="px-4 py-2 rounded-lg bg-[color:var(--brand)] text-white text-sm font-medium disabled:opacity-50"
           >
-            {creating ? "Addniyor..." : "Add"}
+            {creating ? "Adding..." : "Add"}
           </button>
         </form>
       </div>
@@ -160,7 +160,7 @@ export default function UsersPage() {
             <thead className="bg-[color:var(--surface)]">
               <tr>
                 <th className="px-4 py-3 text-left font-medium text-[color:var(--muted-strong)]">User</th>
-                <th className="px-4 py-3 text-left font-medium text-[color:var(--muted-strong)]">Rol</th>
+                <th className="px-4 py-3 text-left font-medium text-[color:var(--muted-strong)]">Role</th>
                 <th className="px-4 py-3 text-left font-medium text-[color:var(--muted-strong)]">Durum</th>
                 <th className="px-4 py-3 text-right font-medium text-[color:var(--muted-strong)]">Actions</th>
               </tr>

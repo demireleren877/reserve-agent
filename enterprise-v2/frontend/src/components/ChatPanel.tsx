@@ -40,10 +40,9 @@ interface ActiveContext {
 // agent taze veriyle devam eder / nihai toplamları okuyup verir. Bu metin kullanıcıya
 // gösterilmez — yalnız history'e girer.
 const AUTO_CONTINUE_TEXT =
-  "(Sistem) Önceki aksiyonlar uygulandı ve güncel snapshot artık hazır. Kaldığın " +
-  "yerden DEVAM ET: gereken sonraki modelleme adımlarını uygula. Model tamamsa YENİ " +
-  "değişiklik yapma; get_analysis_state'ten OKUYARAK nihai Toplam Ultimate / IBNR / " +
-  "ULR'yi ve kısa gerekçeyi ver. Kullanıcıya soru sorma, onay isteme.";
+  "(System) Previous actions have been applied and the latest snapshot is ready. CONTINUE " +
+  "from where you left off: perform the next required modelling steps. If the model is complete, " +
+  "make no new changes; READ get_analysis_state and provide final Total Ultimate / IBNR / ULR with a brief rationale. Do not ask the user a question or request confirmation.";
 const MAX_AUTO_CONTINUE = 6;
 
 interface Props {
@@ -221,7 +220,7 @@ export function ChatPanel({
         } else if (!shouldContinue) {
           msgs = [
             ...msgs,
-            { role: "assistant", content: resp.actions?.length ? "Uygulandı." : "(empty response)" },
+            { role: "assistant", content: resp.actions?.length ? "Applied." : "(empty response)" },
           ];
           setMessages(msgs);
         }
@@ -269,7 +268,7 @@ export function ChatPanel({
       return `- ${f.label} (${f.id}): ${disp}`;
     });
     setPendingForm(null);
-    dispatchSend(`Form yanıtları:\n${lines.join("\n")}`);
+    dispatchSend(`Form responses:\n${lines.join("\n")}`);
   }
 
   const freqLabel =
@@ -318,7 +317,7 @@ export function ChatPanel({
                     setModels(r.models);
                     setModel(r.models[0]?.id ?? r.default);
                   })
-                  .catch((e) => setModelsError(e instanceof Error ? e.message : "Hata"))
+                  .catch((e) => setModelsError(e instanceof Error ? e.message : "Error"))
                   .finally(() => setModelsLoading(false));
               }}
             >
@@ -607,7 +606,7 @@ function AgentFormCard({
         }}
         className="btn btn-primary text-xs px-4 py-1.5"
       >
-        {form.submit_label || "Gönder"}
+        {form.submit_label || "Submit"}
       </button>
     </div>
   );

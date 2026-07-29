@@ -13,12 +13,14 @@ import {
   type ClaimAgg,
 } from "@/lib/roll-adjust";
 import type { ClaimAdjustment } from "@/types/project";
+import type { ModelBasis } from "@/types/triangle";
 
 interface Props {
   onClose: () => void;
   onLoaded: () => void;
   /** "large" → yüklenen üçgenler LARGE segmentine yazılır (setLargeTriangles). */
   target?: "gross" | "large";
+  mode?: "load" | "change";
 }
 
 type Granularity = "yearly" | "quarterly";
@@ -29,7 +31,7 @@ function fmtNum(n: number): string {
   return _nf.format(n);
 }
 
-export function LoadFromDataStore({ onClose, onLoaded, target = "gross" }: Props) {
+export function LoadFromDataStore({ onClose, onLoaded, target = "gross", mode = "load" }: Props) {
   const store = useDataStore();
   const setters = useBranchSetters("user");
   const { project, activeBranch, actions } = useProject();
@@ -42,11 +44,13 @@ export function LoadFromDataStore({ onClose, onLoaded, target = "gross" }: Props
     fileName: string,
     fileData?: import("@/types/triangle").FileData | null,
     count?: import("@/types/triangle").Triangle | null,
+    basis: ModelBasis = modelBasis,
   ) {
     if (isLarge) {
       setters.setLargeTriangles(paid, incurred, fileData ?? null);
+      setters.setModelBasis(basis);
     } else {
-      setters.setBothTriangles(paid, incurred, fileName, fileData, count);
+      setters.setBothTriangles(paid, incurred, fileName, fileData, count, basis);
     }
   }
 
@@ -56,6 +60,7 @@ export function LoadFromDataStore({ onClose, onLoaded, target = "gross" }: Props
   const [brans, setBrans] = useState<string>("");
   const [originGran, setOriginGran] = useState<Granularity>("yearly");
   const [devGran, setDevGran] = useState<Granularity>("yearly");
+  const [modelBasis, setModelBasis] = useState<ModelBasis>(activeBranch?.modelBasis ?? "incurred");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loadingRecords, setLoadingRecords] = useState(false);
@@ -275,7 +280,7 @@ export function LoadFromDataStore({ onClose, onLoaded, target = "gross" }: Props
       );
 
       const fileName = `${selectedPeriod?.label ?? ""} – ${brans}`;
-      commit(paidTriangle, incurredTriangle, fileName, fileData, countTriangle);
+      commit(paidTriangle, incurredTriangle, fileName, fileData, countTriangle, modelBasis);
       onLoaded();
       onClose();
     } catch (e) {
@@ -312,7 +317,12 @@ export function LoadFromDataStore({ onClose, onLoaded, target = "gross" }: Props
       const incurred = incRec ? toTri(incRec) : null;
       const fileName = `${selectedPeriod?.label ?? ""} – ${recs[0]?.brans ?? ""}`;
       // Ana çalışma üçgeni incurred; yoksa paid'e düşer (eski tek-üçgen dataset)
-      commit(paid, incurred ?? paid, fileName);
+      if (modelBasis === "paid" && !paid) throw new Error("The selected dataset does not contain a Paid triangle.");
+      if (modelBasis === "incurred" && !incurred) throw new Error("The selected dataset does not contain an Incurred triangle.");
+      if (modelBasis === "outstanding" && (!paid || !incurred)) {
+        throw new Error("Outstanding modeling requires both Paid and Incurred triangles.");
+      }
+      commit(paid, incurred, fileName, null, null, modelBasis);
       onLoaded();
       onClose();
     } catch (e) {
@@ -379,10 +389,11 @@ export function LoadFromDataStore({ onClose, onLoaded, target = "gross" }: Props
         // Large segment üçgenleri (gross'tan bağımsız). largeModel korunur (dokunulmaz).
         const fd = mergeFileData(base.largeFileData, newDiagFd);
         setters.setLargeTriangles(paidTriangle, incurredTriangle ?? paidTriangle, fd);
+        setters.setModelBasis(modelBasis);
       } else {
         // Gross: SADECE veri değişir; base'in tüm varsayım/seçimleri korunur.
         const fd = mergeFileData(base.fileData, newDiagFd);
-        setters.setRolledForward(paidTriangle, incurredTriangle ?? paidTriangle, fileName, fd, base);
+        setters.setRolledForward(paidTriangle, incurredTriangle ?? paidTriangle, fileName, fd, base, modelBasis);
       }
 
       // Dosya düzeltmelerini branch'e kaydet (denetlenebilir + yeniden roll'da korunur).
@@ -418,7 +429,7 @@ export function LoadFromDataStore({ onClose, onLoaded, target = "gross" }: Props
       <div className={`card w-full ${source === "rollforward" ? "max-w-lg" : "max-w-md"} shadow-xl border border-[color:var(--border)]`}>
         <div className="p-5 border-b border-[color:var(--border)] flex items-center justify-between">
           <h2 className="text-sm font-semibold">
-            Load from Data Module
+            {mode === "change" ? "Change data source" : "Load from Data Module"}
             {isLarge && (
               <span className="ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[color:var(--primary-soft)] text-[color:var(--primary)] align-middle">
                 LARGE
@@ -628,6 +639,54 @@ export function LoadFromDataStore({ onClose, onLoaded, target = "gross" }: Props
             </>
           )}
 
+          {/* Model değeri, veri modele bağlanırken seçilir. */}
+          {selectedDatasetId && (
+            <fieldset>
+              <legend className="block text-xs font-medium text-[color:var(--muted-strong)] mb-1.5">
+                Model value
+              </legend>
+              <div className="grid grid-cols-3 overflow-hidden rounded-lg border border-[color:var(--border)]">
+                {([
+                  ["paid", "Paid", "Cumulative payments"],
+                  ["outstanding", "Outstanding", "Incurred − Paid"],
+                  ["incurred", "Incurred", "Paid + Outstanding"],
+                ] as const).map(([value, label, hint], index) => {
+                  const selected = modelBasis === value;
+                  return (
+                    <label
+                      key={value}
+                      className={
+                        "cursor-pointer px-2.5 py-2.5 transition " +
+                        (index > 0 ? "border-l border-[color:var(--border)] " : "") +
+                        (selected
+                          ? "bg-[color:var(--primary-soft)] text-[color:var(--primary)]"
+                          : "bg-[color:var(--surface)] text-[color:var(--foreground)] hover:bg-[color:var(--surface-alt)]")
+                      }
+                    >
+                      <span className="flex items-center gap-2 text-[11px] font-semibold">
+                        <input
+                          type="radio"
+                          name="model-basis"
+                          value={value}
+                          checked={selected}
+                          onChange={() => setModelBasis(value)}
+                          className="accent-[color:var(--primary)]"
+                        />
+                        {label}
+                      </span>
+                      <span className="block mt-1 pl-5 text-[9px] leading-snug text-[color:var(--muted)]">
+                        {hint}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+              <p className="mt-1.5 text-[10px] leading-relaxed text-[color:var(--muted)]">
+                This value will drive the model&apos;s LDF, ultimate and reserve calculations.
+              </p>
+            </fieldset>
+          )}
+
           {/* Claim adjustments (optional) — bir dosyanın ödeme/muallağını roll-forward'da düzelt */}
           {source === "rollforward" && priorPeriodId && brans && bransList.length > 0 && (
             <div className="rounded-lg" style={{ border: "1px solid var(--border)" }}>
@@ -788,6 +847,8 @@ export function LoadFromDataStore({ onClose, onLoaded, target = "gross" }: Props
           >
             {loading
               ? source === "ucgen" ? "Loading…" : source === "rollforward" ? "Rolling forward…" : "Building…"
+              : mode === "change"
+              ? source === "rollforward" ? "Apply Roll Forward" : "Replace Model Data"
               : source === "ucgen" ? "Load Triangle" : source === "rollforward" ? "Roll Forward" : "Load Triangles"}
           </button>
         </div>

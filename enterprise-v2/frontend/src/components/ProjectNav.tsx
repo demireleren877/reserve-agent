@@ -116,7 +116,13 @@ const ACTION_LABELS: Record<string, string> = {
   curve_reset: "Curve reset",
 };
 
-export function BranchLogsButton() {
+export function BranchLogsButton({
+  onChangeDataSource,
+  dataSourceDisabled = false,
+}: {
+  onChangeDataSource?: () => void;
+  dataSourceDisabled?: boolean;
+} = {}) {
   const { activeBranch, activePeriod } = useProject();
   const popoverRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
@@ -139,7 +145,8 @@ export function BranchLogsButton() {
     <div className="relative" ref={popoverRef}>
       <button
         onClick={() => setOpen((v) => !v)}
-        title="Logs"
+        title="Model settings"
+        aria-label="Model settings"
         className={
           "p-1 rounded transition text-[color:var(--muted)] hover:text-[color:var(--foreground)] hover:bg-[color:var(--surface-alt)] " +
           (open ? "text-[color:var(--primary)]" : "")
@@ -151,12 +158,36 @@ export function BranchLogsButton() {
       {open && (
         <div className="absolute right-0 top-full mt-1.5 card shadow-xl border z-[40] w-[520px] flex flex-col max-h-[420px]">
           <div className="flex items-center gap-2 px-3 py-2.5 border-b bg-[color:var(--surface-alt)]">
-            <span className="text-xs font-semibold flex-1">Logs</span>
+            <span className="text-xs font-semibold flex-1">Model settings</span>
             {activeBranch && (
               <span className="text-[10px] text-[color:var(--muted)]">
                 {activePeriod?.label} / {activeBranch.name}
               </span>
             )}
+          </div>
+          {onChangeDataSource && activeBranch && (
+            <div className="flex items-center gap-3 px-3 py-3 border-b bg-[color:var(--surface)]">
+              <div className="min-w-0 flex-1">
+                <div className="text-[11px] font-semibold text-[color:var(--foreground)]">Data source</div>
+                <div className="mt-0.5 text-[10px] text-[color:var(--muted)] truncate" title={activeBranch.triangleFileName ?? undefined}>
+                  {activeBranch.triangleFileName ?? "No named source"}
+                </div>
+              </div>
+              <button
+                type="button"
+                disabled={dataSourceDisabled}
+                onClick={() => {
+                  setOpen(false);
+                  onChangeDataSource();
+                }}
+                className="px-3 py-1.5 text-[11px] font-medium rounded-md border border-[color:var(--border)] bg-[color:var(--surface)] text-[color:var(--muted-strong)] hover:text-[color:var(--foreground)] hover:border-[color:var(--border-strong)] hover:bg-[color:var(--surface-alt)] transition disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Change
+              </button>
+            </div>
+          )}
+          <div className="px-3 py-1.5 border-b text-[10px] font-semibold text-[color:var(--muted-strong)] bg-[color:var(--surface-alt)]">
+            Activity log
           </div>
           {!activeBranch ? (
             <div className="p-6 text-center text-sm text-[color:var(--muted)]">No active branch.</div>

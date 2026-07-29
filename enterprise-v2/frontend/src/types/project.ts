@@ -1,4 +1,4 @@
-import type { FileData, Granularity, LDFMethod, Triangle, TriangleType } from "./triangle";
+import type { FileData, Granularity, LDFMethod, ModelBasis, Triangle, TriangleType } from "./triangle";
 
 export type Frequency = "yearly" | "quarterly";
 
@@ -37,6 +37,9 @@ export interface Branch {
   paidTriangle?: Triangle | null;
   /** Gerçekleşen (incurred) üçgeni — DataTab görünümü ve Muallak hesabı için */
   incurredTriangle?: Triangle | null;
+
+  /** Value used by the reserve model. Outstanding is derived as incurred − paid. */
+  modelBasis?: ModelBasis;
 
   /** Kümülatif ihbar adedi üçgeni — Frekans-Şiddet için. Yalnızca DOSYA_NO'lu
    *  hasar verisinden yüklenen branşlarda dolu olur. */
@@ -135,6 +138,7 @@ export interface Branch {
 /** Bir versiyonun (senaryonun) sakladığı assumption alan kümesi — Branch alt-kümesi.
  *  VERİ alanları (üçgen, fileData, rollAdjustments) buraya dahil DEĞİL (paylaşılır). */
 export const ASSUMPTION_KEYS = [
+  "modelBasis",
   "method", "window", "excludedCells", "ldfAvgPairs",
   "premiums", "lrInputPerOrigin", "basisPerOrigin", "correctionPerOrigin",
   "cdfInitial", "cdfChoicePerPeriod", "cdfModelPerPeriod", "curveIncludePerPeriod",
@@ -231,6 +235,7 @@ export function makeBranch(name: string, frequency: Frequency): Branch {
     triangle: null,
     paidTriangle: null,
     incurredTriangle: null,
+    modelBasis: "incurred",
     method: "volume_weighted",
     window: "all",
     excludedCells: [],
@@ -266,14 +271,24 @@ export function makeBranch(name: string, frequency: Frequency): Branch {
 
 /** Eski/versiyonsuz branch'e Base versiyon ekler (idempotent). Migrasyon + güvenlik ağı. */
 export function ensureBranchVersions(branch: Branch): Branch {
-  if (branch.versions && branch.versions.length > 0) {
-    if (branch.activeVersionId && branch.versions.some((v) => v.id === branch.activeVersionId)) {
-      return branch;
+  const migrated: Branch = {
+    ...branch,
+    modelBasis: branch.modelBasis ??
+      (branch.triangle?.triangle_type === "paid" ? "paid" :
+       branch.triangle?.triangle_type === "outstanding" ? "outstanding" : "incurred"),
+  };
+  if (migrated.versions && migrated.versions.length > 0) {
+    const versions = migrated.versions.map((v) => ({
+      ...v,
+      modelBasis: v.modelBasis ?? migrated.modelBasis,
+    }));
+    if (migrated.activeVersionId && versions.some((v) => v.id === migrated.activeVersionId)) {
+      return { ...migrated, versions };
     }
-    return { ...branch, activeVersionId: branch.versions[0].id };
+    return { ...migrated, versions, activeVersionId: versions[0].id };
   }
-  const base = makeVersion("Base", snapshotAssumptions(branch));
-  return { ...branch, versions: [base], activeVersionId: base.id };
+  const base = makeVersion("Base", snapshotAssumptions(migrated));
+  return { ...migrated, versions: [base], activeVersionId: base.id };
 }
 
 export function makePeriod(label: string): Period {

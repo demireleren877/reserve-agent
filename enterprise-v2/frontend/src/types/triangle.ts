@@ -1,4 +1,5 @@
 export type TriangleType = "paid" | "incurred";
+export type ModelBasis = "paid" | "outstanding" | "incurred";
 export type Granularity = "yearly" | "quarterly";
 export type LDFMethod = "volume_weighted" | "simple_average" | "geometric_average";
 
@@ -25,10 +26,48 @@ export interface Triangle {
   origin_periods: string[];
   development_periods: number[];
   values: (number | null)[][];
-  triangle_type: TriangleType;
+  triangle_type: ModelBasis;
   origin_granularity: Granularity;
   development_granularity: Granularity;
   file_data?: FileData;
+}
+
+/** Outstanding is a period-end stock: cumulative incurred minus cumulative paid. */
+export function deriveOutstandingTriangle(
+  paid: Triangle | null | undefined,
+  incurred: Triangle | null | undefined,
+): Triangle | null {
+  if (!paid || !incurred) return null;
+  if (
+    paid.origin_periods.length !== incurred.origin_periods.length ||
+    paid.development_periods.length !== incurred.development_periods.length
+  ) return null;
+  return {
+    ...incurred,
+    triangle_type: "outstanding",
+    values: incurred.values.map((row, i) =>
+      row.map((inc, j) => {
+        const p = paid.values[i]?.[j];
+        return inc != null && p != null ? inc - p : null;
+      }),
+    ),
+  };
+}
+
+export function selectModelTriangle(
+  paid: Triangle | null | undefined,
+  incurred: Triangle | null | undefined,
+  basis: ModelBasis,
+): Triangle | null {
+  if (basis === "paid") return paid ?? null;
+  if (basis === "outstanding") return deriveOutstandingTriangle(paid, incurred);
+  return incurred ?? null;
+}
+
+export function fileValueForBasis(v: FileLeaf | undefined, basis: ModelBasis): number {
+  if (basis === "paid") return filePaid(v);
+  if (basis === "outstanding") return fileOs(v);
+  return fileIncurred(v);
 }
 
 export interface ComputeResponse {

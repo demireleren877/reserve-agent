@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { LDFMethod } from "@/types/triangle";
+import { selectModelTriangle, type LDFMethod, type ModelBasis } from "@/types/triangle";
 import type { Window } from "@/types/project";
 import { DataTab } from "@/components/DataTab";
 import { LDFTab } from "@/components/LDFTab";
@@ -13,6 +13,7 @@ import { ILRTab } from "@/components/ILRTab";
 import { FrequencySeverityTab } from "@/components/FrequencySeverityTab";
 import { ActualVsExpectedTab } from "@/components/ActualVsExpectedTab";
 import { FileAnalysisTab } from "@/components/FileAnalysisTab";
+import { LoadFromDataStore } from "@/components/LoadFromDataStore";
 import { BranchLogsButton } from "@/components/ProjectNav";
 import { ModelTabs } from "@/components/ModelTabs";
 import { ProjectSidebar } from "@/components/ProjectSidebar";
@@ -67,12 +68,14 @@ const TABS: { id: Tab; label: string; sub: string }[] = [
 
 export default function Home() {
   const { project, navLevel, activePeriod, activeBranch, setReadOnly } = useProject();
+  const modelBasis: ModelBasis = activeBranch?.modelBasis ?? "incurred";
 
   // ── DİNAMİK LARGE (veri ↔ model): large segmenti, veri modülündeki large
   // verisinden (yöntem: doğrudan/roll-forward) CANLI türetilir — EP gibi. Gross
   // bağlıyken hizalanır. effBranch = activeBranch + türetilmiş large üçgenleri.
-  const grossTri0 =
-    activeBranch?.incurredTriangle ?? activeBranch?.paidTriangle ?? activeBranch?.triangle ?? null;
+  const grossTri0 = activeBranch
+    ? selectModelTriangle(activeBranch.paidTriangle, activeBranch.incurredTriangle, modelBasis) ?? activeBranch.triangle
+    : null;
   const dataLarge = useDataLarge(
     activePeriod?.label,
     activeBranch?.name,
@@ -111,6 +114,11 @@ export default function Home() {
   // Alt-sekme her MODEL için ayrı hatırlanır (tarayıcı sekmesi gibi) — modeller
   // arasında geçince açık alt-sekme taşmaz. `tab`/`setTab` triangle'dan sonra türetilir.
   const [tabByKey, setTabByKey] = useState<Record<string, Tab>>({});
+  const [showDataSourceDialog, setShowDataSourceDialog] = useState(false);
+
+  useEffect(() => {
+    setShowDataSourceDialog(false);
+  }, [activeBranch?.id]);
 
   const lockKey =
     navLevel === "branch" && activePeriod && activeBranch
@@ -155,8 +163,9 @@ export default function Home() {
     [effBranch, largeOn],
   );
 
-  const grossTriangle = activeBranch?.triangle ?? null;
-  const isPaidType = grossTriangle?.triangle_type === "paid";
+  const grossTriangle = activeBranch
+    ? selectModelTriangle(activeBranch.paidTriangle, activeBranch.incurredTriangle, modelBasis) ?? activeBranch.triangle
+    : null;
   // Large segment üçgenleri GROSS şekline carry-forward ile tamamlanır.
   const largeWork = useMemo(
     () => (effBranch && largeOn ? largeWorkingTriangles(effBranch) : null),
@@ -165,11 +174,11 @@ export default function Home() {
   const triangle = useMemo(() => {
     if (!activeBranch) return null;
     if (isLargeSeg) {
-      return (isPaidType ? largeWork?.paid ?? largeWork?.incurred : largeWork?.incurred ?? largeWork?.paid) ?? null;
+      return selectModelTriangle(largeWork?.paid, largeWork?.incurred, modelBasis) ?? largeWork?.incurred ?? largeWork?.paid ?? null;
     }
     if (isGrossSeg) return grossTriangle;
     return (largeOn ? attritionalWorkingTriangle(effBranch!) : grossTriangle) ?? null;
-  }, [activeBranch, effBranch, isLargeSeg, isGrossSeg, largeOn, grossTriangle, isPaidType, largeWork]);
+  }, [activeBranch, effBranch, isLargeSeg, isGrossSeg, largeOn, grossTriangle, modelBasis, largeWork]);
 
   const avePrior = useMemo(() => {
     if (!activePeriod || !activeBranch) return null;
@@ -201,7 +210,7 @@ export default function Home() {
     const prior = avePriorBranch;
     if (isLargeSeg) {
       const work = largeWorkingTriangles(prior);
-      const priorTriangle = triangle.triangle_type === "paid" ? work?.paid : work?.incurred;
+      const priorTriangle = selectModelTriangle(work?.paid, work?.incurred, modelBasis);
       const model = { ...prior, ...(prior.largeModel ?? {}), triangle: priorTriangle ?? null, paidTriangle: null, incurredTriangle: null };
       return priorTriangle ? { branch: model, triangle: priorTriangle, basis: "Large" } : null;
     }
@@ -210,10 +219,10 @@ export default function Home() {
       const model = { ...prior, ...(prior.grossModel ?? {}), triangle: priorTriangle, paidTriangle: null, incurredTriangle: null };
       return priorTriangle ? { branch: model, triangle: priorTriangle, basis: "Gross" } : null;
     }
-    const priorTriangle = attritionalWorkingTriangle(prior);
+    const priorTriangle = attritionalWorkingTriangle(prior, modelBasis);
     const model = { ...prior, triangle: priorTriangle, paidTriangle: null, incurredTriangle: null };
     return priorTriangle ? { branch: model, triangle: priorTriangle, basis: largeOn ? "Attritional" : "Gross" } : null;
-  }, [avePriorBranch, triangle, isLargeSeg, isGrossSeg, largeOn]);
+  }, [avePriorBranch, triangle, isLargeSeg, isGrossSeg, largeOn, modelBasis]);
   const aveResult = useMemo(() => aveComparison && triangle ? calculateActualVsExpected(aveComparison.branch, triangle, aveComparison.triangle) : null, [aveComparison, triangle]);
 
   // Alt-sekme model başına: aktif modelin anahtarıyla sakla/oku. Üçgen yoksa
@@ -228,15 +237,15 @@ export default function Home() {
   );
 
   const effPaid = isLargeSeg
-    ? largeWork?.paid ?? (isPaidType ? triangle : null)
+    ? largeWork?.paid ?? (triangle?.triangle_type === "paid" ? triangle : null)
     : isGrossSeg
-    ? activeBranch?.paidTriangle ?? (isPaidType ? triangle : null)
-    : (largeOn ? attr?.paid : activeBranch?.paidTriangle) ?? (isPaidType ? triangle : null);
+    ? activeBranch?.paidTriangle ?? (triangle?.triangle_type === "paid" ? triangle : null)
+    : (largeOn ? attr?.paid : activeBranch?.paidTriangle) ?? (triangle?.triangle_type === "paid" ? triangle : null);
   const effIncurred = isLargeSeg
-    ? largeWork?.incurred ?? (!isPaidType ? triangle : null)
+    ? largeWork?.incurred ?? (triangle?.triangle_type === "incurred" ? triangle : null)
     : isGrossSeg
-    ? activeBranch?.incurredTriangle ?? (!isPaidType ? triangle : null)
-    : (largeOn ? attr?.incurred : activeBranch?.incurredTriangle) ?? (!isPaidType ? triangle : null);
+    ? activeBranch?.incurredTriangle ?? (triangle?.triangle_type === "incurred" ? triangle : null)
+    : (largeOn ? attr?.incurred : activeBranch?.incurredTriangle) ?? (triangle?.triangle_type === "incurred" ? triangle : null);
 
   // Param kaynağı: Large/Gross segmentinde nötr defaults + kaydedilmiş model (largeModel/grossModel).
   const segModel = isLargeSeg ? activeBranch?.largeModel : isGrossSeg ? activeBranch?.grossModel : null;
@@ -342,18 +351,17 @@ export default function Home() {
   const priorLDFRef = useMemo(() => {
     const b = priorEffBranch;
     if (!b || !b.triangle || !priorRaw) return null;
-    const paidType = b.triangle.triangle_type === "paid";
     let priorTri: typeof b.triangle | null = null;
     let priorFd = b.fileData ?? null;
     if (isLargeSeg) {
       const lw = largeWorkingTriangles(b);
-      priorTri = (paidType ? lw.paid ?? lw.incurred : lw.incurred ?? lw.paid) ?? null;
+      priorTri = selectModelTriangle(lw.paid, lw.incurred, modelBasis) ?? lw.incurred ?? lw.paid ?? null;
       priorFd = b.largeFileData ?? null;
     } else if (isGrossSeg) {
       priorTri = b.triangle; // gross (ayrım yapılmadan)
       priorFd = b.fileData ?? null;
     } else if (largeOn && hasLarge(b)) {
-      priorTri = attritionalWorkingTriangle(b);
+      priorTri = attritionalWorkingTriangle(b, modelBasis);
       priorFd = subtractFileData(b.fileData, b.largeFileData); // attritional dosya kırılımı
     } else {
       priorTri = b.triangle;
@@ -365,7 +373,7 @@ export default function Home() {
       grossFileData: b.fileData ?? null,
       largeFileData: b.largeFileData ?? null,
     } : null;
-  }, [priorEffBranch, priorRaw, isLargeSeg, isGrossSeg, largeOn]);
+  }, [priorEffBranch, priorRaw, isLargeSeg, isGrossSeg, largeOn, modelBasis]);
 
   const method = (pb?.method ?? "volume_weighted") as LDFMethod;
   const window: Window = pb?.window ?? "all";
@@ -1046,7 +1054,10 @@ export default function Home() {
   }
 
   return (
-    <Shell onUploaded={() => setTab("data")}>
+    <Shell
+      onChangeDataSource={triangle ? () => setShowDataSourceDialog(true) : undefined}
+      dataSourceDisabled={isReadOnly}
+    >
       <ModelLockBanner state={lockState} onForceAcquire={forceAcquire} />
       {largeOn && (
         <div className="border-b bg-[color:var(--surface-alt)]/50 px-4 py-2 flex items-center gap-2">
@@ -1166,6 +1177,17 @@ export default function Home() {
           </div>
         </div>
       </div>
+
+      {showDataSourceDialog && (
+        <LoadFromDataStore
+          mode="change"
+          onClose={() => setShowDataSourceDialog(false)}
+          onLoaded={() => {
+            setShowDataSourceDialog(false);
+            setTab("data");
+          }}
+        />
+      )}
 
       <main className="p-5 max-w-[1600px] w-full mx-auto">
         {tab === "data" && (
@@ -1411,9 +1433,12 @@ function ReserveSidebar() {
 
 function Shell({
   children,
+  onChangeDataSource,
+  dataSourceDisabled,
 }: {
   children: React.ReactNode;
-  onUploaded?: () => void;
+  onChangeDataSource?: () => void;
+  dataSourceDisabled?: boolean;
 }) {
   return (
     <div className="min-h-screen">
@@ -1429,7 +1454,10 @@ function Shell({
         <ModelTabs />
         {/* Aktif model logları (breadcrumb kaldırıldı; sidebar yolu gösteriyor) */}
         <div className="ml-auto flex items-center">
-          <BranchLogsButton />
+          <BranchLogsButton
+            onChangeDataSource={onChangeDataSource}
+            dataSourceDisabled={dataSourceDisabled}
+          />
         </div>
       </header>
       <div className="flex">

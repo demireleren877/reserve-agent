@@ -97,8 +97,11 @@ export function SummaryTab(props: Props) {
   const totalULR =
     totalRawPremium > 0 ? totals.selectedUltimate / totalRawPremium : null;
 
-  const triangleLabel =
-    triangle?.triangle_type === "incurred" ? "Incurred" : "Paid";
+  const triangleLabel = triangle?.triangle_type === "incurred"
+    ? "Incurred"
+    : triangle?.triangle_type === "outstanding"
+    ? "Outstanding"
+    : "Paid";
 
   // Origin başına elemelerin net IBNR etkisi (satırdaki tüm adımların toplamı)
   const exclusionByOrigin = useMemo(() => {

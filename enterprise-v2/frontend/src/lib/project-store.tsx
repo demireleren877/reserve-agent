@@ -10,7 +10,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import type { FileData, LDFMethod } from "@/types/triangle";
+import { selectModelTriangle, type FileData, type LDFMethod, type ModelBasis } from "@/types/triangle";
 import {
   type Branch,
   type ChangeSource,
@@ -74,7 +74,16 @@ function applyVersionSwitch(b: Branch, versionId: string): Branch {
   const saved = versions.map((v) =>
     v.id === b.activeVersionId ? { ...v, ...snapshotAssumptions(b), updatedAt: now } : v,
   );
-  return { ...b, ...assumptionsFromVersion(target), versions: saved, activeVersionId: versionId, updatedAt: now };
+  const assumptions = assumptionsFromVersion(target);
+  const basis = assumptions.modelBasis ?? b.modelBasis ?? "incurred";
+  return {
+    ...b,
+    ...assumptions,
+    triangle: selectModelTriangle(b.paidTriangle, b.incurredTriangle, basis) ?? b.triangle,
+    versions: saved,
+    activeVersionId: versionId,
+    updatedAt: now,
+  };
 }
 
 /** Her branch'in en az bir versiyonu (Base) olduğundan emin ol — eski projeleri migrate eder. */
@@ -921,7 +930,7 @@ export function useProject(): Ctx {
 
 export interface BranchSetters {
   setTriangle: (t: Branch["triangle"], fileName?: string | null, fileData?: FileData) => void;
-  setBothTriangles: (paid: Branch["triangle"], incurred: Branch["triangle"], fileName?: string, fileData?: FileData | null, count?: Branch["triangle"]) => void;
+  setBothTriangles: (paid: Branch["triangle"], incurred: Branch["triangle"], fileName?: string, fileData?: FileData | null, count?: Branch["triangle"], modelBasis?: ModelBasis) => void;
   /** Roll-forward: yeni üçgenleri yükle ama TÜM model varsayım/seçimlerini base'den
    *  koru (elemeler, curve, CDF, premium, LR, basis, correction, window, largeModel).
    *  Sadece VERİ değişir; formüller/seçimler aynı kalır. */
@@ -931,9 +940,11 @@ export interface BranchSetters {
     fileName: string,
     fileData: FileData | null | undefined,
     base: Branch,
+    modelBasis?: ModelBasis,
   ) => void;
   /** LARGE-LOSS üçgenlerini yükle (ödeme + gerçekleşen). */
   setLargeTriangles: (paid: Branch["triangle"], incurred: Branch["triangle"], fileData?: FileData | null) => void;
+  setModelBasis: (basis: ModelBasis) => void;
   clearLarge: () => void;
   setLargeWindow: (w: Window) => void;
   setMethod: (m: LDFMethod) => void;
@@ -1022,8 +1033,9 @@ export function useBranchSetters(
       return {
       setTriangle: (t, fileName, fileData) =>
         updData(
-          () => ({
+          (prev) => ({
             triangle: t,
+            modelBasis: t?.triangle_type ?? prev.modelBasis ?? "incurred",
             triangleFileName: fileName ?? null,
             fileData: fileData ?? undefined,
             excludedCells: [],
@@ -1044,10 +1056,11 @@ export function useBranchSetters(
           fileName ? { fileName } : {},
           source,
         ),
-      setBothTriangles: (paid, incurred, fileName, fileData, count) =>
+      setBothTriangles: (paid, incurred, fileName, fileData, count, modelBasis) =>
         updData(
-          () => ({
-            triangle: incurred,
+          (prev) => ({
+            triangle: selectModelTriangle(paid, incurred, modelBasis ?? prev.modelBasis ?? "incurred") ?? incurred ?? paid,
+            modelBasis: modelBasis ?? prev.modelBasis ?? "incurred",
             triangleFileName: fileName ?? null,
             fileData: fileData ?? undefined,
             excludedCells: [],
@@ -1061,13 +1074,14 @@ export function useBranchSetters(
             countTriangle: count ?? null,
           }),
           "triangle_loaded",
-          fileName ? { fileName } : {},
+          { ...(fileName ? { fileName } : {}), modelBasis: modelBasis ?? activeBranch?.modelBasis ?? "incurred" },
           source,
         ),
-      setRolledForward: (paid, incurred, fileName, fileData, base) =>
+      setRolledForward: (paid, incurred, fileName, fileData, base, modelBasis) =>
         updData(
           () => ({
-            triangle: incurred,
+            triangle: selectModelTriangle(paid, incurred, modelBasis ?? base.modelBasis ?? "incurred") ?? incurred ?? paid,
+            modelBasis: modelBasis ?? base.modelBasis ?? "incurred",
             triangleFileName: fileName ?? null,
             fileData: fileData ?? undefined,
             paidTriangle: paid,
@@ -1090,7 +1104,7 @@ export function useBranchSetters(
             grossModel: base.grossModel ? { ...base.grossModel } : undefined,
           }),
           "roll_forward",
-          { fileName },
+          { fileName, modelBasis: modelBasis ?? base.modelBasis ?? "incurred" },
           source,
         ),
       setLargeTriangles: (paid, incurred, fileData) =>
@@ -1102,6 +1116,16 @@ export function useBranchSetters(
           }),
           "large_loaded",
           {},
+          source,
+        ),
+      setModelBasis: (basis) =>
+        updData(
+          (prev) => ({
+            modelBasis: basis,
+            triangle: selectModelTriangle(prev.paidTriangle, prev.incurredTriangle, basis) ?? prev.triangle,
+          }),
+          "model_basis_set",
+          { basis },
           source,
         ),
       clearLarge: () =>

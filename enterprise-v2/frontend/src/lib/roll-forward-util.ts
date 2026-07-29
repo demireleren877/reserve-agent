@@ -5,7 +5,7 @@
  * FileData şekli: origin → gelişim dönemi etiketi → { dosya_no: tutar }.
  */
 
-import { fileIncurred, fileOs, filePaid, type Triangle, type FileData, type FileLeaf } from "@/types/triangle";
+import { fileOs, filePaid, fileValueForBasis, type Triangle, type FileData, type FileLeaf } from "@/types/triangle";
 import { periodOrder } from "@/lib/period-order";
 
 // Python convention: quarterly seq = y*4+q (q ∈ 1..4). seq → "YYYYQq".
@@ -123,7 +123,7 @@ export function reconcileFileDataSnapshots(
       const observableIndex = triangle.values[i].slice(0, j + 1).filter((value) => value != null).length - 1;
       const orderedDates = Object.keys(byDate).sort((a, b) => periodOrder(a) - periodOrder(b));
       const total = (snapshot: Record<string, FileLeaf>) => Object.values(snapshot).reduce<number>(
-        (sum, leaf) => sum + (triangle.triangle_type === "incurred" ? fileIncurred(leaf) : filePaid(leaf)),
+        (sum, leaf) => sum + fileValueForBasis(leaf, triangle.triangle_type),
         0,
       );
       const candidateDates = [...new Set([date, orderedDates[observableIndex]].filter(Boolean))];

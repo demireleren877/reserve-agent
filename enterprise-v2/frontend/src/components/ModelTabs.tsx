@@ -42,7 +42,15 @@ export function ModelTabs() {
       const period = project.periods.find((p) => p.id === pid);
       const branch = period?.branches.find((b) => b.id === bid);
       if (!period || !branch) return null;
-      return { key: k, periodId: pid, branchId: bid, periodLabel: period.label, name: branch.name };
+      const activeVersion = branch.versions?.find((v) => v.id === branch.activeVersionId);
+      return {
+        key: k,
+        periodId: pid,
+        branchId: bid,
+        periodLabel: period.label,
+        name: branch.name,
+        versionName: activeVersion?.name ?? branch.versions?.[0]?.name ?? "Base",
+      };
     },
     [project.periods],
   );
@@ -94,7 +102,7 @@ export function ModelTabs() {
           <div
             key={t.key}
             onClick={() => actions.openBranch(t.periodId, t.branchId)}
-            title={`${t.periodLabel} / ${t.name}`}
+            title={`${t.periodLabel} / ${t.name} / ${t.versionName}`}
             className={
               "group shrink-0 flex items-center gap-1.5 h-8 pl-2.5 pr-1.5 rounded-md cursor-pointer border transition select-none " +
               (on
@@ -111,14 +119,14 @@ export function ModelTabs() {
             <span className="flex flex-col leading-none min-w-0">
               <span
                 className={
-                  "text-[11px] font-medium truncate max-w-[9rem] " +
+                  "text-[11px] font-medium truncate max-w-[11rem] " +
                   (on ? "text-[color:var(--foreground)]" : "text-[color:var(--muted-strong)]")
                 }
               >
                 {t.name}
               </span>
-              <span className="text-[9px] text-[color:var(--muted)] truncate max-w-[9rem]">
-                {t.periodLabel}
+              <span className="text-[9px] text-[color:var(--muted)] truncate max-w-[11rem]">
+                {t.periodLabel} · {t.versionName}
               </span>
             </span>
             <button

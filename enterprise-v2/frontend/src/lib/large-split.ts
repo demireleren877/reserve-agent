@@ -6,8 +6,8 @@
  * Bu modül SADECE saf hesap yapar (veri değiştirmez, UI bilmez) — kolay test.
  */
 
-import type { Triangle, FileData } from "@/types/triangle";
-import { filePaid, fileOs } from "@/types/triangle";
+import type { Triangle, FileData, ModelBasis } from "@/types/triangle";
+import { filePaid, fileOs, selectModelTriangle } from "@/types/triangle";
 import type { Branch, Window } from "@/types/project";
 import { computeBranchSummary, type BranchSummary } from "@/lib/reserve-pipeline";
 
@@ -143,13 +143,13 @@ export function deriveAttritional(branch: Branch): AttritionalTriangles {
 }
 
 /** Model için attritional çalışma üçgeni (incurred öncelikli, yoksa paid). */
-export function attritionalWorkingTriangle(branch: Branch): Triangle | null {
+export function attritionalWorkingTriangle(
+  branch: Branch,
+  basis: ModelBasis = branch.modelBasis ?? "incurred",
+): Triangle | null {
   if (!hasLarge(branch)) return branch.triangle ?? null;
   const a = deriveAttritional(branch);
-  // Çalışma üçgeni gross ile aynı tipte olmalı (branch.triangle hangi tipse).
-  const t = branch.triangle?.triangle_type;
-  if (t === "paid") return a.paid ?? a.incurred;
-  return a.incurred ?? a.paid;
+  return selectModelTriangle(a.paid, a.incurred, basis) ?? a.incurred ?? a.paid;
 }
 
 /** LARGE segmentinin çalışma üçgenleri — GROSS şekline carry-forward ile tamamlanmış. */
@@ -163,9 +163,8 @@ export function largeWorkingTriangles(branch: Branch): { paid: Triangle | null; 
 /** LARGE üçgeni + largeModel parametreleriyle özet (kendi bağımsız modeli). */
 export function computeLargeSummary(branch: Branch): BranchSummary | null {
   if (!hasLarge(branch)) return null;
-  const t = branch.triangle?.triangle_type;
   const lw = largeWorkingTriangles(branch);
-  const tri = t === "paid" ? lw.paid ?? lw.incurred : lw.incurred ?? lw.paid;
+  const tri = selectModelTriangle(lw.paid, lw.incurred, branch.modelBasis ?? "incurred") ?? lw.incurred ?? lw.paid;
   if (!tri) return null;
   const lm = branch.largeModel ?? {};
   const synthetic: Branch = {

@@ -46,7 +46,7 @@ function toMuallak(paid: Triangle, incurred: Triangle): Triangle | null {
       return inc != null && p != null ? inc - p : null;
     }),
   );
-  return { ...incurred, values };
+  return { ...incurred, values, triangle_type: "outstanding" };
 }
 
 function lenLabel(months: number): string {

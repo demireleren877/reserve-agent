@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LDFMethod, Triangle, FileData, FileLeaf } from "@/types/triangle";
-import { filePaid, fileIncurred } from "@/types/triangle";
+import { fileValueForBasis } from "@/types/triangle";
 import { formatNumber } from "@/lib/api";
 import { devDate, reconcileFileDataSnapshots } from "@/lib/roll-forward-util";
 import { periodOrder } from "@/lib/period-order";
@@ -285,10 +285,8 @@ export function LDFTab(props: Props) {
       const files: FileRow[] = [];
       let sumPrev = 0;
       let sumCur = 0;
-      // LDF üçgeni incurred ise dosya değişimini de INCURRED (ödeme+muallak) üzerinden
-      // hesapla — aksi halde SADECE muallak (OS) düzeltilen dosyalar (paid aynı kalır)
-      // görünmez. Paid üçgende paid bazına düş.
-      const fileVal = triangle.triangle_type === "incurred" ? fileIncurred : filePaid;
+      // Dosya etkisi model üçgeniyle aynı değer bazında hesaplanır.
+      const fileVal = (leaf: FileLeaf | undefined) => fileValueForBasis(leaf, triangle.triangle_type);
       // Oran = num/den. Değişim iki taraftan da gelebilir; bu yüzden HEM numerator
       // (dev j+1) HEM denominator (dev j) hücresinin dosya değişimlerini tara.
       const cfd = comparableFileData;
@@ -452,8 +450,7 @@ export function LDFTab(props: Props) {
   }
 
   const steps = triangle.development_periods.length - 1;
-  // Dosya kırılımı bazı — LDF üçgeni incurred ise incurred, değilse paid.
-  const fileBasis = triangle.triangle_type === "incurred" ? "incurred" : "paid";
+  const fileBasis = triangle.triangle_type;
 
   return (
     <div className="space-y-4">

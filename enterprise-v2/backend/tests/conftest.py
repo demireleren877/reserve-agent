@@ -80,7 +80,9 @@ def db():
 @pytest_asyncio.fixture
 async def client(db) -> AsyncGenerator[tuple[AsyncClient, MockCursor], None]:
     pool, conn, cur = db
-    with patch("app.db._pool", pool):
+    # The injected pool represents an already initialized test schema; prevent
+    # the production first-request migrator from opening a real Oracle socket.
+    with patch("app.db._pool", pool), patch("app.db._schema_ready", True):
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"
         ) as c:

@@ -16,6 +16,7 @@ import {
   type OracleObject,
   type OraclePreviewResult,
 } from "@/lib/api";
+import { uniqueBranchNames } from "@/lib/branch-identity";
 
 // ─── Sabitler ─────────────────────────────────────────────────────────────────
 
@@ -807,7 +808,7 @@ export function DataImportWizard({
         }
         const dates = rows.map((r) => r.hasar_tarihi);
         const developments = rows.map((r) => r.gelisim_tarihi);
-        result = { record_count: rows.length, brans_list: [...new Set(rows.map((r) => r.brans))].sort(), hasar_tarihi_min: dates.sort()[0] ?? "", hasar_tarihi_max: dates.sort().at(-1) ?? "", gelisim_tarihi_min: developments.sort()[0] ?? "", gelisim_tarihi_max: developments.sort().at(-1) ?? "", total_odeme: rows.reduce((sum, r) => sum + r.odeme, 0), total_muallak: rows.reduce((sum, r) => sum + r.muallak, 0), records: rows };
+        result = { record_count: rows.length, brans_list: uniqueBranchNames(rows.map((r) => r.brans)).sort(), hasar_tarihi_min: dates.sort()[0] ?? "", hasar_tarihi_max: dates.sort().at(-1) ?? "", gelisim_tarihi_min: developments.sort()[0] ?? "", gelisim_tarihi_max: developments.sort().at(-1) ?? "", total_odeme: rows.reduce((sum, r) => sum + r.odeme, 0), total_muallak: rows.reduce((sum, r) => sum + r.muallak, 0), records: rows };
         filename = `Oracle · ${oracle.object.qualified}`;
       } else {
         result = await importDataFile(state!.file, state!.selectedSheet, state!.mapping);

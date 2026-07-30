@@ -39,6 +39,7 @@ import {
 import { mergeProjects } from "@/lib/project-merge";
 import { sortByPeriodLabel } from "@/lib/period-order";
 import { CHAT_CHANGED_EVENT } from "@/lib/chat-storage";
+import { cleanBranchDisplayName, sameBranchName } from "@/lib/branch-identity";
 
 const STORAGE_KEY_PREFIX = "reserve-agent-project-v2";
 const CHAT_STORAGE_KEY_PREFIX = "reserve-agent-chat-v1";
@@ -178,6 +179,8 @@ interface ProjectProviderProps {
 
 export function ProjectProvider({ children, userId, userName }: ProjectProviderProps) {
   const [project, setProject] = useState<Project>(EMPTY);
+  const projectRef = useRef<Project>(EMPTY);
+  projectRef.current = project;
   const [hydrated, setHydrated] = useState(false);
   const undoStackRef = useRef<Project[]>([]);
   const [undoDepth, setUndoDepth] = useState(0);
@@ -487,19 +490,41 @@ export function ProjectProvider({ children, userId, userName }: ProjectProviderP
         }));
       },
       createBranch(periodId, frequency, name) {
-        const b = makeBranch(name, frequency);
+        const displayName = cleanBranchDisplayName(name);
+        const existing = projectRef.current.periods
+          .find((period) => period.id === periodId)
+          ?.branches.find(
+            (branch) => branch.frequency === frequency && sameBranchName(branch.name, displayName),
+          );
+        if (existing) {
+          setProject((prev) => ({
+            ...prev,
+            activePeriodId: periodId,
+            activeFrequency: frequency,
+            activeBranchId: existing.id,
+          }));
+          return existing.id;
+        }
+        const b = makeBranch(displayName, frequency);
         b.history = b.history.map((entry) => ({ ...entry, actorName: userName }));
-        setProject((prev) => ({
-          ...prev,
-          periods: prev.periods.map((p) =>
-            p.id === periodId
-              ? { ...p, branches: [...p.branches, b] }
-              : p,
-          ),
-          activePeriodId: periodId,
-          activeFrequency: frequency,
-          activeBranchId: b.id,
-        }));
+        setProject((prev) => {
+          const duplicate = prev.periods
+            .find((period) => period.id === periodId)
+            ?.branches.find(
+              (branch) => branch.frequency === frequency && sameBranchName(branch.name, displayName),
+            );
+          return {
+            ...prev,
+            periods: duplicate
+              ? prev.periods
+              : prev.periods.map((p) =>
+                  p.id === periodId ? { ...p, branches: [...p.branches, b] } : p,
+                ),
+            activePeriodId: periodId,
+            activeFrequency: frequency,
+            activeBranchId: duplicate?.id ?? b.id,
+          };
+        });
         return b.id;
       },
       deleteBranch(branchId) {
@@ -517,19 +542,44 @@ export function ProjectProvider({ children, userId, userName }: ProjectProviderP
         });
       },
       renameBranch(branchId, name) {
+        const displayName = cleanBranchDisplayName(name);
         setProject((prev) => ({
           ...prev,
-          periods: prev.periods.map((p) => ({
-            ...p,
-            branches: p.branches.map((b) =>
-              b.id === branchId
-                ? { ...b, name, updatedAt: new Date().toISOString() }
-                : b,
-            ),
-          })),
+          periods: prev.periods.map((p) => {
+            const current = p.branches.find((branch) => branch.id === branchId);
+            if (!current) return p;
+            const duplicate = p.branches.some(
+              (branch) =>
+                branch.id !== branchId &&
+                branch.frequency === current.frequency &&
+                sameBranchName(branch.name, displayName),
+            );
+            if (duplicate) return p;
+            return {
+              ...p,
+              branches: p.branches.map((b) =>
+                b.id === branchId
+                  ? { ...b, name: displayName, updatedAt: new Date().toISOString() }
+                  : b,
+              ),
+            };
+          }),
         }));
       },
       copyBranch(branchId, targetPeriodId, newName, targetFrequency) {
+        const source = projectRef.current.periods
+          .flatMap((period) => period.branches)
+          .find((branch) => branch.id === branchId);
+        const displayName = cleanBranchDisplayName(newName);
+        const frequency = targetFrequency ?? source?.frequency;
+        const existing = frequency
+          ? projectRef.current.periods
+              .find((period) => period.id === targetPeriodId)
+              ?.branches.find(
+                (branch) => branch.frequency === frequency && sameBranchName(branch.name, displayName),
+              )
+          : undefined;
+        if (existing) return existing.id;
         const newBranchId = newId();
         const now = new Date().toISOString();
         setProjectWithUndo((prev) => {
@@ -542,7 +592,7 @@ export function ProjectProvider({ children, userId, userName }: ProjectProviderP
           const newBranch: Branch = {
             ...src,
             id: newBranchId,
-            name: newName,
+            name: displayName,
             frequency: targetFrequency ?? src.frequency,
             createdAt: now,
             updatedAt: now,
@@ -575,6 +625,15 @@ export function ProjectProvider({ children, userId, userName }: ProjectProviderP
           const updated: Branch = targetFrequency
             ? { ...movingBranch, frequency: targetFrequency }
             : movingBranch;
+          const collision = prev.periods
+            .find((period) => period.id === targetPeriodId)
+            ?.branches.some(
+              (branch) =>
+                branch.id !== branchId &&
+                branch.frequency === updated.frequency &&
+                sameBranchName(branch.name, updated.name),
+            );
+          if (collision) return prev;
           const samePeriod = sourcePeriodId === targetPeriodId;
           return {
             ...prev,

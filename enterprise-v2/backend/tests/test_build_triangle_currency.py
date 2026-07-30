@@ -51,3 +51,18 @@ def test_currency_split_across_files():
     )
     assert paid.values[0][0] == pytest.approx(40.0)           # 10+10+20
     assert incurred.values[0][0] == pytest.approx(40.0 + 250.0)  # A:200 + B:50
+
+
+def test_branch_filter_combines_case_variants():
+    records = [
+        {**_rec("A", "2022", "2022", 10, 100), "brans": "fire"},
+        {**_rec("B", "2022", "2022", 20, 200), "brans": "FIRE"},
+    ]
+    paid, incurred, _count, _fd = build_triangles(
+        records=records,
+        brans="Fire",
+        origin_granularity="yearly",
+        development_granularity="yearly",
+    )
+    assert paid.values[0][0] == pytest.approx(30.0)
+    assert incurred.values[0][0] == pytest.approx(330.0)

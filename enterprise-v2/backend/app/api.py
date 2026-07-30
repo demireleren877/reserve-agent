@@ -18,6 +18,7 @@ from app.cashflow.compute import (
 from app.data.parser import inspect_file, parse_with_mapping
 from app.data.prim_parser import inspect_prim_file, parse_prim_with_mapping
 from app.data.triangle_builder import build_triangles
+from app.data.branch_identity import branch_identity_key, unique_branch_names
 from app.core.chain_ladder import run_chain_ladder
 from app.core.excel_parser import ParseError, ParseOptions, parse_premiums_from_excel, parse_triangle_from_excel
 from app.core.triangle import Granularity, TriangleType
@@ -305,7 +306,7 @@ async def data_import(body: DataImportRequest, _: Auth) -> dict[str, Any]:
     if not records:
         raise HTTPException(status_code=400, detail="Geçerli kayıt bulunamadı")
 
-    brans_set: set[str] = set()
+    branch_names: list[str] = []
     hasar_min = hasar_max = gelisim_min = gelisim_max = None
     # Ödeme = AKIŞ (flow): dönemler boyunca toplanır → kümülatif ödeme.
     total_odeme = 0.0
@@ -317,13 +318,13 @@ async def data_import(body: DataImportRequest, _: Auth) -> dict[str, Any]:
 
     for r in records:
         h, g = r.hasar_tarihi.isoformat(), r.gelisim_tarihi.isoformat()
-        brans_set.add(r.brans)
+        branch_names.append(r.brans)
         hasar_min = h if hasar_min is None or h < hasar_min else hasar_min
         hasar_max = h if hasar_max is None or h > hasar_max else hasar_max
         gelisim_min = g if gelisim_min is None or g < gelisim_min else gelisim_min
         gelisim_max = g if gelisim_max is None or g > gelisim_max else gelisim_max
         total_odeme += r.odeme
-        key = (r.brans, r.dosya_no)
+        key = (branch_identity_key(r.brans), r.dosya_no)
         prev = last_muallak.get(key)
         if prev is None or g > prev[0]:
             last_muallak[key] = (g, r.muallak)
@@ -334,7 +335,8 @@ async def data_import(body: DataImportRequest, _: Auth) -> dict[str, Any]:
     total_muallak = sum(v for _, v in last_muallak.values())
 
     return {
-        "record_count": len(records), "brans_list": sorted(brans_set),
+        "record_count": len(records),
+        "brans_list": sorted(unique_branch_names(branch_names), key=branch_identity_key),
         "hasar_tarihi_min": hasar_min, "hasar_tarihi_max": hasar_max,
         "gelisim_tarihi_min": gelisim_min, "gelisim_tarihi_max": gelisim_max,
         "total_odeme": total_odeme, "total_muallak": total_muallak,
@@ -447,18 +449,19 @@ async def data_import_prim(body: PrimImportRequest, _: Auth) -> dict[str, Any]:
     if not records:
         raise HTTPException(status_code=400, detail="Geçerli kayıt bulunamadı")
 
-    brans_set: set[str] = set()
+    branch_names: list[str] = []
     donem_set: set[str] = set()
     total_ep = 0.0
     serialized = []
 
     for r in records:
-        brans_set.add(r.brans)
+        branch_names.append(r.brans)
         donem_set.add(r.donem)
         total_ep += r.ep
         serialized.append({"brans": r.brans, "donem": r.donem, "ep": r.ep})
 
     return {
-        "record_count": len(records), "brans_list": sorted(brans_set),
+        "record_count": len(records),
+        "brans_list": sorted(unique_branch_names(branch_names), key=branch_identity_key),
         "donem_list": sorted(donem_set), "total_ep": total_ep, "records": serialized,
     }

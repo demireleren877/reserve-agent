@@ -7,6 +7,7 @@ const ep = (brans: string, donem: string, epv: number): PrimRecord => ({ brans, 
 describe("sameBrans", () => {
   it("case-insensitive (tr) eşleşir", () => {
     expect(sameBrans("eren", "EREN")).toBe(true);
+    expect(sameBrans("fire", "FIRE")).toBe(true);
     expect(sameBrans(" Kasko ", "KASKO")).toBe(true);
     expect(sameBrans("eren", "eren hasar")).toBe(false);
   });
@@ -52,5 +53,10 @@ describe("matchPremiumsToOrigins — EP büyük/küçük harf + yıllık dönem"
     const recs = [ep("kasko", "2023", 500)];
     const out = matchPremiumsToOrigins(recs, "EREN", ["2023"]);
     expect(Object.keys(out)).toHaveLength(0);
+  });
+
+  it("aynı kanonik branş ve dönemdeki EP satırlarını toplar", () => {
+    const recs = [ep("fire", "2023", 400), ep("FIRE", "2023", 600)];
+    expect(matchPremiumsToOrigins(recs, "Fire", ["2023"])).toEqual({ "2023": 1000 });
   });
 });

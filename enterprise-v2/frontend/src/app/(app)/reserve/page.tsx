@@ -21,6 +21,7 @@ import { ModelLockBanner } from "@/components/ModelLockBanner";
 import { useModelLock } from "@/lib/use-model-lock";
 import { useBranchSetters, useProject } from "@/lib/project-store";
 import { useDataPremiums, useDataLarge } from "@/lib/provision-models";
+import { sameBranchName } from "@/lib/branch-identity";
 import { formatNumber } from "@/lib/api";
 import { exportToExcel } from "@/lib/export";
 import { computeBranchSummary } from "@/lib/reserve-pipeline";
@@ -178,7 +179,9 @@ export default function Home() {
     if (!activePeriod || !activeBranch) return null;
     const index = project.periods.findIndex((period) => period.id === activePeriod.id);
     for (let i = index - 1; i >= 0; i--) {
-      const match = project.periods[i].branches.find((branch) => branch.name === activeBranch.name && branch.frequency === activeBranch.frequency);
+      const match = project.periods[i].branches.find(
+        (branch) => sameBranchName(branch.name, activeBranch.name) && branch.frequency === activeBranch.frequency,
+      );
       if (match && (match.triangle || match.paidTriangle || match.incurredTriangle)) return { branch: match, label: project.periods[i].label };
     }
     return null;
@@ -326,7 +329,7 @@ export default function Home() {
       const b = sorted[k].branches.find(
         (br) =>
           br.frequency === activeBranch.frequency &&
-          br.name === activeBranch.name &&
+          sameBranchName(br.name, activeBranch.name) &&
           br.triangle,
       );
       if (b?.triangle) return { label: sorted[k].label, branch: b };

@@ -15,6 +15,7 @@ from collections import defaultdict
 from typing import Literal
 
 from app.core.triangle import Granularity, Triangle, TriangleType
+from app.data.branch_identity import same_branch_name
 
 _YYYYQQ_RE = re.compile(r"^(\d{4})[Qq]([1-4])$")
 _YYYY_RE = re.compile(r"^(\d{4})$")
@@ -73,7 +74,7 @@ def build_triangles(
     orig_gran = Granularity(origin_granularity)
     dev_gran = Granularity(development_granularity)
 
-    filtered = [r for r in records if str(r.get("brans", "")).strip() == brans]
+    filtered = [r for r in records if same_branch_name(r.get("brans"), brans)]
     if not filtered:
         raise ValueError(f"'{brans}' branşına ait kayıt bulunamadı")
 
@@ -363,7 +364,7 @@ def roll_forward(
             "granülaritesinde olmalı."
         )
 
-    filtered = [r for r in records if str(r.get("brans", "")).strip() == brans]
+    filtered = [r for r in records if same_branch_name(r.get("brans"), brans)]
     if not filtered:
         raise ValueError(f"'{brans}' branşına ait güncel kayıt bulunamadı")
 

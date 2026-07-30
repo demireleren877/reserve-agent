@@ -5,6 +5,7 @@ import { useProject } from "@/lib/project-store";
 import { computeBranchSummary } from "@/lib/reserve-pipeline";
 import { formatNumber } from "@/lib/api";
 import type { Branch, Period } from "@/types/project";
+import { sameBranchName } from "@/lib/branch-identity";
 
 function periodOrder(label: string): number {
   const m = label.match(/^(\d{4})(?:[Qq](\d))?/);
@@ -43,7 +44,7 @@ export function RollForwardTab() {
   }, [project.periods, activePeriod, activeBranch]);
 
   const defaultId = useMemo(() => {
-    const same = priorBranchOptions.find(x => x.branch.name === activeBranch?.name);
+    const same = priorBranchOptions.find(x => sameBranchName(x.branch.name, activeBranch?.name));
     return (same ?? priorBranchOptions[0])?.branch.id ?? "";
   }, [priorBranchOptions, activeBranch?.name]);
 

@@ -51,3 +51,24 @@ async def test_multiple_files_last_diagonal_each(client, user_headers):
     assert data["total_odeme"] == 450.0      # 100+50+300
     assert data["total_muallak"] == 400.0     # 200 (A) + 200 (B)
     assert data["total_incurred"] == 850.0
+
+
+async def test_branch_names_are_deduplicated_case_insensitively(client, user_headers):
+    c, _cur = client
+    csv = (
+        "Dosya No;Brans;Hasar Tarihi;Gelisim Tarihi;Odeme;Muallak\n"
+        "A;fire;01.01.2022;30.06.2022;100;300\n"
+        "A;FIRE;01.01.2022;31.12.2022;50;200\n"
+        "B;EREN;01.01.2022;31.12.2022;20;80\n"
+        "C;eren;01.01.2022;31.12.2022;30;70\n"
+    )
+    resp = await c.post(
+        "/v1/data/import",
+        headers=user_headers,
+        json={"file_b64": _b64(csv), "filename": "h.csv", "column_mapping": _MAPPING},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["brans_list"] == ["EREN", "fire"]
+    # A, iki farklı casing ile gelse de tek dosyanın son stok bakiyesi alınır.
+    assert data["total_muallak"] == 350.0

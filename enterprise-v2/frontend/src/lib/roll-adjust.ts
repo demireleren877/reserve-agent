@@ -8,6 +8,7 @@
 import type { ClaimRecord } from "@/lib/api";
 import type { ClaimAdjustment } from "@/types/project";
 import type { Triangle, FileData } from "@/types/triangle";
+import { sameBranchName } from "@/lib/branch-identity";
 
 export interface ClaimAgg {
   dosya: string;
@@ -31,7 +32,7 @@ function yearOf(s: string): string {
 export function aggregateClaims(records: ClaimRecord[], brans: string): ClaimAgg[] {
   const byDosya = new Map<string, ClaimRecord[]>();
   for (const r of records) {
-    if (brans && String(r.brans).trim() !== brans) continue;
+    if (brans && !sameBranchName(r.brans, brans)) continue;
     const d = String(r.dosya_no ?? "").trim();
     if (!d) continue;
     (byDosya.get(d) ?? byDosya.set(d, []).get(d)!).push(r);

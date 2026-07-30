@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useDataStore } from "@/lib/data-store";
 import type { ClaimRecord, Dataset } from "@/lib/data-store";
 import type { CashflowRecord } from "@/lib/api";
+import { sameBranchName, uniqueBranchNames } from "@/lib/branch-identity";
 
 // Hasar dataset'i typeId ile bulunur (datasetId rastgeledir; sabit "hasar" anahtarı yanlış).
 function findHasar(datasets?: Record<string, Dataset>): Dataset | undefined {
@@ -35,13 +36,14 @@ export function LoadCashflowFromDataStore({ onLoad, onClose }: Props) {
     const hasarDs = findHasar(period?.datasets);
     const meta = hasarDs?.meta;
     if (meta?.brans_list?.length) {
-      setBransList(meta.brans_list);
-      setBrans((b) => (meta.brans_list!.includes(b) ? b : meta.brans_list![0]));
+      const list = uniqueBranchNames(meta.brans_list);
+      setBransList(list);
+      setBrans((b) => (list.some((name) => sameBranchName(name, b)) ? b : list[0]));
     } else if (period && hasarDs) {
       setLoading(true);
       store.loadDatasetRecords(periodId, hasarDs.datasetId)
         .then((ds) => {
-          const list = ds?.meta.brans_list ?? [];
+          const list = uniqueBranchNames(ds?.meta.brans_list ?? []);
           setBransList(list);
           setBrans(list[0] ?? "");
         })
@@ -62,7 +64,7 @@ export function LoadCashflowFromDataStore({ onLoad, onClose }: Props) {
       }
       if (!ds?.records?.length) throw new Error("No records found");
 
-      const claimRecords = (ds.records as ClaimRecord[]).filter((r) => r.brans === brans);
+      const claimRecords = (ds.records as ClaimRecord[]).filter((r) => sameBranchName(r.brans, brans));
       if (!claimRecords.length) throw new Error(`No records for branch ${brans}`);
 
       // origin_year + dev_date bazında odeme topla

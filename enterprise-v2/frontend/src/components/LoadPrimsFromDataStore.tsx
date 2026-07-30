@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useDataStore, type PrimRecord, type Dataset } from "@/lib/data-store";
 import { matchPremiumsToOrigins } from "@/lib/provision-models";
+import { sameBranchName, uniqueBranchNames } from "@/lib/branch-identity";
 
 // Prim dataset'i typeId ile bulunur (datasetId rastgeledir; sabit "prim" anahtarı yanlış).
 function findPrim(datasets?: Record<string, Dataset>): Dataset | undefined {
@@ -35,13 +36,14 @@ export function LoadPrimsFromDataStore({ originPeriods, onLoad, onClose }: Props
     const primDs = findPrim(period?.datasets);
     const meta = primDs?.meta;
     if (meta?.brans_list?.length) {
-      setBransList(meta.brans_list);
-      setBrans((b) => (meta.brans_list!.includes(b) ? b : meta.brans_list![0]));
+      const list = uniqueBranchNames(meta.brans_list);
+      setBransList(list);
+      setBrans((b) => (list.some((name) => sameBranchName(name, b)) ? b : list[0]));
     } else if (period && primDs) {
       setLoadingRecords(true);
       store.loadDatasetRecords(periodId, primDs.datasetId)
         .then((ds) => {
-          const list = ds?.meta.brans_list ?? [];
+          const list = uniqueBranchNames(ds?.meta.brans_list ?? []);
           setBransList(list);
           setBrans(list[0] ?? "");
         })
@@ -70,7 +72,7 @@ export function LoadPrimsFromDataStore({ originPeriods, onLoad, onClose }: Props
       }
 
       if (cancelled) return;
-      const filtered = records.filter((r) => r.brans === brans);
+      const filtered = records.filter((r) => sameBranchName(r.brans, brans));
       const rows = filtered.map((r) => {
         // Granülarite/format toleranslı: bu kayıt herhangi bir origin'e katkı veriyor mu?
         const matched = Object.keys(matchPremiumsToOrigins([r], brans, originPeriods)).length > 0

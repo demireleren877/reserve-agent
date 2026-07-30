@@ -14,6 +14,7 @@ import {
 } from "@/lib/roll-adjust";
 import type { ClaimAdjustment } from "@/types/project";
 import type { ModelBasis } from "@/types/triangle";
+import { sameBranchName, uniqueBranchNames } from "@/lib/branch-identity";
 
 interface Props {
   onClose: () => void;
@@ -213,7 +214,7 @@ export function LoadFromDataStore({ onClose, onLoaded, target = "gross", mode = 
     if (!p) return null;
     const withData = p.branches.filter(baseHasData);
     return (
-      withData.find((b) => activeBranch && b.frequency === activeBranch.frequency && b.name === activeBranch.name) ??
+      withData.find((b) => activeBranch && b.frequency === activeBranch.frequency && sameBranchName(b.name, activeBranch.name)) ??
       withData.find((b) => activeBranch && b.frequency === activeBranch.frequency) ??
       withData[0] ??
       null
@@ -237,22 +238,23 @@ export function LoadFromDataStore({ onClose, onLoaded, target = "gross", mode = 
 
     if (source === "ucgen") {
       const ds = period?.datasets[selectedDatasetId];
-      const list = ds?.meta.brans_list ?? [];
+      const list = uniqueBranchNames(ds?.meta.brans_list ?? []);
       setBransList(list);
-      setBrans((b) => (list.includes(b) ? b : list[0] ?? ""));
+      setBrans((b) => (list.some((name) => sameBranchName(name, b)) ? b : list[0] ?? ""));
       return;
     }
 
     // hasar
     const ds = period?.datasets[selectedDatasetId];
     if (ds?.meta.brans_list?.length) {
-      setBransList(ds.meta.brans_list);
-      setBrans((b) => (ds.meta.brans_list!.includes(b) ? b : ds.meta.brans_list![0] ?? ""));
+      const list = uniqueBranchNames(ds.meta.brans_list);
+      setBransList(list);
+      setBrans((b) => (list.some((name) => sameBranchName(name, b)) ? b : list[0] ?? ""));
     } else if (period && selectedDatasetId) {
       setLoadingRecords(true);
       store.loadDatasetRecords(periodId, selectedDatasetId)
         .then((loaded) => {
-          const list = loaded?.meta.brans_list ?? [];
+          const list = uniqueBranchNames(loaded?.meta.brans_list ?? []);
           setBransList(list);
           setBrans(list[0] ?? "");
         })

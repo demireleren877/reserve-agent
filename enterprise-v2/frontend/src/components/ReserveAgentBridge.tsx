@@ -28,6 +28,7 @@ import {
 import { newDiagonalToFileData, mergeFileData } from "@/lib/roll-forward-util";
 import type { AgentAction } from "@/types/triangle";
 import type { Branch, Period } from "@/types/project";
+import { sameBranchName } from "@/lib/branch-identity";
 
 export function ReserveAgentBridge() {
   const { project, activePeriod, activeBranch, actions } = useProject();
@@ -197,7 +198,9 @@ export function ReserveAgentBridge() {
           let source: { period: Period; branch: Branch } | null = null;
           for (const p of project.periods) {
             if (p.id === targetPeriod.id) continue;
-            const b = p.branches.find((x) => x.name === targetBranch!.name);
+            const b = p.branches.find(
+              (x) => x.frequency === targetBranch!.frequency && sameBranchName(x.name, targetBranch!.name),
+            );
             if (!b) continue;
             if (fromLabel) {
               if (p.label === fromLabel) {
@@ -321,7 +324,9 @@ async function loadTriangleFromData(
     const fromLabel = payload.from_period as string | undefined;
     for (const p of periods) {
       if (p.id === activePeriod.id) continue;
-      const b = p.branches.find((x) => x.name === brans);
+      const b = p.branches.find(
+        (x) => x.frequency === activeBranch.frequency && sameBranchName(x.name, brans),
+      );
       if (!b?.paidTriangle || !b.incurredTriangle) continue;
       const o = periodOrderLabel(p.label);
       if (fromLabel ? p.label === fromLabel : o < tOrder && o > baseOrder) {

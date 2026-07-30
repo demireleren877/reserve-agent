@@ -24,14 +24,13 @@ import {
   type ClaimRecord,
 } from "@/lib/api";
 import { newDiagonalToFileData, mergeFileData } from "@/lib/roll-forward-util";
+import { branchIdentityKey, sameBranchName, uniqueBranchNames } from "@/lib/branch-identity";
 import type { Frequency } from "@/types/project";
 import type { Triangle, FileData } from "@/types/triangle";
 
-/** Branş adı karşılaştırması case-insensitive (+ trim, Türkçe locale). "Kasko" = "KASKO". */
-const normBrans = (s: string | null | undefined): string =>
-  String(s ?? "").trim().toLocaleLowerCase("tr-TR");
+/** Geriye uyumlu alias; bütün branş eşleşmeleri ortak kimlik standardını kullanır. */
 export function sameBrans(a: string | null | undefined, b: string | null | undefined): boolean {
-  return normBrans(a) === normBrans(b);
+  return sameBranchName(a, b);
 }
 
 /**
@@ -71,7 +70,10 @@ export function matchPremiumsToOrigins(
 ): Record<string, number> {
   const byDonem: Record<string, number> = {};
   for (const r of recs) {
-    if (sameBrans(r.brans, brans)) byDonem[normPeriodLabel(r.donem)] = r.ep;
+    if (sameBrans(r.brans, brans)) {
+      const period = normPeriodLabel(r.donem);
+      byDonem[period] = (byDonem[period] ?? 0) + r.ep;
+    }
   }
   const out: Record<string, number> = {};
   for (const o of originPeriods) {
@@ -120,15 +122,19 @@ export function useProvisionModels() {
   const provisionShells = useCallback(
     (label: string, bransList: string[], frequency: Frequency) => {
       if (!bransList.length) return;
-      const { periodId, existing } = ensurePeriod(label);
-      for (const brans of bransList) {
-        if (existing) {
-          const period = project.periods.find((p) => p.id === periodId);
-          // Case-insensitive: "Kasko" ile "KASKO" aynı branş → çift model olmaz.
-          const has = period?.branches.some((b) => sameBrans(b.name, brans) && b.frequency === frequency);
-          if (has) continue; // zaten var
-        }
+      const { periodId } = ensurePeriod(label);
+      const period = project.periods.find((p) => p.id === periodId);
+      const existingKeys = new Set(
+        (period?.branches ?? [])
+          .filter((branch) => branch.frequency === frequency)
+          .map((branch) => branchIdentityKey(branch.name)),
+      );
+      for (const brans of uniqueBranchNames(bransList)) {
+        const key = branchIdentityKey(brans);
+        if (existingKeys.has(key)) continue;
         actions.createBranch(periodId, frequency, brans);
+        // Aynı import paketindeki FIRE/fire gibi tekrarları da engeller.
+        existingKeys.add(key);
       }
     },
     [ensurePeriod, project.periods, actions],

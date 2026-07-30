@@ -6,6 +6,7 @@ import { filePaid, fileOs } from "@/types/triangle";
 import type { Branch, Period } from "@/types/project";
 import { formatNumber } from "@/lib/api";
 import { useProject } from "@/lib/project-store";
+import { sameBranchName } from "@/lib/branch-identity";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   LineChart, Line, Legend, Cell,
@@ -601,7 +602,7 @@ function CompareTab({
   prevPeriodBranches: { period: Period; branch: Branch }[];
 }) {
   const defaultId = useMemo(() => {
-    const sameName = prevPeriodBranches.find(x => x.branch.name === activeBranchName);
+    const sameName = prevPeriodBranches.find(x => sameBranchName(x.branch.name, activeBranchName));
     return (sameName ?? prevPeriodBranches[0])?.branch.id ?? "";
   }, [prevPeriodBranches, activeBranchName]);
 

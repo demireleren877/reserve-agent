@@ -3,6 +3,7 @@ import type { Triangle } from "@/types/triangle";
 import { sortByPeriodLabel } from "@/lib/period-order";
 import { computeBranchSummary } from "@/lib/reserve-pipeline";
 import { computeAttritionalSummary } from "@/lib/large-split";
+import { branchIdentityKey } from "@/lib/branch-identity";
 
 export interface DevelopmentPoint {
   periodId: string;
@@ -25,7 +26,7 @@ export interface DevelopmentBranchOption {
 }
 
 export function developmentBranchKey(branch: Pick<Branch, "name" | "frequency">): string {
-  return `${branch.frequency}\u0000${branch.name.trim().toLocaleLowerCase("tr-TR")}`;
+  return `${branch.frequency}\u0000${branchIdentityKey(branch.name)}`;
 }
 
 export function listDevelopmentBranches(periods: Period[]): DevelopmentBranchOption[] {

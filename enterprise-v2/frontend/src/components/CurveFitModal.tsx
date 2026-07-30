@@ -60,8 +60,16 @@ export function CurveFitModal({ selectedLDFs, includeFlags, devPeriods, fits, on
 
   const svgRef = useRef<SVGSVGElement>(null);
   const [hoverPeriod, setHoverPeriod] = useState<number | null>(null);
+  const [zoom, setZoom] = useState(1);
+  const [zoomCenter, setZoomCenter] = useState(1);
 
   const n = selectedLDFs.length;
+  const maxZoom = Math.max(1, Math.min(8, n - 1));
+
+  useEffect(() => {
+    setZoom(1);
+    setZoomCenter((n + 1) / 2);
+  }, [n]);
 
   useEffect(() => {
     const h = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -88,18 +96,38 @@ export function CurveFitModal({ selectedLDFs, includeFlags, devPeriods, fits, on
     return { yMin: Math.max(1.0001, lo - pad), yMax: hi + pad };
   }, [selectedLDFs, includeFlags, fits, fitFns, n]);
 
-  const xScale = (t: number) => ml + ((t - 1) / Math.max(n - 1, 1)) * pw;
+  const { xMin, xMax } = useMemo(() => {
+    if (n <= 1) return { xMin: 1, xMax: 1 };
+    const span = Math.max(1, (n - 1) / zoom);
+    const maxStart = n - span;
+    const start = Math.max(1, Math.min(maxStart, zoomCenter - span / 2));
+    return { xMin: start, xMax: start + span };
+  }, [n, zoom, zoomCenter]);
+
+  const xScale = (t: number) => ml + ((t - xMin) / Math.max(xMax - xMin, Number.EPSILON)) * pw;
   const yScale = (v: number) => mt + ph - ((v - yMin) / (yMax - yMin || 1)) * ph;
 
   const yTicks = useMemo(() => niceTicks(yMin, yMax, 7), [yMin, yMax]);
-  const xTicks = useMemo(() => niceXTicks(1, n, 14), [n]);
+  const xTicks = useMemo(() => niceXTicks(xMin, xMax, 14), [xMin, xMax]);
+
+  function changeZoom(multiplier: number) {
+    const next = Math.max(1, Math.min(maxZoom, zoom * multiplier));
+    setZoomCenter(hoverPeriod ?? (xMin + xMax) / 2);
+    setZoom(next);
+  }
+
+  function resetZoom() {
+    setZoom(1);
+    setZoomCenter((n + 1) / 2);
+  }
 
   function smoothPath(key: string): string {
     const fit = fits[key as keyof Props["fits"]];
     if (!fit.ok || fit.cdfs.length < 2) return "";
     const fn = fitFns[key];
     const pts: string[] = [];
-    for (let t = 1; t <= n; t += 0.2) {
+    const step = Math.max(0.04, (xMax - xMin) / 120);
+    for (let t = xMin; t <= xMax + step * 0.25; t += step) {
       const v = fn(t);
       if (v > 1) pts.push(`${xScale(t).toFixed(1)},${yScale(Math.max(yMin, Math.min(yMax, v))).toFixed(1)}`);
     }
@@ -116,10 +144,20 @@ export function CurveFitModal({ selectedLDFs, includeFlags, devPeriods, fits, on
   function handleMouseMove(e: React.MouseEvent<SVGSVGElement>) {
     const [sx, sy] = clientToSvg(e.clientX, e.clientY);
     if (sx >= ml && sx <= ml + pw && sy >= mt && sy <= mt + ph) {
-      setHoverPeriod(Math.max(1, Math.min(n, Math.round(1 + ((sx - ml) / pw) * (n - 1)))));
+      setHoverPeriod(Math.max(1, Math.min(n, Math.round(xMin + ((sx - ml) / pw) * (xMax - xMin)))));
     } else {
       setHoverPeriod(null);
     }
+  }
+
+  function handleWheel(e: React.WheelEvent<SVGSVGElement>) {
+    const [sx, sy] = clientToSvg(e.clientX, e.clientY);
+    if (sx < ml || sx > ml + pw || sy < mt || sy > mt + ph) return;
+    e.preventDefault();
+    const anchor = xMin + ((sx - ml) / pw) * (xMax - xMin);
+    const multiplier = Math.exp(-e.deltaY * 0.0025);
+    setZoomCenter(anchor);
+    setZoom((current) => Math.max(1, Math.min(maxZoom, current * multiplier)));
   }
 
   const hoverData = useMemo(() => {
@@ -150,10 +188,37 @@ export function CurveFitModal({ selectedLDFs, includeFlags, devPeriods, fits, on
         }}
       >
         {/* Header */}
-        <div className="px-6 py-3.5 flex items-center justify-between shrink-0"
+        <div className="px-6 py-3.5 flex items-center gap-4 shrink-0"
           style={{ borderBottom: "1px solid var(--border)", background: "var(--surface-alt)" }}>
           <span className="text-[14px] font-semibold">Fitted Curve Ratios</span>
+          <div className="ml-auto flex items-center gap-1" aria-label="Chart zoom controls">
+            <button
+              type="button"
+              onClick={() => changeZoom(1 / 1.5)}
+              disabled={zoom <= 1}
+              className="btn h-7 w-7 p-0 text-base"
+              aria-label="Zoom out"
+              title="Zoom out"
+            >−</button>
+            <button
+              type="button"
+              onClick={resetZoom}
+              disabled={zoom <= 1}
+              className="btn h-7 min-w-[58px] px-2 text-[11px] tabular"
+              aria-label="Reset zoom"
+              title="Reset zoom"
+            >{Math.round(zoom * 100)}%</button>
+            <button
+              type="button"
+              onClick={() => changeZoom(1.5)}
+              disabled={zoom >= maxZoom || n <= 2}
+              className="btn h-7 w-7 p-0 text-base"
+              aria-label="Zoom in"
+              title="Zoom in"
+            >+</button>
+          </div>
           <button onClick={onClose}
+            aria-label="Close curve chart"
             className="w-7 h-7 rounded-md text-[18px] flex items-center justify-center hover:bg-[color:var(--surface)] transition"
             style={{ color: "var(--muted)" }}>×</button>
         </div>
@@ -168,6 +233,8 @@ export function CurveFitModal({ selectedLDFs, includeFlags, devPeriods, fits, on
                 style={{ display: "block", cursor: "crosshair", userSelect: "none" }}
                 onMouseMove={handleMouseMove}
                 onMouseLeave={() => setHoverPeriod(null)}
+                onWheel={handleWheel}
+                onDoubleClick={resetZoom}
               >
                 <defs>
                   <clipPath id="cfc-clip">
@@ -239,7 +306,7 @@ export function CurveFitModal({ selectedLDFs, includeFlags, devPeriods, fits, on
                   {/* Observed line */}
                   {(() => {
                     const pts = selectedLDFs
-                      .map((ldf, i) => (!includeFlags[i] || ldf <= 1) ? null :
+                      .map((ldf, i) => (!includeFlags[i] || ldf <= 1 || i + 1 < xMin || i + 1 > xMax) ? null :
                         `${xScale(i + 1).toFixed(1)},${yScale(Math.max(yMin, Math.min(yMax, ldf))).toFixed(1)}`)
                       .filter((p): p is string => p !== null);
                     if (pts.length < 2) return null;

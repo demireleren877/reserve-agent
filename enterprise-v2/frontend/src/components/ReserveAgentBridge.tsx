@@ -13,7 +13,7 @@
  */
 
 import { useEffect, useMemo } from "react";
-import { useAgentRegistry } from "@/lib/agent-registry";
+import { useAgentRegistryWriter } from "@/lib/agent-registry";
 import { useBranchSetters, useProject } from "@/lib/project-store";
 import { useDataPremiums, useDataLarge } from "@/lib/provision-models";
 import type { LargeTriangles } from "@/lib/provision-models";
@@ -32,7 +32,7 @@ import { sameBranchName } from "@/lib/branch-identity";
 
 export function ReserveAgentBridge() {
   const { project, activePeriod, activeBranch, actions } = useProject();
-  const agentReg = useAgentRegistry();
+  const agentReg = useAgentRegistryWriter();
   const agentSetters = useBranchSetters("agent");
   const dataStore = useDataStore();
 
@@ -439,6 +439,11 @@ interface ProjectSnapshot {
   };
 }
 
+// Project update'ları yapısal paylaşımı korur: değişmeyen Branch nesnelerinin
+// referansı sabit kalır. Bu sayede Agent için pahalı full summary yalnız değişen
+// branşta yeniden hesaplanır; diğer dönem/branş sonuçları güvenle paylaşılır.
+const inactiveBranchSnapshotCache = new WeakMap<Branch, BranchSnapshot>();
+
 function buildProjectSnapshot(
   periods: Period[],
   activePeriod: Period | null,
@@ -457,6 +462,16 @@ function buildProjectSnapshot(
     for (const b of p.branches) {
       totalBranches += 1;
       const isActive = activeBranch?.id === b.id;
+      if (!isActive) {
+        const cached = inactiveBranchSnapshotCache.get(b);
+        if (cached) {
+          if (cached.has_triangle) withData += 1;
+          totalIbnr += cached.totals.ibnr;
+          totalSelectedUlt += cached.totals.selected_ultimate;
+          branchSnaps.push(cached);
+          continue;
+        }
+      }
       // Aktif branşta dinamik exposure + dinamik large'ı merge et — reserve/page ile
       // aynı (effBranch + effectivePremiums). Manuel premiums ÜSTTE override eder.
       let cb: Branch = b;
@@ -536,6 +551,7 @@ function buildProjectSnapshot(
             source: h.source ?? null,
           })),
       };
+      if (!isActive) inactiveBranchSnapshotCache.set(b, snap);
       branchSnaps.push(snap);
     }
     periodSnaps.push({ id: p.id, label: p.label, branches: branchSnaps });

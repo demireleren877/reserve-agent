@@ -1,6 +1,6 @@
-import { describe, it, expect } from "vitest";
-import { matchPremiumsToOrigins, normPeriodLabel, sameBrans } from "./provision-models";
-import type { PrimRecord } from "./data-store";
+import { describe, it, expect, vi } from "vitest";
+import { loadDataLargeForModel, matchPremiumsToOrigins, normPeriodLabel, sameBrans } from "./provision-models";
+import type { DataPeriod, PrimRecord, TriangleRecord } from "./data-store";
 
 const ep = (brans: string, donem: string, epv: number): PrimRecord => ({ brans, donem, ep: epv });
 
@@ -58,5 +58,45 @@ describe("matchPremiumsToOrigins — EP büyük/küçük harf + yıllık dönem"
   it("aynı kanonik branş ve dönemdeki EP satırlarını toplar", () => {
     const recs = [ep("fire", "2023", 400), ep("FIRE", "2023", 600)];
     expect(matchPremiumsToOrigins(recs, "Fire", ["2023"])).toEqual({ "2023": 1000 });
+  });
+});
+
+describe("loadDataLargeForModel cache", () => {
+  it("aynı dataset revision için paralel kayıt yüklemesini tekilleştirir", async () => {
+    const record: TriangleRecord = {
+      brans: "FIRE",
+      triangle_type: "incurred",
+      origin_granularity: "yearly",
+      development_granularity: "yearly",
+      origin_periods: ["2023"],
+      development_periods: [0],
+      values: [[100]],
+    };
+    const period: DataPeriod = {
+      id: "p1",
+      label: "2026Q2",
+      createdAt: "2026-06-30T00:00:00Z",
+      datasets: {
+        large1: {
+          datasetId: "large1",
+          typeId: "large_ucgen",
+          meta: {
+            filename: "large.xlsx",
+            uploadedAt: "2026-06-30T00:00:00Z",
+            record_count: 1,
+            brans_list: ["fire"],
+          },
+          records: [],
+        },
+      },
+    };
+    const load = vi.fn(async () => ({ ...period.datasets.large1, records: [record] }));
+    const [first, second] = await Promise.all([
+      loadDataLargeForModel("2026Q2", "fire", "yearly", "yearly", [period], load),
+      loadDataLargeForModel("2026Q2", "FIRE", "yearly", "yearly", [period], load),
+    ]);
+    expect(load).toHaveBeenCalledTimes(1);
+    expect(first).toBe(second);
+    expect(first?.incurred?.values).toEqual([[100]]);
   });
 });

@@ -209,6 +209,43 @@ export interface LargeTriangles {
 
 type LoadRecords = (periodId: string, datasetId: string) => Promise<Dataset | null>;
 
+// Aynı kullanıcı oturumundaki Reserve, AvE ve Agent hook'ları aynı Large
+// çözümünü ister. Loader'a göre scope edilen promise cache hem eşzamanlı backend
+// çağrılarını tekilleştirir hem dataset değişmedikçe sonucu yeniden hesaplatmaz.
+const largeResolutionCaches = new WeakMap<LoadRecords, Map<string, Promise<LargeTriangles | null>>>();
+const LARGE_CACHE_LIMIT = 64;
+
+function largeDataRevision(periods: DataPeriod[]): string {
+  const parts: string[] = [];
+  for (const period of periods) {
+    for (const dataset of Object.values(period.datasets)) {
+      if (dataset.typeId !== "large" && dataset.typeId !== "large_ucgen") continue;
+      const meta = dataset.meta;
+      parts.push([
+        period.id,
+        period.label,
+        dataset.datasetId,
+        dataset.typeId,
+        meta.uploadedAt,
+        meta.record_count,
+        meta.largeMethod ?? "",
+        meta.largeBasePeriodLabel ?? "",
+      ].join("|"));
+    }
+  }
+  return parts.sort().join(";");
+}
+
+function largeResolutionKey(
+  periodLabel: string,
+  brans: string,
+  og: Frequency,
+  dg: Frequency,
+  periods: DataPeriod[],
+): string {
+  return [periodLabel, branchIdentityKey(brans), og, dg, largeDataRevision(periods)].join("\u0000");
+}
+
 function triFromRecord(rec: TriangleRecord): Triangle {
   return {
     origin_periods: rec.origin_periods,
@@ -321,15 +358,23 @@ export async function loadDataLargeForModel(
     (dataset) => dataset.typeId === "large" || dataset.typeId === "large_ucgen",
   );
   if (!exists) return null;
-  return resolveLargeTriangles(
-    periodLabel,
-    brans,
-    og,
-    dg,
-    periods,
-    loadDatasetRecords,
-    new Set(),
-  );
+  let cache = largeResolutionCaches.get(loadDatasetRecords);
+  if (!cache) {
+    cache = new Map();
+    largeResolutionCaches.set(loadDatasetRecords, cache);
+  }
+  const key = largeResolutionKey(periodLabel, brans, og, dg, periods);
+  const cached = cache.get(key);
+  if (cached) return cached;
+  const request = resolveLargeTriangles(
+    periodLabel, brans, og, dg, periods, loadDatasetRecords, new Set(),
+  ).catch((error) => {
+    cache!.delete(key);
+    throw error;
+  });
+  cache.set(key, request);
+  if (cache.size > LARGE_CACHE_LIMIT) cache.delete(cache.keys().next().value!);
+  return request;
 }
 
 /**
@@ -361,7 +406,7 @@ export function useDataLarge(
       return;
     }
     let cancelled = false;
-    resolveLargeTriangles(periodLabel, brans, og, dg, periods, loadDatasetRecords, new Set())
+    loadDataLargeForModel(periodLabel, brans, og, dg, periods, loadDatasetRecords)
       .then((r) => {
         if (!cancelled) setLarge(r);
       })

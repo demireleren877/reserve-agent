@@ -8,7 +8,7 @@
  */
 
 import { useEffect, useMemo } from "react";
-import { useAgentRegistry } from "@/lib/agent-registry";
+import { useAgentRegistryWriter } from "@/lib/agent-registry";
 import { useProject } from "@/lib/project-store";
 import { computeBranchSummary } from "@/lib/reserve-pipeline";
 import {
@@ -23,7 +23,7 @@ import type { Period, Branch } from "@/types/project";
 export function DiscountAgentBridge() {
   const { project, activeBranch } = useProject();
   const { registerSnapshot, registerActionHandler, unregisterActionHandler } =
-    useAgentRegistry();
+    useAgentRegistryWriter();
 
   const snapshot = useMemo(
     () => buildDiscountSnapshot(project.periods, activeBranch),

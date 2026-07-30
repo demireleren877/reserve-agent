@@ -45,6 +45,7 @@ const STORAGE_KEY_PREFIX = "reserve-agent-project-v2";
 const CHAT_STORAGE_KEY_PREFIX = "reserve-agent-chat-v1";
 const MAX_HISTORY = 500;
 const SYNC_DEBOUNCE_MS = 1500;
+const PERSIST_DEBOUNCE_MS = 250;
 
 const EMPTY: Project = {
   periods: [],
@@ -189,6 +190,8 @@ export function ProjectProvider({ children, userId, userName }: ProjectProviderP
 
   // Refs for the debounced worker sync. We don't want stale closures.
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const persistIdleRef = useRef<number | null>(null);
   const lastSerializedRef = useRef<string>("");
   // Çok kullanıcı senkron: son sunucu durumu (3-yollu merge tabanı) + versiyon + push kilidi
   const baseRef = useRef<Project | null>(null);
@@ -271,16 +274,48 @@ export function ProjectProvider({ children, userId, userName }: ProjectProviderP
     };
   }, [userId, projectKey]);
 
-  // Persist project to localStorage cache + schedule worker sync on change.
-  useEffect(() => {
-    if (!hydrated || !userId) return;
+  function persistLatestProject() {
+    if (!userId) return;
     try {
-      localStorage.setItem(projectKey, JSON.stringify(project));
+      localStorage.setItem(projectKey, JSON.stringify(projectRef.current));
+      schedulePush();
     } catch {
       /* quota — silent */
     }
-    schedulePush();
-    // schedulePush is stable via refs; we intentionally exclude it from deps.
+  }
+
+  // Persist işlemi büyük triangle/fileData projelerinde pahalıdır. Her küçük
+  // state değişiminin render'ından hemen sonra stringify etmek yerine kısa bir
+  // debounce ve tarayıcının idle penceresinde tek kez çalıştır.
+  useEffect(() => {
+    if (!hydrated || !userId) return;
+    if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
+    if (persistIdleRef.current != null && "cancelIdleCallback" in window) {
+      window.cancelIdleCallback(persistIdleRef.current);
+      persistIdleRef.current = null;
+    }
+    persistTimerRef.current = setTimeout(() => {
+      persistTimerRef.current = null;
+      if ("requestIdleCallback" in window) {
+        persistIdleRef.current = window.requestIdleCallback(() => {
+          persistIdleRef.current = null;
+          persistLatestProject();
+        }, { timeout: 1000 });
+      } else {
+        persistLatestProject();
+      }
+    }, PERSIST_DEBOUNCE_MS);
+    return () => {
+      if (persistTimerRef.current) {
+        clearTimeout(persistTimerRef.current);
+        persistTimerRef.current = null;
+      }
+      if (persistIdleRef.current != null && "cancelIdleCallback" in window) {
+        window.cancelIdleCallback(persistIdleRef.current);
+        persistIdleRef.current = null;
+      }
+    };
+    // Helpers are stable via refs; project is the intentional trigger.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project, hydrated, userId, projectKey]);
 
@@ -382,14 +417,27 @@ export function ProjectProvider({ children, userId, userName }: ProjectProviderP
   useEffect(() => {
     if (!hydrated) return;
     function onBeforeUnload() {
+      if (persistTimerRef.current) {
+        clearTimeout(persistTimerRef.current);
+        persistTimerRef.current = null;
+      }
+      if (persistIdleRef.current != null && "cancelIdleCallback" in window) {
+        window.cancelIdleCallback(persistIdleRef.current);
+        persistIdleRef.current = null;
+      }
+      // Debounce/idle bekleyen son state kaybolmasın.
+      try {
+        localStorage.setItem(projectKey, JSON.stringify(projectRef.current));
+      } catch {
+        /* quota — silent */
+      }
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current);
         debounceTimerRef.current = null;
-        // sendBeacon would be ideal, but we can't easily attach Bearer tokens
-        // to it, so we fall back to a fire-and-forget fetch. The browser may
-        // cancel it, but in most cases the request goes through.
-        void pushNow();
       }
+      // sendBeacon would be ideal, but Bearer token ekleyemediğimiz için son
+      // state'i localStorage'dan fire-and-forget göndeririz.
+      void pushNow();
     }
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => window.removeEventListener("beforeunload", onBeforeUnload);

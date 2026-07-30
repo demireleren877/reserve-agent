@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -168,6 +169,17 @@ export function DataStoreProvider({
   const [activePeriodId, setActivePeriodIdState] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [ready, setReady] = useState(false);
+  const periodsRef = useRef<DataPeriod[]>([]);
+  periodsRef.current = periods;
+  const datasetGenerationRef = useRef(new Map<string, number>());
+  const datasetRequestsRef = useRef(new Map<string, Promise<Dataset | null>>());
+
+  const datasetKey = (periodId: string, datasetId: string) => `${periodId}\u0000${datasetId}`;
+  const invalidateDatasetRequest = (periodId: string, datasetId: string) => {
+    const key = datasetKey(periodId, datasetId);
+    datasetGenerationRef.current.set(key, (datasetGenerationRef.current.get(key) ?? 0) + 1);
+    datasetRequestsRef.current.delete(key);
+  };
 
   // İlk yüklemede D1'den dönemleri çek
   useEffect(() => {
@@ -231,6 +243,7 @@ export function DataStoreProvider({
 
   // Dataset kaydet (local + D1)
   const setDataset = useCallback(async (periodId: string, dataset: Dataset) => {
+    invalidateDatasetRequest(periodId, dataset.datasetId);
     setPeriods((prev) =>
       prev.map((p) =>
         p.id === periodId
@@ -243,6 +256,7 @@ export function DataStoreProvider({
 
   // Dataset sil
   const removeDataset = useCallback(async (periodId: string, datasetId: string) => {
+    invalidateDatasetRequest(periodId, datasetId);
     setPeriods((prev) =>
       prev.map((p) => {
         if (p.id !== periodId) return p;
@@ -258,53 +272,87 @@ export function DataStoreProvider({
     periodId: string,
     datasetId: string,
   ): Promise<Dataset | null> => {
-    // Zaten yüklüyse döndür
-    const period = periods.find((p) => p.id === periodId);
+    const key = datasetKey(periodId, datasetId);
+    // Zaten yüklüyse döndür. Ref kullanımı callback kimliğini periods
+    // değişimlerinden bağımsız tutar; veri hook'ları gereksiz yere yeniden çalışmaz.
+    const period = periodsRef.current.find((p) => p.id === periodId);
     if (period?.datasets[datasetId]?.records?.length) {
       return period.datasets[datasetId];
     }
-    try {
-      const data = await getDataset(periodId, datasetId);
-      const ds: Dataset = {
-        datasetId,
-        typeId: data.typeId,
-        meta: data.meta as DatasetMeta,
-        records: data.records as ClaimRecord[],
-      };
-      // State'e yaz
-      setPeriods((prev) =>
-        prev.map((p) =>
-          p.id === periodId
-            ? { ...p, datasets: { ...p.datasets, [datasetId]: ds } }
-            : p,
-        ),
-      );
-      return ds;
-    } catch (e) {
-      if (e instanceof WorkerError && e.status === 404) return null;
-      throw e;
-    }
-  }, [periods]);
+    const pending = datasetRequestsRef.current.get(key);
+    if (pending) return pending;
 
-  const activePeriod = periods.find((p) => p.id === activePeriodId) ?? null;
+    const generation = datasetGenerationRef.current.get(key) ?? 0;
+    let request!: Promise<Dataset | null>;
+    request = (async (): Promise<Dataset | null> => {
+      try {
+        const data = await getDataset(periodId, datasetId);
+        const ds: Dataset = {
+          datasetId,
+          typeId: data.typeId,
+          meta: data.meta as DatasetMeta,
+          records: data.records as ClaimRecord[],
+        };
+        // Dataset bu sırada silinmediyse/değişmediyse state'e yaz.
+        if ((datasetGenerationRef.current.get(key) ?? 0) === generation) {
+          setPeriods((prev) =>
+            prev.map((p) =>
+              p.id === periodId
+                ? { ...p, datasets: { ...p.datasets, [datasetId]: ds } }
+                : p,
+            ),
+          );
+        }
+        return ds;
+      } catch (e) {
+        if (e instanceof WorkerError && e.status === 404) return null;
+        throw e;
+      } finally {
+        if (datasetRequestsRef.current.get(key) === request) {
+          datasetRequestsRef.current.delete(key);
+        }
+      }
+    })();
+    datasetRequestsRef.current.set(key, request);
+    return request;
+  }, []);
+
+  const activePeriod = useMemo(
+    () => periods.find((p) => p.id === activePeriodId) ?? null,
+    [periods, activePeriodId],
+  );
+
+  const contextValue = useMemo<DataStoreState>(
+    () => ({
+      periods,
+      activePeriodId,
+      activePeriod,
+      syncing,
+      addPeriod,
+      deletePeriod,
+      setActivePeriod,
+      setDataset,
+      removeDataset,
+      loadDatasetRecords,
+    }),
+    [
+      periods,
+      activePeriodId,
+      activePeriod,
+      syncing,
+      addPeriod,
+      deletePeriod,
+      setActivePeriod,
+      setDataset,
+      removeDataset,
+      loadDatasetRecords,
+    ],
+  );
 
   if (!ready) return null;
 
   return (
-    <DataStoreContext.Provider
-      value={{
-        periods,
-        activePeriodId,
-        activePeriod,
-        syncing,
-        addPeriod,
-        deletePeriod,
-        setActivePeriod,
-        setDataset,
-        removeDataset,
-        loadDatasetRecords,
-      }}
-    >
+    <DataStoreContext.Provider value={contextValue}>
       {children}
     </DataStoreContext.Provider>
   );

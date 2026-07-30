@@ -36,7 +36,13 @@ interface AgentRegistry {
   togglePanel: () => void;
 }
 
+type AgentRegistryWriter = Pick<
+  AgentRegistry,
+  "registerSnapshot" | "registerActionHandler" | "unregisterActionHandler"
+>;
+
 const Ctx = createContext<AgentRegistry | null>(null);
+const WriterCtx = createContext<AgentRegistryWriter | null>(null);
 
 export function AgentRegistryProvider({ children }: { children: ReactNode }) {
   const [modulesPayload, setModulesPayload] = useState<
@@ -114,11 +120,28 @@ export function AgentRegistryProvider({ children }: { children: ReactNode }) {
     ],
   );
 
-  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+  const writerValue = useMemo<AgentRegistryWriter>(
+    () => ({ registerSnapshot, registerActionHandler, unregisterActionHandler }),
+    [registerSnapshot, registerActionHandler, unregisterActionHandler],
+  );
+
+  return (
+    <WriterCtx.Provider value={writerValue}>
+      <Ctx.Provider value={value}>{children}</Ctx.Provider>
+    </WriterCtx.Provider>
+  );
 }
 
 export function useAgentRegistry(): AgentRegistry {
   const v = useContext(Ctx);
   if (!v) throw new Error("AgentRegistryProvider eksik");
   return v;
+}
+
+/** Snapshot bridge'leri yalnız stabil yazma API'sine abone olur. Böylece başka
+ * bir modül snapshot kaydettiğinde bütün bridge'ler yeniden render edilmez. */
+export function useAgentRegistryWriter(): AgentRegistryWriter {
+  const value = useContext(WriterCtx);
+  if (!value) throw new Error("AgentRegistryProvider eksik");
+  return value;
 }

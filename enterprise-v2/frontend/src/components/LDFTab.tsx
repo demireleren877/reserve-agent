@@ -109,6 +109,29 @@ interface Props {
 
 const FIXED_METHOD: LDFMethod = "volume_weighted";
 
+type FileOriginIndex = { dates: string[]; membership: Record<string, FileLeaf> };
+const fileOriginIndexCache = new WeakMap<FileData, Map<string, FileOriginIndex>>();
+
+function fileOriginIndex(source: FileData | null | undefined, origin: string): FileOriginIndex {
+  if (!source) return { dates: [], membership: {} };
+  let byOrigin = fileOriginIndexCache.get(source);
+  if (!byOrigin) {
+    byOrigin = new Map();
+    fileOriginIndexCache.set(source, byOrigin);
+  }
+  const cached = byOrigin.get(origin);
+  if (cached) return cached;
+  const byDate = source[origin] ?? {};
+  const dates = Object.keys(byDate).sort((a, b) => periodOrder(a) - periodOrder(b));
+  const membership: Record<string, FileLeaf> = {};
+  for (const date of dates) {
+    for (const [file, leaf] of Object.entries(byDate[date])) membership[file] = leaf;
+  }
+  const index = { dates, membership };
+  byOrigin.set(origin, index);
+  return index;
+}
+
 export function LDFTab(props: Props) {
   const {
     triangle,
@@ -239,7 +262,7 @@ export function LDFTab(props: Props) {
     const exact = byDate[devDate(origin, step, tri)];
     if (exact) return exact;
     const observableIndex = tri.values[rowIndex].slice(0, step + 1).filter((value) => value != null).length - 1;
-    const dates = Object.keys(byDate).sort((a, b) => periodOrder(a) - periodOrder(b));
+    const dates = fileOriginIndex(source, origin).dates;
     return byDate[dates[observableIndex]] ?? {};
   }
 
@@ -247,15 +270,7 @@ export function LDFTab(props: Props) {
     source: FileData | null | undefined,
     origin: string,
   ): Record<string, FileLeaf> {
-    const byDate = source?.[origin] ?? {};
-    const dates = Object.keys(byDate).sort((a, b) => periodOrder(a) - periodOrder(b));
-    const membership: Record<string, FileLeaf> = {};
-    // Large dataset üyeliği tek bir hücreye bağlı değildir. Dosya dönemin Large
-    // datasının HERHANGİ bir snapshot'ında varsa üyedir; son görülen tutarı sakla.
-    for (const date of dates) {
-      for (const [file, leaf] of Object.entries(byDate[date])) membership[file] = leaf;
-    }
-    return membership;
+    return fileOriginIndex(source, origin).membership;
   }
 
   const columnStats = useMemo(() => {
@@ -292,6 +307,18 @@ export function LDFTab(props: Props) {
       const cfd = comparableFileData;
       const pfd = comparablePriorFileData;
       if (hasPrior && (fileData || prior?.fileData) && pIdx != null && pStep != null) {
+        const currentLargeMembership = components
+          ? componentMembershipSnapshot(components.largeFileData, o)
+          : {};
+        const priorLargeMembership = components && prior
+          ? componentMembershipSnapshot(prior.largeFileData, o)
+          : {};
+        const currentGrossMembership = components
+          ? componentMembershipSnapshot(components.grossFileData, o)
+          : {};
+        const priorGrossMembership = components && prior
+          ? componentMembershipSnapshot(prior.grossFileData, o)
+          : {};
         const sides: [string, string][] = [
           [devDate(o, j + 1, triangle), "numerator"],
           [devDate(o, j, triangle), "denominator"],
@@ -316,18 +343,6 @@ export function LDFTab(props: Props) {
           // Segment üyeliği hücre snapshot'ından değil dönemin son Large
           // snapshot'ından okunur. Dosya Q1 Large'da olup Q2'de tamamen yoksa
           // ilgili hücrede boş olsa bile Large → Attritional geçişi yakalanır.
-          const currentLargeMembership = components
-            ? componentMembershipSnapshot(components.largeFileData, o)
-            : {};
-          const priorLargeMembership = components && prior
-            ? componentMembershipSnapshot(prior.largeFileData, o)
-            : {};
-          const currentGrossMembership = components
-            ? componentMembershipSnapshot(components.grossFileData, o)
-            : {};
-          const priorGrossMembership = components && prior
-            ? componentMembershipSnapshot(prior.grossFileData, o)
-            : {};
           const keys = new Set([
             ...Object.keys(curF), ...Object.keys(prevF),
             ...Object.keys(curGross), ...Object.keys(curLarge),

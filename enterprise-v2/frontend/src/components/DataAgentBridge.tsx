@@ -6,13 +6,13 @@
  */
 
 import { useEffect, useMemo } from "react";
-import { useAgentRegistry } from "@/lib/agent-registry";
+import { useAgentRegistryWriter } from "@/lib/agent-registry";
 import { useDataStore } from "@/lib/data-store";
 
 export function DataAgentBridge() {
   const store = useDataStore();
   const { registerSnapshot, registerActionHandler, unregisterActionHandler } =
-    useAgentRegistry();
+    useAgentRegistryWriter();
 
   const snapshot = useMemo(() => {
     return {

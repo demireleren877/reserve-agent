@@ -7,7 +7,7 @@
  */
 
 import { useEffect, useMemo } from "react";
-import { useAgentRegistry } from "@/lib/agent-registry";
+import { useAgentRegistryWriter } from "@/lib/agent-registry";
 import { useProject } from "@/lib/project-store";
 import type { AgentAction } from "@/types/triangle";
 import type { Branch, Period } from "@/types/project";
@@ -15,7 +15,7 @@ import type { Branch, Period } from "@/types/project";
 export function CashflowAgentBridge() {
   const { project, activeBranch, actions } = useProject();
   const { registerSnapshot, registerActionHandler, unregisterActionHandler } =
-    useAgentRegistry();
+    useAgentRegistryWriter();
 
   const snapshot = useMemo(() => buildCashflowSnapshot(project.periods, activeBranch), [
     project.periods,

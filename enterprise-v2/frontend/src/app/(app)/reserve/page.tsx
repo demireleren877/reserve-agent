@@ -21,7 +21,7 @@ import { ModelLockBanner } from "@/components/ModelLockBanner";
 import { useModelLock } from "@/lib/use-model-lock";
 import { useBranchSetters, useProject } from "@/lib/project-store";
 import { useDataPremiums, useDataLarge } from "@/lib/provision-models";
-import { formatNumber, type SessionState } from "@/lib/api";
+import { formatNumber } from "@/lib/api";
 import { exportToExcel } from "@/lib/export";
 import { computeBranchSummary } from "@/lib/reserve-pipeline";
 import {
@@ -48,7 +48,10 @@ import {
   type TailFit,
 } from "@/lib/tail-fit";
 import { evalFormula, type FormulaContext } from "@/lib/formula";
-import { analyzeLDFDiagnostics } from "@/lib/ldf-diagnostics";
+import {
+  analyzeLDFDiagnostics,
+  findLDFOutlierCandidates,
+} from "@/lib/ldf-diagnostics";
 import { calculateActualVsExpected } from "@/lib/actual-vs-expected";
 
 type Tab = "data" | "file" | "ldf" | "curve" | "ilr" | "bf" | "freq" | "ave" | "ultimate" | "summary";
@@ -154,15 +157,6 @@ export default function Home() {
     () => (effBranch && largeOn ? deriveAttritional(effBranch) : null),
     [effBranch, largeOn],
   );
-  const largeSummary = useMemo(
-    () => (effBranch ? computeLargeSummary(effBranch) : null),
-    [effBranch],
-  );
-  const attritionalSummary = useMemo(
-    () => (effBranch && largeOn ? computeAttritionalSummary(effBranch) : null),
-    [effBranch, largeOn],
-  );
-
   const grossTriangle = activeBranch
     ? selectModelTriangle(activeBranch.paidTriangle, activeBranch.incurredTriangle, modelBasis) ?? activeBranch.triangle
     : null;
@@ -223,8 +217,6 @@ export default function Home() {
     const model = { ...prior, triangle: priorTriangle, paidTriangle: null, incurredTriangle: null };
     return priorTriangle ? { branch: model, triangle: priorTriangle, basis: largeOn ? "Attritional" : "Gross" } : null;
   }, [avePriorBranch, triangle, isLargeSeg, isGrossSeg, largeOn, modelBasis]);
-  const aveResult = useMemo(() => aveComparison && triangle ? calculateActualVsExpected(aveComparison.branch, triangle, aveComparison.triangle) : null, [aveComparison, triangle]);
-
   // Alt-sekme model başına: aktif modelin anahtarıyla sakla/oku. Üçgen yoksa
   // data/file dışı sekmeler kilitli olduğundan güvenli olarak "data"ya düş.
   const branchKey =
@@ -234,6 +226,28 @@ export default function Home() {
   const setTab = useCallback(
     (t: Tab) => setTabByKey((m) => (branchKey ? { ...m, [branchKey]: t } : m)),
     [branchKey],
+  );
+
+  const aveResult = useMemo(
+    () =>
+      tab === "ave" && aveComparison && triangle
+        ? calculateActualVsExpected(aveComparison.branch, triangle, aveComparison.triangle)
+        : null,
+    [tab, aveComparison, triangle],
+  );
+
+  // Segment totals are only rendered on Summary. Avoid two complete reserve
+  // pipelines when the user is working on another tab.
+  const largeSummary = useMemo(
+    () => (tab === "summary" && effBranch ? computeLargeSummary(effBranch) : null),
+    [tab, effBranch],
+  );
+  const attritionalSummary = useMemo(
+    () =>
+      tab === "summary" && effBranch && largeOn
+        ? computeAttritionalSummary(effBranch)
+        : null,
+    [tab, effBranch, largeOn],
   );
 
   const effPaid = isLargeSeg
@@ -384,11 +398,12 @@ export default function Home() {
   // method/eleme/curve/CDF override'larıyla (mevcut ayarlarla ham yeniden hesap DEĞİL).
   // Böylece Curve sekmesinde prior olarak, o dönemin kendi Curve'ünde gördüğü değerler çıkar.
   const priorCDFs = useMemo(() => {
+    if (tab !== "curve") return null;
     const t = priorLDFRef?.triangle;
     const pb = priorEffBranch ?? priorRaw?.branch;
     if (!t || !pb) return null;
     return computeBranchSummary({ ...pb, triangle: t }).effective_cdfs;
-  }, [priorLDFRef, priorEffBranch, priorRaw]);
+  }, [tab, priorLDFRef, priorEffBranch, priorRaw]);
 
   const premiums = effectivePremiums;
   const lrInputPerOrigin = pb?.lrInputPerOrigin ?? {};
@@ -537,173 +552,6 @@ export default function Home() {
 
   const elrPerOrigin = lrEvaluated.values;
   const lrErrors = lrEvaluated.errors;
-
-  const sessionState = useMemo<SessionState | null>(() => {
-    if (!triangle) return null;
-    const cdfs = cumulativeFactors(effectiveLDFs);
-    const per_origin: SessionState["per_origin"] = [];
-    let totalLatest = 0;
-    let totalCLUlt = 0;
-    let totalBFUlt = 0;
-    let totalSelectedUlt = 0;
-    let totalExposure = 0;
-    for (let i = 0; i < triangle.values.length; i++) {
-      let latest: number | null = null;
-      let latestIdx = -1;
-      for (let j = 0; j < triangle.values[i].length; j++) {
-        const v = triangle.values[i][j];
-        if (v != null) {
-          latest = v;
-          latestIdx = j;
-        }
-      }
-      if (latest == null) continue;
-      const origin = triangle.origin_periods[i];
-      const cdf = latestIdx < cdfs.length ? cdfs[latestIdx] : 1;
-      const clUlt = latest * cdf;
-      const premium = premiums[origin] ?? 0;
-      const k =
-        correctionPerOrigin[origin] && correctionPerOrigin[origin] > 0
-          ? correctionPerOrigin[origin]
-          : 1;
-      const premiumAnnual = premium * k;
-      const patternRatio = premiumAnnual > 0 ? clUlt / premiumAnnual : null;
-      const userLR = elrPerOrigin[origin];
-      const selectedLR =
-        userLR !== undefined
-          ? userLR
-          : patternRatio !== null
-          ? patternRatio
-          : 0.7;
-      const pctDeveloped = clUlt > 0 ? latest / clUlt : 1;
-      const bfUltAnnual =
-        latest + selectedLR * premiumAnnual * (1 - pctDeveloped);
-      const bfUlt = bfUltAnnual / k;
-      const basis = basisPerOrigin[origin] ?? "cl";
-      const selectedUlt = basis === "cl" ? clUlt : bfUlt;
-      const selectedIbnr = selectedUlt - latest;
-      const ulr = premium > 0 ? selectedUlt / premium : null;
-
-      totalLatest += latest;
-      totalExposure += premium;
-      totalCLUlt += clUlt;
-      totalBFUlt += bfUlt;
-      totalSelectedUlt += selectedUlt;
-
-      per_origin.push({
-        origin,
-        latest,
-        cdf,
-        ultimate: clUlt,
-        ibnr: selectedIbnr,
-        premium,
-        premium_annual: premiumAnnual,
-        correction: k,
-        pattern_ratio: patternRatio,
-        selected_lr: selectedLR,
-        selected_lr_input: lrInputPerOrigin[origin] ?? null,
-        cl_ultimate: clUlt,
-        bf_ultimate: bfUlt,
-        bf_ultimate_annual: bfUltAnnual,
-        basis,
-        selected_ultimate: selectedUlt,
-        ulr,
-      } as unknown as SessionState["per_origin"][number]);
-    }
-    return {
-      method,
-      window: String(window),
-      excluded_cells: Array.from(excludedCells).map((k) => {
-        const [origin, step] = k.split("|");
-        return { origin, step: Number(step) };
-      }),
-      selected_ldfs: effectiveLDFs,
-      cdfs,
-      total_latest: totalLatest,
-      total_ultimate: totalCLUlt,
-      total_ibnr: totalSelectedUlt - totalLatest,
-      per_origin,
-      ...({
-        total_exposure: totalExposure,
-        total_bf_ultimate: totalBFUlt,
-        total_selected_ultimate: totalSelectedUlt,
-        total_selected_ibnr: totalSelectedUlt - totalLatest,
-        curve_state: {
-          development_periods: triangle.development_periods.map(String),
-          initial_cdfs: initialCDFs,
-          effective_cdfs: cascade.effective,
-          choices: triangle.development_periods.map((d) => ({
-            dev_period: String(d),
-            choice: cdfChoicePerPeriod[String(d)] ?? "initial",
-            user_value: cdfInitial[String(d)] ?? null,
-          })),
-          has_overrides: Object.values(cdfChoicePerPeriod).some(
-            (c) => c === "user",
-          ),
-        },
-        project_context: activePeriod && activeBranch
-          ? {
-              period: activePeriod.label,
-              branch: activeBranch.name,
-              frequency: activeBranch.frequency,
-              history_count: activeBranch.history.length,
-              recent_actions: activeBranch.history
-                .slice(-5)
-                .map((h) => ({ ts: h.timestamp, action: h.action })),
-            }
-          : null,
-        file_data_summary: (() => {
-          const fd = activeBranch?.fileData;
-          if (!fd) return null;
-          const origins = Object.keys(fd);
-          if (!origins.length) return null;
-          const originSummaries = origins.flatMap((origin) => {
-            const devDates = Object.keys(fd[origin]);
-            if (!devDates.length) return [];
-            const lastDev = devDates[devDates.length - 1];
-            const filesMap = fd[origin][lastDev];
-            const entries = Object.entries(filesMap).map(([dosya, val]) => ({ dosya, val: Number(val) }));
-            if (!entries.length) return [];
-            const total = entries.reduce((s, e) => s + e.val, 0);
-            entries.sort((a, b) => b.val - a.val);
-            const top3sum = entries.slice(0, 3).reduce((s, e) => s + e.val, 0);
-            return [{
-              origin,
-              dev_date: lastDev,
-              total: Math.round(total),
-              n_files: entries.length,
-              top1_file: entries[0].dosya,
-              top1_value: Math.round(entries[0].val),
-              top1_pct: total > 0 ? Math.round(entries[0].val / total * 1000) / 10 : 0,
-              top3_pct: total > 0 ? Math.round(top3sum / total * 1000) / 10 : 0,
-            }];
-          });
-          return {
-            has_file_data: true,
-            origin_count: originSummaries.length,
-            origins: originSummaries,
-          };
-        })(),
-      } as Record<string, unknown>),
-    } as SessionState;
-  }, [
-    triangle,
-    effectiveLDFs,
-    method,
-    window,
-    excludedCells,
-    premiums,
-    elrPerOrigin,
-    lrInputPerOrigin,
-    basisPerOrigin,
-    activePeriod,
-    activeBranch,
-    correctionPerOrigin,
-    initialCDFs,
-    cascade.effective,
-    cdfChoicePerPeriod,
-    cdfInitial,
-  ]);
 
   // -------- Pipeline helper (per-exclusion impact için yeniden çalıştırılır) -----
   const runPipeline = useCallback(
@@ -871,27 +719,32 @@ export default function Home() {
     ],
   );
 
+  const needsSummary =
+    tab === "ldf" || tab === "ultimate" || tab === "summary" || tab === "freq";
   const summary = useMemo(
-    () => runPipeline(excludedCells),
-    [runPipeline, excludedCells],
+    () => (needsSummary ? runPipeline(excludedCells) : null),
+    [needsSummary, runPipeline, excludedCells],
   );
 
-  // LDF inceleme önerileri: her dahil hücre için leave-one-out IBNR simülasyonu.
-  // Sonuç yalnızca öneridir; hiçbir hücre burada otomatik olarak elenmez.
+  // First identify outliers with the cheap median/MAD pass. The expensive
+  // leave-one-out reserve pipeline is only needed for those candidates.
+  const ldfDiagnosticCandidates = useMemo(
+    () =>
+      tab === "ldf" && triangle
+        ? findLDFOutlierCandidates(triangle, ratios, excludedCells)
+        : [],
+    [tab, triangle, ratios, excludedCells],
+  );
+
   const ldfDiagnostics = useMemo(() => {
-    if (!triangle || !summary) return [];
+    if (tab !== "ldf" || !triangle || !summary) return [];
     const impactByCell = new Map<string, number>();
-    for (let i = 0; i < triangle.origin_periods.length; i++) {
-      const origin = triangle.origin_periods[i];
-      for (let step = 0; step < triangle.development_periods.length - 1; step++) {
-        const a = triangle.values[i]?.[step];
-        const b = triangle.values[i]?.[step + 1];
-        const key = `${origin}|${step}`;
-        if (a == null || b == null || a === 0 || excludedCells.has(key)) continue;
-        const alternative = new Set(excludedCells);
-        alternative.add(key);
-        const altIbnr = runPipeline(alternative)?.totals.ibnr;
-        if (altIbnr != null) impactByCell.set(key, altIbnr - summary.totals.ibnr);
+    for (const key of ldfDiagnosticCandidates) {
+      const alternative = new Set(excludedCells);
+      alternative.add(key);
+      const altIbnr = runPipeline(alternative)?.totals.ibnr;
+      if (altIbnr != null) {
+        impactByCell.set(key, altIbnr - summary.totals.ibnr);
       }
     }
     return analyzeLDFDiagnostics(triangle, ratios, excludedCells, {
@@ -899,11 +752,11 @@ export default function Home() {
       totalLatest: summary.totals.latest,
       impactByCell,
     });
-  }, [triangle, summary, excludedCells, ratios, runPipeline]);
+  }, [tab, triangle, summary, excludedCells, ratios, runPipeline, ldfDiagnosticCandidates]);
 
   // Per-exclusion impact: bu hücre eleme uygulanmasaydı IBNR ne kadar değişirdi
   const exclusionImpacts = useMemo(() => {
-    if (!triangle || !summary) return [];
+    if (tab !== "summary" || !triangle || !summary) return [];
     const cur = summary.totals.ibnr;
     const out: {
       origin: string;
@@ -956,7 +809,7 @@ export default function Home() {
       return x.step - y.step;
     });
     return out;
-  }, [triangle, excludedCells, summary, runPipeline]);
+  }, [tab, triangle, excludedCells, summary, runPipeline]);
 
   const curveOverrides = useMemo(() => {
     const out: { devPeriod: string; userValue: number }[] = [];

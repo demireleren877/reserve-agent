@@ -33,7 +33,7 @@ async def test_roll_forward_appends_diagonal(client, user_headers):
     assert data["paid_triangle"]["origin_periods"] == ["2021", "2022", "2023", "2024"]
     assert data["paid_triangle"]["values"][2][1] == 1460      # 2023 age1 = 1200+260
     assert data["incurred_triangle"]["values"][3][0] == 1500  # 2024 incurred age0 = 900+600
-    assert data["new_diagonal_files"]["2024"] == {"D": 900.0}
+    assert data["new_diagonal_files"]["2024"] == {"D": {"p": 900.0, "o": 600.0}}
 
 
 async def test_roll_forward_missing_brans_400(client, user_headers):

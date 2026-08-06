@@ -1,12 +1,28 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import type { Triangle, FileData, FileLeaf } from "@/types/triangle";
-import { filePaid, fileOs } from "@/types/triangle";
+import type { Triangle, FileData, ModelBasis } from "@/types/triangle";
+import { selectModelTriangle } from "@/types/triangle";
 import type { Branch, Period } from "@/types/project";
 import { formatNumber } from "@/lib/api";
 import { useProject } from "@/lib/project-store";
 import { sameBranchName } from "@/lib/branch-identity";
+import { periodOrder } from "@/lib/period-order";
+import {
+  buildClaimComparison,
+  fileMetricValue,
+  latestFileSnapshots,
+  originSnapshotTotals,
+  type ClaimChangeTag,
+  type FileMetric,
+  type FileValue,
+} from "@/lib/file-analysis";
+import {
+  attritionalWorkingTriangle,
+  hasLarge,
+  largeWorkingTriangles,
+  subtractFileData,
+} from "@/lib/large-split";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   LineChart, Line, Legend, Cell,
@@ -15,7 +31,7 @@ import {
 interface Props {
   triangle: Triangle | null;
   fileData: FileData | null | undefined;
-  excludedCells: Set<string>;
+  segment: "gross" | "attritional" | "large";
 }
 
 const TOOLTIP_STYLE = {
@@ -30,57 +46,12 @@ const PAID_COLOR = "var(--primary)";
 const OS_COLOR = "#f59e0b"; // muallak (outstanding)
 
 // ── Metric (ödeme / muallak / hasar) ──────────────────────────────────────────
-type Metric = "inc" | "p" | "o";
+type Metric = FileMetric;
 const METRIC_LABEL: Record<Metric, string> = { inc: "Incurred", p: "Paid", o: "Outstanding" };
 function metricOf(v: FileVal, m: Metric): number {
-  return m === "p" ? v.p : m === "o" ? v.o : v.inc;
+  return fileMetricValue(v, m);
 }
-
-// ── Dev-dönemi sıralama (fd anahtarları: "2023" | "2023Q2") ────────────────────
-function devSeq(label: string): number {
-  const m = label.match(/^(\d{4})(?:[Qq]?(\d))?/);
-  return m ? parseInt(m[1], 10) * 4 + (m[2] ? parseInt(m[2], 10) : 0) : -1;
-}
-
-interface FileVal { p: number; o: number; inc: number }
-
-/**
- * Her origin için GÜNCEL dosya durumu: fd'de o origin'in EN SON (max dev) hücresi.
- * Bu hücre kümülatif olduğundan o origin'de görülen TÜM dosyaları içerir — üçgenin
- * son köşegen tarihi fd'de anahtar olmayabildiği için `lastDate` yerine bunu kullan
- * (eski kod bazı dosyaları kaçırıyordu). Sadece-muallaklı (ödeme=0) dosyalar da gelir.
- */
-function snapshotByOrigin(
-  fd: FileData,
-  origins: string[],
-): Record<string, Record<string, FileVal>> {
-  const out: Record<string, Record<string, FileVal>> = {};
-  for (const orig of origins) {
-    const byDate = fd[orig];
-    if (!byDate) { out[orig] = {}; continue; }
-    let bestKey = ""; let bestSeq = -Infinity;
-    for (const d of Object.keys(byDate)) {
-      const s = devSeq(d);
-      if (s >= bestSeq) { bestSeq = s; bestKey = d; }
-    }
-    const cell = byDate[bestKey] ?? {};
-    const m: Record<string, FileVal> = {};
-    for (const [dosya, leaf] of Object.entries(cell as Record<string, FileLeaf>)) {
-      const p = filePaid(leaf); const o = fileOs(leaf);
-      m[dosya] = { p, o, inc: p + o };
-    }
-    out[orig] = m;
-  }
-  return out;
-}
-
-function originTotals(snap: Record<string, Record<string, FileVal>>, m: Metric): Record<string, number> {
-  const out: Record<string, number> = {};
-  for (const [orig, files] of Object.entries(snap)) {
-    out[orig] = Object.values(files).reduce((s, v) => s + metricOf(v, m), 0);
-  }
-  return out;
-}
+type FileVal = FileValue;
 
 // ── İstatistik yardımcıları ───────────────────────────────────────────────────
 function quantile(sortedAsc: number[], q: number): number {
@@ -117,25 +88,33 @@ function shortNum(n: number): string {
   return Math.round(n).toString();
 }
 
-// ── Legacy helpers (Development / Runoff tab'ları — paid davranışını korur) ─────
-function lastDiagTotals(tri: Triangle, fd: FileData): Record<string, number> {
-  const snap = snapshotByOrigin(fd, tri.origin_periods);
-  return originTotals(snap, "p");
+function branchAnalysisData(
+  branch: Branch,
+  segment: Props["segment"],
+  basis: ModelBasis,
+): { triangle: Triangle; fileData: FileData } | null {
+  if (segment === "large") {
+    const large = largeWorkingTriangles(branch);
+    const triangle = selectModelTriangle(large.paid, large.incurred, basis) ?? large.incurred ?? large.paid;
+    return triangle && branch.largeFileData ? { triangle, fileData: branch.largeFileData } : null;
+  }
+  const grossTriangle = selectModelTriangle(branch.paidTriangle, branch.incurredTriangle, basis) ?? branch.triangle;
+  if (!grossTriangle || !branch.fileData) return null;
+  if (segment === "attritional" && hasLarge(branch)) {
+    const triangle = attritionalWorkingTriangle(branch, basis);
+    return triangle ? { triangle, fileData: subtractFileData(branch.fileData, branch.largeFileData) } : null;
+  }
+  return { triangle: grossTriangle, fileData: branch.fileData };
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
-export function FileAnalysisTab({ triangle, fileData }: Props) {
+export function FileAnalysisTab({ triangle, fileData, segment }: Props) {
   const [tab, setTab] = useState<"stats" | "largeloss" | "devt" | "compare">("stats");
   const { project, activePeriod, activeBranch } = useProject();
 
   const prevPeriodBranches = useMemo((): { period: Period; branch: Branch }[] => {
     if (!activePeriod) return [];
-    const periodOrder = (label: string): number => {
-      const m = label.match(/^(\d{4})(?:[Qq](\d))?/);
-      if (!m) return 0;
-      return parseInt(m[1], 10) * 4 + (m[2] ? parseInt(m[2], 10) : 0);
-    };
     const sorted = [...project.periods].sort((a, b) => periodOrder(a.label) - periodOrder(b.label));
     const activeIdx = sorted.findIndex(p => p.id === activePeriod.id);
     if (activeIdx <= 0) return [];
@@ -143,13 +122,17 @@ export function FileAnalysisTab({ triangle, fileData }: Props) {
     const result: { period: Period; branch: Branch }[] = [];
     for (const period of [...prevPeriods].reverse()) {
       for (const branch of period.branches) {
-        if (branch.frequency === activeBranch?.frequency && branch.fileData && branch.triangle) {
+        if (
+          branch.frequency === activeBranch?.frequency &&
+          sameBranchName(branch.name, activeBranch?.name) &&
+          branchAnalysisData(branch, segment, activeBranch?.modelBasis ?? "incurred")
+        ) {
           result.push({ period, branch });
         }
       }
     }
     return result;
-  }, [project.periods, activePeriod, activeBranch?.frequency]);
+  }, [project.periods, activePeriod, activeBranch, segment]);
 
   if (!fileData || !triangle) {
     return (
@@ -161,8 +144,8 @@ export function FileAnalysisTab({ triangle, fileData }: Props) {
 
   const TABS = [
     { id: "stats", label: "Statistics" },
-    { id: "largeloss", label: "Large Loss" },
-    { id: "devt", label: "File Development" },
+    { id: "largeloss", label: "Claim Concentration" },
+    { id: "devt", label: "Development" },
     { id: "compare", label: `Runoff${prevPeriodBranches.length ? ` (${prevPeriodBranches.length})` : ""}` },
   ] as const;
 
@@ -187,13 +170,15 @@ export function FileAnalysisTab({ triangle, fileData }: Props) {
 
       {tab === "stats" && <StatsTab triangle={triangle} fileData={fileData} />}
       {tab === "largeloss" && <LargeLossTab triangle={triangle} fileData={fileData} />}
-      {tab === "devt" && <DevelopmentTab triangle={triangle} fileData={fileData} />}
+      {tab === "devt" && <DevelopmentTab triangle={triangle} fileData={fileData} segment={segment} />}
       {tab === "compare" && (
         <CompareTab
           triangle={triangle}
           fileData={fileData}
           activeBranchName={activeBranch?.name ?? ""}
           prevPeriodBranches={prevPeriodBranches}
+          segment={segment}
+          modelBasis={activeBranch?.modelBasis ?? "incurred"}
         />
       )}
     </div>
@@ -204,7 +189,7 @@ export function FileAnalysisTab({ triangle, fileData }: Props) {
 
 function StatsTab({ triangle, fileData }: { triangle: Triangle; fileData: FileData }) {
   const [metric, setMetric] = useState<Metric>("inc");
-  const snap = useMemo(() => snapshotByOrigin(fileData, triangle.origin_periods), [fileData, triangle.origin_periods]);
+  const snap = useMemo(() => latestFileSnapshots(triangle, fileData), [fileData, triangle]);
 
   // Origin bazında paid/os/incurred + severity istatistikleri (seçili metrik).
   const stats = useMemo(() => triangle.origin_periods.map(orig => {
@@ -262,9 +247,9 @@ function StatsTab({ triangle, fileData }: { triangle: Triangle; fileData: FileDa
         </div>
       </div>
 
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard label="Total Incurred" value={formatNumber(totInc)} sub={`Paid ${pct(totInc > 0 ? totPaid / totInc : 0, 0)}`} />
-        <KpiCard label="Outstanding" value={formatNumber(totOs)} sub="reserve (muallak)" />
+        <KpiCard label="Outstanding" value={formatNumber(totOs)} sub="case reserve" />
         <KpiCard label="Total Files" value={String(totalFiles)} sub="incl. reserve-only" />
         <KpiCard label="Concentration (Gini)" value={g.toFixed(2)} sub={METRIC_LABEL[metric]} accent={g > 0.7} />
       </div>
@@ -368,7 +353,7 @@ function histogram(vals: number[], nbins = 8): { range: string; count: number }[
 
 function LargeLossTab({ triangle, fileData }: { triangle: Triangle; fileData: FileData }) {
   const [topN, setTopN] = useState(20);
-  const snap = useMemo(() => snapshotByOrigin(fileData, triangle.origin_periods), [fileData, triangle.origin_periods]);
+  const snap = useMemo(() => latestFileSnapshots(triangle, fileData), [fileData, triangle]);
 
   // Büyük hasar analizinde metrik = INCURRED (toplam hasar boyutu).
   const allFiles = useMemo(() => {
@@ -393,12 +378,12 @@ function LargeLossTab({ triangle, fileData }: { triangle: Triangle; fileData: Fi
     if (!total) return null;
     const largeCount = Math.max(1, Math.ceil(vals.length * 0.1));
     const large = vals.slice(0, largeCount).reduce((s, v) => s + v, 0);
-    return { name: orig, "Large Loss": Math.round(large / 1000), "Other": Math.round((total - large) / 1000) };
+    return { name: orig, "Top 10%": Math.round(large / 1000), "Other": Math.round((total - large) / 1000) };
   }).filter(Boolean), [triangle.origin_periods, snap]);
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <KpiCard label="Largest Claim (incurred)" value={formatNumber(allFiles[0]?.inc ?? 0)} sub={allFiles[0]?.orig} />
         <KpiCard
           label={`Top ${topN} Total`}
@@ -416,7 +401,7 @@ function LargeLossTab({ triangle, fileData }: { triangle: Triangle; fileData: Fi
             <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `${v}k`} />
             <Tooltip formatter={(v: unknown) => [`${Number(v ?? 0).toLocaleString("tr-TR")}k TL`]} contentStyle={TOOLTIP_STYLE} />
             <Legend iconSize={10} wrapperStyle={{ fontSize: 10 }} />
-            <Bar dataKey="Large Loss" stackId="a" fill="#ef4444" />
+            <Bar dataKey="Top 10%" stackId="a" fill="#ef4444" />
             <Bar dataKey="Other" stackId="a" fill="#d1d5db" radius={[3, 3, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
@@ -475,42 +460,50 @@ const DEV_COLORS = [
   "#8b5cf6", "#06b6d4", "#f97316", "#84cc16", "#ec4899", "#14b8a6",
 ];
 
-function DevelopmentTab({ triangle }: { triangle: Triangle; fileData: FileData }) {
+function DevelopmentTab({
+  triangle,
+  fileData,
+  segment,
+}: {
+  triangle: Triangle;
+  fileData: FileData;
+  segment: Props["segment"];
+}) {
   const { project, activeBranch } = useProject();
   const origins = triangle.origin_periods;
   const [showTopN, setShowTopN] = useState(5);
-
-  const parsePeriodLabel = (s: string): number => {
-    const m = s.match(/^(\d{4})(?:[Qq](\d))?/);
-    return m ? parseInt(m[1], 10) * 4 + (m[2] ? parseInt(m[2], 10) : 0) : 0;
-  };
+  const [metric, setMetric] = useState<Metric>(activeBranch?.modelBasis === "paid" ? "p" : activeBranch?.modelBasis === "outstanding" ? "o" : "inc");
 
   const periodSnapshots = useMemo(() => {
     const freq = activeBranch?.frequency;
+    const basis = activeBranch?.modelBasis ?? "incurred";
     return [...project.periods]
-      .sort((a, b) => parsePeriodLabel(a.label) - parsePeriodLabel(b.label))
+      .sort((a, b) => periodOrder(a.label) - periodOrder(b.label))
       .flatMap(period => {
         const branch = period.branches.find(
-          b => b.frequency === freq && b.fileData && b.triangle
+          b => b.frequency === freq && sameBranchName(b.name, activeBranch?.name)
         );
         if (!branch) return [];
-        return [{ label: period.label, triangle: branch.triangle!, fileData: branch.fileData! }];
+        const data = branch.id === activeBranch?.id
+          ? { triangle, fileData }
+          : branchAnalysisData(branch, segment, basis);
+        return data ? [{ label: period.label, ...data }] : [];
       });
-  }, [project.periods, activeBranch?.frequency]);
+  }, [project.periods, activeBranch, triangle, fileData, segment]);
 
   const byPeriod = useMemo(() =>
     periodSnapshots.map(snap => ({
       label: snap.label,
-      totals: lastDiagTotals(snap.triangle, snap.fileData),
+      totals: originSnapshotTotals(latestFileSnapshots(snap.triangle, snap.fileData), metric),
     })),
-    [periodSnapshots]
+    [periodSnapshots, metric]
   );
 
   const latestTotals = byPeriod[byPeriod.length - 1]?.totals ?? {};
   const topOrigins = useMemo(() =>
     [...origins]
-      .filter(o => latestTotals[o] > 0)
-      .sort((a, b) => (latestTotals[b] ?? 0) - (latestTotals[a] ?? 0))
+      .filter(o => latestTotals[o] !== 0)
+      .sort((a, b) => Math.abs(latestTotals[b] ?? 0) - Math.abs(latestTotals[a] ?? 0))
       .slice(0, showTopN),
     [origins, latestTotals, showTopN]
   );
@@ -519,19 +512,22 @@ function DevelopmentTab({ triangle }: { triangle: Triangle; fileData: FileData }
     const row: Record<string, number | string> = { date: snap.label };
     for (const orig of topOrigins) {
       const v = snap.totals[orig];
-      if (v != null && v > 0) row[orig] = Math.round(v / 1000);
+      if (v != null && v !== 0) row[orig] = Math.round(v / 1000);
     }
     return row;
   });
 
-  const tableOrigins = origins.filter(o => byPeriod.some(snap => (snap.totals[o] ?? 0) > 0));
+  const tableOrigins = [...new Set(byPeriod.flatMap(snapshot => Object.keys(snapshot.totals)))]
+    .filter(o => byPeriod.some(snapshot => (snapshot.totals[o] ?? 0) !== 0))
+    .sort((a, b) => periodOrder(a) - periodOrder(b));
 
   return (
     <div className="space-y-4">
       <div className="card p-4">
-        <div className="flex items-center gap-3 mb-3">
-          <div className="text-xs font-semibold">Paid Development by Accident Year (000s)</div>
-          <div className="flex items-center gap-1.5 ml-auto text-[10px] text-[color:var(--muted)]">
+        <div className="flex items-center gap-3 mb-3 flex-wrap">
+          <div className="text-xs font-semibold">{METRIC_LABEL[metric]} Development by Accident Year (000s)</div>
+          <MetricSelector metric={metric} onChange={setMetric} className="ml-auto" />
+          <div className="flex items-center gap-1.5 text-[10px] text-[color:var(--muted)]">
             Show:
             {[3, 5, 8, 10].map(n => (
               <button key={n} onClick={() => setShowTopN(n)}
@@ -557,7 +553,7 @@ function DevelopmentTab({ triangle }: { triangle: Triangle; fileData: FileData }
 
       <div className="card p-0 overflow-hidden">
         <div className="px-4 py-2.5 border-b bg-[color:var(--surface-alt)] text-xs font-semibold">
-          Reporting Period × Accident Year — Latest Paid Total
+          Reporting Period × Accident Year — Latest {METRIC_LABEL[metric]} Total
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-xs tabular">
@@ -577,7 +573,7 @@ function DevelopmentTab({ triangle }: { triangle: Triangle; fileData: FileData }
                     const v = snap.totals[o];
                     return (
                       <td key={snap.label} className="text-right px-3 py-1.5 text-[color:var(--muted)]">
-                        {v != null && v > 0 ? formatNumber(v) : "—"}
+                        {v != null && v !== 0 ? formatNumber(v) : "—"}
                       </td>
                     );
                   })}
@@ -594,12 +590,14 @@ function DevelopmentTab({ triangle }: { triangle: Triangle; fileData: FileData }
 // ── 4. Runoff ─────────────────────────────────────────────────────────────────
 
 function CompareTab({
-  triangle, fileData, activeBranchName, prevPeriodBranches,
+  triangle, fileData, activeBranchName, prevPeriodBranches, segment, modelBasis,
 }: {
   triangle: Triangle;
   fileData: FileData;
   activeBranchName: string;
   prevPeriodBranches: { period: Period; branch: Branch }[];
+  segment: Props["segment"];
+  modelBasis: ModelBasis;
 }) {
   const defaultId = useMemo(() => {
     const sameName = prevPeriodBranches.find(x => sameBranchName(x.branch.name, activeBranchName));
@@ -614,61 +612,60 @@ function CompareTab({
   const compareEntry = prevPeriodBranches.find(x => x.branch.id === effectiveId);
   const compareBranch = compareEntry?.branch;
 
-  const currSnap = useMemo(() => snapshotByOrigin(fileData, triangle.origin_periods), [fileData, triangle.origin_periods]);
-  const compSnap = useMemo(() =>
-    compareBranch?.triangle && compareBranch.fileData
-      ? snapshotByOrigin(compareBranch.fileData, compareBranch.triangle.origin_periods)
-      : {},
-    [compareBranch]
+  const currSnap = useMemo(() => latestFileSnapshots(triangle, fileData), [fileData, triangle]);
+  const compareData = useMemo(
+    () => compareBranch ? branchAnalysisData(compareBranch, segment, modelBasis) : null,
+    [compareBranch, segment, modelBasis],
   );
+  const compSnap = useMemo(
+    () => compareData ? latestFileSnapshots(compareData.triangle, compareData.fileData) : {},
+    [compareData],
+  );
+  const fileRows = useMemo(
+    () => buildClaimComparison(currSnap, compSnap, cmpMetric),
+    [currSnap, compSnap, cmpMetric],
+  );
+  const lifecycleCounts = useMemo(() => {
+    const counts = new Map<string, { newFiles: number; closedFiles: number; reopenedFiles: number }>();
+    for (const row of fileRows) {
+      const value = counts.get(row.orig) ?? { newFiles: 0, closedFiles: 0, reopenedFiles: 0 };
+      if (row.tag === "new") value.newFiles++;
+      if (row.tag === "closed") value.closedFiles++;
+      if (row.tag === "reopened") value.reopenedFiles++;
+      counts.set(row.orig, value);
+    }
+    return counts;
+  }, [fileRows]);
 
   const rows = useMemo(() => {
     const allOrigins = [...new Set([...Object.keys(currSnap), ...Object.keys(compSnap)])].sort();
     return allOrigins.map(orig => {
       const cf = currSnap[orig] ?? {};
       const pf = compSnap[orig] ?? {};
-      const curr = Object.values(cf).reduce((s, v) => s + v.p, 0);
-      const comp = Object.values(pf).reduce((s, v) => s + v.p, 0);
+      const curr = Object.values(cf).reduce((s, v) => s + metricOf(v, cmpMetric), 0);
+      const comp = Object.values(pf).reduce((s, v) => s + metricOf(v, cmpMetric), 0);
       const delta = curr - comp;
       const deltaPct = comp > 0 ? delta / comp : null;
       const currSet = new Set(Object.keys(cf));
       const compSet = new Set(Object.keys(pf));
-      const newFiles = [...currSet].filter(k => !compSet.has(k)).length;
-      const closedFiles = [...compSet].filter(k => !currSet.has(k)).length;
-      return { orig, curr, comp, delta, deltaPct, currN: currSet.size, compN: compSet.size, newFiles, closedFiles };
+      const { newFiles, closedFiles, reopenedFiles } = lifecycleCounts.get(orig) ?? {
+        newFiles: 0, closedFiles: 0, reopenedFiles: 0,
+      };
+      return { orig, curr, comp, delta, deltaPct, currN: currSet.size, compN: compSet.size, newFiles, closedFiles, reopenedFiles };
     });
-  }, [currSnap, compSnap]);
-
-  // Dosya bazlı: her hasarın iki dönem arasındaki değişimi (seçili metrik).
-  const fileRows = useMemo(() => {
-    const out: { dosya: string; orig: string; curr: number; comp: number; delta: number; tag: "new" | "closed" | "up" | "down" | "same" }[] = [];
-    const origins = new Set([...Object.keys(currSnap), ...Object.keys(compSnap)]);
-    for (const orig of origins) {
-      const cf = currSnap[orig] ?? {};
-      const pf = compSnap[orig] ?? {};
-      const dosyas = new Set([...Object.keys(cf), ...Object.keys(pf)]);
-      for (const d of dosyas) {
-        const curr = cf[d] ? metricOf(cf[d], cmpMetric) : 0;
-        const comp = pf[d] ? metricOf(pf[d], cmpMetric) : 0;
-        if (curr === 0 && comp === 0) continue;
-        const delta = curr - comp;
-        const tag = !pf[d] ? "new" : !cf[d] ? "closed" : delta > 0 ? "up" : delta < 0 ? "down" : "same";
-        out.push({ dosya: d, orig, curr, comp, delta, tag });
-      }
-    }
-    return out.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
-  }, [currSnap, compSnap, cmpMetric]);
+  }, [currSnap, compSnap, cmpMetric, lifecycleCounts]);
 
   const visibleFileRows = useMemo(() => {
-    const q = search.trim();
-    const filtered = q ? fileRows.filter(r => r.dosya.includes(q) || r.orig.includes(q)) : fileRows;
+    const q = search.trim().toLocaleLowerCase("en-US");
+    const filtered = q ? fileRows.filter(r => r.dosya.toLocaleLowerCase("en-US").includes(q) || r.orig.toLocaleLowerCase("en-US").includes(q)) : fileRows;
     return filtered.slice(0, 300);
   }, [fileRows, search]);
 
   const fileTotals = useMemo(() => fileRows.reduce(
     (a, r) => ({ curr: a.curr + r.curr, comp: a.comp + r.comp,
-      newN: a.newN + (r.tag === "new" ? 1 : 0), closedN: a.closedN + (r.tag === "closed" ? 1 : 0) }),
-    { curr: 0, comp: 0, newN: 0, closedN: 0 },
+      newN: a.newN + (r.tag === "new" ? 1 : 0), closedN: a.closedN + (r.tag === "closed" ? 1 : 0),
+      reopenedN: a.reopenedN + (r.tag === "reopened" ? 1 : 0) }),
+    { curr: 0, comp: 0, newN: 0, closedN: 0, reopenedN: 0 },
   ), [fileRows]);
 
   const totalCurr = rows.reduce((s, r) => s + r.curr, 0);
@@ -682,7 +679,7 @@ function CompareTab({
   if (!prevPeriodBranches.length) {
     return (
       <div className="card p-8 text-center text-xs text-[color:var(--muted)]">
-        No branch with a file-level Excel loaded at the same frequency in a previous period.
+        No matching branch with file-level data was found in a previous period.
         For example, if you load a file-level Excel into a branch in 2025Q4, it will appear as an automatic comparison option from 2026Q1 onward.
       </div>
     );
@@ -699,6 +696,7 @@ function CompareTab({
             </option>
           ))}
         </select>
+        <MetricSelector metric={cmpMetric} onChange={setCmpMetric} />
         <div className="ml-auto flex rounded-md overflow-hidden border border-[color:var(--border)]">
           {([["origin", "By accident year"], ["file", "By file"]] as const).map(([val, lbl]) => (
             <button key={val} onClick={() => setMode(val)}
@@ -709,9 +707,9 @@ function CompareTab({
       </div>
 
       {mode === "origin" && (<>
-      <div className="grid grid-cols-3 gap-3">
-        <KpiCard label="Current Paid" value={formatNumber(totalCurr)} />
-        <KpiCard label="Comparison Paid" value={formatNumber(totalComp)} sub={compareBranch?.name} />
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <KpiCard label={`Current ${METRIC_LABEL[cmpMetric]}`} value={formatNumber(totalCurr)} />
+        <KpiCard label={`Comparison ${METRIC_LABEL[cmpMetric]}`} value={formatNumber(totalComp)} sub={compareBranch?.name} />
         <KpiCard
           label="Total Change"
           value={(totalDelta >= 0 ? "+" : "") + formatNumber(totalDelta)}
@@ -722,7 +720,7 @@ function CompareTab({
 
       {barData.length > 0 && (
         <div className="card p-4">
-          <div className="text-xs font-semibold mb-3">Accident Year Comparison — Paid (000s)</div>
+          <div className="text-xs font-semibold mb-3">Accident Year Comparison — {METRIC_LABEL[cmpMetric]} (000s)</div>
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={barData} margin={{ top: 4, right: 8, left: 0, bottom: 20 }}>
               <XAxis dataKey="name" tick={{ fontSize: 10 }} angle={-45} textAnchor="end" interval={0} />
@@ -750,6 +748,7 @@ function CompareTab({
                 <th className="text-right px-3 py-2">Comp. Files</th>
                 <th className="text-right px-3 py-2">New</th>
                 <th className="text-right px-3 py-2">Closed</th>
+                <th className="text-right px-3 py-2">Reopened</th>
               </tr>
             </thead>
             <tbody>
@@ -758,8 +757,8 @@ function CompareTab({
                 return (
                   <tr key={r.orig} className={`border-t hover:bg-[color:var(--surface-alt)]/40 ${bigChange ? "bg-orange-50/20" : ""}`}>
                     <td className="px-3 py-1.5 font-medium">{r.orig}</td>
-                    <td className="text-right px-3 py-1.5">{r.curr > 0 ? formatNumber(r.curr) : "—"}</td>
-                    <td className="text-right px-3 py-1.5 text-[color:var(--muted)]">{r.comp > 0 ? formatNumber(r.comp) : "—"}</td>
+                    <td className="text-right px-3 py-1.5">{r.curr !== 0 ? formatNumber(r.curr) : "—"}</td>
+                    <td className="text-right px-3 py-1.5 text-[color:var(--muted)]">{r.comp !== 0 ? formatNumber(r.comp) : "—"}</td>
                     <td className={`text-right px-3 py-1.5 font-medium ${r.delta > 0 ? "text-[color:var(--danger)]" : r.delta < 0 ? "text-green-600" : "text-[color:var(--muted)]"}`}>
                       {r.delta !== 0 ? (r.delta > 0 ? "+" : "") + formatNumber(r.delta) : "—"}
                     </td>
@@ -773,6 +772,9 @@ function CompareTab({
                     </td>
                     <td className={`text-right px-3 py-1.5 ${r.closedFiles > 0 ? "text-[color:var(--muted-strong)]" : "text-[color:var(--muted)]"}`}>
                       {r.closedFiles > 0 ? `-${r.closedFiles}` : "—"}
+                    </td>
+                    <td className={`text-right px-3 py-1.5 ${r.reopenedFiles > 0 ? "text-[color:var(--warning)] font-medium" : "text-[color:var(--muted)]"}`}>
+                      {r.reopenedFiles > 0 ? `+${r.reopenedFiles}` : "—"}
                     </td>
                   </tr>
                 );
@@ -789,7 +791,7 @@ function CompareTab({
                 <td className="text-right px-3 py-1.5">
                   {totalComp > 0 ? (totalDelta > 0 ? "+" : "") + pct(totalDelta / totalComp) : "—"}
                 </td>
-                <td colSpan={4} />
+                <td colSpan={5} />
               </tr>
             </tfoot>
           </table>
@@ -798,22 +800,15 @@ function CompareTab({
       </>)}
 
       {mode === "file" && (<>
-        <div className="grid grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
           <KpiCard label={`Current ${METRIC_LABEL[cmpMetric]}`} value={formatNumber(fileTotals.curr)} />
           <KpiCard label={`Comparison ${METRIC_LABEL[cmpMetric]}`} value={formatNumber(fileTotals.comp)} sub={compareBranch?.name} />
           <KpiCard label="New claims" value={`+${fileTotals.newN}`} />
           <KpiCard label="Closed claims" value={`-${fileTotals.closedN}`} />
+          <KpiCard label="Reopened claims" value={`+${fileTotals.reopenedN}`} />
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-[11px] text-[color:var(--muted-strong)] font-medium">Metric:</span>
-          <div className="flex rounded-md overflow-hidden border border-[color:var(--border)]">
-            {(["inc", "p", "o"] as Metric[]).map(m => (
-              <button key={m} onClick={() => setCmpMetric(m)}
-                className={`px-2.5 py-1 text-[11px] font-medium transition ${cmpMetric === m ? "bg-[color:var(--primary)] text-white" : "bg-[color:var(--surface)] text-[color:var(--muted-strong)]"}`}
-              >{METRIC_LABEL[m]}</button>
-            ))}
-          </div>
           <input
             type="text"
             value={search}
@@ -849,8 +844,8 @@ function CompareTab({
                   <tr key={`${r.orig}-${r.dosya}`} className="border-t hover:bg-[color:var(--surface-alt)]/40">
                     <td className="px-3 py-1.5 font-mono">{r.dosya}</td>
                     <td className="px-3 py-1.5 text-[color:var(--muted)]">{r.orig}</td>
-                    <td className="text-right px-3 py-1.5">{r.curr > 0 ? formatNumber(r.curr) : "—"}</td>
-                    <td className="text-right px-3 py-1.5 text-[color:var(--muted)]">{r.comp > 0 ? formatNumber(r.comp) : "—"}</td>
+                    <td className="text-right px-3 py-1.5">{r.curr !== 0 ? formatNumber(r.curr) : "—"}</td>
+                    <td className="text-right px-3 py-1.5 text-[color:var(--muted)]">{r.comp !== 0 ? formatNumber(r.comp) : "—"}</td>
                     <td className={`text-right px-3 py-1.5 font-medium ${r.delta > 0 ? "text-[color:var(--danger)]" : r.delta < 0 ? "text-green-600" : "text-[color:var(--muted)]"}`}>
                       {r.delta !== 0 ? (r.delta > 0 ? "+" : "") + formatNumber(r.delta) : "—"}
                     </td>
@@ -866,10 +861,12 @@ function CompareTab({
   );
 }
 
-function ChangeTag({ tag }: { tag: "new" | "closed" | "up" | "down" | "same" }) {
+function ChangeTag({ tag }: { tag: ClaimChangeTag }) {
   const map = {
     new: ["New", "bg-[color:var(--success-soft)] text-[color:var(--success)]"],
+    removed: ["Removed", "bg-[color:var(--surface-alt)] text-[color:var(--muted-strong)]"],
     closed: ["Closed", "bg-[color:var(--surface-alt)] text-[color:var(--muted-strong)]"],
+    reopened: ["Reopened", "bg-[color:var(--warning-soft)] text-[color:var(--warning)]"],
     up: ["↑ Increased", "bg-[color:var(--danger-soft)] text-[color:var(--danger)]"],
     down: ["↓ Decreased", "bg-green-500/10 text-green-600"],
     same: ["No change", "text-[color:var(--muted)]"],
@@ -879,6 +876,30 @@ function ChangeTag({ tag }: { tag: "new" | "closed" | "up" | "down" | "same" }) 
 }
 
 // ── Shared ────────────────────────────────────────────────────────────────────
+
+function MetricSelector({
+  metric,
+  onChange,
+  className = "",
+}: {
+  metric: Metric;
+  onChange: (metric: Metric) => void;
+  className?: string;
+}) {
+  return (
+    <div className={`flex rounded-md overflow-hidden border border-[color:var(--border)] ${className}`}>
+      {(["inc", "p", "o"] as Metric[]).map(m => (
+        <button
+          key={m}
+          onClick={() => onChange(m)}
+          className={`px-2.5 py-1 text-[11px] font-medium transition ${metric === m ? "bg-[color:var(--primary)] text-white" : "bg-[color:var(--surface)] text-[color:var(--muted-strong)]"}`}
+        >
+          {METRIC_LABEL[m]}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 function KpiCard({ label, value, sub, accent }: { label: string; value: string; sub?: string; accent?: boolean }) {
   return (

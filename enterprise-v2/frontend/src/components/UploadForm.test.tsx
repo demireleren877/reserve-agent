@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import "@testing-library/jest-dom/vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { UploadForm } from "./UploadForm";
@@ -17,7 +18,7 @@ describe("UploadForm", () => {
 
   it("renders triangle type selector and file input", () => {
     render(<UploadForm onLoaded={() => {}} />);
-    expect(screen.getByLabelText(/excel dosyası/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/select excel file/i)).toBeInTheDocument();
     // 4 selects: triangle type, cumulative/incremental, origin granularity, dev granularity
     expect(screen.getAllByRole("combobox")).toHaveLength(4);
   });
@@ -40,7 +41,7 @@ describe("UploadForm", () => {
     const file = new File(["dummy"], "test.xlsx", {
       type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     });
-    const input = screen.getByLabelText(/excel dosyası/i);
+    const input = screen.getByLabelText(/select excel file/i);
     await userEvent.upload(input, file);
 
     await waitFor(() => expect(onLoaded).toHaveBeenCalledWith(fakeTriangle));
@@ -54,7 +55,7 @@ describe("UploadForm", () => {
 
     render(<UploadForm onLoaded={() => {}} />);
     const file = new File(["x"], "t.xlsx");
-    await userEvent.upload(screen.getByLabelText(/excel dosyası/i), file);
+    await userEvent.upload(screen.getByLabelText(/select excel file/i), file);
 
     await waitFor(() =>
       expect(screen.getByRole("alert")).toHaveTextContent(/bozuk/i),

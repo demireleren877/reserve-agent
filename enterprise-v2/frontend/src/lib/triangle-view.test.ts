@@ -89,7 +89,7 @@ describe("buildDisplayMatrix — calendar", () => {
 describe("transpose", () => {
   it("eksenleri takas eder", () => {
     const m = buildDisplayMatrix(tri(), { ...base, transposed: true });
-    expect(m.corner).toBe("Gelişim");
+    expect(m.corner).toBe("Development");
     expect(m.rows.length).toBe(3); // 3 gelişim satırı
     expect(m.columns).toEqual(["2000", "2001", "2002"]); // origin sütun
     // ilk gelişim satırı (dev1) tüm originlerin latest'i: 100,120,130

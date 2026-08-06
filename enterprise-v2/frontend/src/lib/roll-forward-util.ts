@@ -58,7 +58,8 @@ export function newDiagonalToFileData(
     if (!files || Object.keys(files).length === 0) continue;
     const d = lastDate(origin, triangle);
     if (!d) continue;
-    const priorDates = Object.keys(priorFileData?.[origin] ?? {});
+    const priorDates = Object.keys(priorFileData?.[origin] ?? {})
+      .sort((a, b) => periodOrder(a) - periodOrder(b));
     const priorSnapshot = priorDates.length
       ? priorFileData?.[origin]?.[priorDates[priorDates.length - 1]] ?? {}
       : {};

@@ -301,12 +301,7 @@ export default function Home() {
     [pb, effectivePremiums, triangle, effPaid, effIncurred],
   );
 
-  // File sekmesi + genel: segmentin HAM dosya kırılımı — attritional/gross'ta gross
-  // claims, large segmentinde large dosyalar. (İstatistikler bunu kullanır; gross−large
-  // ÇIKARMASI YAPILMAZ — aksi halde tutarlar negatif/yanlış çıkar.)
-  const effFileData = isLargeSeg ? effBranch?.largeFileData : activeBranch?.fileData;
-
-  // SADECE LDF popup'ı için: attritional segmentte gross−large (dosya bazında) —
+  // Segment-aware file breakdown: attritional segmentte gross−large (dosya bazında) —
   // large'dan çıkan dosyaların attritional LDF'i nasıl değiştirdiğini göstermek için.
   const ldfFileData = useMemo(() => {
     if (isLargeSeg) return effBranch?.largeFileData;
@@ -1189,8 +1184,8 @@ export default function Home() {
         {tab === "file" && (
           <FileAnalysisTab
             triangle={triangle}
-            fileData={effFileData}
-            excludedCells={excludedCells}
+            fileData={ldfFileData}
+            segment={segment}
           />
         )}
       </main>

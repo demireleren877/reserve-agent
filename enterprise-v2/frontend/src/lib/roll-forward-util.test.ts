@@ -29,6 +29,21 @@ describe("newDiagonalToFileData", () => {
     });
   });
 
+  it("önceki snapshot'ı nesne ekleme sırasına göre değil kronolojik olarak seçer", () => {
+    const paidTriangle: Triangle = {
+      origin_periods: ["2024"], development_periods: [0, 1, 2], values: [[10, 20, 25]],
+      triangle_type: "paid", origin_granularity: "yearly", development_granularity: "yearly",
+    };
+    const prior: FileData = {
+      "2024": {
+        "2025": { A: { p: 20, o: 0 } },
+        "2024": { A: { p: 10, o: 0 } },
+      },
+    };
+    expect(newDiagonalToFileData(paidTriangle, { "2024": { A: { p: 5, o: 0 } } }, prior)["2024"]["2026"].A)
+      .toEqual({ p: 25, o: 0 });
+  });
+
   it("eski artımsal snapshot'ı üçgen toplamıyla mutabıklaştırarak onarır", () => {
     const triangle: Triangle = {
       origin_periods: ["2024"], development_periods: [0, 1], values: [[100, 135]],

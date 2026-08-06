@@ -127,20 +127,18 @@ async def test_cashflow_compute_with_records(client, user_headers):
     assert "monthly_pattern" in data
 
 
-# ─── /v1/agent/chat (placeholder) ────────────────────────────────────────────
+# ─── /v1/agent/chat ──────────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
-async def test_agent_chat_placeholder(client, user_headers):
+async def test_agent_chat_requires_configuration(client, user_headers):
     c, _ = client
     res = await c.post(
-        "/v1/chat",
+        "/v1/agent/chat",
         json={"messages": [{"role": "user", "content": "merhaba"}]},
         headers=user_headers,
     )
-    assert res.status_code == 200
-    data = res.json()
-    assert "message" in data
-    assert "etkin değil" in data["message"]
+    assert res.status_code == 400
+    assert res.json()["detail"] == "agent_not_configured"
 
 
 # ─── /health ──────────────────────────────────────────────────────────────────

@@ -115,7 +115,7 @@ export function UploadForm({ onLoaded }: Props) {
 
       <p className="text-[11px] text-[color:var(--muted)] leading-relaxed">
         Expected columns: <strong>ACCIDENT_YEAR</strong>,{" "}
-        <strong>DEVELOPMENT_DATE</strong>, <strong>PAID</strong> (veya INCURRED).
+        <strong>DEVELOPMENT_DATE</strong>, <strong>PAID</strong> (or INCURRED).
         Quarterly formats: <code>2024Q1</code>, <code>2024-Q1</code>.
       </p>
     </div>

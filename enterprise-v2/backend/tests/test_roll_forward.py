@@ -113,8 +113,8 @@ class TestRollForward:
             records=[_rec("A", "2021", "2024", 40, 0), _rec("D", "2024", "2024", 900, 600)],
             brans="Yangın", origin_granularity="yearly", development_granularity="yearly",
         )
-        assert files["2021"] == {"A": 40.0}
-        assert files["2024"] == {"D": 900.0}
+        assert files["2021"] == {"A": {"p": 40.0, "o": 0.0}}
+        assert files["2024"] == {"D": {"p": 900.0, "o": 600.0}}
 
     def test_paid_only_prior_produces_no_incurred(self, prior):
         paid, incurred, _ = roll_forward(

@@ -17,7 +17,7 @@ import {
   signOut,
   type User,
 } from "firebase/auth";
-import { getFirebaseAuth } from "./firebase";
+import { getFirebaseAuth, isFirebaseConfigured } from "./firebase";
 
 export interface AuthUser {
   uid: string;
@@ -53,6 +53,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Firebase yapılandırılmamışsa oturum yok sayılır — public sayfalar (landing,
+    // gizlilik, şartlar) yine render edilir. Giriş denemesi ayrıca ve yüksek sesle
+    // hata verir, yani yanlış yapılandırma sessizce gizlenmez.
+    if (!isFirebaseConfigured()) {
+      console.error(
+        "Firebase yapılandırılmadı — NEXT_PUBLIC_FIREBASE_* değişkenlerini .env.local dosyasına ekleyin. Oturum gerektiren sayfalar çalışmayacak.",
+      );
+      setLoading(false);
+      return;
+    }
     const auth = getFirebaseAuth();
     const unsub = onIdTokenChanged(auth, (u) => {
       setUser(toAuthUser(u));

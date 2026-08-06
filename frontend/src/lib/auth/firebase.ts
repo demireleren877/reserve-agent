@@ -13,6 +13,12 @@ const config = {
 let _app: FirebaseApp | null = null;
 let _auth: Auth | null = null;
 
+/** Firebase env değişkenleri tanımlı mı? Public sayfalar (landing, gizlilik…)
+ *  auth olmadan da render edilebilmeli; bu yüzden çağıranlar önce buna bakar. */
+export function isFirebaseConfigured(): boolean {
+  return Boolean(config.apiKey && config.projectId);
+}
+
 export function getFirebaseApp(): FirebaseApp {
   if (_app) return _app;
   if (!config.apiKey || !config.projectId) {

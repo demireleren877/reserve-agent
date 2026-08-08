@@ -529,6 +529,79 @@ async function handlePaddleWebhook(req: Request, env: Env): Promise<Response> {
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
+/** HTML kaçışı — kullanıcı girdisi maile gömülmeden önce zorunlu. */
+function esc(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/** Anahtar/değer satırları — bildirim mailindeki künye tablosu. */
+function table(rows: [string, string][]): string {
+  return (
+    `<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse">` +
+    rows
+      .map(
+        ([k, v]) =>
+          `<tr>` +
+          `<td style="padding:9px 0;border-bottom:1px solid #edeae4;font:600 11px/1.4 -apple-system,Segoe UI,Roboto,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#8a8f99;width:104px;vertical-align:top">${k}</td>` +
+          `<td style="padding:9px 0;border-bottom:1px solid #edeae4;font:15px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;color:#191b20">${v}</td>` +
+          `</tr>`,
+      )
+      .join("") +
+    `</table>`
+  );
+}
+
+/**
+ * Markalı e-posta iskeleti. Görsel yok — logo dosyası 1,3 MB olduğu için
+ * tipografik wordmark kullanılıyor; her istemcide sorunsuz açılır.
+ */
+function shell(title: string, inner: string): string {
+  return `<!doctype html>
+<html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f4f3ef">
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0">${esc(title)} — Actuarius</div>
+  <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;background:#f4f3ef;padding:32px 16px">
+    <tr><td align="center">
+      <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;max-width:560px;background:#ffffff;border:1px solid #e5e2db;border-radius:14px;overflow:hidden">
+        <tr><td style="padding:22px 28px;border-bottom:1px solid #edeae4">
+          <span style="font:800 17px/1 -apple-system,Segoe UI,Roboto,sans-serif;letter-spacing:-.02em;color:#191b20">Actuarius</span>
+          <span style="display:inline-block;width:1px;height:14px;background:#e5e2db;margin:0 10px;vertical-align:-2px"></span>
+          <span style="font:600 11px/1 -apple-system,Segoe UI,Roboto,sans-serif;letter-spacing:.14em;text-transform:uppercase;color:#a85a33">${esc(title)}</span>
+        </td></tr>
+        <tr><td style="padding:28px">${inner}</td></tr>
+        <tr><td style="padding:18px 28px;border-top:1px solid #edeae4;background:#faf9f7">
+          <p style="margin:0;font:13px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;color:#8a8f99">
+            Actuarius · Aktüeryal rezerv platformu<br>
+            <a href="https://actuarius.com.tr" style="color:#a85a33;text-decoration:none">actuarius.com.tr</a>
+            &nbsp;·&nbsp;
+            <a href="mailto:info@actuarius.com.tr" style="color:#a85a33;text-decoration:none">info@actuarius.com.tr</a>
+          </p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`;
+}
+
+/** Resend'e tek bir gönderim isteği. */
+function sendEmail(
+  env: Env,
+  payload: Record<string, unknown>,
+): Promise<Response> {
+  return fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${env.RESEND_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
 /** Gövdedeki alanı string'e indirger, kırpar ve üst sınıra kadar keser. */
 function field(v: unknown, max: number): string {
   return typeof v === "string" ? v.trim().slice(0, max) : "";
@@ -589,34 +662,72 @@ async function handleContact(
   const to = env.CONTACT_TO || "info@actuarius.com.tr";
   const from = env.CONTACT_FROM || "Actuarius <info@actuarius.com.tr>";
 
-  const lines = [
-    `Ad: ${name}`,
-    `E-posta: ${email}`,
-    ...(company ? [`Şirket: ${company}`] : []),
-    "",
-    message,
-  ];
-
-  const sent = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${env.RESEND_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      from,
-      to: [to],
-      // Yanıtla dendiğinde doğrudan gönderene gitsin.
-      reply_to: email,
-      subject: `Actuarius iletişim — ${company || name}`,
-      text: lines.join("\n"),
-    }),
+  const receivedAt = new Date().toLocaleString("tr-TR", {
+    timeZone: "Europe/Istanbul",
+    dateStyle: "long",
+    timeStyle: "short",
   });
 
-  if (!sent.ok) {
-    const detail = await sent.text();
+  // 1) Bize bildirim — yapılandırılmış, markalı
+  const notify = await sendEmail(env, {
+    from,
+    to: [to],
+    reply_to: email, // "Yanıtla" doğrudan gönderene gider
+    subject: `Yeni iletişim talebi — ${company || name}`,
+    text: [
+      `Ad: ${name}`,
+      `E-posta: ${email}`,
+      ...(company ? [`Şirket: ${company}`] : []),
+      `Tarih: ${receivedAt}`,
+      "",
+      message,
+    ].join("\n"),
+    html: shell(
+      "Yeni iletişim talebi",
+      `
+      ${table([
+        ["Ad", esc(name)],
+        ["E-posta", `<a href="mailto:${esc(email)}" style="color:#a85a33;text-decoration:none">${esc(email)}</a>`],
+        ...(company ? [["Şirket", esc(company)] as [string, string]] : []),
+        ["Tarih", esc(receivedAt)],
+      ])}
+      <p style="margin:26px 0 8px;font:600 11px/1 -apple-system,Segoe UI,Roboto,sans-serif;letter-spacing:.14em;text-transform:uppercase;color:#8a8f99">MESAJ</p>
+      <div style="background:#f4f3ef;border:1px solid #e5e2db;border-radius:10px;padding:16px 18px;font:15px/1.6 -apple-system,Segoe UI,Roboto,sans-serif;color:#191b20;white-space:pre-wrap">${esc(message)}</div>
+      <p style="margin:24px 0 0;font:14px/1.6 -apple-system,Segoe UI,Roboto,sans-serif;color:#5d6472">
+        Bu maili yanıtlarsanız doğrudan <b style="color:#191b20">${esc(name)}</b> kişisine ulaşır.
+      </p>`,
+    ),
+  });
+
+  if (!notify.ok) {
+    const detail = await notify.text();
     return err(502, "email_send_failed", origin, detail.slice(0, 300));
   }
+
+  // 2) Gönderene otomatik teyit — best-effort; başarısız olsa da form başarılıdır
+  await sendEmail(env, {
+    from,
+    to: [email],
+    reply_to: to,
+    subject: "Mesajınızı aldık — Actuarius",
+    text:
+      `Merhaba ${name},\n\n` +
+      `Mesajınız bize ulaştı. En kısa sürede (genelde aynı iş günü içinde) dönüş yapacağız.\n\n` +
+      `Gönderdiğiniz mesaj:\n${message}\n\n` +
+      `Actuarius · actuarius.com.tr`,
+    html: shell(
+      "Mesajınızı aldık",
+      `
+      <p style="margin:0 0 16px;font:16px/1.65 -apple-system,Segoe UI,Roboto,sans-serif;color:#191b20">Merhaba ${esc(name)},</p>
+      <p style="margin:0 0 22px;font:15px/1.65 -apple-system,Segoe UI,Roboto,sans-serif;color:#5d6472">
+        Mesajınız bize ulaştı. En kısa sürede — genelde aynı iş günü içinde — dönüş yapacağız.
+        Bu arada ürünü ücretsiz hesapla deneyebilirsiniz.
+      </p>
+      <a href="https://actuarius.com.tr/reserve" style="display:inline-block;background:#a85a33;color:#ffffff;text-decoration:none;font:600 15px/1 -apple-system,Segoe UI,Roboto,sans-serif;padding:13px 24px;border-radius:8px">Ücretsiz başlayın</a>
+      <p style="margin:26px 0 8px;font:600 11px/1 -apple-system,Segoe UI,Roboto,sans-serif;letter-spacing:.14em;text-transform:uppercase;color:#8a8f99">GÖNDERDİĞİNİZ MESAJ</p>
+      <div style="background:#f4f3ef;border:1px solid #e5e2db;border-radius:10px;padding:16px 18px;font:14px/1.6 -apple-system,Segoe UI,Roboto,sans-serif;color:#5d6472;white-space:pre-wrap">${esc(message)}</div>`,
+    ),
+  }).catch(() => undefined);
 
   return json({ ok: true }, { status: 200 }, origin);
 }

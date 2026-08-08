@@ -43,7 +43,7 @@ export default function PrivacyPage() {
         </Section>
 
         <Section title="6. Haklarınız (KVKK / GDPR)">
-          Verilerinize erişim, düzeltme, silme ve taşıma talep etme haklarına sahipsiniz. Talepleriniz için: <a href="mailto:demireleren877@gmail.com" className="underline">demireleren877@gmail.com</a>
+          Verilerinize erişim, düzeltme, silme ve taşıma talep etme haklarına sahipsiniz. Talepleriniz için: <a href="mailto:info@actuarius.com.tr" className="underline">info@actuarius.com.tr</a>
         </Section>
 
         <Section title="7. Güvenlik">
@@ -55,7 +55,7 @@ export default function PrivacyPage() {
         </Section>
 
         <Section title="9. İletişim">
-          Gizlilikle ilgili sorularınız için: <a href="mailto:demireleren877@gmail.com" className="underline">demireleren877@gmail.com</a>
+          Gizlilikle ilgili sorularınız için: <a href="mailto:info@actuarius.com.tr" className="underline">info@actuarius.com.tr</a>
         </Section>
       </main>
 
@@ -80,7 +80,7 @@ function Footer() {
         <Link href="/terms" className="hover:underline">Kullanım Şartları</Link>
         <Link href="/privacy" className="hover:underline">Gizlilik Politikası</Link>
         <Link href="/refund" className="hover:underline">İade Politikası</Link>
-        <a href="mailto:demireleren877@gmail.com" className="hover:underline">İletişim</a>
+        <a href="mailto:info@actuarius.com.tr" className="hover:underline">İletişim</a>
       </div>
       <p className="mt-3">© 2026 Actuarius</p>
     </footer>

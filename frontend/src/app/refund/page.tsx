@@ -31,7 +31,7 @@ export default function RefundPage() {
         </Section>
 
         <Section title="5. İade Nasıl Talep Edilir">
-          İade talebinizi <a href="mailto:demireleren877@gmail.com" className="underline">demireleren877@gmail.com</a> adresine e-posta göndererek iletebilirsiniz. Lütfen hesabınıza kayıtlı e-posta adresini ve satın alma tarihini belirtin. Talepler 3–5 iş günü içinde sonuçlandırılır.
+          İade talebinizi <a href="mailto:info@actuarius.com.tr" className="underline">info@actuarius.com.tr</a> adresine e-posta göndererek iletebilirsiniz. Lütfen hesabınıza kayıtlı e-posta adresini ve satın alma tarihini belirtin. Talepler 3–5 iş günü içinde sonuçlandırılır.
         </Section>
 
         <Section title="6. Ödeme Yöntemi">
@@ -43,7 +43,7 @@ export default function RefundPage() {
         </Section>
 
         <Section title="8. İletişim">
-          Sorularınız için: <a href="mailto:demireleren877@gmail.com" className="underline">demireleren877@gmail.com</a>
+          Sorularınız için: <a href="mailto:info@actuarius.com.tr" className="underline">info@actuarius.com.tr</a>
         </Section>
       </main>
 
@@ -68,7 +68,7 @@ function Footer() {
         <Link href="/terms" className="hover:underline">Kullanım Şartları</Link>
         <Link href="/privacy" className="hover:underline">Gizlilik Politikası</Link>
         <Link href="/refund" className="hover:underline">İade Politikası</Link>
-        <a href="mailto:demireleren877@gmail.com" className="hover:underline">İletişim</a>
+        <a href="mailto:info@actuarius.com.tr" className="hover:underline">İletişim</a>
       </div>
       <p className="mt-3">© 2026 Actuarius</p>
     </footer>

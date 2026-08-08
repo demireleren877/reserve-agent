@@ -53,7 +53,7 @@ const GOV: [string, string][] = [
 const PLANS = [
   { n: "Free", p: "₺0", s: "kalıcı", f: ["1 dönem · 1 branş", "Rezerv modülü", "AI Agent", "Excel çıktısı"], h: "/reserve", a: "Ücretsiz başlayın" },
   { n: "Pro", p: "₺100", s: "aylık", f: ["Sınırsız dönem ve branş", "Nakit akışı ve iskonto", "Senaryo versiyonları", "Tüm agent araçları"], h: "/onboarding/plan", a: "Pro'ya geçin", on: true },
-  { n: "Enterprise", p: "Özel", s: "kuruma göre", f: ["Çoklu kullanıcı ve roller", "Oracle entegrasyonu", "Kurumsal audit akışı", "On-premise"], h: "mailto:demireleren877@gmail.com", a: "Görüşme planlayın" },
+  { n: "Enterprise", p: "Özel", s: "kuruma göre", f: ["Çoklu kullanıcı ve roller", "Oracle entegrasyonu", "Kurumsal audit akışı", "On-premise"], h: "mailto:info@actuarius.com.tr", a: "Görüşme planlayın" },
 ];
 
 export default function V5() {
@@ -93,7 +93,7 @@ export default function V5() {
             </p>
             <div className={styles.actions}>
               <Link href="/reserve" className={styles.solidLg}>Ücretsiz başlayın</Link>
-              <a href="mailto:demireleren877@gmail.com" className={styles.ghostLg}>Kurumsal demo</a>
+              <a href="mailto:info@actuarius.com.tr" className={styles.ghostLg}>Kurumsal demo</a>
             </div>
             <p className={styles.note}>Kredi kartı gerekmez · Excel, CSV veya Oracle ile başlayın</p>
           </div>
@@ -293,7 +293,7 @@ export default function V5() {
             <p>Ücretsiz hesapla bir branşı baştan sona modelleyin; agent&apos;ı işin içine alın, sonucu ve gerekçesini görün.</p>
             <div className={styles.actions}>
               <Link href="/reserve" className={styles.solidLg}>Ücretsiz başlayın</Link>
-              <a href="mailto:demireleren877@gmail.com" className={styles.ghostLgDark}>Kurumsal demo</a>
+              <a href="mailto:info@actuarius.com.tr" className={styles.ghostLgDark}>Kurumsal demo</a>
             </div>
           </div>
         </div>
@@ -309,7 +309,7 @@ export default function V5() {
             </span>
             <span className={styles.footLinks}>
               <Link href="/privacy">Gizlilik</Link><Link href="/terms">Şartlar</Link>
-              <a href="mailto:demireleren877@gmail.com">İletişim</a>
+              <a href="mailto:info@actuarius.com.tr">İletişim</a>
             </span>
           </div>
         </div>

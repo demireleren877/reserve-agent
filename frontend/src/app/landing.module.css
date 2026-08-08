@@ -250,3 +250,43 @@
   .modCard:hover { transform: none; }
   .track { transition: none; }
 }
+
+/* ── İletişim formu ──────────────────────────────────────────────────── */
+.form { margin-top: 26px; display: grid; gap: 14px; text-align: left; }
+.formRow { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.field { display: grid; gap: 6px; }
+.field > span {
+  font-family: var(--font-fira), monospace; font-size: 10.5px;
+  letter-spacing: .12em; text-transform: uppercase; color: var(--slate);
+}
+.field > span i { font-style: normal; text-transform: none; letter-spacing: 0; opacity: .7; }
+.field input, .field textarea {
+  font-family: inherit; font-size: 14.5px; color: var(--ink);
+  background: var(--bg); border: 1px solid var(--line); border-radius: 9px;
+  padding: 11px 13px; width: 100%; transition: border-color .15s, background .15s;
+}
+.field textarea { resize: vertical; min-height: 96px; line-height: 1.55; }
+.field input::placeholder, .field textarea::placeholder { color: #a9a49c; }
+.field input:focus, .field textarea:focus {
+  outline: none; border-color: var(--copper); background: var(--card);
+}
+/* Honeypot — kullanıcı görmez, bot doldurur */
+.hp { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+
+.formActions { display: flex; flex-wrap: wrap; gap: 11px; margin-top: 4px; }
+.formActions button:disabled { opacity: .6; cursor: not-allowed; }
+.formNote { margin: 4px 0 0 !important; font-size: 12.5px !important; color: var(--slate) !important; }
+.formNote a { color: var(--copper); }
+.formErr {
+  margin: 0 !important; font-size: 13px !important; color: #a3341f !important;
+  background: #fdeee9; border: 1px solid #f3d3c8; border-radius: 8px; padding: 10px 13px;
+}
+.formOk {
+  margin-top: 26px; display: grid; justify-items: center; gap: 8px;
+  background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 28px 24px;
+}
+.formOk b { font-family: var(--font-archivo), sans-serif; font-size: 17px; letter-spacing: -0.02em; }
+.formOk span { font-size: 14px; color: var(--slate); }
+.formOk button { margin-top: 8px; cursor: pointer; font-family: inherit; }
+
+@media (max-width: 640px) { .formRow { grid-template-columns: 1fr; } }

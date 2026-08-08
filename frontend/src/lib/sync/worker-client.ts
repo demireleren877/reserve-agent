@@ -182,3 +182,35 @@ export async function deleteDataset(
     { method: "DELETE" },
   );
 }
+
+// ─── İletişim formu ──────────────────────────────────────────────────────────
+// Oturum GEREKTİRMEZ: landing'deki form ziyaretçi tarafından doldurulur, bu yüzden
+// `call()` yerine doğrudan fetch kullanılır (o token zorunlu kılıyor).
+
+export interface ContactPayload {
+  name: string;
+  email: string;
+  company?: string;
+  message: string;
+  /** Honeypot — kullanıcıya gösterilmez, boş kalmalı. */
+  website?: string;
+}
+
+export async function sendContact(payload: ContactPayload): Promise<void> {
+  const res = await fetch(`${WORKER_BASE}/v1/contact`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as
+      | { error?: string; message?: string }
+      | null;
+    throw new WorkerError(
+      res.status,
+      body?.error ?? "contact_failed",
+      body?.message ?? `HTTP ${res.status}`,
+    );
+  }
+}

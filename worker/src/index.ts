@@ -7,6 +7,10 @@ interface Env {
   PADDLE_WEBHOOK_SECRET: string;
   PADDLE_API_KEY: string;
   PADDLE_ENV: string; // "sandbox" | "production"
+  // İletişim formu → Resend ile e-posta gönderimi
+  RESEND_API_KEY: string;   // secret: wrangler secret put RESEND_API_KEY
+  CONTACT_TO: string;       // alıcı, ör. info@actuarius.com.tr
+  CONTACT_FROM: string;     // gönderen, Resend'de DOĞRULANMIŞ domain olmalı
 }
 
 type Plan = "free" | "pro";
@@ -521,6 +525,102 @@ async function handlePaddleWebhook(req: Request, env: Env): Promise<Response> {
   return new Response("ok", { status: 200 });
 }
 
+// ─── İletişim formu (public — token istemez) ────────────────────────────────
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+/** Gövdedeki alanı string'e indirger, kırpar ve üst sınıra kadar keser. */
+function field(v: unknown, max: number): string {
+  return typeof v === "string" ? v.trim().slice(0, max) : "";
+}
+
+async function handleContact(
+  req: Request,
+  env: Env,
+  origin: string,
+): Promise<Response> {
+  // Basit kötüye kullanım engeli: yalnız kendi sitemizden gelen isteklere izin ver.
+  const reqOrigin = req.headers.get("Origin");
+  if (
+    env.ALLOWED_ORIGIN &&
+    env.ALLOWED_ORIGIN !== "*" &&
+    reqOrigin &&
+    reqOrigin !== env.ALLOWED_ORIGIN
+  ) {
+    return err(403, "forbidden_origin", origin);
+  }
+
+  let body: Record<string, unknown>;
+  try {
+    body = (await req.json()) as Record<string, unknown>;
+  } catch {
+    return err(400, "invalid_json", origin);
+  }
+
+  // Honeypot: gerçek kullanıcı bu alanı görmez. Doluysa botdur — sessizce başarı dön.
+  if (field(body.website, 200)) {
+    return json({ ok: true }, { status: 200 }, origin);
+  }
+
+  const name = field(body.name, 80);
+  const email = field(body.email, 160);
+  const company = field(body.company, 120);
+  const message = field(body.message, 4000);
+
+  if (name.length < 2) {
+    return err(400, "invalid_name", origin, "Ad en az 2 karakter olmalı.");
+  }
+  if (!EMAIL_RE.test(email)) {
+    return err(400, "invalid_email", origin, "Geçerli bir e-posta adresi girin.");
+  }
+  if (message.length < 10) {
+    return err(400, "invalid_message", origin, "Mesaj en az 10 karakter olmalı.");
+  }
+
+  if (!env.RESEND_API_KEY) {
+    return err(
+      501,
+      "email_not_configured",
+      origin,
+      "RESEND_API_KEY tanımlı değil (wrangler secret put RESEND_API_KEY).",
+    );
+  }
+
+  const to = env.CONTACT_TO || "info@actuarius.com.tr";
+  const from = env.CONTACT_FROM || "Actuarius <info@actuarius.com.tr>";
+
+  const lines = [
+    `Ad: ${name}`,
+    `E-posta: ${email}`,
+    ...(company ? [`Şirket: ${company}`] : []),
+    "",
+    message,
+  ];
+
+  const sent = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${env.RESEND_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from,
+      to: [to],
+      // Yanıtla dendiğinde doğrudan gönderene gitsin.
+      reply_to: email,
+      subject: `Actuarius iletişim — ${company || name}`,
+      text: lines.join("\n"),
+    }),
+  });
+
+  if (!sent.ok) {
+    const detail = await sent.text();
+    return err(502, "email_send_failed", origin, detail.slice(0, 300));
+  }
+
+  return json({ ok: true }, { status: 200 }, origin);
+}
+
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
     const origin = env.ALLOWED_ORIGIN || "*";
@@ -537,6 +637,16 @@ export default {
     // Paddle webhook — no bearer token, signature-verified
     if (url.pathname === "/v1/paddle/webhook" && req.method === "POST") {
       return handlePaddleWebhook(req, env);
+    }
+
+    // İletişim formu — public; auth kapısından ÖNCE gelmeli
+    if (url.pathname === "/v1/contact" && req.method === "POST") {
+      try {
+        return await handleContact(req, env, origin);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "internal_error";
+        return err(500, "internal_error", origin, msg);
+      }
     }
 
     if (!url.pathname.startsWith("/v1/")) {

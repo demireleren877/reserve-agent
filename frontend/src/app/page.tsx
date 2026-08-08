@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { sendContact } from "@/lib/sync/worker-client";
 import Link from "next/link";
 import styles from "./landing.module.css";
 
@@ -53,11 +54,32 @@ const GOV: [string, string][] = [
 const PLANS = [
   { n: "Free", p: "₺0", s: "kalıcı", f: ["1 dönem · 1 branş", "Rezerv modülü", "AI Agent", "Excel çıktısı"], h: "/reserve", a: "Ücretsiz başlayın" },
   { n: "Pro", p: "₺100", s: "aylık", f: ["Sınırsız dönem ve branş", "Nakit akışı ve iskonto", "Senaryo versiyonları", "Tüm agent araçları"], h: "/onboarding/plan", a: "Pro'ya geçin", on: true },
-  { n: "Enterprise", p: "Özel", s: "kuruma göre", f: ["Çoklu kullanıcı ve roller", "Oracle entegrasyonu", "Kurumsal audit akışı", "On-premise"], h: "mailto:info@actuarius.com.tr", a: "Görüşme planlayın" },
+  { n: "Enterprise", p: "Özel", s: "kuruma göre", f: ["Çoklu kullanıcı ve roller", "Oracle entegrasyonu", "Kurumsal audit akışı", "On-premise"], h: "#iletisim", a: "Görüşme planlayın" },
 ];
 
 export default function V5() {
   const [step, setStep] = useState(2); // LDF
+  const [form, setForm] = useState({ name: "", email: "", company: "", message: "", website: "" });
+  const [status, setStatus] = useState<"idle" | "sending" | "ok" | "error">("idle");
+  const [errMsg, setErrMsg] = useState("");
+
+  async function submitContact(e: React.FormEvent) {
+    e.preventDefault();
+    if (status === "sending") return;
+    setStatus("sending");
+    setErrMsg("");
+    try {
+      await sendContact(form);
+      setStatus("ok");
+      setForm({ name: "", email: "", company: "", message: "", website: "" });
+    } catch (e) {
+      setStatus("error");
+      setErrMsg(e instanceof Error ? e.message : "Mesaj gönderilemedi.");
+    }
+  }
+
+  const set = (k: keyof typeof form) => (ev: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+    setForm((f) => ({ ...f, [k]: ev.target.value }));
 
   return (
     <div className={styles.page}>
@@ -93,7 +115,7 @@ export default function V5() {
             </p>
             <div className={styles.actions}>
               <Link href="/reserve" className={styles.solidLg}>Ücretsiz başlayın</Link>
-              <a href="mailto:info@actuarius.com.tr" className={styles.ghostLg}>Kurumsal demo</a>
+              <a href="#iletisim" className={styles.ghostLg}>Kurumsal demo</a>
             </div>
             <p className={styles.note}>Kredi kartı gerekmez · Excel, CSV veya Oracle ile başlayın</p>
           </div>
@@ -285,16 +307,70 @@ export default function V5() {
         </div>
       </section>
 
-      {/* ── Kapanış çağrısı ── */}
-      <section className={styles.section}>
+      {/* ── İletişim / kurumsal demo ── */}
+      <section className={styles.section} id="iletisim">
         <div className={styles.wrap}>
           <div className={styles.cta}>
+            <p className={styles.label}>Kurumsal demo</p>
             <h2>Bir sonraki kapanışı birlikte yapalım.</h2>
-            <p>Ücretsiz hesapla bir branşı baştan sona modelleyin; agent&apos;ı işin içine alın, sonucu ve gerekçesini görün.</p>
-            <div className={styles.actions}>
-              <Link href="/reserve" className={styles.solidLg}>Ücretsiz başlayın</Link>
-              <a href="mailto:info@actuarius.com.tr" className={styles.ghostLgDark}>Kurumsal demo</a>
-            </div>
+            <p>
+              Ekibinizin süreci nasıl işliyor anlatın; kurumsal kurulum, entegrasyon ve
+              fiyatlandırmayı birlikte konuşalım. Genelde aynı gün dönüş yapıyoruz.
+            </p>
+
+            {status === "ok" ? (
+              <div className={styles.formOk} role="status">
+                <b>Mesajınız ulaştı.</b>
+                <span>En kısa sürede {form.email || "belirttiğiniz adrese"} dönüş yapacağız.</span>
+                <button type="button" className={styles.ghostLgDark} onClick={() => setStatus("idle")}>
+                  Yeni mesaj gönder
+                </button>
+              </div>
+            ) : (
+              <form className={styles.form} onSubmit={submitContact} noValidate>
+                <div className={styles.formRow}>
+                  <label className={styles.field}>
+                    <span>Ad soyad</span>
+                    <input value={form.name} onChange={set("name")} required minLength={2} maxLength={80} autoComplete="name" />
+                  </label>
+                  <label className={styles.field}>
+                    <span>E-posta</span>
+                    <input type="email" value={form.email} onChange={set("email")} required maxLength={160} autoComplete="email" />
+                  </label>
+                </div>
+                <label className={styles.field}>
+                  <span>Şirket <i>(opsiyonel)</i></span>
+                  <input value={form.company} onChange={set("company")} maxLength={120} autoComplete="organization" />
+                </label>
+                <label className={styles.field}>
+                  <span>Mesaj</span>
+                  <textarea value={form.message} onChange={set("message")} required minLength={10} maxLength={4000} rows={4}
+                    placeholder="Kaç branş, hangi dönem sıklığı, mevcut süreçte en çok ne zaman kaybediyorsunuz?" />
+                </label>
+
+                {/* Honeypot — ekran okuyucudan ve gözden gizli, botlar doldurur */}
+                <input
+                  className={styles.hp}
+                  value={form.website}
+                  onChange={set("website")}
+                  tabIndex={-1}
+                  autoComplete="off"
+                  aria-hidden="true"
+                />
+
+                {status === "error" && <p className={styles.formErr} role="alert">{errMsg}</p>}
+
+                <div className={styles.formActions}>
+                  <button type="submit" className={styles.solidLg} disabled={status === "sending"}>
+                    {status === "sending" ? "Gönderiliyor…" : "Mesaj gönderin"}
+                  </button>
+                  <Link href="/reserve" className={styles.ghostLgDark}>Önce ücretsiz deneyin</Link>
+                </div>
+                <p className={styles.formNote}>
+                  Doğrudan yazmak isterseniz: <a href="mailto:info@actuarius.com.tr">info@actuarius.com.tr</a>
+                </p>
+              </form>
+            )}
           </div>
         </div>
       </section>
@@ -309,7 +385,7 @@ export default function V5() {
             </span>
             <span className={styles.footLinks}>
               <Link href="/privacy">Gizlilik</Link><Link href="/terms">Şartlar</Link>
-              <a href="mailto:info@actuarius.com.tr">İletişim</a>
+              <a href="#iletisim">İletişim</a>
             </span>
           </div>
         </div>

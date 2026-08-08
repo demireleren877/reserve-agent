@@ -9,6 +9,10 @@ ALLOWED_ORIGIN = "http://localhost:3000"
 # Firebase project ID — must be set so we can verify ID tokens.
 # Set this real value with: wrangler secret put FIREBASE_PROJECT_ID  (or here for non-secret).
 FIREBASE_PROJECT_ID = "reserveagent"
+# İletişim formu — alıcı ve gönderen. CONTACT_FROM'daki domain Resend'de DOĞRULANMIŞ olmalı.
+# API anahtarı secret olarak: wrangler secret put RESEND_API_KEY
+CONTACT_TO = "info@actuarius.com.tr"
+CONTACT_FROM = "Actuarius <info@actuarius.com.tr>"
 # Paddle webhook secret — set via secret, NOT committed here:
 #   wrangler secret put PADDLE_WEBHOOK_SECRET
 #   wrangler secret put PADDLE_WEBHOOK_SECRET --env production
@@ -27,6 +31,8 @@ migrations_dir = "migrations"
 [env.production.vars]
 ALLOWED_ORIGIN = "https://actuarius.com.tr"
 FIREBASE_PROJECT_ID = "reserveagent"
+CONTACT_TO = "info@actuarius.com.tr"
+CONTACT_FROM = "Actuarius <info@actuarius.com.tr>"
 
 [[env.production.d1_databases]]
 binding = "DB"

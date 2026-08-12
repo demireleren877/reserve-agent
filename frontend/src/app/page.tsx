@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { sendContact } from "@/lib/sync/worker-client";
+import { FAQ, faqSchema, softwareSchema } from "@/lib/seo";
 import Link from "next/link";
 import styles from "./landing.module.css";
 
@@ -13,10 +14,10 @@ import styles from "./landing.module.css";
  */
 
 const MODULES = [
-  { t: "Veri", s: "Bağlı", d: "Dönem bazlı hasar, prim ve büyük hasar verisi. Oracle tablosundan doğrudan ya da Excel/CSV ile.", shot: "/shots/data-map.jpg" },
-  { t: "Rezerv", s: "Modelleniyor", d: "Chain-Ladder ve Bornhuetter–Ferguson; gelişim faktörleri, kuyruk, large ayrımı, frekans-şiddet, senaryo versiyonları.", shot: "/shots/ldf.jpg" },
-  { t: "Nakit Akışı", s: "Hazır", d: "Ödeme deseninden çeyreklik ve aylık nakit akışı projeksiyonu; rezervle tutarlı kalır.", shot: "/shots/cashflow.jpg" },
-  { t: "İskonto", s: "Hazır", d: "IFRS 17 eğrisi, illikidite primi ve risk marjı ile yükümlülük iskontosu (LIC).", shot: "/shots/discount.jpg" },
+  { t: "Veri", s: "Bağlı", d: "Dönem bazlı hasar, prim ve büyük hasar verisi. Oracle tablosundan doğrudan ya da Excel/CSV ile.", shot: "/shots/data-map.webp" },
+  { t: "Rezerv", s: "Modelleniyor", d: "Chain-Ladder ve Bornhuetter–Ferguson; gelişim faktörleri, kuyruk, large ayrımı, frekans-şiddet, senaryo versiyonları.", shot: "/shots/ldf.webp" },
+  { t: "Nakit Akışı", s: "Hazır", d: "Ödeme deseninden çeyreklik ve aylık nakit akışı projeksiyonu; rezervle tutarlı kalır.", shot: "/shots/cashflow.webp" },
+  { t: "İskonto", s: "Hazır", d: "IFRS 17 eğrisi, illikidite primi ve risk marjı ile yükümlülük iskontosu (LIC).", shot: "/shots/discount.webp" },
 ];
 
 const AGENT_TOOLS: [string, number, string][] = [
@@ -35,13 +36,13 @@ const CLOSE: [string, string, string][] = [
 ];
 
 const MODEL_STEPS: { t: string; d: string; shot: string; copy: string }[] = [
-  { t: "Veri", d: "Üçgen önizleme", shot: "/shots/data-tab.jpg", copy: "Ödeme ve muallak üçgenleri kümülatif ya da artımsal olarak; veri modülünden çekilir veya Excel'den yüklenir." },
-  { t: "Dosya", d: "Hasar kırılımı", shot: "/shots/files.jpg", copy: "Hangi dosya hangi hücreyi taşıyor? Medyan, değişim katsayısı ve konsantrasyon ile dosya bazında dağılım." },
-  { t: "LDF", d: "Gelişim faktörleri", shot: "/shots/ldf.jpg", copy: "Hacim penceresi seçilir, aykırı hücre elenir; seçili LDF ve CDF zinciri anında güncellenir." },
-  { t: "Curve", d: "Kuyruk uydurma", shot: "/shots/curve.jpg", copy: "Exponential, inverse power, power ve Weibull; adım bazında seçim ve elle CDF girişi." },
-  { t: "ILR", d: "Hasar oranı üçgeni", shot: "/shots/ilr.jpg", copy: "Kazanılmış prime göre hasar oranı gelişimi — BF için a priori oran buradan okunur." },
-  { t: "BF", d: "Bornhuetter–Ferguson", shot: "/shots/bf.jpg", copy: "Exposure, yıllıklaştırma katsayısı ve beklenen hasar oranı; kohort bazında CL/BF seçimi." },
-  { t: "Ultimate / IBNR", d: "Rezerv projeksiyonu", shot: "/shots/ultimate.jpg", copy: "Kaza yılı bazında nihai hasar, IBNR ve ULR — seçilen bazla birlikte." },
+  { t: "Veri", d: "Üçgen önizleme", shot: "/shots/data-tab.webp", copy: "Ödeme ve muallak üçgenleri kümülatif ya da artımsal olarak; veri modülünden çekilir veya Excel'den yüklenir." },
+  { t: "Dosya", d: "Hasar kırılımı", shot: "/shots/files.webp", copy: "Hangi dosya hangi hücreyi taşıyor? Medyan, değişim katsayısı ve konsantrasyon ile dosya bazında dağılım." },
+  { t: "LDF", d: "Gelişim faktörleri", shot: "/shots/ldf.webp", copy: "Hacim penceresi seçilir, aykırı hücre elenir; seçili LDF ve CDF zinciri anında güncellenir." },
+  { t: "Curve", d: "Kuyruk uydurma", shot: "/shots/curve.webp", copy: "Exponential, inverse power, power ve Weibull; adım bazında seçim ve elle CDF girişi." },
+  { t: "ILR", d: "Hasar oranı üçgeni", shot: "/shots/ilr.webp", copy: "Kazanılmış prime göre hasar oranı gelişimi — BF için a priori oran buradan okunur." },
+  { t: "BF", d: "Bornhuetter–Ferguson", shot: "/shots/bf.webp", copy: "Exposure, yıllıklaştırma katsayısı ve beklenen hasar oranı; kohort bazında CL/BF seçimi." },
+  { t: "Ultimate / IBNR", d: "Rezerv projeksiyonu", shot: "/shots/ultimate.webp", copy: "Kaza yılı bazında nihai hasar, IBNR ve ULR — seçilen bazla birlikte." },
 ];
 
 const GOV: [string, string][] = [
@@ -83,9 +84,15 @@ export default function V5() {
 
   return (
     <div className={styles.page}>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify([softwareSchema(), faqSchema()]),
+        }}
+      />
       <header className={styles.nav}>
         <Link href="/" className={styles.brand}>
-          <img src="/favicon.png" alt="" width={34} height={34} className={styles.logo} />
+          <img src="/logo-128.png" alt="" width={34} height={34} className={styles.logo} />
           Actuarius
         </Link>
         <nav className={styles.navLinks}>
@@ -94,6 +101,7 @@ export default function V5() {
           <a href="#kapanis">Kapanış</a>
           <a href="#modelleme">Modelleme</a>
           <a href="#yonetisim">Yönetişim</a>
+          <a href="#sss">SSS</a>
           <a href="#fiyat">Fiyat</a>
         </nav>
         <div className={styles.navCta}>
@@ -147,7 +155,7 @@ export default function V5() {
           <div className={styles.grid2}>
             {MODULES.map((m) => (
               <article key={m.t} className={styles.modCard}>
-                <img loading="lazy" decoding="async" src={m.shot} alt={`Actuarius ${m.t} modülü`} />
+                <img loading="lazy" decoding="async" width={1600} height={1000} src={m.shot} alt={`Actuarius ${m.t} modülü`} />
                 <div className={styles.modBody}>
                   <div className={styles.modTop}>
                     <h3>{m.t}</h3>
@@ -239,7 +247,7 @@ export default function V5() {
                         <i /><i /><i />
                         <span>rezerv / 2026Q2 / Fire &amp; Home — {m.t.toLowerCase()}</span>
                       </div>
-                      <img loading="lazy" decoding="async" src={m.shot} alt={`Actuarius ${m.t} ekranı`} />
+                      <img loading="lazy" decoding="async" width={1600} height={1000} src={m.shot} alt={`Actuarius ${m.t} ekranı`} />
                     </div>
                     <figcaption>{m.copy}</figcaption>
                   </figure>
@@ -302,6 +310,25 @@ export default function V5() {
                 <ul>{p.f.map((x) => <li key={x}>{x}</li>)}</ul>
                 <Link href={p.h} className={p.on ? styles.solidLg : styles.ghostLgDark}>{p.a}</Link>
               </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── SSS — görünür içerik FAQPage şemasıyla birebir aynı ── */}
+      <section className={styles.section} id="sss">
+        <div className={styles.wrap}>
+          <div className={styles.head}>
+            <p className={styles.label}>Sık sorulan sorular</p>
+            <h2>Merak edilenler</h2>
+            <p>Aradığınızı bulamazsanız aşağıdaki formdan yazın, aynı gün dönelim.</p>
+          </div>
+          <div className={styles.grid2}>
+            {FAQ.map((f) => (
+              <details key={f.q} className={styles.faq}>
+                <summary>{f.q}</summary>
+                <p>{f.a}</p>
+              </details>
             ))}
           </div>
         </div>
@@ -379,7 +406,7 @@ export default function V5() {
         <div className={styles.wrap}>
           <div className={styles.footInner}>
             <span className={styles.footBrand}>
-              <img src="/favicon.png" alt="" width={26} height={26} className={styles.footLogo} />
+              <img src="/logo-128.png" alt="" width={26} height={26} className={styles.footLogo} />
               Actuarius
               <em>actuarius.com.tr</em>
             </span>

@@ -1,11 +1,20 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+
+export const metadata: Metadata = {
+  title: "Kullanım Şartları",
+  description:
+    "Actuarius kullanım şartları: hizmet kapsamı, abonelik ve ödeme koşulları, sorumluluk sınırları ve hesap kuralları.",
+  alternates: { canonical: "/terms" },
+  openGraph: { title: "Kullanım Şartları · Actuarius", description: "Actuarius kullanım şartları: hizmet kapsamı, abonelik ve ödeme koşulları, sorumluluk sınırları ve hesap kuralları.", url: "/terms" },
+};
 
 export default function TermsPage() {
   return (
     <div className="min-h-screen" style={{ background: "#faf9f6", color: "#0a0a14" }}>
       <header className="px-6 md:px-8 h-16 flex items-center border-b" style={{ borderColor: "#e8e5dd", background: "#fff" }}>
         <Link href="/" className="flex items-center gap-2 text-[14px] font-bold tracking-tight">
-          <img src="/favicon.png" alt="Actuarius" className="h-7 w-7" />
+          <img src="/logo-128.png" alt="Actuarius" className="h-7 w-7" />
           Actuarius
         </Link>
       </header>

@@ -1,0 +1,67 @@
+# Actuarius
+
+> Sigorta şirketleri ve aktüerler için uçtan uca aktüeryal analiz platformu.
+> Chain-Ladder ve Bornhuetter-Ferguson ile IBNR rezerv hesabı, nakit akışı
+> projeksiyonu ve IFRS 17 iskonto tek sistemde toplanır. Bir AI Agent bu
+> modüllerin hepsini yürütebilir: dönemi kapatır, modeli kurar, raporu üretir
+> ve her kararın gerekçesini denetim izine yazar.
+
+Site: https://actuarius.com.tr
+İletişim: info@actuarius.com.tr
+Dil: Türkçe (tr-TR)
+Hedef kitle: rezerv aktüerleri, aktüerya yöneticileri, denetim ekipleri
+
+## Modüller
+
+- **Veri**: Dönem bazlı hasar, kazanılmış prim ve büyük hasar verisi. Excel/CSV ile
+  yüklenir veya kurumsal kurulumda Oracle tablosundan okunur.
+- **Rezerv**: Gelişim üçgeni, LDF seçimi ve hücre eleme, parametrik kuyruk
+  (exponential, inverse power, power, Weibull), ILR, Bornhuetter-Ferguson,
+  frekans-şiddet, ultimate ve IBNR.
+- **Nakit Akışı**: Ödeme deseninden çeyreklik ve aylık nakit akışı projeksiyonu.
+- **İskonto**: IFRS 17 getiri eğrisi, illikidite primi ve risk marjı ile
+  gerçekleşmiş hasar yükümlülüğü (LIC).
+
+## Yöntemler
+
+- Chain-Ladder (hacim ağırlıklı, basit ve geometrik ortalama seçenekleriyle)
+- Bornhuetter-Ferguson; a priori hasar oranı olgun kaza yıllarından türetilir
+- Frekans-şiddet (ortalama hasar maliyeti) — saf Chain-Ladder için makullük kontrolü
+- Büyük hasar ayrımı: gross, attritional ve large segmentleri ayrı modellenir
+- Roll-forward ile dönem taşıma ve Actual vs Expected mutabakatı
+
+## AI Agent
+
+Agent dört modülde toplam 45 araca sahiptir (rezerv 31, nakit akışı 10,
+iskonto 2, veri ve navigasyon 2). Sohbet etmekle kalmaz; okur, karar verir,
+uygular ve gerekçesini yazar. Rol ve model kilidine uyar; uyguladığı her adım
+arayüzde görünür, geri alınabilir ve denetim kaydına yazılır.
+
+## Yönetişim
+
+- Roller: admin ve kullanıcı ayrımı
+- Model kilidi: bir modeli aynı anda tek kişi düzenler
+- Denetim izi: her yazma işlemi kim, ne zaman, ne ve neden bilgisiyle saklanır
+- Versiyonlar: senaryolar ayrı tutulur, yan yana karşılaştırılır
+
+## Fiyatlandırma
+
+- **Free** — ₺0, kalıcı ücretsiz. 1 dönem ve 1 branş, rezerv modülü, AI Agent,
+  Excel çıktısı. Kredi kartı istenmez.
+- **Pro** — ₺100/ay. Sınırsız dönem ve branş, nakit akışı ve iskonto modülleri,
+  senaryo versiyonları, tüm agent araçları.
+- **Enterprise** — kuruma göre fiyatlanır. Çoklu kullanıcı ve roller, Oracle
+  entegrasyonu, kurumsal audit akışı, on-premise seçeneği.
+
+## Bağlantılar
+
+- [Ana sayfa](https://actuarius.com.tr): ürün tanıtımı, modüller, kapanış ve
+  modelleme akışı, sık sorulan sorular
+- [Gizlilik Politikası](https://actuarius.com.tr/privacy)
+- [Kullanım Şartları](https://actuarius.com.tr/terms)
+- [İade Politikası](https://actuarius.com.tr/refund)
+
+## Notlar
+
+Uygulama ekranları oturum açmayı gerektirir ve arama motorlarına kapalıdır;
+kamuya açık içerik yukarıdaki sayfalardır.

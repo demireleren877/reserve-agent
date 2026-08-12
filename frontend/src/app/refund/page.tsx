@@ -1,11 +1,20 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+
+export const metadata: Metadata = {
+  title: "İade Politikası",
+  description:
+    "Actuarius iade politikası: ilk satın almadan itibaren 14 gün içinde tam iade hakkı, talep süreci ve sonuçlandırma süresi.",
+  alternates: { canonical: "/refund" },
+  openGraph: { title: "İade Politikası · Actuarius", description: "Actuarius iade politikası: ilk satın almadan itibaren 14 gün içinde tam iade hakkı, talep süreci ve sonuçlandırma süresi.", url: "/refund" },
+};
 
 export default function RefundPage() {
   return (
     <div className="min-h-screen" style={{ background: "#faf9f6", color: "#0a0a14" }}>
       <header className="px-6 md:px-8 h-16 flex items-center border-b" style={{ borderColor: "#e8e5dd", background: "#fff" }}>
         <Link href="/" className="flex items-center gap-2 text-[14px] font-bold tracking-tight">
-          <img src="/favicon.png" alt="Actuarius" className="h-7 w-7" />
+          <img src="/logo-128.png" alt="Actuarius" className="h-7 w-7" />
           Actuarius
         </Link>
       </header>

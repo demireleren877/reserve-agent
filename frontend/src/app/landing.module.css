@@ -290,3 +290,23 @@
 .formOk button { margin-top: 8px; cursor: pointer; font-family: inherit; }
 
 @media (max-width: 640px) { .formRow { grid-template-columns: 1fr; } }
+
+/* ── SSS ─────────────────────────────────────────────────────────────── */
+.faq {
+  background: var(--card); border: 1px solid var(--line); border-radius: 13px;
+  padding: 18px 20px; transition: border-color .15s;
+}
+.sectionAlt .faq { background: var(--bg); }
+.faq[open] { border-color: #d8d3ca; }
+.faq summary {
+  cursor: pointer; list-style: none; display: flex; align-items: flex-start; gap: 10px;
+  font-size: 15px; font-weight: 650; letter-spacing: -0.015em; color: var(--ink); line-height: 1.4;
+}
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary::after {
+  content: "+"; margin-left: auto; flex: none;
+  font-family: var(--font-fira), monospace; font-size: 17px; line-height: 1;
+  color: var(--copper); transition: transform .2s;
+}
+.faq[open] summary::after { content: "−"; }
+.faq p { margin: 12px 0 0; font-size: 14px; line-height: 1.65; color: var(--slate); }

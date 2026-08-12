@@ -310,3 +310,12 @@
 }
 .faq[open] summary::after { content: "−"; }
 .faq p { margin: 12px 0 0; font-size: 14px; line-height: 1.65; color: var(--slate); }
+
+/* Dil seçici — nav'da, ikincil ağırlıkta */
+.lang {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 8px 11px; font-size: 12.5px; font-weight: 650; letter-spacing: .04em;
+  color: var(--slate); border: 1px solid var(--line); border-radius: 8px;
+  background: var(--card); text-decoration: none; transition: .15s;
+}
+.lang:hover { color: var(--ink); border-color: var(--ink); }

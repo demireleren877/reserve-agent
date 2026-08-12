@@ -1,67 +1,88 @@
 # Actuarius
 
-> Sigorta şirketleri ve aktüerler için uçtan uca aktüeryal analiz platformu.
-> Chain-Ladder ve Bornhuetter-Ferguson ile IBNR rezerv hesabı, nakit akışı
-> projeksiyonu ve IFRS 17 iskonto tek sistemde toplanır. Bir AI Agent bu
-> modüllerin hepsini yürütebilir: dönemi kapatır, modeli kurar, raporu üretir
-> ve her kararın gerekçesini denetim izine yazar.
+> End-to-end actuarial analysis platform for insurers, reinsurers and consulting
+> actuaries. IBNR loss reserving with Chain-Ladder and Bornhuetter-Ferguson,
+> cash flow projection and IFRS 17 discounting in one system. An AI agent
+> operates every module: it closes the valuation period, builds the model,
+> produces the report and records the reasoning behind each decision in an
+> audit trail.
 
-Site: https://actuarius.com.tr
-İletişim: info@actuarius.com.tr
-Dil: Türkçe (tr-TR)
-Hedef kitle: rezerv aktüerleri, aktüerya yöneticileri, denetim ekipleri
+Website: https://actuarius.com.tr (Turkish) · https://actuarius.com.tr/en (English)
+Contact: info@actuarius.com.tr
+Languages: Turkish, English
+Audience: reserving actuaries, actuarial managers, audit and review teams
 
-## Modüller
+## What makes it different
 
-- **Veri**: Dönem bazlı hasar, kazanılmış prim ve büyük hasar verisi. Excel/CSV ile
-  yüklenir veya kurumsal kurulumda Oracle tablosundan okunur.
-- **Rezerv**: Gelişim üçgeni, LDF seçimi ve hücre eleme, parametrik kuyruk
-  (exponential, inverse power, power, Weibull), ILR, Bornhuetter-Ferguson,
-  frekans-şiddet, ultimate ve IBNR.
-- **Nakit Akışı**: Ödeme deseninden çeyreklik ve aylık nakit akışı projeksiyonu.
-- **İskonto**: IFRS 17 getiri eğrisi, illikidite primi ve risk marjı ile
-  gerçekleşmiş hasar yükümlülüğü (LIC).
+Most loss reserving software is operated entirely by hand. Actuarius exposes
+every module to an AI agent with 45 tools, so the agent can carry a valuation
+from raw data to a signed-off report on its own — while every action stays
+visible in the UI, reversible, and written to the audit trail.
 
-## Yöntemler
+## Modules
 
-- Chain-Ladder (hacim ağırlıklı, basit ve geometrik ortalama seçenekleriyle)
-- Bornhuetter-Ferguson; a priori hasar oranı olgun kaza yıllarından türetilir
-- Frekans-şiddet (ortalama hasar maliyeti) — saf Chain-Ladder için makullük kontrolü
-- Büyük hasar ayrımı: gross, attritional ve large segmentleri ayrı modellenir
-- Roll-forward ile dönem taşıma ve Actual vs Expected mutabakatı
+- **Data** — Claim, earned premium and large-loss data by valuation period.
+  Uploaded as Excel/CSV or read directly from an Oracle table.
+- **Reserving** — Development triangle, LDF selection and cell exclusion,
+  parametric tail fitting (exponential, inverse power, power, Weibull),
+  incurred loss ratio triangle, Bornhuetter-Ferguson, frequency-severity,
+  ultimate loss and IBNR.
+- **Cash Flow** — Quarterly and monthly cash flow projection from the payment
+  pattern, kept consistent with the reserve.
+- **Discounting** — IFRS 17 yield curve, illiquidity premium and risk
+  adjustment producing the liability for incurred claims (LIC).
 
-## AI Agent
+## Methods
 
-Agent dört modülde toplam 45 araca sahiptir (rezerv 31, nakit akışı 10,
-iskonto 2, veri ve navigasyon 2). Sohbet etmekle kalmaz; okur, karar verir,
-uygular ve gerekçesini yazar. Rol ve model kilidine uyar; uyguladığı her adım
-arayüzde görünür, geri alınabilir ve denetim kaydına yazılır.
+- Chain-Ladder with volume-weighted, simple and geometric averaging
+- Bornhuetter-Ferguson; a priori loss ratio derived from mature accident years
+- Frequency-severity (average cost per claim) as a sanity check on pure CL
+- Large-loss split: gross, attritional and large modelled separately
+- Roll-forward between valuation periods and Actual vs Expected reconciliation
 
-## Yönetişim
+## AI agent
 
-- Roller: admin ve kullanıcı ayrımı
-- Model kilidi: bir modeli aynı anda tek kişi düzenler
-- Denetim izi: her yazma işlemi kim, ne zaman, ne ve neden bilgisiyle saklanır
-- Versiyonlar: senaryolar ayrı tutulur, yan yana karşılaştırılır
+The agent holds 45 tools across four modules (reserving 31, cash flow 10,
+discounting 2, data and navigation 2). It reads state, decides, applies the
+change and writes the rationale. It respects user roles and model locks; every
+step it takes is reversible and recorded.
 
-## Fiyatlandırma
+## Governance
 
-- **Free** — ₺0, kalıcı ücretsiz. 1 dönem ve 1 branş, rezerv modülü, AI Agent,
-  Excel çıktısı. Kredi kartı istenmez.
-- **Pro** — ₺100/ay. Sınırsız dönem ve branş, nakit akışı ve iskonto modülleri,
-  senaryo versiyonları, tüm agent araçları.
-- **Enterprise** — kuruma göre fiyatlanır. Çoklu kullanıcı ve roller, Oracle
-  entegrasyonu, kurumsal audit akışı, on-premise seçeneği.
+- Roles: admin and user separation
+- Model lock: only one person edits a model at a time
+- Audit trail: every write stored with who, when, what and why
+- Versions: scenarios kept separately and compared side by side
 
-## Bağlantılar
+## Pricing
 
-- [Ana sayfa](https://actuarius.com.tr): ürün tanıtımı, modüller, kapanış ve
-  modelleme akışı, sık sorulan sorular
-- [Gizlilik Politikası](https://actuarius.com.tr/privacy)
-- [Kullanım Şartları](https://actuarius.com.tr/terms)
-- [İade Politikası](https://actuarius.com.tr/refund)
+- **Free** — ₺0, permanently free. 1 valuation period and 1 line of business,
+  reserving module, AI agent, Excel export. No credit card required.
+- **Pro** — ₺100/month. Unlimited periods and lines of business, cash flow and
+  discounting modules, scenario versions, all agent tools.
+- **Enterprise** — priced per organisation. Multiple users and roles, Oracle
+  integration, enterprise audit workflow, on-premise deployment.
 
-## Notlar
+## Pages
 
-Uygulama ekranları oturum açmayı gerektirir ve arama motorlarına kapalıdır;
-kamuya açık içerik yukarıdaki sayfalardır.
+- [Home (Turkish)](https://actuarius.com.tr): product overview, modules, close
+  and modelling workflow, frequently asked questions
+- [Home (English)](https://actuarius.com.tr/en): same content in English
+- [Privacy Policy](https://actuarius.com.tr/privacy)
+- [Terms of Use](https://actuarius.com.tr/terms)
+- [Refund Policy](https://actuarius.com.tr/refund)
+
+## Notes
+
+Application screens require sign-in and are excluded from indexing; the public
+content is the pages listed above.
+
+---
+
+# Türkçe özet
+
+Actuarius, sigorta şirketleri ve aktüerler için uçtan uca aktüeryal analiz
+platformudur. Chain-Ladder ve Bornhuetter-Ferguson ile IBNR rezerv hesabı,
+nakit akışı projeksiyonu ve IFRS 17 iskonto tek sistemde toplanır. Dört modülde
+45 aracı olan bir AI agent dönemi kapatır, modeli kurar, raporu üretir ve her
+kararın gerekçesini denetim izine yazar. Türkçe sayfa: https://actuarius.com.tr

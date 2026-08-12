@@ -43,8 +43,8 @@ export const PRICING = [
   { name: "Enterprise", price: null, desc: "Çoklu kullanıcı ve roller, Oracle entegrasyonu, kurumsal audit akışı, on-premise." },
 ] as const;
 
-/** Landing'de gösterilen ve FAQPage şemasına giren sorular. */
-export const FAQ: { q: string; a: string }[] = [
+/** Landing'de gösterilen ve FAQPage şemasına giren sorular (Türkçe). */
+export const FAQ_TR: { q: string; a: string }[] = [
   {
     q: "Actuarius kimler için?",
     a: "Sigorta ve reasürans şirketlerinde çalışan rezerv aktüerleri, aktüerya yöneticileri ve model değişikliklerini denetleyen ekipler için tasarlandı. Bireysel kullanımdan çok kullanıcılı kurumsal sürece kadar aynı model yapısı korunur.",
@@ -122,7 +122,7 @@ export function webSiteSchema() {
   };
 }
 
-export function softwareSchema() {
+export function softwareSchema(locale: "tr" | "en" = "tr") {
   return {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
@@ -131,12 +131,15 @@ export function softwareSchema() {
     applicationCategory: "BusinessApplication",
     applicationSubCategory: "Actuarial reserving software",
     operatingSystem: "Web",
-    url: SITE.url,
-    inLanguage: SITE.locale,
+    url: locale === "en" ? `${SITE.url}/en` : SITE.url,
+    inLanguage: ["tr", "en"],
     description:
-      "Uçtan uca aktüeryal analiz platformu: veri yönetimi, Chain-Ladder ve Bornhuetter-Ferguson ile " +
-      "IBNR rezerv hesabı, nakit akışı projeksiyonu ve IFRS 17 iskonto. AI Agent tüm modülleri yürütür.",
-    featureList: [...FEATURES],
+      locale === "en"
+        ? "End-to-end actuarial analysis platform: data management, IBNR reserving with Chain-Ladder and " +
+          "Bornhuetter-Ferguson, cash flow projection and IFRS 17 discounting. An AI agent runs every module."
+        : "Uçtan uca aktüeryal analiz platformu: veri yönetimi, Chain-Ladder ve Bornhuetter-Ferguson ile " +
+          "IBNR rezerv hesabı, nakit akışı projeksiyonu ve IFRS 17 iskonto. AI Agent tüm modülleri yürütür.",
+    featureList: locale === "en" ? [...FEATURES_EN] : [...FEATURES],
     publisher: { "@id": `${SITE.url}/#organization` },
     offers: PRICING.map((p) => ({
       "@type": "Offer",
@@ -163,15 +166,71 @@ export function softwareSchema() {
   };
 }
 
-export function faqSchema() {
+export function faqSchema(locale: "tr" | "en" = "tr") {
+  const items = locale === "en" ? FAQ_EN : FAQ_TR;
+  const path = locale === "en" ? "/en" : "";
   return {
     "@context": "https://schema.org",
     "@type": "FAQPage",
-    "@id": `${SITE.url}/#faq`,
-    mainEntity: FAQ.map((f) => ({
+    "@id": `${SITE.url}${path}/#faq`,
+    inLanguage: locale === "en" ? "en" : SITE.locale,
+    mainEntity: items.map((f) => ({
       "@type": "Question",
       name: f.q,
       acceptedAnswer: { "@type": "Answer", text: f.a },
     })),
   };
 }
+
+/** İngilizce özellik listesi — SoftwareApplication şeması ve llms.txt için. */
+export const FEATURES_EN = [
+  "IBNR reserving with the Chain-Ladder method",
+  "Bornhuetter-Ferguson with a priori loss ratio derived from mature cohorts",
+  "Development factors (LDF), cell exclusion and averaging windows",
+  "Parametric tail models: exponential, inverse power, power, Weibull",
+  "Large-loss split: gross / attritional / large modelled separately",
+  "Frequency-severity (average cost per claim) method",
+  "Roll-forward period close and Actual vs Expected reconciliation",
+  "Cash flow projection (quarterly and monthly payment pattern)",
+  "IFRS 17 discounting: yield curve, illiquidity premium, risk adjustment and LIC",
+  "Scenario versions and model locking",
+  "Audit trail scoped by user, model and time",
+  "Excel and CSV export, direct read from Oracle tables",
+  "An AI agent that operates every module (45 tools)",
+] as const;
+
+/** İngilizce SSS — /en sayfasındaki görünür içerik ve FAQPage şeması. */
+export const FAQ_EN: { q: string; a: string }[] = [
+  {
+    q: "Who is Actuarius for?",
+    a: "It is built for reserving actuaries, actuarial managers and the teams that review model changes at insurers and reinsurers. The same model structure carries from individual use to a multi-user enterprise process.",
+  },
+  {
+    q: "Which reserving methods are supported?",
+    a: "Chain-Ladder and Bornhuetter-Ferguson are the core methods. On top of those you get the frequency-severity (average cost per claim) method, volume-weighted / simple / geometric LDF averaging, parametric tail models (exponential, inverse power, power, Weibull) and manual CDF entry.",
+  },
+  {
+    q: "What can the AI agent actually do?",
+    a: "The agent has 45 tools across four modules. It connects the data, builds the triangle, excludes outlying development ratios, moves immature accident periods onto a BF basis, derives the a priori loss ratio from mature years, runs cash flow and discounting, and produces the closing report. Every step it applies is visible in the interface, reversible and written to the audit trail.",
+  },
+  {
+    q: "How do I load my data?",
+    a: "Claim-level loss data and earned premium can be uploaded as Excel or CSV; in an enterprise setup they can be read directly from an Oracle table. If you already have a development triangle, you can import that instead.",
+  },
+  {
+    q: "Can model changes be audited?",
+    a: "Yes. Every write is recorded with who made it, when, and on which line of business and model. Model locking means only one person edits a model at a time; scenarios are kept as separate versions and compared side by side.",
+  },
+  {
+    q: "How does the period close work?",
+    a: "New period data is loaded, the previous model can be carried forward with roll-forward, the new diagonal is compared against expectation (Actual vs Expected), deviating cohorts are revised, cash flow and discounting are calculated, then the report is produced and the model is locked.",
+  },
+  {
+    q: "Is IFRS 17 discounting supported?",
+    a: "Yes. The discounting module discounts cash flows using a yield curve and illiquidity premium, then adds the risk adjustment to produce the liability for incurred claims (LIC). An IFRS 4 style fixed-rate and nominal approach is also supported.",
+  },
+  {
+    q: "What does the free plan include?",
+    a: "The Free plan is permanently free: 1 valuation period and 1 line of business, the reserving module, Chain-Ladder and BF calculations, the AI agent and Excel export. No credit card is required.",
+  },
+];

@@ -1,6 +1,21 @@
+# Actuarius — https://actuarius.com.tr
+#
+# Content Signals (contentsignals.org, draft-romm-aipref-contentsignals):
+#   search    = arama dizinine alma ve sonuçlarda bağlantı/alıntı gösterme
+#   ai-input  = yanıt üretirken kaynak olarak kullanma (RAG, grounding, AI arama)
+#   ai-train  = model eğitimi / ince ayar
+#
+# Tercihimiz: üçü de açık. Ürünün bulunması ve doğru anlatılması, içeriğin
+# korunmasından önce geliyor. ai-input=no dersek Gemini, ChatGPT ve benzeri
+# asistanlar siteyi kaynak gösteremez — bu da bulunmamak demek.
+
 User-agent: *
+Content-Signal: search=yes, ai-input=yes, ai-train=yes
 Allow: /
-# Oturum gerektiren uygulama ekranları — ince içerik, indekslenmemeli
+
+# Oturum gerektiren uygulama ekranları — ince içerik, indekslenmemeli.
+# Bu kurallar TÜM tarayıcılar için geçerli (AI crawler'ları dahil): robots.txt'te
+# bir bota özel grup açmak, o botun '*' grubunu tamamen yok saymasına yol açar.
 Disallow: /reserve
 Disallow: /cashflow
 Disallow: /discount
@@ -9,50 +24,15 @@ Disallow: /home
 Disallow: /login
 Disallow: /onboarding
 
-# AI crawler'ları — indeksleme ve alıntılamaya açık
-User-agent: GPTBot
-Allow: /
+# Aşağıdaki AI crawler'ları bilerek serbest bırakıldı; yukarıdaki '*' grubu
+# hepsini kapsar, ayrı grup açmaya gerek yok:
+#   GPTBot, OAI-SearchBot, ChatGPT-User (OpenAI)
+#   ClaudeBot, Claude-User, Claude-SearchBot, anthropic-ai (Anthropic)
+#   Google-Extended (Gemini), PerplexityBot, Perplexity-User
+#   Applebot-Extended, Amazonbot, meta-externalagent, Bytespider, CCBot
 
-User-agent: OAI-SearchBot
-Allow: /
-
-User-agent: ChatGPT-User
-Allow: /
-
-User-agent: ClaudeBot
-Allow: /
-
-User-agent: Claude-User
-Allow: /
-
-User-agent: Claude-SearchBot
-Allow: /
-
-User-agent: anthropic-ai
-Allow: /
-
-User-agent: PerplexityBot
-Allow: /
-
-User-agent: Perplexity-User
-Allow: /
-
-User-agent: Google-Extended
-Allow: /
-
-User-agent: Applebot-Extended
-Allow: /
-
-User-agent: Amazonbot
-Allow: /
-
-User-agent: Bytespider
-Allow: /
-
-User-agent: meta-externalagent
-Allow: /
-
-User-agent: CCBot
-Allow: /
+# Ajanlar için: sayfa özeti ve yetenekler
+# https://actuarius.com.tr/llms.txt
+# https://actuarius.com.tr/.well-known/agents.json
 
 Sitemap: https://actuarius.com.tr/sitemap.xml

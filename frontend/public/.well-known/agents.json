@@ -1,0 +1,44 @@
+{
+  "$schema": "https://actuarius.com.tr/.well-known/agents.json",
+  "organization": {
+    "name": "Actuarius",
+    "url": "https://actuarius.com.tr",
+    "description": "End-to-end actuarial reserving platform: IBNR reserving with Chain-Ladder and Bornhuetter-Ferguson, cash flow projection and IFRS 17 discounting.",
+    "contact": "info@actuarius.com.tr"
+  },
+  "agents": [],
+  "note": "Actuarius runs an AI agent inside the authenticated product, where it operates the reserving, cash flow, discounting and data modules on the signed-in user's behalf. That agent is not exposed as an external A2A or MCP endpoint, so the list above is intentionally empty. The resources below are what an external agent can use today.",
+  "resources": [
+    {
+      "rel": "describedby",
+      "href": "https://actuarius.com.tr/llms.txt",
+      "type": "text/plain",
+      "title": "Product summary written for language models"
+    },
+    {
+      "rel": "api-catalog",
+      "href": "https://actuarius.com.tr/.well-known/api-catalog",
+      "type": "application/linkset+json",
+      "title": "API catalog (RFC 9727)"
+    },
+    {
+      "rel": "service-desc",
+      "href": "https://actuarius.com.tr/openapi.json",
+      "type": "application/json",
+      "title": "OpenAPI 3.1 description of the public API"
+    },
+    {
+      "rel": "service-doc",
+      "href": "https://actuarius.com.tr/api-docs/",
+      "type": "text/html",
+      "title": "Human-readable API documentation"
+    }
+  ],
+  "contentNegotiation": {
+    "markdown": {
+      "accept": "text/markdown",
+      "description": "Any public page returns a clean markdown representation when requested with Accept: text/markdown.",
+      "example": "curl -H 'Accept: text/markdown' https://actuarius.com.tr/"
+    }
+  }
+}

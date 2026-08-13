@@ -71,6 +71,19 @@ step it takes is reversible and recorded.
 - [Privacy Policy](https://actuarius.com.tr/privacy)
 - [Terms of Use](https://actuarius.com.tr/terms)
 - [Refund Policy](https://actuarius.com.tr/refund)
+- [API documentation](https://actuarius.com.tr/api-docs/): the public contact API
+
+## For agents
+
+- Send `Accept: text/markdown` to any page above to get it as markdown instead
+  of HTML — same content, no navigation or markup
+- [Agent skills](https://actuarius.com.tr/.well-known/agent-skills/index.json):
+  how to contact the team, how to read the site as markdown
+- [OpenAPI description](https://actuarius.com.tr/openapi.json) ·
+  [API catalog](https://actuarius.com.tr/.well-known/api-catalog)
+- The landing page registers WebMCP tools (`actuarius_list_modules`,
+  `actuarius_get_pricing`, `actuarius_search_faq`,
+  `actuarius_prepare_contact_message`) for in-browser agents
 
 ## Notes
 

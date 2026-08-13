@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import Link from "next/link";
 import { sendContact } from "@/lib/sync/worker-client";
+import { WebMcpTools } from "@/components/WebMcpTools";
 import { faqSchema, softwareSchema } from "@/lib/seo";
 import type { LandingContent } from "@/lib/content/landing";
 import styles from "@/app/landing.module.css";
@@ -36,10 +37,22 @@ export function LandingPage({ c }: { c: LandingContent }) {
   const set = (k: keyof typeof form) => (ev: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setForm((f) => ({ ...f, [k]: ev.target.value }));
 
+  /** WebMCP aracının çağırdığı yol: formu doldurur, göndermez — onay kullanıcıda. */
+  const fillContact = useCallback(
+    (fields: { name: string; email: string; company: string; message: string }) => {
+      setForm({ ...fields, website: "" });
+      setStatus("idle");
+      setErrMsg("");
+    },
+    [],
+  );
+
   const steps = c.modeling.steps;
 
   return (
     <div className={styles.page} lang={c.locale}>
+      <WebMcpTools c={c} onFillContact={fillContact} />
+
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{

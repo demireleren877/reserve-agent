@@ -10,11 +10,13 @@
  * Sunum: functions/_middleware.ts, Accept: text/markdown gelince bunu döndürür.
  */
 
+import { createHash } from "node:crypto";
 import { copyFile, readdir, readFile, writeFile } from "node:fs/promises";
 import { join, relative } from "node:path";
 import TurndownService from "turndown";
 
 const OUT = "out";
+const ORIGIN = "https://actuarius.com.tr";
 
 /** robots.txt'te kapalı olan rotalar: ince/auth'lu içerik, markdown da üretilmez. */
 const PRIVATE = ["reserve", "cashflow", "discount", "data", "home", "login", "onboarding", "_not-found"];
@@ -114,7 +116,58 @@ for (const file of pages) {
   written++;
 }
 
+/**
+ * Agent Skills keşif dizini (Agent Skills Discovery RFC 0.2.0).
+ *
+ * Elle yazılmıyor çünkü her kayıt, dosyanın sha256 özetini taşıyor: SKILL.md'de
+ * tek karakter değişse index.json yalan söylemeye başlar. Ad ve açıklama da
+ * dosyanın kendi front matter'ından okunuyor — tek doğruluk kaynağı SKILL.md.
+ */
+const SKILLS_DIR = join(OUT, ".well-known", "agent-skills");
+
+function frontMatterField(text, key) {
+  const block = text.match(/^---\r?\n([\s\S]*?)\r?\n---/)?.[1] ?? "";
+  const line = block.match(new RegExp(`^${key}:\\s*(.+)$`, "m"))?.[1]?.trim();
+  return line ? line.replace(/^["']|["']$/g, "") : null;
+}
+
+const skills = [];
+for (const e of await readdir(SKILLS_DIR, { withFileTypes: true })) {
+  if (!e.isDirectory()) continue;
+  const file = join(SKILLS_DIR, e.name, "SKILL.md");
+  let body;
+  try {
+    body = await readFile(file, "utf8");
+  } catch {
+    continue; // SKILL.md'si olmayan klasör dizine girmez
+  }
+  const description = frontMatterField(body, "description");
+  if (!description) throw new Error(`${file}: front matter'da description yok`);
+
+  skills.push({
+    name: frontMatterField(body, "name") ?? e.name,
+    type: "skill-md",
+    description,
+    url: `${ORIGIN}/.well-known/agent-skills/${e.name}/SKILL.md`,
+    digest: `sha256:${createHash("sha256").update(body).digest("hex")}`,
+  });
+}
+
+skills.sort((a, b) => a.name.localeCompare(b.name));
+
+await writeFile(
+  join(SKILLS_DIR, "index.json"),
+  JSON.stringify(
+    { $schema: "https://schemas.agentskills.io/discovery/0.2.0/schema.json", skills },
+    null,
+    2,
+  ) + "\n",
+  "utf8",
+);
+
 // Pages advanced mode worker'ı çıktının içine koy — Pages onu burada arar.
 await copyFile("scripts/_worker.js", join(OUT, "_worker.js"));
 
-console.log(`  markdown: ${written} sayfa üretildi · _worker.js kopyalandı`);
+console.log(
+  `  markdown: ${written} sayfa üretildi · agent-skills: ${skills.length} beceri · _worker.js kopyalandı`,
+);

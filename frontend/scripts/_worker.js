@@ -105,6 +105,15 @@ export default {
       });
     }
 
+    // Statik .md varlıkları (SKILL.md dosyaları) — Pages bunları text/plain
+    // olarak sunuyor; ajanın markdown beklediği yerde tip doğru olmalı.
+    if (url.pathname.endsWith(".md")) {
+      return withCommonHeaders(res, {
+        "Content-Type": "text/markdown; charset=utf-8",
+        "Cache-Control": "public, max-age=3600",
+      });
+    }
+
     return withCommonHeaders(res);
   },
 };

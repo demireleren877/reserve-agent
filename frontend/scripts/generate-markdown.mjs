@@ -10,7 +10,7 @@
  * Sunum: functions/_middleware.ts, Accept: text/markdown gelince bunu döndürür.
  */
 
-import { readdir, readFile, writeFile } from "node:fs/promises";
+import { copyFile, readdir, readFile, writeFile } from "node:fs/promises";
 import { join, relative } from "node:path";
 import TurndownService from "turndown";
 
@@ -114,4 +114,7 @@ for (const file of pages) {
   written++;
 }
 
-console.log(`  markdown: ${written} sayfa üretildi`);
+// Pages advanced mode worker'ı çıktının içine koy — Pages onu burada arar.
+await copyFile("scripts/_worker.js", join(OUT, "_worker.js"));
+
+console.log(`  markdown: ${written} sayfa üretildi · _worker.js kopyalandı`);

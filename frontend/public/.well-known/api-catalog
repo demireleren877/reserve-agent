@@ -1,0 +1,19 @@
+{
+  "linkset": [
+    {
+      "anchor": "https://actuarius.com.tr/.well-known/api-catalog",
+      "item": [
+        { "href": "https://actuarius.com.tr/openapi.json", "title": "Actuarius Public API" }
+      ],
+      "service-desc": [
+        { "href": "https://actuarius.com.tr/openapi.json", "type": "application/json", "title": "OpenAPI 3.1 description" }
+      ],
+      "service-doc": [
+        { "href": "https://actuarius.com.tr/api-docs/", "type": "text/html", "title": "API documentation" }
+      ],
+      "describedby": [
+        { "href": "https://actuarius.com.tr/llms.txt", "type": "text/plain", "title": "Site summary for language models" }
+      ]
+    }
+  ]
+}

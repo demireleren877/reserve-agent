@@ -1,0 +1,83 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Actuarius Public API",
+    "version": "1.0.0",
+    "summary": "Publicly callable endpoints of the Actuarius platform.",
+    "description": "Actuarius is an actuarial reserving platform. Most of its surface (reserving, cash flow, discounting, data) requires an authenticated session and is not part of this public specification. The endpoint documented here is open and may be called by agents acting on behalf of a user, for example to request an enterprise demo.",
+    "contact": { "name": "Actuarius", "email": "info@actuarius.com.tr", "url": "https://actuarius.com.tr" },
+    "license": { "name": "Proprietary", "identifier": "LicenseRef-Proprietary" }
+  },
+  "servers": [
+    { "url": "https://reserve-agent-worker-production.l5819033.workers.dev", "description": "Production" }
+  ],
+  "externalDocs": { "description": "Human-readable documentation", "url": "https://actuarius.com.tr/api-docs" },
+  "paths": {
+    "/v1/contact": {
+      "post": {
+        "operationId": "createContactEnquiry",
+        "summary": "Send a contact or demo enquiry",
+        "description": "Delivers a message to the Actuarius team by email. No authentication is required. Replies go to the address supplied in `email`.",
+        "tags": ["contact"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ContactEnquiry" },
+              "example": {
+                "name": "Jane Actuary",
+                "email": "jane@insurer.example",
+                "company": "Example Insurance",
+                "message": "We reserve 12 lines of business quarterly and would like to see the agent run a close."
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Message accepted and delivered.",
+            "content": {
+              "application/json": {
+                "schema": { "type": "object", "properties": { "ok": { "type": "boolean", "const": true } }, "required": ["ok"] }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error" },
+          "403": { "$ref": "#/components/responses/Error" },
+          "501": { "$ref": "#/components/responses/Error" },
+          "502": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ContactEnquiry": {
+        "type": "object",
+        "required": ["name", "email", "message"],
+        "properties": {
+          "name": { "type": "string", "minLength": 2, "maxLength": 80, "description": "Sender's full name." },
+          "email": { "type": "string", "format": "email", "maxLength": 160, "description": "Reply-to address." },
+          "company": { "type": "string", "maxLength": 120, "description": "Organisation name. Optional." },
+          "message": { "type": "string", "minLength": 10, "maxLength": 4000, "description": "The enquiry itself." },
+          "website": { "type": "string", "maxLength": 200, "description": "Anti-spam honeypot. Leave empty; a filled value is silently discarded." }
+        },
+        "additionalProperties": false
+      },
+      "Error": {
+        "type": "object",
+        "required": ["error"],
+        "properties": {
+          "error": { "type": "string", "description": "Machine-readable code, e.g. invalid_email." },
+          "message": { "type": "string", "description": "Human-readable explanation." }
+        }
+      }
+    },
+    "responses": {
+      "Error": {
+        "description": "Request rejected.",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+      }
+    }
+  }
+}

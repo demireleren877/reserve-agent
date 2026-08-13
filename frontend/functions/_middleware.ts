@@ -60,6 +60,13 @@ export const onRequest: PagesFunction = async (context) => {
     "Cache-Control": "public, max-age=300",
     // Yaklaşık token sayısı (~4 karakter/token) — ajanlar bütçe planlar.
     "x-markdown-tokens": String(Math.ceil(body.length / 4)),
+    // Keşif bağlantıları (RFC 8288). Statik yanıtlara _headers ile veriliyor;
+    // bu yanıtı burada ürettiğimiz için aynı seti elle eklemek gerekiyor.
+    Link:
+      '</.well-known/api-catalog>; rel="api-catalog", ' +
+      '</openapi.json>; rel="service-desc"; type="application/json", ' +
+      '</api-docs/>; rel="service-doc"; type="text/html", ' +
+      '</llms.txt>; rel="describedby"; type="text/plain"',
   });
 
   return new Response(request.method === "HEAD" ? null : body, { status: 200, headers });

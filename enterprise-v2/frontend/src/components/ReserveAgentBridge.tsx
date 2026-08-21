@@ -110,6 +110,26 @@ export function ReserveAgentBridge() {
       legacyFields.cdfs = activeBranchSnap.effective_cdfs ?? [];
       legacyFields.per_origin = activeBranchSnap.per_origin ?? [];
       legacyFields.formula_context = activeBranchSnap.formula_context ?? null;
+
+      // Curve/tail durumu — get_analysis_state bunu okuyor ve prompt "kuyruk
+      // nereden kesildi?" sorusunu buradan cevaplamayı emrediyor. Hiçbir bridge
+      // yazmadığı için alan her zaman {} kalıyordu: agent ya "override yok"
+      // diyor ya da cevap üretemeyip boş dönüyordu.
+      {
+        const devs = activeBranch.triangle?.development_periods ?? [];
+        const choices = activeBranch.cdfChoicePerPeriod ?? {};
+        const initial = activeBranch.cdfInitial ?? {};
+        legacyFields.curve_state = {
+          development_periods: devs.map(String),
+          effective_cdfs: activeBranchSnap.effective_cdfs ?? [],
+          choices: devs.map((d) => ({
+            dev_period: String(d),
+            choice: choices[String(d)] ?? "initial",
+            user_value: initial[String(d)] ?? null,
+          })),
+          has_overrides: Object.values(choices).some((c) => c === "user"),
+        };
+      }
       legacyFields.total_latest = activeBranchSnap.totals.latest;
       legacyFields.total_exposure = activeBranchSnap.totals.exposure_annual;
       legacyFields.total_ultimate = activeBranchSnap.totals.cl_ultimate;

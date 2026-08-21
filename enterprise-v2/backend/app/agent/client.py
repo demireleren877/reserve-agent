@@ -123,7 +123,11 @@ class AgentClient:
                 try:
                     args = json.loads(raw_args)
                 except json.JSONDecodeError:
-                    args = {}
+                    # Küçük/lokal modeller bozuk JSON üretebiliyor. Sessizce {}
+                    # bırakmak tool'u varsayılanlarla çalıştırır (prim 0'a düşer,
+                    # CDF 1.0 olur) — hatayı taşı ki dispatch reddedip modele
+                    # düzeltme şansı versin.
+                    args = {"__malformed_arguments__": raw_args[:400]}
             tool_calls.append(
                 ToolCall(id=tc.get("id") or "", name=fn.get("name") or "", arguments=args)
             )

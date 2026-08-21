@@ -69,6 +69,49 @@ export function CashflowAgentBridge() {
             },
             "cashflow_cdf_model_bulk", { count: items.length }, "agent",
           );
+        } else if (a.type === "exclude_cashflow_cells") {
+          const cells =
+            (a.payload?.cells as { origin: string; step: number }[]) ?? [];
+          if (!cells.length) continue;
+          actions.updateBranch(
+            branchId,
+            (b) => {
+              const existing = new Set(b.cashflowLdfExcludedCells ?? []);
+              for (const c of cells) existing.add(`${c.origin}|${c.step}`);
+              return { cashflowLdfExcludedCells: Array.from(existing) };
+            },
+            "cashflow_cells_excluded",
+            { count: cells.length },
+            "agent",
+          );
+        } else if (a.type === "clear_cashflow_exclusions") {
+          actions.updateBranch(
+            branchId,
+            () => ({ cashflowLdfExcludedCells: [] }),
+            "cashflow_exclusions_cleared",
+            undefined,
+            "agent",
+          );
+        } else if (a.type === "set_cashflow_cdf_user_value") {
+          const dev = a.payload?.dev_period as string | undefined;
+          const v = Number(a.payload?.value);
+          if (!dev || !Number.isFinite(v)) continue;
+          actions.updateBranch(
+            branchId,
+            (b) => ({
+              cashflowCdfInitial: {
+                ...(b.cashflowCdfInitial ?? {}),
+                [dev]: v,
+              },
+              cashflowCdfModelPerPeriod: {
+                ...(b.cashflowCdfModelPerPeriod ?? {}),
+                [dev]: 6,
+              },
+            }),
+            "cashflow_cdf_user_value_set",
+            { dev_period: dev, value: v },
+            "agent",
+          );
         } else if (a.type === "reset_cashflow_curve") {
           actions.updateBranch(
             branchId,

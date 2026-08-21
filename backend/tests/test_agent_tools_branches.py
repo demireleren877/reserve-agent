@@ -148,14 +148,14 @@ class TestWriteValidation:
             "set_window", {"window": "9"},
             triangle=triangle, session_state=session_state,
         )
-        assert "Geçersiz window" in out["error"]
+        assert "window" in out["error"]
 
     def test_set_premium_invalid_value(self, triangle, session_state):
         out = dispatch_tool(
             "set_premium", {"origin": "2022", "value": "abc"},
             triangle=triangle, session_state=session_state,
         )
-        assert "Geçersiz value" in out["error"]
+        assert "value" in out["error"]
 
     def test_set_premiums_skips_invalid_items(self, triangle, session_state):
         out = dispatch_tool(
@@ -175,7 +175,7 @@ class TestWriteValidation:
             "set_basis", {"origin": "2022", "basis": "xx"},
             triangle=triangle, session_state=session_state,
         )
-        assert "Geçersiz basis" in out["error"]
+        assert "basis" in out["error"]
 
     def test_set_basis_bulk_filters(self, triangle, session_state):
         out = dispatch_tool(
@@ -191,7 +191,7 @@ class TestWriteValidation:
             "set_correction", {"origin": "2022", "value": "dört"},
             triangle=triangle, session_state=session_state,
         )
-        assert "Geçersiz value" in out["error"]
+        assert "value" in out["error"]
 
     def test_set_correction_null_means_no_correction(self, triangle, session_state):
         out = dispatch_tool(
@@ -224,14 +224,14 @@ class TestWriteValidation:
             "set_cdf_user_value", {"dev_period": "3", "value": "bir"},
             triangle=triangle, session_state=session_state,
         )
-        assert "Geçersiz value" in out["error"]
+        assert "value" in out["error"]
 
     def test_set_cdf_choice_invalid(self, triangle, session_state):
         out = dispatch_tool(
             "set_cdf_choice", {"dev_period": "3", "choice": "manual"},
             triangle=triangle, session_state=session_state,
         )
-        assert "Geçersiz choice" in out["error"]
+        assert "choice" in out["error"]
 
     def test_set_cdf_choices_filters(self, triangle, session_state):
         out = dispatch_tool(
@@ -367,7 +367,7 @@ class TestSimulateBf:
             "simulate_bf", {"origin": "2024", "loss_ratio": "yüzde"},
             session_state=session_state,
         )
-        assert "Geçersiz loss_ratio" in out["error"]
+        assert "loss_ratio" in out["error"]
 
     def test_unknown_origin_lists_available(self, session_state):
         out = dispatch_tool(
@@ -653,7 +653,7 @@ class TestCashflowWrites:
             {"dev_period": "3", "value": "bir"},
             session_state=cashflow_state,
         )
-        assert "Geçersiz value" in out["error"]
+        assert "value" in out["error"]
 
     def test_cdf_user_value_with_branch(self, cashflow_state):
         out = dispatch_tool(
@@ -667,7 +667,7 @@ class TestCashflowWrites:
         out = dispatch_tool(
             "set_cashflow_window", {"window": "6"}, session_state=cashflow_state
         )
-        assert "Geçersiz window" in out["error"]
+        assert "window" in out["error"]
 
     def test_window_with_branch(self, cashflow_state):
         out = dispatch_tool(
@@ -681,7 +681,7 @@ class TestCashflowWrites:
             "set_cashflow_cdf_model", {"dev_period": "3", "model": 9},
             session_state=cashflow_state,
         )
-        assert "Geçersiz model" in out["error"]
+        assert "model" in out["error"]
 
     def test_cdf_model_bulk_filters(self, cashflow_state):
         out = dispatch_tool(
@@ -742,7 +742,7 @@ class TestDiscountBranches:
             "compute_discount", {"rate_mode": "sabit"},
             session_state=discount_state,
         )
-        assert "Geçersiz rate_mode" in out["error"]
+        assert "rate_mode" in out["error"]
 
     def test_compute_no_session(self):
         assert "error" in dispatch_tool("compute_discount", {"rate_mode": "flat"})
@@ -818,7 +818,7 @@ class TestComputeDiscountStandards:
             "compute_discount", {"standard": "solvency2"},
             session_state=discount_state,
         )
-        assert "Geçersiz standard" in out["error"]
+        assert "standard" in out["error"]
 
     def test_ifrs4_default_is_flat_seddk(self, discount_state):
         """Parametresiz çağrı: ifrs4 + flat %30, RA alanları yok."""
@@ -908,7 +908,7 @@ class TestComputeDiscountStandards:
             {"standard": "ifrs17", "risk_adjustment_method": "var99"},
             session_state=discount_state,
         )
-        assert "Geçersiz risk_adjustment_method" in out["error"]
+        assert "risk_adjustment_method" in out["error"]
 
     def test_ifrs4_ignores_ra_params(self, discount_state):
         """IFRS 4'te RA parametreleri verilse bile uygulanmaz."""
@@ -941,7 +941,7 @@ class TestDataAndNavigation:
 
     def test_navigate_invalid_module(self):
         out = dispatch_tool("navigate_to", {"module": "yok"})
-        assert "Geçersiz module" in out["error"]
+        assert "module" in out["error"]
 
     def test_navigate_valid(self):
         out = dispatch_tool("navigate_to", {"module": "discount"})
@@ -956,7 +956,7 @@ class TestScenarioErrors:
         out = dispatch_tool(
             "run_chain_ladder", {"method": "uydurma"}, triangle=triangle
         )
-        assert "Geçersiz method" in out["error"]
+        assert "method" in out["error"]
 
     def test_chain_ladder_bad_override_length(self, triangle):
         out = dispatch_tool(
@@ -970,7 +970,7 @@ class TestScenarioErrors:
             triangle=triangle,
             count_triangle=triangle,
         )
-        assert "Geçersiz method" in out["error"]
+        assert "method" in out["error"]
 
 
 # ─── _norm_origin / formül aritmetiği uçları ────────────────────────────────────

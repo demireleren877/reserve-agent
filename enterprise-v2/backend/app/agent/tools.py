@@ -1158,6 +1158,87 @@ def get_tool_schema(name: str) -> dict[str, Any]:
     raise KeyError(f"Tool bulunamadı: {name}")
 
 
+# JSON tipi → Python tipi. Şema doğrulaması için kullanılır.
+_JSON_TYPES: dict[str, tuple[type, ...]] = {
+    "string": (str,),
+    "number": (int, float),
+    "integer": (int,),
+    "boolean": (bool,),
+    "array": (list,),
+    "object": (dict,),
+    "null": (type(None),),
+}
+
+
+def _type_ok(value: Any, spec_type: Any) -> bool:
+    if spec_type is None:
+        return True
+    names = spec_type if isinstance(spec_type, list) else [spec_type]
+    for n in names:
+        allowed = _JSON_TYPES.get(n)
+        if allowed and isinstance(value, allowed):
+            # bool, int'in alt sınıfı — "number/integer" beklenirken True geçmesin.
+            if n in ("number", "integer") and isinstance(value, bool):
+                continue
+            return True
+    return False
+
+
+def validate_args(name: str, args: dict[str, Any]) -> str | None:
+    """Şemadaki required/type/enum kurallarını uygular; ihlal varsa mesaj döner.
+
+    Neden gerekli: LLM 50+ araç arasında argüman adını sık karıştırır
+    ("premium" vs "value", "step" vs "dev_period"). Doğrulama olmadan eksik
+    argüman tool içinde 0.0 / "" / 1.0 gibi bir varsayılana düşüyor ve tool
+    BAŞARILI görünen bir _action üretiyordu — yani prim sıfırlanıyor, LR
+    siliniyor, CDF 1.0'a çekilip kuyruk kesiliyordu. Agent "yaptım" diyor,
+    model sessizce bozuluyor. Hatayı burada döndürmek modele düzeltme şansı
+    verir (tool sonucu konuşmaya geri yazılıyor).
+    """
+    if "__malformed_arguments__" in args:
+        return (
+            f"{name}: argümanlar geçerli JSON değildi "
+            f"({args['__malformed_arguments__']!r}). Aynı aracı geçerli JSON ile tekrar çağır."
+        )
+    try:
+        params = get_tool_schema(name)["function"]["parameters"]
+    except KeyError:
+        return None  # bilinmeyen araç: aşağıdaki dispatch zaten hata döner
+    props: dict[str, Any] = params.get("properties", {}) or {}
+
+    missing: list[str] = []
+    for key in params.get("required", []) or []:
+        spec = props.get(key, {})
+        nullable = "null" in (
+            spec.get("type") if isinstance(spec.get("type"), list) else [spec.get("type")]
+        )
+        if key not in args or (args[key] is None and not nullable):
+            missing.append(key)
+    if missing:
+        expected = ", ".join(
+            f"{k} ({props.get(k, {}).get('type', 'any')})" for k in params.get("required", [])
+        )
+        return (
+            f"{name}: zorunlu argüman eksik: {', '.join(missing)}. "
+            f"Beklenen: {expected}. Gönderilen: {sorted(args) or 'yok'}. "
+            "Doğru adlarla tekrar çağır — eksik argüman varsayılana düşürülmez."
+        )
+
+    for key, value in args.items():
+        spec = props.get(key)
+        if not spec:
+            continue
+        enum = spec.get("enum")
+        if enum is not None and value not in enum:
+            return f"{name}: {key} geçersiz ({value!r}). Geçerli değerler: {enum}."
+        if not _type_ok(value, spec.get("type")):
+            return (
+                f"{name}: {key} tipi hatalı ({type(value).__name__}); "
+                f"beklenen {spec.get('type')}."
+            )
+    return None
+
+
 _TRIANGLE_REQUIRED = {
     "describe_triangle",
     "exclude_cells",
@@ -1197,6 +1278,10 @@ def dispatch_tool(
     session_state: dict[str, Any] | None = None,
     count_triangle: Triangle | None = None,
 ) -> dict[str, Any]:
+    invalid = validate_args(name, args)
+    if invalid:
+        return {"error": invalid}
+
     # Triangle gerektirenler için aktif branş kontrolü
     if name in _TRIANGLE_REQUIRED and triangle is None:
         return {
@@ -1563,8 +1648,8 @@ def dispatch_tool(
             "loading": True,
             "note": (
                 "Üçgen veri modülünden yükleniyor (async — bu turun snapshot'ında "
-                "görünmez). Kullanıcıya 'üçgeni yükledim; devam edeyim mi?' de ve DUR; "
-                "onaylayınca modele geç."
+                "görünmez). Turu burada bitir; KULLANICIYA SORMA, onay bekleme. "
+                "Sistem otomatik devam eder ve bir sonraki turda üçgen snapshot'ta olur."
             ),
             "_action": {"type": "load_triangle_from_data", "payload": payload, "module": "reserve"},
         }
@@ -1631,6 +1716,33 @@ def _get_branch_state(
     return {"error": f"branch_id bulunamadı: {branch_id}"}
 
 
+def _degeneracy_warning(triangle: Triangle | None) -> str | None:
+    """Üçgende gelişim sinyali yoksa uyarı metni döner, yoksa None.
+
+    Tek köşegenli veri setinden (ör. yalnız cari çeyreğin hareketleri) "direct"
+    üçgen kurulduğunda satırların diagonal öncesi hücreleri boş/sıfır kalır;
+    compute_ldfs veri bulamayıp her adım için 1.0 döner. Sonuç: CDF=1, ultimate
+    = latest, IBNR = 0 — hata da uyarı da yok. Agent bunu "IBNR sıfır" diye
+    raporluyordu. Bu kontrol o sessiz yolu görünür kılar.
+    """
+    if triangle is None:
+        return None
+    populated = 0
+    for row in triangle.values:
+        if sum(1 for v in row if v is not None and v != 0) > 1:
+            populated += 1
+    if populated == 0:
+        return (
+            "DİKKAT: Üçgende gelişim sinyali yok — her kaza döneminde en fazla tek "
+            "dolu hücre var. Bu, tek köşegenlik bir veri setinden (yalnız cari "
+            "dönemin hareketleri) 'direct' üçgen kurulduğunda olur. Tüm LDF'ler 1.0 "
+            "olur ve IBNR sıfır çıkar; bu bir MODEL SONUCU DEĞİL, veri eksikliğidir. "
+            "Doğru yol: load_triangle_from_data(source='roll_forward') ile önceki "
+            "dönemin üçgenine yeni diagonal'i ekle. Kullanıcıya IBNR=0 RAPORLAMA."
+        )
+    return None
+
+
 def _describe_triangle(triangle: Triangle) -> dict[str, Any]:
     latest = triangle.latest_diagonal()
     return {
@@ -1643,6 +1755,7 @@ def _describe_triangle(triangle: Triangle) -> dict[str, Any]:
         "development_periods": list(triangle.development_periods),
         "latest_diagonal": latest,
         "total_latest": sum(latest),
+        **({"warning": w} if (w := _degeneracy_warning(triangle)) else {}),
     }
 
 
@@ -1679,6 +1792,9 @@ def _get_analysis_state(
         "triangle_type": triangle.triangle_type.value if triangle else None,
         "origin_granularity": triangle.origin_granularity.value if triangle else None,
         "development_granularity": triangle.development_granularity.value if triangle else None,
+        # Uyarı burada da olmalı: prompt rezerv sorularında agent'ı önce buraya
+        # yönlendiriyor, describe_triangle'ı hiç çağırmayabiliyor.
+        **({"warning": w} if (w := _degeneracy_warning(triangle)) else {}),
     }
 
 
@@ -2289,12 +2405,11 @@ def _get_file_summary(session_state: dict[str, Any] | None) -> dict[str, Any]:
     if not summary:
         return {
             "error": (
-                "Bu branşta dosya bazlı kırılım yok. Sütun adı sorun değil — "
-                "'Dosya No', 'DOSYA_NO' vb. otomatik tanınır. En olası neden: "
-                "üçgen, dosya bazlı hasar verisinden değil, hazır/toplulaştırılmış "
-                "bir üçgen dosyasından yüklenmiş; o formatta tekil dosya kırılımı "
-                "bulunmaz. Dosya analizi için Veri modülünden DOSYA_NO içeren hasar "
-                "veri setini yükleyip üçgeni oradan türetmek gerekir."
+                "Dosya bazlı özet bu oturumda agent'a aktarılmıyor (masaüstü "
+                "sürümünde snapshot 'file_data_summary' alanını henüz "
+                "doldurmuyor) — branşta DOSYA_NO verisi OLSA BİLE bu araç boş "
+                "döner. Kullanıcıya 'bu branşta dosya kırılımı yok' DEME; "
+                "dosya analizini arayüzdeki Dosya sekmesinden görebileceğini söyle."
             )
         }
     return summary
@@ -2804,6 +2919,7 @@ def _run_chain_ladder(
             "total_latest": sum(latest_per_origin),
             "total_ultimate": sum(ultimate_per_origin),
             "total_reserve": sum(reserve_per_origin),
+            **({"warning": w} if (w := _degeneracy_warning(triangle)) else {}),
         }
 
     # ── SENARYO: alternatif parametrelerle ham CL (mevcut seçimi değiştirmez) ──

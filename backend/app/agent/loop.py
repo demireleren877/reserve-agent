@@ -537,11 +537,26 @@ def run_agent_turn(
         tool_calls: list[ToolCall] = response.get("tool_calls", [])
 
         if not tool_calls:
+            # Model boş içerik döndürebiliyor (tool çağrısı da yoksa). Ham hâlde
+            # kullanıcı sohbette BOMBOŞ bir cevap görüyor ve neyin olduğunu
+            # anlamıyor. Bu turda tool çalıştıysa ne yapıldığını özetle,
+            # çalışmadıysa durumu açıkça söyle.
+            final_text = content or ""
+            if not final_text.strip():
+                if tool_invocations:
+                    names = ", ".join(t["name"] for t in tool_invocations)
+                    final_text = f"Uygulandı: {names}."
+                else:
+                    final_text = (
+                        "Bu soruya cevap üretemedim (model boş yanıt döndü). "
+                        "Soruyu biraz daha somut yazar mısın — hangi branş, "
+                        "hangi dönem, hangi büyüklük?"
+                    )
             # Final assistant mesajını raw_additions'a ekle
-            final_msg: dict[str, Any] = {"role": "assistant", "content": content or ""}
+            final_msg: dict[str, Any] = {"role": "assistant", "content": final_text}
             raw_additions = conv[initial_conv_len:] + [final_msg]
             return AgentTurnResult(
-                assistant_message=content or "",
+                assistant_message=final_text,
                 tool_invocations=tool_invocations,
                 actions=actions,
                 stopped_reason="final",

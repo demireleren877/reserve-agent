@@ -54,6 +54,26 @@ export function ReserveAgentBridge() {
       legacyFields.cdfs = activeBranchSnap.effective_cdfs ?? [];
       legacyFields.per_origin = activeBranchSnap.per_origin ?? [];
       legacyFields.formula_context = activeBranchSnap.formula_context ?? null;
+
+      // Curve/tail durumu — get_analysis_state bunu okuyor ve prompt "kuyruk
+      // nereden kesildi?" sorusunu buradan cevaplamayı emrediyor. Hiçbir bridge
+      // yazmadığı için alan her zaman {} kalıyordu: agent ya "override yok"
+      // diyor ya da cevap üretemeyip boş dönüyordu.
+      {
+        const devs = activeBranch.triangle?.development_periods ?? [];
+        const choices = activeBranch.cdfChoicePerPeriod ?? {};
+        const initial = activeBranch.cdfInitial ?? {};
+        legacyFields.curve_state = {
+          development_periods: devs.map(String),
+          effective_cdfs: activeBranchSnap.effective_cdfs ?? [],
+          choices: devs.map((d) => ({
+            dev_period: String(d),
+            choice: choices[String(d)] ?? "initial",
+            user_value: initial[String(d)] ?? null,
+          })),
+          has_overrides: Object.values(choices).some((c) => c === "user"),
+        };
+      }
       legacyFields.total_latest = activeBranchSnap.totals.latest;
       legacyFields.total_exposure = activeBranchSnap.totals.exposure_annual;
       legacyFields.total_ultimate = activeBranchSnap.totals.cl_ultimate;
@@ -420,5 +440,24 @@ function applyReserveAction(
     }
   } else if (a.type === "reset_curve") {
     s.resetCdfInitial();
+  } else if (a.type === "set_curve_model") {
+    // Curve sekmesi: 1=Initial 2=Exp Decay 3=Inv Power 4=Power 5=Weibull 6=User
+    const dev = a.payload?.dev_period as string | undefined;
+    const model = Number(a.payload?.model);
+    if (dev && [1, 2, 3, 4, 5, 6].includes(model)) {
+      s.setCdfModel(dev, model as 1 | 2 | 3 | 4 | 5 | 6);
+    }
+  } else if (a.type === "set_curve_include") {
+    const dev = a.payload?.dev_period as string | undefined;
+    const include = a.payload?.include;
+    if (dev && typeof include === "boolean") s.setCurveInclude(dev, include);
+  } else if (a.type === "set_karma_window") {
+    const step = a.payload?.step as string | number | undefined;
+    const w = a.payload?.window as string | undefined;
+    if (step != null && w) {
+      s.setKarmaWindow(String(step), w === "all" ? "all" : Number(w));
+    }
+  } else if (a.type === "clear_karma") {
+    s.clearKarma();
   }
 }

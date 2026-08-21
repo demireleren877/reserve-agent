@@ -62,13 +62,28 @@ class TestAgentClientChat:
             ToolCall(id="t2", name="describe_triangle", arguments={}),
         ]
 
-    def test_invalid_json_arguments_become_empty_dict(self, client):
-        """LLM bozuk JSON üretirse crash yerine boş argüman."""
+    def test_invalid_json_arguments_are_flagged_not_silently_emptied(self, client):
+        """LLM bozuk JSON üretirse crash YOK ama argümanlar sessizce boşalmaz.
+
+        Eskiden arguments={} oluyordu; o hâlde tool varsayılanlarıyla çalışıp
+        primi 0'a, CDF'i 1.0'a çekiyordu — agent "yaptım" derken model
+        bozuluyordu. Artık işaret taşınır, dispatch_tool bunu net hataya
+        çevirir ve model aynı çağrıyı düzgün JSON ile tekrarlayabilir.
+        """
         client._client.chat.completions.create.return_value = _fake_openai_response(
             tool_calls=[_fake_tool_call("t1", "simulate_bf", "{bozuk json")],
         )
         out = client.chat(messages=[], tools=[])
-        assert out["tool_calls"][0].arguments == {}
+        args = out["tool_calls"][0].arguments
+        assert "__malformed_arguments__" in args
+        assert args["__malformed_arguments__"].startswith("{bozuk")
+
+    def test_malformed_arguments_are_rejected_by_dispatch(self):
+        from app.agent.tools import dispatch_tool
+
+        out = dispatch_tool("simulate_bf", {"__malformed_arguments__": "{bozuk json"})
+        assert "error" in out and "JSON" in out["error"]
+        assert "_action" not in out
 
     def test_model_and_tools_passed_through(self, client):
         client._client.chat.completions.create.return_value = (

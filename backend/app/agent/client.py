@@ -31,8 +31,11 @@ class AgentClient:
         api_key: str | None = None,
         model: str | None = None,
         base_url: str | None = None,
+        temperature: float | None = None,
     ) -> None:
         self.model = model or os.getenv("OPENROUTER_MODEL", DEFAULT_MODEL)
+        # Masaüstü ile aynı varsayılan: tool seçiminde kararlılık için düşük.
+        self.temperature = temperature if temperature is not None else 0.2
         self._client = OpenAI(
             api_key=api_key or os.getenv("OPENROUTER_API_KEY", "missing"),
             base_url=base_url or os.getenv("OPENROUTER_BASE_URL", DEFAULT_BASE_URL),
@@ -54,6 +57,7 @@ class AgentClient:
             model=self.model,
             messages=messages,  # type: ignore[arg-type]
             tools=tools,  # type: ignore[arg-type]
+            temperature=self.temperature,
         )
         msg = resp.choices[0].message
         tool_calls: list[ToolCall] = []
@@ -63,7 +67,11 @@ class AgentClient:
                 try:
                     args = json.loads(tc.function.arguments) if tc.function.arguments else {}
                 except json.JSONDecodeError:
-                    args = {}
+                    # Küçük/lokal modeller bozuk JSON üretebiliyor. Sessizce {}
+                    # bırakmak tool'u varsayılanlarla çalıştırır (prim 0'a düşer,
+                    # CDF 1.0 olur) — hatayı taşı ki dispatch reddedip modele
+                    # düzeltme şansı versin.
+                    args = {"__malformed_arguments__": str(tc.function.arguments)[:400]}
                 tool_calls.append(
                     ToolCall(id=tc.id, name=tc.function.name, arguments=args)
                 )

@@ -551,9 +551,20 @@ def run_agent_turn(
             # Boş final ama bu turda tool çalıştıysa, ne yapıldığını özetle
             # ("(empty response)" yerine kullanıcıya faydalı bir şey dönsün).
             final_text = content or ""
-            if not final_text.strip() and tool_invocations:
-                names = ", ".join(t["name"] for t in tool_invocations)
-                final_text = f"Uygulandı: {names}."
+            if not final_text.strip():
+                if tool_invocations:
+                    names = ", ".join(t["name"] for t in tool_invocations)
+                    final_text = f"Uygulandı: {names}."
+                else:
+                    # Model ne metin ne tool çağrısı üretti. Buraya kadar
+                    # gelinip boş string dönerse kullanıcı sohbette BOŞ bir
+                    # cevap görüyor ve neyin olduğunu anlamıyor. Sessizce boş
+                    # dönmektense ne olduğunu söyle.
+                    final_text = (
+                        "Bu soruya cevap üretemedim (model boş yanıt döndü). "
+                        "Soruyu biraz daha somut yazar mısın — hangi branş, "
+                        "hangi dönem, hangi büyüklük?"
+                    )
             # Final assistant mesajını raw_additions'a ekle
             final_msg: dict[str, Any] = {"role": "assistant", "content": final_text}
             raw_additions = conv[initial_conv_len:] + [final_msg]

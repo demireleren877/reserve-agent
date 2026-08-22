@@ -1060,10 +1060,14 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                 "Kullanıcıdan YAPISAL girdi iste — chat'te tıklanabilir form olarak "
                 "gösterilir (radio / çoklu-seçim / açılır liste / metin). Formu "
                 "gönderene kadar tur DURUR; cevaplar sonraki kullanıcı mesajında gelir. "
-                "SADECE gerçekten kullanıcı kararı gereken şeyleri sor (hangi branş(lar), "
-                "üçgen tipi paid/incurred, roll-forward kaynağı, BF kapsamı/oranı gibi). "
-                "Otonom karar verebileceğin şeyi SORMA. En fazla 5-6 alan. Her alana makul "
-                "bir 'default' koy ki kullanıcı hızlı onaylasın."
+                "YALNIZCA kullanıcı 'modelle' / 'model kur' gibi ÇOK ADIMLI bir iş "
+                "başlattığında, o işi başlatmak için gereken seçimleri topla (hangi "
+                "branş(lar), üçgen tipi paid/incurred, roll-forward kaynağı). "
+                "ŞUNLARDA ASLA KULLANMA: bir soruya cevap verirken, senaryo/hesap sonucu "
+                "sunarken, onay alırken ('uygulayayım mı?'), state'ten okuyabileceğin bir "
+                "şeyi sorarken. Kullanıcı SORU sorduysa cevabı ver ve turu bitir — form "
+                "gösterme. Otonom karar verebileceğin şeyi SORMA. En fazla 5-6 alan. Her "
+                "alana makul bir 'default' koy ki kullanıcı hızlı onaylasın."
             ),
             "parameters": {
                 "type": "object",
@@ -1772,7 +1776,19 @@ def _get_analysis_state(
             )
         }
     excluded_cells = session_state.get("excluded_cells", []) or []
+    # Bu araç YALNIZ aktif branşı okur. Model, başka bir branş sorulduğunda da
+    # bunu çağırıp aktif branşın sayılarıyla cevap veriyordu — prompt kuralı
+    # tutmuyor. Kapsamı çıktının İÇİNE yazmak modeli kendi hatasıyla
+    # yüzleştiriyor: sonuç konuşmaya geri yazılıyor ve düzeltebiliyor.
+    _act = session_state.get("active") or {}
+    _scope = (
+        f"Bu çıktı YALNIZ aktif branş içindir: "
+        f"{_act.get('branch_name', '?')} / {_act.get('period_label', '?')}. "
+        "Başka bir branş veya dönem soruluyorsa bu sayıları KULLANMA; "
+        "get_branch_state(branch_id) çağır (branch_id için list_project)."
+    )
     return {
+        "scope": _scope,
         "window": session_state.get("window"),
         "excluded_cells_count": len(excluded_cells),
         "excluded_cells": excluded_cells[:50],

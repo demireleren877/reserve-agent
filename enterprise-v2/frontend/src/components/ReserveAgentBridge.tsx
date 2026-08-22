@@ -12,10 +12,13 @@
  *   - select_branch action'ı: navigasyon (goToBranch)
  */
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAgentRegistryWriter } from "@/lib/agent-registry";
 import { useBranchSetters, useProject } from "@/lib/project-store";
-import { useDataPremiums, useDataLarge } from "@/lib/provision-models";
+import {
+  loadDataPremiumsForModel,
+  loadDataLargeForModel,
+} from "@/lib/provision-models";
 import type { LargeTriangles } from "@/lib/provision-models";
 import { computeBranchSummary } from "@/lib/reserve-pipeline";
 import { computeAttritionalSummary, attritionalWorkingTriangle, hasLarge } from "@/lib/large-split";
@@ -30,40 +33,111 @@ import type { AgentAction } from "@/types/triangle";
 import type { Branch, Period } from "@/types/project";
 import { sameBranchName } from "@/lib/branch-identity";
 
+/** Bir branşın veri modülünden çözülen dinamik bağları. */
+export interface BranchBinding {
+  premiums: Record<string, number>;
+  large: LargeTriangles | null;
+}
+
+/**
+ * TÜM dönem × branş çiftleri için prim ve large ayrımını çözer.
+ *
+ * useDataPremiums / useDataLarge birer React hook; döngüde çağrılamadıkları için
+ * eskiden yalnız aktif branş çözülüyordu. Buradaki tek effect saf resolver'ları
+ * (loadDataPremiumsForModel / loadDataLargeForModel) kullanarak her branş için
+ * aynı işi yapar; large tarafında zaten promise cache var, tekrar yük binmez.
+ */
+function useAllBranchBindings(periods: Period[]): Map<string, BranchBinding> {
+  const { periods: dataPeriods, loadDatasetRecords } = useDataStore();
+  const [bindings, setBindings] = useState<Map<string, BranchBinding>>(
+    () => new Map(),
+  );
+
+  // Yeniden çözüm yalnız gerçekten değişince tetiklensin: branş kimliği, adı ve
+  // üçgen şekli. Referans değişimi tek başına yeterli değil (her render tetiklerdi).
+  const shapeKey = useMemo(
+    () =>
+      periods
+        .flatMap((p) =>
+          p.branches.map((b) => {
+            const gross =
+              b.incurredTriangle ?? b.paidTriangle ?? b.triangle ?? null;
+            return [
+              p.label,
+              b.id,
+              b.name,
+              b.triangle?.origin_periods?.join(",") ?? "",
+              gross?.origin_granularity ?? "",
+              gross?.development_granularity ?? "",
+            ].join("|");
+          }),
+        )
+        .join(";"),
+    [periods],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const next = new Map<string, BranchBinding>();
+      for (const p of periods) {
+        for (const b of p.branches) {
+          const origins = b.triangle?.origin_periods ?? [];
+          const gross =
+            b.incurredTriangle ?? b.paidTriangle ?? b.triangle ?? null;
+          const [premiums, large] = await Promise.all([
+            origins.length
+              ? loadDataPremiumsForModel(
+                  p.label, b.name, origins, dataPeriods, loadDatasetRecords,
+                ).catch(() => ({}) as Record<string, number>)
+              : Promise.resolve({} as Record<string, number>),
+            gross
+              ? loadDataLargeForModel(
+                  p.label,
+                  b.name,
+                  gross.origin_granularity as "yearly" | "quarterly",
+                  gross.development_granularity as "yearly" | "quarterly",
+                  dataPeriods,
+                  loadDatasetRecords,
+                ).catch(() => null)
+              : Promise.resolve(null),
+          ]);
+          if (cancelled) return;
+          next.set(b.id, { premiums, large });
+        }
+      }
+      if (!cancelled) setBindings(next);
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // periods shapeKey ile temsil ediliyor; referansı bağımlılığa koymak
+    // her render'da yeniden çözüme yol açardı.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shapeKey, dataPeriods, loadDatasetRecords]);
+
+  return bindings;
+}
+
 export function ReserveAgentBridge() {
   const { project, activePeriod, activeBranch, actions } = useProject();
   const agentReg = useAgentRegistryWriter();
   const agentSetters = useBranchSetters("agent");
   const dataStore = useDataStore();
 
-  // Aktif branşın DİNAMİK exposure'ı (Data modülü prim verisinden) — reserve/page ile
-  // aynı. Bridge ham branch.premiums'ı kullanırsa BF exposure eksik/yanlış olur ve
-  // Ultimate/IBNR yanlış çıkar. Bunu aktif branşa merge ederiz.
-  const dataPremiums = useDataPremiums(
-    activePeriod?.label,
-    activeBranch?.name,
-    activeBranch?.triangle?.origin_periods,
-  );
-
-  // Aktif branşın DİNAMİK large ayrımı (Data modülü large verisinden) — reserve/page
-  // ile aynı (effBranch). Model attritional (gross − large) üzerinde çalışıyorsa agent
-  // da attritional Ultimate/IBNR görmeli; ham gross'u kullanırsa sayılar UI ile SAPAR.
-  const grossTri0 =
-    activeBranch?.incurredTriangle ??
-    activeBranch?.paidTriangle ??
-    activeBranch?.triangle ??
-    null;
-  const dataLarge = useDataLarge(
-    activePeriod?.label,
-    activeBranch?.name,
-    grossTri0?.origin_granularity as ("yearly" | "quarterly") | undefined,
-    grossTri0?.development_granularity as ("yearly" | "quarterly") | undefined,
-  );
+  // Veri modülünden gelen prim + large ayrımı TÜM branşlar için çözülür.
+  // Eskiden yalnız aktif branşa uygulanıyordu (hook'lar döngüde çağrılamadığı
+  // için): diğer branşlar ham branch.premiums ile hesaplanıyordu, o da çoğunlukla
+  // boş olduğu için BF exposure 0 çıkıp BF ultimate CL'ye çöküyordu; üstüne large
+  // ayrımı uygulanmadığından model attritional çalışırken agent gross rakam
+  // görüyordu. Sonuç: aktif branş dışındaki her IBNR yanlıştı.
+  const bindings = useAllBranchBindings(project.periods);
 
   // Aktif branşın EFEKTİF çalışma üçgeni — large ayrımı varsa ATTRITIONAL (gross −
   // large), yoksa ham üçgen. Legacy triangle payload'u + senaryo tool'ları bunu kullanır.
   const activeTriangle = useMemo(() => {
     if (!activeBranch) return null;
+    const dataLarge = bindings.get(activeBranch.id)?.large ?? null;
     const eff =
       dataLarge?.paid || dataLarge?.incurred
         ? {
@@ -73,7 +147,7 @@ export function ReserveAgentBridge() {
           }
         : activeBranch;
     return hasLarge(eff) ? attritionalWorkingTriangle(eff) : activeBranch.triangle ?? null;
-  }, [activeBranch, dataLarge]);
+  }, [activeBranch, bindings]);
 
   // Tüm branşların full snapshot'ı
   const snapshot = useMemo(() => {
@@ -81,10 +155,9 @@ export function ReserveAgentBridge() {
       project.periods,
       activePeriod,
       activeBranch,
-      dataPremiums,
-      dataLarge,
+      bindings,
     );
-  }, [project.periods, activePeriod, activeBranch, dataPremiums, dataLarge]);
+  }, [project.periods, activePeriod, activeBranch, bindings]);
 
   // Modül payload'u: triangle (aktif) + session_state (full snapshot + legacy
   // aktif branş alanları)
@@ -462,14 +535,19 @@ interface ProjectSnapshot {
 // Project update'ları yapısal paylaşımı korur: değişmeyen Branch nesnelerinin
 // referansı sabit kalır. Bu sayede Agent için pahalı full summary yalnız değişen
 // branşta yeniden hesaplanır; diğer dönem/branş sonuçları güvenle paylaşılır.
-const inactiveBranchSnapshotCache = new WeakMap<Branch, BranchSnapshot>();
+// Snapshot artık branşın kendisine DEĞİL, branş + veri modülünden çözülen
+// binding çiftine bağlı. Binding referansını da saklayıp karşılaştırmazsak
+// prim/large çözülmeden önce hesaplanmış (yanlış) snapshot cache'te kalır.
+const inactiveBranchSnapshotCache = new WeakMap<
+  Branch,
+  { binding: BranchBinding | undefined; snap: BranchSnapshot }
+>();
 
-function buildProjectSnapshot(
+export function buildProjectSnapshot(
   periods: Period[],
   activePeriod: Period | null,
   activeBranch: Branch | null,
-  dataPremiums: Record<string, number> = {},
-  dataLarge: LargeTriangles | null = null,
+  bindings: Map<string, BranchBinding> = new Map(),
 ): ProjectSnapshot {
   const periodSnaps: PeriodSnapshot[] = [];
   let withData = 0;
@@ -484,27 +562,30 @@ function buildProjectSnapshot(
       const isActive = activeBranch?.id === b.id;
       if (!isActive) {
         const cached = inactiveBranchSnapshotCache.get(b);
-        if (cached) {
-          if (cached.has_triangle) withData += 1;
-          totalIbnr += cached.totals.ibnr;
-          totalSelectedUlt += cached.totals.selected_ultimate;
-          branchSnaps.push(cached);
+        if (cached && cached.binding === bindings.get(b.id)) {
+          const snap = cached.snap;
+          if (snap.has_triangle) withData += 1;
+          totalIbnr += snap.totals.ibnr;
+          totalSelectedUlt += snap.totals.selected_ultimate;
+          branchSnaps.push(snap);
           continue;
         }
       }
-      // Aktif branşta dinamik exposure + dinamik large'ı merge et — reserve/page ile
-      // aynı (effBranch + effectivePremiums). Manuel premiums ÜSTTE override eder.
+      // Dinamik exposure + large ayrımı HER branşa uygulanır (reserve/page ile
+      // aynı: effBranch + effectivePremiums). Manuel premiums ÜSTTE override eder.
+      // Bu merge aktif branşa kilitliyken diğer branşların IBNR'ı yanlış çıkıyordu.
+      const bind = bindings.get(b.id);
       let cb: Branch = b;
-      if (isActive) {
-        if (Object.keys(dataPremiums).length) {
-          cb = { ...cb, premiums: { ...dataPremiums, ...(b.premiums ?? {}) } };
+      if (bind) {
+        if (Object.keys(bind.premiums).length) {
+          cb = { ...cb, premiums: { ...bind.premiums, ...(b.premiums ?? {}) } };
         }
-        if (dataLarge?.paid || dataLarge?.incurred) {
+        if (bind.large?.paid || bind.large?.incurred) {
           cb = {
             ...cb,
-            largePaidTriangle: dataLarge.paid ?? cb.largePaidTriangle,
-            largeIncurredTriangle: dataLarge.incurred ?? cb.largeIncurredTriangle,
-            largeFileData: dataLarge.fileData ?? cb.largeFileData,
+            largePaidTriangle: bind.large.paid ?? cb.largePaidTriangle,
+            largeIncurredTriangle: bind.large.incurred ?? cb.largeIncurredTriangle,
+            largeFileData: bind.large.fileData ?? cb.largeFileData,
           };
         }
       }
@@ -571,7 +652,7 @@ function buildProjectSnapshot(
             source: h.source ?? null,
           })),
       };
-      if (!isActive) inactiveBranchSnapshotCache.set(b, snap);
+      if (!isActive) inactiveBranchSnapshotCache.set(b, { binding: bind, snap });
       branchSnaps.push(snap);
     }
     periodSnaps.push({ id: p.id, label: p.label, branches: branchSnaps });

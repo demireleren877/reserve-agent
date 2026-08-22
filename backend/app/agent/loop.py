@@ -4,6 +4,7 @@ prompt fragment alır, tool çağrılarını isimden modül dispatch'ine yönlen
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -412,6 +413,62 @@ benzersizdir; çağırırsan doğru yere yönlendirilir.
 """
 
 
+# Durum bloğunun SINIRI. Blokta her branşın toplam IBNR'ı var; model bunu
+# görüp detay sorularında da araç çağırmayı bırakıyordu (correction nerede,
+# hangi volume, nakit akışı hazır mı...). Neyin BLOKTA OLMADIĞINI açıkça
+# yazmak, toplam sorularındaki hız kazancını bozmadan bunu düzeltiyor.
+_STATE_BLOCK_BOUNDARY = """
+
+Bu blok YALNIZ üst düzey özettir: branş listesi ve toplam IBNR. Kaza yılı
+kırılımı, LDF/CDF, volume, correction, elenmiş hücreler, BF oranı, kuyruk
+kesimi, nakit akışı deseni ve iskonto BU BLOKTA YOKTUR. Bunlardan biri
+sorulduğunda MUTLAKA araç çağır:
+  * aktif branşın detayı        -> get_analysis_state
+  * BAŞKA branş/dönem detayı    -> get_branch_state(branch_id)
+  * nakit akışı                 -> get_cashflow_state / get_cashflow_pattern_state
+  * iskonto                     -> get_discount_state
+Yalnızca yukarıda YAZAN bir toplamı tekrar edeceksen araç çağırma."""
+
+# Bu araçlar çalıştıysa cevabın SAYISAL karşılığı elde edilmiş demektir; o turda
+# ask_user ile form açmak kullanıcıya cevap yerine soru döndürür. Prompt'ta
+# "soruya cevap verirken form gösterme" yazıyor ama küçük modeller bunu ara sıra
+# çiğniyor — bu yüzden kural burada da uygulanıyor.
+_ANSWER_PRODUCING_TOOLS = {
+    "simulate_bf",
+    "simulate_bf_formula",
+    "run_chain_ladder",
+    "simulate_frequency_severity",
+    "compute_discount",
+    "get_ilr_triangle",
+}
+
+
+# Kullanıcı state'ten okunabilir bir ŞEY SORDUYSA form gösterilmez — cevap
+# verilir. Bu araçlar o cevabın verisini getirir; çalıştıktan sonra ask_user
+# yalnızca soru bağlamında engellenir. list_project / list_data_periods bilerek
+# DIŞARIDA: "modelle" akışı önce proje ağacını okuyup sonra form açıyor, o meşru.
+_STATE_READ_TOOLS = {
+    "get_analysis_state",
+    "get_branch_state",
+    "get_cashflow_state",
+    "get_cashflow_ldf_state",
+    "get_cashflow_pattern_state",
+    "get_discount_state",
+    "get_file_summary",
+    "describe_triangle",
+}
+
+_QUESTION_RE = re.compile(
+    r"\?|\b(ne kadar|nedir|neler|hangi|neden|niçin|nasıl|kaç|mı|mi|mu|mü)\b",
+    re.IGNORECASE,
+)
+
+
+def _is_question(messages: list[dict[str, Any]]) -> bool:
+    last = next((m for m in reversed(messages) if m.get("role") == "user"), None)
+    return bool(_QUESTION_RE.search(str((last or {}).get("content") or "")))
+
+
 @dataclass
 class AgentTurnResult:
     assistant_message: str
@@ -491,9 +548,17 @@ def run_agent_turn(
         sections.append(
             f"\n\n# {m.label.upper()} MODÜLÜ ({m.name})\n{m.system_prompt}"
         )
+    # Her turda DEĞİŞEN tek parça durum özeti. Prompt'un ortasında durursa
+    # ondan sonraki ~16k karakterlik modül prompt'ları da her turda yeniden
+    # prefill ediliyor ve lokal modelde KV-cache'in tamamı boşa gidiyor
+    # (qwen3.5-9b, LAN: durum ortadayken 10,8 sn → sonda 1,6 sn). Statik kısım
+    # önde sabit kalsın, değişen blok en sona.
     system = (
-        GLOBAL_PROMPT.format(module_summaries="\n".join(summaries))
+        GLOBAL_PROMPT.format(module_summaries="(Güncel durum bu mesajın SONUNDA, «DURUM (güncel)» bölümünde.)")
         + "".join(sections)
+        + "\n\n# DURUM (güncel)\n"
+        + "\n".join(summaries)
+        + _STATE_BLOCK_BOUNDARY
     )
 
     # Tool'ları topla, tool_name → modül haritası kur
@@ -532,7 +597,18 @@ def run_agent_turn(
     actions: list[dict[str, Any]] = []
 
     for _iteration in range(max_iterations):
-        response = client.chat(messages=conv, tools=all_tools)
+        # Hesap aracı çalıştıysa ask_user'ı listeden çıkar. Sadece hata
+        # döndürmek yetmiyordu: model reddi görüp aynı çağrıyı üst üste
+        # deneyip tur limitini yakıyordu. Araç listede yoksa ısrar edemez.
+        turn_tools = all_tools
+        _ran = {inv["name"] for inv in tool_invocations}
+        if (_ran & _ANSWER_PRODUCING_TOOLS) or (
+            (_ran & _STATE_READ_TOOLS) and _is_question(messages)
+        ):
+            turn_tools = [
+                t for t in all_tools if t["function"]["name"] != "ask_user"
+            ]
+        response = client.chat(messages=conv, tools=turn_tools)
         content = response.get("content")
         tool_calls: list[ToolCall] = response.get("tool_calls", [])
 
@@ -571,6 +647,20 @@ def run_agent_turn(
             if mod is None:
                 output: dict[str, Any] = {
                     "error": f"Tool bulunamadı: {tc.name} (aktif modüllerden hiçbiri sahiplenmiyor)"
+                }
+            elif tc.name == "ask_user" and any(
+                inv["name"] in _ANSWER_PRODUCING_TOOLS for inv in tool_invocations
+            ):
+                done = ", ".join(
+                    inv["name"] for inv in tool_invocations
+                    if inv["name"] in _ANSWER_PRODUCING_TOOLS
+                )
+                output = {
+                    "error": (
+                        f"ask_user reddedildi: bu turda {done} çalıştı, yani cevabın "
+                        "sayısal karşılığı elinde. Kullanıcı soru sordu — form açma, "
+                        "sonucu doğrudan yaz ve turu bitir."
+                    )
                 }
             else:
                 ctx = module_ctx.get(mod.name, {})
@@ -616,9 +706,7 @@ def run_agent_turn(
         if pending_form is not None:
             raw_additions = conv[initial_conv_len:]
             return AgentTurnResult(
-                assistant_message=(
-                    content or "Modelleme için birkaç seçim gerekli — aşağıdaki formu doldur."
-                ),
+                assistant_message=_form_intro(content),
                 tool_invocations=tool_invocations,
                 actions=actions,
                 stopped_reason="awaiting_input",
@@ -638,6 +726,24 @@ def run_agent_turn(
         stopped_reason="max_iterations",
         raw_additions=raw_additions,
     )
+
+
+
+_FORM_DEFAULT = "Modelleme için birkaç seçim gerekli — aşağıdaki formu doldur."
+
+
+def _form_intro(content: str | None) -> str:
+    """ask_user turunda kullanıcıya gösterilecek giriş metni.
+
+    Model form çağrısının yanına çoğu zaman İÇ MUHAKEMESİNİ yazıyor ("Şimdi
+    cevabı hazırlayayım: ...") ve o metin cümle ortasında kesiliyor; kullanıcı
+    yarım bir düşünce akışı görüyordu. Yalnızca kısa ve tamamlanmış bir giriş
+    cümlesini geçir, aksi hâlde standart metni kullan.
+    """
+    text = (content or "").strip()
+    if not text or len(text) > 400:
+        return _FORM_DEFAULT
+    return text if text[-1] in ".!?:…" else _FORM_DEFAULT
 
 
 def _assistant_message_with_tool_calls(

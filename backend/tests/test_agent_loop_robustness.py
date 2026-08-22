@@ -169,3 +169,119 @@ class TestFoundByLiveModel:
         out = dispatch_tool("get_analysis_state", {}, triangle=_degenerate(),
                             session_state={"active": {"branch_id": "b1"}, "per_origin": []})
         assert "warning" in out
+
+
+class TestAskUserGuard:
+    """ask_user, cevabı zaten hesaplanmış bir turda form açmamalı.
+
+    Küçük modeller "2024 için LR %25 olsaydı?" gibi sorularda simulate_bf'yi
+    doğru çağırıp doğru sonucu alıyor, sonra ask_user ile form açıyordu: tur
+    awaiting_input ile kesiliyor ve kullanıcı cevap yerine form görüyordu.
+    Prompt kuralı 9B'de tutmadığı için kural döngüde de uygulanıyor.
+    """
+
+    def test_ask_user_rejected_after_compute_tool(self):
+        client = ScriptedClient([
+            {"content": None, "tool_calls": [
+                ToolCall("c1", "simulate_bf", {"origin": "2023", "loss_ratio": 0.25})]},
+            {"content": None, "tool_calls": [
+                ToolCall("c2", "ask_user", {"title": "Seçim", "fields": [
+                    {"name": "b", "label": "Basis", "type": "select", "options": ["cl", "bf"]}]})]},
+            {"content": "IBNR -10.742.934 olurdu.", "tool_calls": []},
+        ])
+        res = run_agent_turn(client, [{"role": "user", "content": "LR %25 olsaydı?"}],
+                             _payload(), max_iterations=5)
+        assert res.stopped_reason == "final", "hesap sonrası form turu kesti"
+        assert res.form is None
+        rejected = res.tool_invocations[1]["output"]
+        assert "error" in rejected and "simulate_bf" in rejected["error"]
+
+    def test_ask_user_still_allowed_without_compute(self):
+        """Otonom modelleme akışı bozulmamalı: hesap yapılmadıysa form serbest."""
+        client = ScriptedClient([
+            {"content": None, "tool_calls": [ToolCall("c1", "list_project", {})]},
+            {"content": None, "tool_calls": [
+                ToolCall("c2", "ask_user", {"title": "Modelleme", "fields": [
+                    {"name": "b", "label": "Branş", "type": "select", "options": ["x"]}]})]},
+        ])
+        res = run_agent_turn(client, [{"role": "user", "content": "modelle"}],
+                             _payload(), max_iterations=5)
+        assert res.stopped_reason == "awaiting_input"
+        assert res.form is not None
+
+
+class TestAskUserRemovedFromToolList:
+    """Hesap aracı çalıştıktan sonra ask_user modele HİÇ sunulmamalı.
+
+    Sadece reddetmek yetmedi: model reddi görüp aynı çağrıyı üst üste
+    deneyerek tur limitini yaktı ("Tur limiti doldu... ask_user, ask_user,
+    ask_user, ask_user"). Araç listede yoksa ısrar edemez.
+    """
+
+    def _tools_seen(self, client):
+        return client.tool_lists
+
+    def test_ask_user_absent_after_compute_tool(self):
+        class Recording(ScriptedClient):
+            def __init__(self, script):
+                super().__init__(script)
+                self.tool_lists = []
+
+            def chat(self, messages, tools):
+                self.tool_lists.append([t["function"]["name"] for t in tools])
+                return super().chat(messages, tools)
+
+        client = Recording([
+            {"content": None, "tool_calls": [
+                ToolCall("c1", "simulate_bf", {"origin": "2023", "loss_ratio": 0.25})]},
+            {"content": "IBNR -10.742.934 olurdu.", "tool_calls": []},
+        ])
+        run_agent_turn(client, [{"role": "user", "content": "LR %25 olsaydı?"}],
+                       _payload(), max_iterations=5)
+        assert "ask_user" in client.tool_lists[0], "ilk turda sunulmalıydı"
+        assert "ask_user" not in client.tool_lists[1], "hesap sonrası hâlâ sunuluyor"
+
+
+class TestAskUserBlockedOnQuestions:
+    """Kullanıcı SORU sorduysa ve state okunduysa form gösterilmez.
+
+    V5 ("BF kullanılan yerlerde hangi loss ratio kullanılıyor?") canlı koşuda
+    get_analysis_state çağırıp sonra ask_user açtı; kullanıcı cevap yerine form
+    gördü. Hesap araçları için konan koruma okuma araçlarını kapsamıyordu.
+    Ayrım aracın türü değil, kullanıcının SORU sorup sormadığı.
+    """
+
+    class _Recording(ScriptedClient):
+        def __init__(self, script):
+            super().__init__(script)
+            self.tool_lists = []
+
+        def chat(self, messages, tools):
+            self.tool_lists.append([t["function"]["name"] for t in tools])
+            return super().chat(messages, tools)
+
+    def _script(self, first_tool):
+        return [
+            {"content": None, "tool_calls": [ToolCall("c1", first_tool, {})]},
+            {"content": "cevap", "tool_calls": []},
+        ]
+
+    def test_blocked_when_question_and_state_read(self):
+        client = self._Recording(self._script("get_analysis_state"))
+        run_agent_turn(client, [{"role": "user", "content": "Hangi loss ratio kullanılıyor?"}],
+                       _payload(), max_iterations=4)
+        assert "ask_user" not in client.tool_lists[1]
+
+    def test_allowed_for_modelling_command(self):
+        """'modelle' bir komut, soru değil — form akışı korunmalı."""
+        client = self._Recording(self._script("get_analysis_state"))
+        run_agent_turn(client, [{"role": "user", "content": "Modelle"}],
+                       _payload(), max_iterations=4)
+        assert "ask_user" in client.tool_lists[1]
+
+    def test_list_project_does_not_block_form(self):
+        """Proje ağacını okumak form açmayı engellememeli (modelleme akışı)."""
+        client = self._Recording(self._script("list_project"))
+        run_agent_turn(client, [{"role": "user", "content": "Q2'yi modelleyebilir misin?"}],
+                       _payload(), max_iterations=4)
+        assert "ask_user" in client.tool_lists[1]

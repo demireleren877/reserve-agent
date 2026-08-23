@@ -339,3 +339,31 @@ def discount_session_state(project: dict[str, Any]) -> dict[str, Any]:
     return dict(branches=branches,
                 active_branch_id=project["active_branch"]["id"],
                 note="İskonto modülü: branş bazlı Unpaid Liability ve iskonto özeti.")
+
+
+def data_session_state(project: dict[str, Any]) -> dict[str, Any]:
+    """DataAgentBridge'in ürettiği payload'ın karşılığı.
+
+    Bu modül olmadan navigate_to ve list_data_periods modele HİÇ sunulmuyor
+    (araçların sahibi data modülü) — navigasyon senaryoları o yüzden
+    "agent yapmadı" gibi görünüyordu.
+    """
+    return dict(
+        periods=[
+            dict(
+                id=p["id"], label=p["label"],
+                datasets=[
+                    dict(dataset_id=f"{p['id']}-hasar", type_id="hasar",
+                         brans_list=[b["name"] for b in p["branches"]],
+                         hasar_tarihi_min="2000-01-01", hasar_tarihi_max="2025-12-31",
+                         total_odeme=None, total_muallak=None),
+                    dict(dataset_id=f"{p['id']}-prim", type_id="prim",
+                         brans_list=[b["name"] for b in p["branches"]],
+                         donem_list=[p["label"]], total_ep=None),
+                ],
+            )
+            for p in project["periods"]
+        ],
+        active_period_id=project["periods"][0]["id"],
+        note="Veri modülü: yüklü dönemler ve dataset meta verisi.",
+    )

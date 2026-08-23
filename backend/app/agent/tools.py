@@ -49,10 +49,12 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
         "function": {
             "name": "select_branch",
             "description": (
-                "UI'da aktif branşı değiştir. Kullanıcı 'X branşına geç' "
-                "derse veya yazma operasyonu için belirli bir branş "
-                "hedeflemen gerekirse kullan. period_id opsiyoneldir; verilirse "
-                "önce o döneme geçilir."
+                "UI'da aktif branşı değiştir — kullanıcının EKRANINI oynatır. "
+                "Yalnızca kullanıcı açıkça 'X branşına geç' derse ya da o branşa "
+                "YAZMAN gerekiyorsa kullan. Başka bir branş hakkında SORU "
+                "soruluyorsa branş DEĞİŞTİRME: get_branch_state(branch_id) ile "
+                "oku ve cevapla; aksi hâlde kullanıcının ekranı sorusunu sorarken "
+                "altından kayar. period_id opsiyoneldir; verilirse önce o döneme geçilir."
             ),
             "parameters": {
                 "type": "object",
@@ -942,8 +944,13 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
         "function": {
             "name": "navigate_to",
             "description": (
-                "Kullanıcıyı belirli bir modüle yönlendir. Kullanıcı 'iskonto sayfasına git', "
-                "'nakit akışını aç' gibi navigasyon isteğinde bulunursa kullan. "
+                "Kullanıcıyı belirli bir modüle yönlendir. 'Veri sekmesine geç', "
+                "'iskonto sayfasına git', 'nakit akışını aç', 'rezerve dön' gibi HER "
+                "gitme/geçme/açma isteğinde kullan — sekme, sayfa ve modül aynı şeydir. "
+                "Kullanıcı bir yere GİTMEK istiyorsa orayı ANLATMA, bu aracı çağır. "
+                "AMA yalnızca AÇIK bir yer değiştirme isteğinde: bir hesap/senaryo "
+                "sorusuna cevap verirken ekranı oynatma — soru sormak navigasyon "
+                "isteği DEĞİLDİR. "
                 "module: 'reserve' | 'cashflow' | 'discount' | 'data' | 'home'."
             ),
             "parameters": {

@@ -67,7 +67,11 @@ Rezerv modülü verileri buradan çeker:
 * Prim (Exposure): Veri → prim kayıtları → BF sekmesinde "Veri modülünden yükle"
   ile aktarılır. Manuel de girilebilir.
 
-9 SEKME
+9 SEKME — bu liste sekmelerin İÇERİĞİNİ anlatır, navigasyon talimatı DEĞİL.
+Kullanıcı bir sekmeye/sayfaya GİTMEK isterse ("veri sekmesine geç", "curve'ü aç")
+o sekmeyi ANLATMA → navigate_to(module=...) çağır. Sekme içeriğini yalnızca
+"X sekmesinde ne var / ne işe yarar" diye SORULDUĞUNDA anlat.
+
 1. Veri — Paid ve/veya Incurred üçgeni önizlemesi. Kümülatif / artımsal toggle.
    Üçgen Veri modülündeki hasar verisinden veya doğrudan Excel/CSV'den gelir.
 2. Dosya — DOSYA_NO kolonu içeren veri yüklenmiş branşlarda aktif olur. 4 alt sekme:

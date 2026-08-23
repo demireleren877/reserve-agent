@@ -22,6 +22,7 @@ import {
 import type { LargeTriangles } from "@/lib/provision-models";
 import { computeBranchSummary } from "@/lib/reserve-pipeline";
 import { computeAttritionalSummary, attritionalWorkingTriangle, hasLarge } from "@/lib/large-split";
+import { buildFileSummary } from "@/lib/file-analysis";
 import { useDataStore } from "@/lib/data-store";
 import {
   buildTriangleFromRecords,
@@ -183,6 +184,15 @@ export function ReserveAgentBridge() {
       legacyFields.cdfs = activeBranchSnap.effective_cdfs ?? [];
       legacyFields.per_origin = activeBranchSnap.per_origin ?? [];
       legacyFields.formula_context = activeBranchSnap.formula_context ?? null;
+
+      // Dosya bazlı (DOSYA_NO) son-diagonal özeti — get_file_summary bunu okur.
+      // Doldurulmadığında agent, branşta dosya verisi OLSA BİLE kullanıcıya
+      // "bu branşta dosya kırılımı yok" diyordu.
+      const fileSummary = buildFileSummary(
+        activeBranch.triangle,
+        activeBranch.fileData,
+      );
+      if (fileSummary) legacyFields.file_data_summary = fileSummary;
 
       // Curve/tail durumu — get_analysis_state bunu okuyor ve prompt "kuyruk
       // nereden kesildi?" sorusunu buradan cevaplamayı emrediyor. Hiçbir bridge

@@ -107,3 +107,89 @@ export function buildClaimComparison(
   }
   return out.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
 }
+
+// ─── Agent özeti ──────────────────────────────────────────────────────────────
+
+export interface FileSummaryOriginRow {
+  origin: string;
+  n_files: number;
+  total: number;
+  top1_share: number;
+  top3_share: number;
+}
+
+export interface FileSummaryLargest {
+  origin: string;
+  dosya_no: string;
+  amount: number;
+  share_of_origin: number;
+}
+
+export interface FileSummary {
+  has_file_data: true;
+  metric: FileMetric;
+  origin_count: number;
+  n_files: number;
+  grand_total: number;
+  per_origin: FileSummaryOriginRow[];
+  largest: FileSummaryLargest[];
+}
+
+/**
+ * Son diagonal'deki dosya bazlı kırılımın agent özeti (get_file_summary okur).
+ *
+ * Bu alan doldurulmadığında agent, branşta DOSYA_NO verisi olsa bile
+ * "bu branşta dosya kırılımı yok" diyordu. Metrik varsayılan olarak `inc`
+ * (ödeme + muallak): rezerv üçgeni incurred bazlı, tutarlı kalsın.
+ */
+export function buildFileSummary(
+  triangle: Triangle | null | undefined,
+  fileData: FileData | null | undefined,
+  topN = 15,
+  metric: FileMetric = "inc",
+): FileSummary | null {
+  if (!triangle || !fileData || Object.keys(fileData).length === 0) return null;
+
+  const snapshot = latestFileSnapshots(triangle, fileData);
+  const perOrigin: FileSummaryOriginRow[] = [];
+  const all: FileSummaryLargest[] = [];
+
+  for (const origin of triangle.origin_periods) {
+    const files = Object.entries(snapshot[origin] ?? {})
+      .map(([dosya, v]) => [dosya, fileMetricValue(v, metric)] as const)
+      .filter(([, amount]) => amount > 0)
+      .sort((a, b) => b[1] - a[1]);
+    if (!files.length) continue;
+
+    const total = files.reduce((s, [, v]) => s + v, 0);
+    const top3 = files.slice(0, 3).reduce((s, [, v]) => s + v, 0);
+    perOrigin.push({
+      origin,
+      n_files: files.length,
+      total: Math.round(total),
+      top1_share: total > 0 ? files[0][1] / total : 0,
+      top3_share: total > 0 ? top3 / total : 0,
+    });
+    for (const [dosya, amount] of files) {
+      all.push({
+        origin,
+        dosya_no: dosya,
+        amount: Math.round(amount),
+        share_of_origin: total > 0 ? amount / total : 0,
+      });
+    }
+  }
+
+  if (!perOrigin.length) return null;
+  all.sort((a, b) => b.amount - a.amount);
+
+  return {
+    has_file_data: true,
+    metric,
+    origin_count: perOrigin.length,
+    n_files: all.length,
+    grand_total: perOrigin.reduce((s, o) => s + o.total, 0),
+    per_origin: perOrigin,
+    largest: all.slice(0, topN),
+  };
+}

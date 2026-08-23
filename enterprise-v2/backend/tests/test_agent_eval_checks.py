@@ -51,17 +51,17 @@ def test_zero_target():
 
 
 def test_evaluate_flags_missing_tool():
-    ok, problems = evaluate({"expect_tools": ["get_branch_state"]}, "cevap", ["get_analysis_state"])
+    ok, problems = evaluate({"expect_tools": ["get_branch_state"]}, {"answer": "cevap", "tools": ["get_analysis_state"], "actions": [], "stop": "final"})
     assert not ok and "get_branch_state" in problems[0]
 
 
 def test_evaluate_flags_forbidden_text():
-    ok, problems = evaluate({"forbid_text": ["kasko"]}, "Kasko branşı 5 TL", [])
+    ok, problems = evaluate({"forbid_text": ["kasko"]}, {"answer": "Kasko branşı 5 TL", "tools": [], "actions": [], "stop": "final"})
     assert not ok
 
 
 def test_evaluate_flags_empty_answer():
-    ok, problems = evaluate({}, "   ", [])
+    ok, problems = evaluate({}, {"answer": "   ", "tools": [], "actions": [], "stop": "final"})
     assert not ok and "boş" in problems[0]
 
 
@@ -69,6 +69,40 @@ def test_evaluate_passes_clean_case():
     ok, problems = evaluate(
         {"expect_tools": ["get_analysis_state"], "expect_numbers": [-183221236.47],
          "expect_text": ["ibnr"], "forbid_text": ["kasko"]},
-        "Toplam IBNR -183.221.236 TL", ["get_analysis_state"],
+        {"answer": "Toplam IBNR -183.221.236 TL", "tools": ["get_analysis_state"],
+         "actions": [], "stop": "final"},
     )
     assert ok and not problems
+
+
+def test_expect_any_actions_accepts_either():
+    """Tekil/çoğul araç ikisi de meşru — 'herhangi biri' yeterli olmalı."""
+    ok, _ = evaluate({"expect_any_actions": ["set_premium", "set_premiums"]},
+                     {"answer": "ok", "tools": [], "actions": ["set_premiums"], "stop": "final"})
+    assert ok
+    ok, problems = evaluate({"expect_any_actions": ["set_premium", "set_premiums"]},
+                            {"answer": "ok", "tools": [], "actions": ["set_basis"], "stop": "final"})
+    assert not ok and "hiçbiri" in problems[0]
+
+
+def test_expect_any_numbers_accepts_either():
+    ok, _ = evaluate({"expect_any_numbers": [100.0, 250.0]},
+                     {"answer": "sonuç 250", "tools": [], "actions": [], "stop": "final"})
+    assert ok
+
+
+def test_tool_sequence_requires_order():
+    base = {"expect_tool_sequence": ["get_analysis_state", "simulate_bf"]}
+    ok, _ = evaluate(base, {"answer": "x", "tools": ["get_analysis_state", "list_project",
+                                                    "simulate_bf"], "actions": [], "stop": "final"})
+    assert ok, "araya başka araç girmesi sırayı bozmamalı"
+    ok, _ = evaluate(base, {"answer": "x", "tools": ["simulate_bf", "get_analysis_state"],
+                            "actions": [], "stop": "final"})
+    assert not ok, "ters sıra kabul edilmemeli"
+
+
+def test_expect_text_accepts_synonym_group():
+    """Liste verilince 'herhangi biri' yeterli — eşanlamlı kabulü."""
+    ok, _ = evaluate({"expect_text": [["yıllık", "annual"]]},
+                     {"answer": "annual bazda", "tools": [], "actions": [], "stop": "final"})
+    assert ok

@@ -458,6 +458,12 @@ _STATE_READ_TOOLS = {
     "describe_triangle",
 }
 
+# Kullanıcının EKRANINI oynatan araçlar. Bir soruya cevap verirken çağrılmaları
+# kullanıcıyı sorusunu sorarken başka yere savuruyor. Cevabın verisi zaten
+# okunduysa (state aracı çalıştı) ve soru sorulduysa listeden çıkarılırlar.
+# Açıklamaya yazmak yetmedi: izole denemede tutuyor, tam koşuda sızıyordu.
+_VIEW_MOVING_TOOLS = {"navigate_to", "select_branch"}
+
 _QUESTION_RE = re.compile(
     r"\?|\b(ne kadar|nedir|neler|hangi|neden|niçin|nasıl|kaç|mı|mi|mu|mü)\b",
     re.IGNORECASE,
@@ -602,11 +608,16 @@ def run_agent_turn(
         # deneyip tur limitini yakıyordu. Araç listede yoksa ısrar edemez.
         turn_tools = all_tools
         _ran = {inv["name"] for inv in tool_invocations}
-        if (_ran & _ANSWER_PRODUCING_TOOLS) or (
-            (_ran & _STATE_READ_TOOLS) and _is_question(messages)
-        ):
+        _answered = bool(_ran & _ANSWER_PRODUCING_TOOLS)
+        _asked = _is_question(messages)
+        _drop: set[str] = set()
+        if _answered or ((_ran & _STATE_READ_TOOLS) and _asked):
+            _drop.add("ask_user")
+        if _asked and (_answered or (_ran & _STATE_READ_TOOLS)):
+            _drop |= _VIEW_MOVING_TOOLS
+        if _drop:
             turn_tools = [
-                t for t in all_tools if t["function"]["name"] != "ask_user"
+                t for t in all_tools if t["function"]["name"] not in _drop
             ]
         response = client.chat(messages=conv, tools=turn_tools)
         content = response.get("content")

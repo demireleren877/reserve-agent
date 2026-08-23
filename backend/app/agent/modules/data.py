@@ -36,7 +36,9 @@ VERİ ARAÇLARI
   Hangi dönemlerde hangi veriler var, kayıt sayıları, branş listeleri, toplam tutarlar.
 
 NAVİGASYON
-* navigate_to(module=...): Kullanıcıyı belirli modüle yönlendir.
+* navigate_to(module=...): Kullanıcıyı belirli modüle yönlendir. "Veri sekmesine
+  geç", "iskontoya git", "nakit akışını aç" gibi HER yer değiştirme isteğinde
+  ÖNCE bu aracı çağır — hedef sekmeyi anlatmak navigasyon YERİNE GEÇMEZ.
   Modüller: 'reserve' | 'cashflow' | 'discount' | 'data' | 'home'
   Kullanım: "iskonto sayfasını aç", "nakit akışına git", "veri modülüne geç"
 

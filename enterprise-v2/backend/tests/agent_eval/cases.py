@@ -212,6 +212,20 @@ def build_cases(project: dict) -> list[dict]:
              expect_any_actions=["set_selected_loss_ratio", "set_selected_loss_ratios"]),
         dict(id="AG03", kat="agentic", q="Volume'ü 5'e çek.",
              expect_actions=["set_window"]),
+        # Prompt "Tek metod: hacim ağırlıklı" derken agent bu üçünü de
+        # reddediyordu — araç ve hesap katmanı ise üçünü de destekliyor.
+        dict(id="AG18", kat="agentic", q="LDF ortalamasını basit ortalamaya çevir.",
+             expect_actions=["set_method"]),
+        dict(id="AG19", kat="agentic", q="Geometrik ortalama yöntemine geç.",
+             expect_actions=["set_method"]),
+        # Pencere ile yöntem ayrı kavramlar: "volume" istendiğinde yöntem
+        # değiştirmemeli, pencere aracını kullanmalı.
+        dict(id="AG20", kat="agentic", q="Volume penceresini son 4 origin yap.",
+             expect_actions=["set_window"]),
+        # Karma Volume prompt'ta hiç anılmıyordu; araç erişilemezdi.
+        dict(id="AG21", kat="agentic",
+             q="İlk gelişim adımı için pencereyi ayrı olarak 4'e sabitle, diğerleri kalsın.",
+             expect_any_actions=["set_karma_window"]),
         dict(id="AG04", kat="agentic", q="2019 kaza yılının ilk gelişim hücresini ele.",
              # 2017|0 fixture'da ZATEN elenmiş; agent onu doğru şekilde
              # "zaten elenmiş" diye geçiyordu. 2019 elenmemiş.

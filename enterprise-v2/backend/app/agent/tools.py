@@ -713,6 +713,31 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
             "parameters": {"type": "object", "properties": {}, "required": []},
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_claim_movement",
+            "description": (
+                "Bir LDF geçişinin (origin × step) dosya bazlı hareketi: o adımda "
+                "ödemeye dönen, muallağı kapanan, yeniden açılan ve yeni giren "
+                "dosyalar; toplam ödeme/muallak değişimi ve |değişim| en büyük "
+                "dosyalar. 'Bu LDF neden bu kadar yüksek?', '2021 step 2'de ne "
+                "oldu?', 'aykırı geçişi hangi dosya taşıyor?' sorularında kullan — "
+                "get_file_summary yalnızca SON diagonal'i gösterir, adımlar "
+                "arasındaki hareketi göstermez. step 0-INDEXLI: step=0 → '1→2'. "
+                "Eleme kararı vermeden önce buraya bak: tek bir büyük dosyanın "
+                "taşıdığı geçiş, aykırı değil gerçek hasar olabilir."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "origin": {"type": "string", "description": "Kaza dönemi etiketi (ör. '2021')"},
+                    "step": {"type": "integer", "description": "Gelişim adımı, 0-indexli (0 → 1→2 geçişi)"},
+                },
+                "required": ["origin", "step"],
+            },
+        },
+    },
     # ─── Cashflow tools ───────────────────────────────────────────────────────
     {
         "type": "function",
@@ -1553,6 +1578,8 @@ def dispatch_tool(
         return _get_ilr_triangle(triangle, session_state)  # type: ignore[arg-type]
     if name == "get_file_summary":
         return _get_file_summary(session_state)
+    if name == "get_claim_movement":
+        return _get_claim_movement(session_state, args)
     # ─── Cashflow ─────────────────────────────────────────────────────────────
     if name == "get_cashflow_state":
         return _get_cashflow_state(session_state)
@@ -2436,6 +2463,51 @@ def _get_file_summary(session_state: dict[str, Any] | None) -> dict[str, Any]:
             )
         }
     return summary
+
+
+def _get_claim_movement(
+    session_state: dict[str, Any] | None, args: dict[str, Any]
+) -> dict[str, Any]:
+    """Tek bir LDF geçişinin dosya bazlı hareketi.
+
+    Bridge `claim_movement[origin][step]` yapısını hazır kurar; burada yalnızca
+    indeksleme ve kullanıcıya dönük hata metni var. Var olmayan bir adım
+    istendiğinde mevcut adımları GERİ SÖYLÜYORUZ: model 0-indexli step'i sık
+    karıştırıyor ve elindeki tek ipucu hata mesajı oluyor.
+    """
+    if not session_state:
+        return {"error": "Session state yok."}
+    movement = session_state.get("claim_movement")
+    if not movement:
+        return {
+            "error": (
+                "Bu branşta dosya bazlı hareket yok — DOSYA_NO'lu ham veriden "
+                "yüklenmemiş (hazır üçgen) ya da tek diagonal var. Kullanıcıya "
+                "'veri yok' demeden önce bunu söyle."
+            )
+        }
+
+    origin = str(args.get("origin", ""))
+    by_origin = movement.get(origin)
+    if not by_origin:
+        return {
+            "error": f"'{origin}' için hareket yok.",
+            "available_origins": sorted(movement.keys()),
+        }
+
+    step = args.get("step")
+    try:
+        step_key = str(int(step))
+    except (TypeError, ValueError):
+        return {"error": f"step tam sayı olmalı, gelen: {step!r}"}
+
+    cell = by_origin.get(step_key)
+    if not cell:
+        return {
+            "error": f"'{origin}' için step={step_key} yok (step 0-INDEXLI).",
+            "available_steps": sorted(int(k) for k in by_origin.keys()),
+        }
+    return cell
 
 
 def _get_cashflow_state(session_state: dict[str, Any] | None) -> dict[str, Any]:

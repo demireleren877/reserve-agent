@@ -22,7 +22,7 @@ import {
 import type { LargeTriangles } from "@/lib/provision-models";
 import { computeBranchSummary } from "@/lib/reserve-pipeline";
 import { computeAttritionalSummary, attritionalWorkingTriangle, hasLarge } from "@/lib/large-split";
-import { buildFileSummary } from "@/lib/file-analysis";
+import { buildClaimMovement, buildFileSummary } from "@/lib/file-analysis";
 import { useDataStore } from "@/lib/data-store";
 import {
   buildTriangleFromRecords,
@@ -193,6 +193,16 @@ export function ReserveAgentBridge() {
         activeBranch.fileData,
       );
       if (fileSummary) legacyFields.file_data_summary = fileSummary;
+
+      // LDF geçişlerinin dosya bazlı hareketi — get_claim_movement bunu okur.
+      // Son diagonal özeti "şu an ne var"ı söylüyor, bu "aradaki adımda ne
+      // oldu"yu: aykırı bir LDF'i tek bir dosyanın mı taşıdığı ancak burada
+      // görülür.
+      const claimMovement = buildClaimMovement(
+        activeBranch.triangle,
+        activeBranch.fileData,
+      );
+      if (claimMovement) legacyFields.claim_movement = claimMovement;
 
       // Curve/tail durumu — get_analysis_state bunu okuyor ve prompt "kuyruk
       // nereden kesildi?" sorusunu buradan cevaplamayı emrediyor. Hiçbir bridge

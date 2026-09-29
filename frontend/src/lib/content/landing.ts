@@ -21,7 +21,10 @@ export interface LandingContent {
   hero: {
     eyebrow: string; title1: string; title2: string; lede: string;
     ctaPrimary: string; ctaSecondary: string; note: string; agentStrip: string;
+    film: string; filmClose: string;
   };
+  /** Hero altındaki rakam bandı */
+  stats: { v: number; pre?: string; suf?: string; l: string }[];
   modules: {
     label: string; h2: string; p: string;
     items: { t: string; s: string; d: string; shot: string }[];
@@ -29,6 +32,8 @@ export interface LandingContent {
   agent: {
     label: string; h2: string; p: string;
     tools: { m: string; n: number; d: string }[];
+    /** Agent konsolunda akan örnek adımlar */
+    console: string; log: { m: string; d: string }[];
   };
   close: { label: string; h2: string; p: string; steps: { n: string; t: string; d: string }[] };
   modeling: {
@@ -86,7 +91,15 @@ export const TR: LandingContent = {
     ctaSecondary: "Kurumsal demo",
     note: "Kredi kartı gerekmez · Excel, CSV veya Oracle ile başlayın",
     agentStrip: "hepsinde çalışır",
+    film: "Filmi izleyin",
+    filmClose: "Kapat",
   },
+  stats: [
+    { v: 45, l: "agent aracı, dört modülde" },
+    { v: 4, l: "modül, tek veri katmanı" },
+    { v: 7, l: "adımlık model akışı" },
+    { v: 100, pre: "%", l: "yazma işlemi denetim izinde" },
+  ],
   modules: {
     label: "Modüller",
     h2: "Dört modül, tek veri katmanı",
@@ -110,6 +123,15 @@ export const TR: LandingContent = {
       { m: "Nakit Akışı", n: 10, d: "Desen, LDF, hariç tutma, eğri" },
       { m: "İskonto", n: 2, d: "Durum okuma ve LIC hesabı" },
       { m: "Veri & Navigasyon", n: 2, d: "Dönem listesi, modüller arası geçiş" },
+    ],
+    console: "Agent · çalışıyor",
+    log: [
+      { m: "Veri bağlandı", d: "Motor · 2025Q4 · ödeme ve muallak" },
+      { m: "Üçgen kuruldu", d: "10 × 10 · kümülatif" },
+      { m: "Aykırı hücre elendi", d: "2019 · 36→48 · tek büyük hasar" },
+      { m: "Genç yıllar BF'e taşındı", d: "2024–2025 · a priori %82,0" },
+      { m: "Kuyruk seçildi", d: "Inverse power · R² 0,998" },
+      { m: "Rapor üretildi, model kilitlendi", d: "Excel · segment kırılımı" },
     ],
   },
   close: {
@@ -205,7 +227,15 @@ export const EN: LandingContent = {
     ctaSecondary: "Book a demo",
     note: "No credit card required · Start with Excel, CSV or Oracle",
     agentStrip: "works across all",
+    film: "Watch the film",
+    filmClose: "Close",
   },
+  stats: [
+    { v: 45, l: "agent tools across four modules" },
+    { v: 4, l: "modules, one data layer" },
+    { v: 7, l: "step model flow" },
+    { v: 100, suf: "%", l: "of writes in the audit trail" },
+  ],
   modules: {
     label: "Modules",
     h2: "Four modules, one data layer",
@@ -229,6 +259,15 @@ export const EN: LandingContent = {
       { m: "Cash Flow", n: 10, d: "Pattern, LDF, exclusions, curve" },
       { m: "Discounting", n: 2, d: "State read and LIC calculation" },
       { m: "Data & Navigation", n: 2, d: "Period listing, moving between modules" },
+    ],
+    console: "Agent · running",
+    log: [
+      { m: "Data connected", d: "Motor · 2025Q4 · paid and outstanding" },
+      { m: "Triangle built", d: "10 × 10 · cumulative" },
+      { m: "Outlier cell excluded", d: "2019 · 36→48 · single large claim" },
+      { m: "Young years moved to BF", d: "2024–2025 · a priori 82.0%" },
+      { m: "Tail selected", d: "Inverse power · R² 0.998" },
+      { m: "Report produced, model locked", d: "Excel · segment breakdown" },
     ],
   },
   close: {

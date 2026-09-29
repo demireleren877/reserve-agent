@@ -12,6 +12,9 @@ interface Props {
   initialCDFs: number[];
   effectiveCdfs?: number[];
   selectedLDFs: number[];
+  /** Önceki dönemin CDF'leri (referans kolon). Dev step index'ine göre hizalanır. */
+  priorCDFs?: number[] | null;
+  priorLabel?: string;
   cdfInitial: Record<string, number>;
   cdfModelPerPeriod: Record<string, 1 | 2 | 3 | 4 | 5 | 6>;
   curveIncludePerPeriod: Record<string, boolean>;
@@ -32,6 +35,8 @@ export function CurveTab({
   initialCDFs,
   effectiveCdfs,
   selectedLDFs,
+  priorCDFs,
+  priorLabel,
   cdfInitial,
   cdfModelPerPeriod,
   curveIncludePerPeriod,
@@ -60,7 +65,7 @@ export function CurveTab({
   if (!triangle) {
     return (
       <div className="card p-10 text-center text-sm text-[color:var(--muted)]">
-        Önce Veri sekmesinden bir üçgen yükleyin.
+        Load a triangle from the Data tab first.
       </div>
     );
   }
@@ -147,7 +152,7 @@ export function CurveTab({
         <div className="flex flex-col leading-tight">
           <span className="text-[13px] font-medium">CDF Curve</span>
           <span className="text-[10px] text-[color:var(--muted)]">
-            Tıkla veya sürükle seç · User Value: çift tık
+            Click or drag to select · User Value: double-click
           </span>
         </div>
         <div className="flex items-center gap-2 ml-auto">
@@ -156,15 +161,15 @@ export function CurveTab({
               onClick={() => setShowChart(true)}
               className="btn text-[11px] py-1 px-2"
             >
-              Grafik
+              Chart
             </button>
           )}
           {(hasOverrides || hasExcludes) && (
             <button
-              onClick={() => { if (confirm("Tüm seçimler ve override'lar temizlensin mi?")) onReset(); }}
+              onClick={() => { if (confirm("Clear all selections and overrides?")) onReset(); }}
               className="btn text-[11px] py-1 px-2"
             >
-              Sıfırla
+              Reset
             </button>
           )}
         </div>
@@ -214,6 +219,12 @@ export function CurveTab({
                 <th className="text-right px-2 py-1.5 font-semibold w-[90px]">User Value</th>
                 <th className="text-right px-2 py-1.5 font-semibold w-[90px]">Selected</th>
                 <th className="text-right px-2 py-1.5 font-semibold w-[90px]">Cumul CDF</th>
+                {priorCDFs && (
+                  <th className="text-right px-2 py-1.5 font-semibold w-[90px] text-[color:var(--muted)]"
+                    title={priorLabel ? `Prior period: ${priorLabel}` : undefined}>
+                    Prior CDF{priorLabel ? ` · ${priorLabel}` : ""}
+                  </th>
+                )}
                 <th className="text-right px-2 py-1.5 font-semibold w-[70px]">Cumul%</th>
                 <th className="text-right px-2 py-1.5 font-semibold w-[70px]">Incr%</th>
               </tr>
@@ -222,7 +233,7 @@ export function CurveTab({
               {rows.map((r, rowIdx) => (
                 <tr
                   key={r.key}
-                  className={"border-t " + (!r.included ? "opacity-50 " : "") + "hover:bg-[color:var(--surface-alt)]/20"}
+                  className={"border-t hover:bg-[color:var(--surface-alt)]/20"}
                 >
                   <td className="px-2 py-0.5 font-medium leading-tight tabular text-[11px]">{r.i + 1}</td>
 
@@ -231,29 +242,32 @@ export function CurveTab({
                     <button
                       onClick={() => !r.autoExcluded && onToggleInclude(r.key, !r.included)}
                       disabled={r.autoExcluded}
-                      title={r.autoExcluded ? "LDF ≤ 1: otomatik hariç" : undefined}
+                      title={r.autoExcluded ? "LDF ≤ 1: auto-excluded" : undefined}
                       className={
                         "text-[10px] font-semibold px-1.5 py-0.5 rounded transition " +
-                        (r.autoExcluded
-                          ? "bg-[color:var(--surface-alt)] text-[color:var(--muted)] opacity-40 cursor-not-allowed"
+                        (r.autoExcluded ? "opacity-40 cursor-not-allowed" : "")
+                      }
+                      style={
+                        r.autoExcluded
+                          ? { background: "var(--surface-alt)", color: "var(--muted)" }
                           : r.included
-                          ? "bg-[color:var(--success-soft)] text-[color:var(--success)]"
-                          : "bg-[color:var(--surface-alt)] text-[color:var(--muted)]")
+                          ? { background: "#16a34a", color: "#ffffff" }   // dahil: koyu yeşil, full opak
+                          : { background: "#dcfce7", color: "#6b7280" }   // diğerleri: soft yeşil, gri metin
                       }
                     >
                       {r.included ? "Yes" : "No"}
                     </button>
                   </td>
 
-                  <DragCell value={r.initLDF} active={r.model === 1}
+                  <DragCell value={r.initLDF} active={r.model === 1} faded={!r.included}
                     onMouseDown={() => startDrag(r.key, 1)} onMouseEnter={() => enterDrag(r.key)} />
-                  <DragCell value={r.expLDF} active={r.model === 2} dim
+                  <DragCell value={r.expLDF} active={r.model === 2}
                     onMouseDown={() => startDrag(r.key, 2)} onMouseEnter={() => enterDrag(r.key)} />
-                  <DragCell value={r.ipLDF} active={r.model === 3} dim
+                  <DragCell value={r.ipLDF} active={r.model === 3}
                     onMouseDown={() => startDrag(r.key, 3)} onMouseEnter={() => enterDrag(r.key)} />
-                  <DragCell value={r.pwLDF} active={r.model === 4} dim
+                  <DragCell value={r.pwLDF} active={r.model === 4}
                     onMouseDown={() => startDrag(r.key, 4)} onMouseEnter={() => enterDrag(r.key)} />
-                  <DragCell value={r.wbLDF} active={r.model === 5} dim
+                  <DragCell value={r.wbLDF} active={r.model === 5}
                     onMouseDown={() => startDrag(r.key, 5)} onMouseEnter={() => enterDrag(r.key)} />
 
                   <UserValueCell
@@ -273,6 +287,13 @@ export function CurveTab({
                   <td className="text-right px-2 py-0.5 text-[12px]">
                     {formatFactor(displayCdfs[rowIdx])}
                   </td>
+
+                  {/* Prior CDF (referans) */}
+                  {priorCDFs && (
+                    <td className="text-right px-2 py-0.5 text-[11px] text-[color:var(--muted)]">
+                      {priorCDFs[r.i] != null ? formatFactor(priorCDFs[r.i]) : "—"}
+                    </td>
+                  )}
 
                   {/* Cumul% */}
                   <td className="text-right px-2 py-0.5 text-[11px] text-[color:var(--muted-strong)]">
@@ -294,9 +315,9 @@ export function CurveTab({
 }
 
 function DragCell({
-  value, active, dim, onMouseDown, onMouseEnter,
+  value, active, faded, onMouseDown, onMouseEnter,
 }: {
-  value: number | null; active: boolean; dim?: boolean;
+  value: number | null; active: boolean; faded?: boolean;
   onMouseDown: () => void; onMouseEnter: () => void;
 }) {
   if (value == null) {
@@ -309,11 +330,11 @@ function DragCell({
       className={
         "text-right px-2 py-0.5 text-[12px] tabular cursor-pointer transition " +
         (active
-          ? "bg-[color:var(--success-soft)] text-[color:var(--success)] font-semibold"
-          : dim
-          ? "text-[color:var(--muted)] hover:bg-[color:var(--surface-alt)]"
-          : "text-[color:var(--muted-strong)] hover:bg-[color:var(--surface-alt)]")
+          ? "font-semibold "
+          : "text-[color:var(--muted-strong)] hover:bg-[color:var(--surface-alt)] ") +
+        (faded ? "opacity-50" : "")
       }
+      style={active ? { background: "#16a34a", color: "#ffffff" } : undefined}
     >
       {formatFactor(value)}
     </td>
@@ -363,15 +384,16 @@ function UserValueCell({
       onMouseDown={e => { e.preventDefault(); onMouseDown(); }}
       onMouseEnter={onMouseEnter}
       onDoubleClick={() => { setEditing(true); }}
-      title="Tıkla / sürükle · Çift tık: değer gir"
+      title="Click / drag · Double-click: enter value"
       className={
         "text-right px-2 py-0.5 text-[12px] tabular cursor-pointer transition " +
         (active
-          ? "bg-[color:var(--success-soft)] text-[color:var(--success)] font-semibold"
+          ? "font-semibold "
           : value != null
-          ? "text-[color:var(--foreground)] hover:bg-[color:var(--surface-alt)]"
-          : "text-[color:var(--muted)] hover:bg-[color:var(--surface-alt)]")
+          ? "text-[color:var(--foreground)] hover:bg-[color:var(--surface-alt)] "
+          : "text-[color:var(--muted)] hover:bg-[color:var(--surface-alt)] ")
       }
+      style={active ? { background: "#16a34a", color: "#ffffff" } : undefined}
     >
       {formatFactor(value ?? 1)}
     </td>

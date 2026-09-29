@@ -2,37 +2,34 @@
 
 /**
  * Cashflow modülünün agent snapshot'ını ve action handler'ını register eder.
- * Reserve bridge ile aynı mimari: tüm branşların LDF/CDF hesapları pure
- * fonksiyonla snapshot'a alınır, session_state sarmalıyla backend'e iletilir.
- * Root layout'ta yaşar — cashflow sayfası açık olmasa da agent erişir.
+ * Root layout'ta yaşar — cashflow sayfası açık olmasa da agent her branşın
+ * cashflow durumuna erişebilir.
  */
 
 import { useEffect, useMemo } from "react";
-import { useAgentRegistry } from "@/lib/agent-registry";
+import { useAgentRegistryWriter } from "@/lib/agent-registry";
 import { useProject } from "@/lib/project-store";
-import { computeCashflowBranchSummary } from "@/lib/cashflow-pipeline";
 import type { AgentAction } from "@/types/triangle";
 import type { Branch, Period } from "@/types/project";
 
 export function CashflowAgentBridge() {
   const { project, activeBranch, actions } = useProject();
   const { registerSnapshot, registerActionHandler, unregisterActionHandler } =
-    useAgentRegistry();
+    useAgentRegistryWriter();
 
-  const modulePayload = useMemo(
-    () => buildCashflowModulePayload(project.periods, activeBranch),
-    [project.periods, activeBranch],
-  );
+  const snapshot = useMemo(() => buildCashflowSnapshot(project.periods, activeBranch), [
+    project.periods,
+    activeBranch,
+  ]);
 
   useEffect(() => {
-    registerSnapshot("cashflow", modulePayload);
-  }, [registerSnapshot, modulePayload]);
+    registerSnapshot("cashflow", snapshot);
+  }, [registerSnapshot, snapshot]);
 
   useEffect(() => {
     const handler = (received: AgentAction[]) => {
       for (const a of received) {
-        const branchId =
-          (a.payload?.branch_id as string | undefined) ?? activeBranch?.id;
+        const branchId = (a.payload?.branch_id as string | undefined) ?? activeBranch?.id;
         if (!branchId) continue;
 
         if (a.type === "set_cashflow_window") {
@@ -42,9 +39,35 @@ export function CashflowAgentBridge() {
           actions.updateBranch(
             branchId,
             () => ({ cashflowLdfWindow: w }),
-            "cashflow_window_set",
-            { window: w },
-            "agent",
+            "cashflow_window_set", { window: w }, "agent",
+          );
+        } else if (a.type === "set_cashflow_cdf_model") {
+          const dev = a.payload?.dev_period as string | undefined;
+          const model = Number(a.payload?.model) as 1 | 2 | 3 | 4 | 5 | 6;
+          if (!dev || ![1, 2, 3, 4, 5, 6].includes(model)) continue;
+          actions.updateBranch(
+            branchId,
+            (b) => ({
+              cashflowCdfModelPerPeriod: {
+                ...(b.cashflowCdfModelPerPeriod ?? {}),
+                [dev]: model,
+              },
+            }),
+            "cashflow_cdf_model_set", { dev_period: dev, model }, "agent",
+          );
+        } else if (a.type === "set_cashflow_cdf_model_bulk") {
+          const items = (a.payload?.items as { dev_period: string; model: number }[]) ?? [];
+          actions.updateBranch(
+            branchId,
+            (b) => {
+              const next = { ...(b.cashflowCdfModelPerPeriod ?? {}) };
+              for (const it of items) {
+                if ([1, 2, 3, 4, 5, 6].includes(it.model))
+                  next[it.dev_period] = it.model as 1 | 2 | 3 | 4 | 5 | 6;
+              }
+              return { cashflowCdfModelPerPeriod: next };
+            },
+            "cashflow_cdf_model_bulk", { count: items.length }, "agent",
           );
         } else if (a.type === "exclude_cashflow_cells") {
           const cells =
@@ -67,39 +90,6 @@ export function CashflowAgentBridge() {
             () => ({ cashflowLdfExcludedCells: [] }),
             "cashflow_exclusions_cleared",
             undefined,
-            "agent",
-          );
-        } else if (a.type === "set_cashflow_cdf_model") {
-          const dev = a.payload?.dev_period as string | undefined;
-          const model = Number(a.payload?.model) as 1 | 2 | 3 | 4 | 5 | 6;
-          if (!dev || ![1, 2, 3, 4, 5, 6].includes(model)) continue;
-          actions.updateBranch(
-            branchId,
-            (b) => ({
-              cashflowCdfModelPerPeriod: {
-                ...(b.cashflowCdfModelPerPeriod ?? {}),
-                [dev]: model,
-              },
-            }),
-            "cashflow_cdf_model_set",
-            { dev_period: dev, model },
-            "agent",
-          );
-        } else if (a.type === "set_cashflow_cdf_model_bulk") {
-          const items =
-            (a.payload?.items as { dev_period: string; model: number }[]) ?? [];
-          actions.updateBranch(
-            branchId,
-            (b) => {
-              const next = { ...(b.cashflowCdfModelPerPeriod ?? {}) };
-              for (const it of items) {
-                if ([1, 2, 3, 4, 5, 6].includes(it.model))
-                  next[it.dev_period] = it.model as 1 | 2 | 3 | 4 | 5 | 6;
-              }
-              return { cashflowCdfModelPerPeriod: next };
-            },
-            "cashflow_cdf_model_bulk",
-            { count: items.length },
             "agent",
           );
         } else if (a.type === "set_cashflow_cdf_user_value") {
@@ -130,9 +120,7 @@ export function CashflowAgentBridge() {
               cashflowCurveIncludePerPeriod: {},
               cashflowCdfInitial: {},
             }),
-            "cashflow_curve_reset",
-            undefined,
-            "agent",
+            "cashflow_curve_reset", undefined, "agent",
           );
         }
       }
@@ -144,73 +132,37 @@ export function CashflowAgentBridge() {
   return null;
 }
 
-// ─── Module payload builder ───────────────────────────────────────────────────
+// ─── Snapshot builder ─────────────────────────────────────────────────────────
 
-function buildCashflowModulePayload(
-  periods: Period[],
-  activeBranch: Branch | null,
-) {
-  let withTriangle = 0;
-  let withPattern = 0;
-
-  const periodSnaps = periods.map((p) => {
-    const branchSnaps = p.branches.map((b) => {
-      const summary = computeCashflowBranchSummary(b);
-      const isActive = activeBranch?.id === b.id;
-      if (summary.has_paid_triangle) withTriangle += 1;
-      const patternCount = Object.keys(b.cashflowMonthlyPattern ?? {}).length;
-      if (patternCount > 0) withPattern += 1;
-
-      return {
-        id: b.id,
-        name: b.name,
+function buildCashflowSnapshot(periods: Period[], activeBranch: Branch | null) {
+  const branches = periods.flatMap((p) =>
+    p.branches
+      .filter((b) => b.paidTriangle != null)
+      .map((b) => ({
+        branch_id: b.id,
+        branch_name: b.name,
+        period_id: p.id,
+        period_label: p.label,
         frequency: b.frequency,
-        is_active: isActive,
-        has_paid_triangle: summary.has_paid_triangle,
-        n_origins: summary.n_origins,
-        n_developments: summary.n_developments,
-        ldf_window: summary.ldf_window,
-        excluded_cells_count: summary.excluded_cells_count,
-        // excluded_cells detayı sadece aktif branş için — diğerleri için gereksiz
-        excluded_cells: isActive ? summary.excluded_cells : [],
-        cdf_model_overrides: Object.entries(b.cashflowCdfModelPerPeriod ?? {})
-          .filter(([, m]) => m !== 1)
-          .map(([dev, model]) => ({ dev_period: dev, model })),
-        cdf_user_values: Object.entries(b.cashflowCdfInitial ?? {}).map(
+        is_active: activeBranch?.id === b.id,
+        has_pattern: Object.keys(b.cashflowMonthlyPattern ?? {}).length > 0,
+        pattern_origin_count: Object.keys(b.cashflowMonthlyPattern ?? {}).length,
+        cashflow_ldf_window: b.cashflowLdfWindow ?? "all",
+        cashflow_cdf_model_overrides: Object.entries(
+          b.cashflowCdfModelPerPeriod ?? {},
+        ).map(([dev, model]) => ({ dev_period: dev, model })),
+        cashflow_curve_include_overrides: Object.entries(
+          b.cashflowCurveIncludePerPeriod ?? {},
+        ).map(([dev, include]) => ({ dev_period: dev, include })),
+        cashflow_cdf_user_values: Object.entries(b.cashflowCdfInitial ?? {}).map(
           ([dev, v]) => ({ dev_period: dev, value: v }),
         ),
-        has_pattern: patternCount > 0,
-        pattern_origin_count: patternCount,
-        pattern_origins: Object.keys(b.cashflowMonthlyPattern ?? {}),
-        // Pattern detayı sadece aktif branş için
-        quarterly_pattern: isActive ? (b.cashflowQuarterlyPattern ?? {}) : undefined,
-        monthly_pattern: isActive
-          ? Object.fromEntries(
-              Object.entries(b.cashflowMonthlyPattern ?? {}).map(([origin, weights]) => [
-                origin,
-                weights.filter((w) => w.weight > 0),
-              ]),
-            )
-          : undefined,
-        // LDF/CDF tam detay — tüm branşlar (reserve'deki per_origin gibi)
-        selected_ldfs: summary.selected_ldfs,
-        effective_cdfs: summary.effective_cdfs,
-        per_dev: summary.per_dev,
-      };
-    });
-    return { id: p.id, label: p.label, branches: branchSnaps };
-  });
+      })),
+  );
 
-  const sessionState = {
+  return {
+    branches,
     active_branch_id: activeBranch?.id ?? null,
-    periods: periodSnaps,
-    totals: {
-      branch_count: periods.reduce((s, p) => s + p.branches.length, 0),
-      branches_with_triangle: withTriangle,
-      branches_with_pattern: withPattern,
-    },
+    note: "Cashflow module: cashflow settings and monthly distribution pattern status per branch.",
   };
-
-  // session_state sarmalı: backend payload.get("session_state") ile okur
-  return { session_state: sessionState };
 }

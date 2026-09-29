@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import {
   DATA_TYPES,
+  isTriangleType,
   useDataStore,
   type DataPeriod,
   type DataTypeDef,
@@ -14,11 +15,12 @@ import { TriangleImportWizard, type TriangleWizardResult } from "@/components/Tr
 import { TriangleGrid } from "@/components/TriangleGrid";
 import { importPrimFile } from "@/lib/api";
 import type { PrimRecord, TriangleRecord } from "@/lib/data-store";
+import { useProvisionModels } from "@/lib/provision-models";
 
 // ─── Yardımcı ─────────────────────────────────────────────────────────────────
 
-const TR2 = new Intl.NumberFormat("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const TR0 = new Intl.NumberFormat("tr-TR", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+const TR2 = new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const TR0 = new Intl.NumberFormat("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 function fmt(n: number) { return TR2.format(n); }
 function fmt0(n: number) { return TR0.format(n); }
 function newId(): string {
@@ -48,7 +50,7 @@ function AddPeriodForm({ onAdd }: { onAdd: (label: string) => void }) {
   return (
     <div className="px-3 pb-3 space-y-1.5">
       <div className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: "var(--muted)" }}>
-        Dönem Ekle
+        Add Period
       </div>
       <div
         className="flex items-center gap-0 rounded-lg border overflow-hidden transition"
@@ -77,12 +79,12 @@ function AddPeriodForm({ onAdd }: { onAdd: (label: string) => void }) {
             borderColor: "var(--border)",
           }}
         >
-          Ekle
+          Add
         </button>
       </div>
       {showError && (
         <div className="text-[10.5px]" style={{ color: "var(--danger)" }}>
-          Format: 2025Q1 (yıl + Q + çeyrek)
+          Format: 2025Q1 (year + Q + quarter)
         </div>
       )}
     </div>
@@ -107,21 +109,19 @@ function PeriodList({
   return (
     <div
       className="flex flex-col border-r flex-shrink-0"
-      style={{ width: 200, borderColor: "var(--border)", background: "var(--surface)" }}
+      style={{ width: 220, borderColor: "var(--border)", background: "var(--surface)" }}
     >
       <div
-        className="px-3 py-3 border-b"
+        className="h-12 px-3 flex items-center border-b"
         style={{ borderColor: "var(--border)" }}
       >
-        <div className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--muted)" }}>
-          Dönemler
-        </div>
+        <div className="text-[11px] font-semibold uppercase tracking-wide flex-1" style={{ color: "var(--muted-strong)" }}>Valuation periods</div><span className="text-[11px] tabular" style={{ color: "var(--muted)" }}>{periods.length}</span>
       </div>
 
       <div className="flex-1 overflow-y-auto py-1.5">
         {periods.length === 0 && (
           <div className="px-3 py-4 text-[12px] text-center" style={{ color: "var(--muted)" }}>
-            Henüz dönem yok
+            No periods yet
           </div>
         )}
         {periods.map((p) => {
@@ -131,11 +131,15 @@ function PeriodList({
             <div
               key={p.id}
               onClick={() => onSelect(p.id)}
-              className="group flex items-center gap-1 mx-1.5 px-2.5 py-2 rounded-lg cursor-pointer transition"
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(p.id); } }}
+              role="button"
+              tabIndex={0}
+              className="group flex w-[calc(100%-12px)] items-center gap-2 mx-1.5 px-2.5 py-2 rounded-md cursor-pointer transition text-left focus:outline-none focus:ring-2 focus:ring-[color:var(--primary)]"
               style={{
                 background: active ? "var(--primary-soft)" : "transparent",
               }}
             >
+              <span className="h-2 w-2 rounded-full" style={{ background: datasetCount ? "var(--success)" : "var(--border-strong)" }} />
               <div className="flex-1 min-w-0">
                 <div
                   className="text-[13px] font-medium truncate"
@@ -145,7 +149,7 @@ function PeriodList({
                 </div>
                 {datasetCount > 0 && (
                   <div className="text-[10.5px]" style={{ color: "var(--muted)" }}>
-                    {datasetCount} veri seti
+                    {datasetCount} datasets
                   </div>
                 )}
               </div>
@@ -153,7 +157,7 @@ function PeriodList({
                 onClick={(e) => { e.stopPropagation(); onDelete(p.id); }}
                 className="opacity-0 group-hover:opacity-100 transition p-0.5 rounded hover:bg-red-100"
                 style={{ color: "#dc2626" }}
-                title="Dönemi sil"
+                title="Delete period"
               >
                 <TrashIcon />
               </button>
@@ -185,108 +189,14 @@ function DataTypeCard({
   onRemove: (datasetId: string) => void;
 }) {
   return (
-    <div
-      className="rounded-xl border p-4 flex flex-col gap-3"
-      style={{ borderColor: "var(--border)", background: "var(--surface)" }}
-    >
-      <div className="flex items-start gap-3">
-        <div
-          className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5"
-          style={{ background: datasets.length > 0 ? "var(--primary-soft)" : "var(--surface-alt)" }}
-        >
-          <TableIcon color={datasets.length > 0 ? "var(--primary)" : "var(--muted)"} />
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="text-[13.5px] font-semibold" style={{ color: "var(--foreground)" }}>
-              {def.label}
-            </span>
-            {datasets.length > 0 && (
-              <span
-                className="text-[10.5px] font-semibold px-1.5 py-0.5 rounded-full"
-                style={{ background: "#dcfce7", color: "#15803d" }}
-              >
-                {datasets.length} veri seti
-              </span>
-            )}
-          </div>
-          <div className="text-[12px] mt-0.5" style={{ color: "var(--muted-strong)" }}>
-            {def.description}
-          </div>
-          <div className="flex flex-wrap gap-1 mt-1.5">
-            {def.columns.map((c) => (
-              <span
-                key={c}
-                className="text-[10.5px] px-1.5 py-0.5 rounded-md font-mono"
-                style={{ background: "var(--surface-alt)", color: "var(--muted-strong)", border: "1px solid var(--border)" }}
-              >
-                {c}
-              </span>
-            ))}
-          </div>
-        </div>
+    <div className="border-b last:border-b-0" style={{ borderColor: "var(--border)" }}>
+      <div className="grid grid-cols-[minmax(190px,1.35fr)_minmax(120px,.75fr)_110px_104px] items-center gap-4 px-5 py-4">
+        <div className="min-w-0"><div className="flex items-center gap-2"><TableIcon color={datasets.length ? "var(--primary)" : "var(--muted)"} /><span className="text-[13px] font-semibold">{def.label}</span></div><p className="mt-1 truncate text-[11.5px]" style={{ color: "var(--muted-strong)" }}>{def.description}</p></div>
+        <div className="min-w-0 text-[11.5px]" style={{ color: "var(--muted-strong)" }}>{datasets.length ? <span className="truncate block">{datasets[0].meta.filename}</span> : <span style={{ color: "var(--muted)" }}>No source loaded</span>}</div>
+        <div className="text-right text-[12px] tabular" style={{ color: datasets.length ? "var(--foreground)" : "var(--muted)" }}>{fmt0(datasets.reduce((sum, ds) => sum + ds.meta.record_count, 0))}</div>
+        <div className="text-right"><button onClick={onImport} className={datasets.length ? "btn text-[11.5px]" : "btn btn-primary text-[11.5px]"}>{datasets.length ? "Add data" : "Load"}</button></div>
       </div>
-
-      {datasets.length > 0 && (
-        <div className="flex flex-col gap-1.5">
-          {datasets.map((ds) => (
-            <div
-              key={ds.datasetId}
-              className="rounded-lg px-3 py-2 text-[12px] flex items-center gap-2"
-              style={{ background: "var(--surface-alt)" }}
-            >
-              <div className="flex-1 min-w-0 grid grid-cols-3 gap-2">
-                <div>
-                  <div style={{ color: "var(--muted)" }}>Kayıt</div>
-                  <div className="font-semibold" style={{ color: "var(--foreground)" }}>
-                    {fmt0(ds.meta.record_count)}
-                  </div>
-                </div>
-                <div>
-                  <div style={{ color: "var(--muted)" }}>Dosya</div>
-                  <div className="font-semibold truncate" style={{ color: "var(--foreground)" }}>
-                    {ds.meta.filename}
-                  </div>
-                </div>
-                <div>
-                  <div style={{ color: "var(--muted)" }}>Yüklenme</div>
-                  <div className="font-semibold" style={{ color: "var(--foreground)" }}>
-                    {new Date(ds.meta.uploadedAt).toLocaleDateString("tr-TR")}
-                  </div>
-                </div>
-              </div>
-              <div className="flex gap-1 flex-shrink-0">
-                <button
-                  onClick={() => onView(ds.datasetId)}
-                  className="px-2.5 py-1 rounded-lg text-[11.5px] border transition"
-                  style={{ borderColor: "var(--border)", color: "var(--muted-strong)" }}
-                >
-                  Görüntüle
-                </button>
-                <button
-                  onClick={() => onRemove(ds.datasetId)}
-                  className="px-2.5 py-1 rounded-lg text-[11.5px] border transition hover:bg-red-50"
-                  style={{ borderColor: "var(--border)", color: "#dc2626" }}
-                >
-                  Sil
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <button
-        onClick={onImport}
-        className="py-1.5 rounded-lg text-[12.5px] font-semibold border transition"
-        style={{
-          borderColor: "var(--primary)",
-          background: datasets.length > 0 ? "transparent" : "var(--primary)",
-          color: datasets.length > 0 ? "var(--primary)" : "#fff",
-        }}
-      >
-        {datasets.length > 0 ? "+ Yeni ekle" : "Veri yükle"}
-      </button>
+      {datasets.length > 0 && <div className="border-t px-5 py-2" style={{ borderColor: "var(--border)", background: "var(--surface-alt)" }}>{datasets.map((ds) => <div key={ds.datasetId} className="flex items-center gap-3 py-1 text-[11px]"><span className="min-w-0 flex-1 truncate" style={{ color: "var(--muted-strong)" }}>{ds.meta.filename}</span><span className="tabular" style={{ color: "var(--muted)" }}>{fmt0(ds.meta.record_count)} records</span><button onClick={() => onView(ds.datasetId)} className="font-medium" style={{ color: "var(--primary)" }}>View</button><button onClick={() => onRemove(ds.datasetId)} className="font-medium" style={{ color: "var(--danger)" }}>Remove</button></div>)}</div>}
     </div>
   );
 }
@@ -322,18 +232,18 @@ function DatasetViewer({
           className="p-1 rounded-lg hover:bg-[color:var(--surface-alt)] transition"
           style={{ color: "var(--muted-strong)" }}
         >
-          ← Geri
+          ← Back
         </button>
         <div className="text-[13px] font-semibold" style={{ color: "var(--foreground)" }}>
           {periodLabel} · {typeLabel}
         </div>
         <div className="ml-auto text-[12px]" style={{ color: "var(--muted)" }}>
-          {fmt0(total)} kayıt · {dataset.meta.filename}
+          {fmt0(total)} records · {dataset.meta.filename}
         </div>
       </div>
 
       <div className="flex-1 overflow-auto">
-        {dataset.typeId === "ucgen" && (dataset.records as TriangleRecord[]).length > 0 && (
+        {isTriangleType(dataset.typeId) && (dataset.records as TriangleRecord[]).length > 0 && (
           <div className="p-4">
             {(dataset.records as TriangleRecord[]).map((rec, i) => (
               <div key={i} className="mb-6">
@@ -345,7 +255,7 @@ function DatasetViewer({
                     {rec.triangle_type === "paid" ? "Paid" : "Incurred"}
                   </span>
                   <span className="text-[10.5px]" style={{ color: "var(--muted)" }}>
-                    {rec.origin_granularity === "yearly" ? "Yıllık" : "Çeyreklik"} kaza · {rec.development_granularity === "yearly" ? "Yıllık" : "Çeyreklik"} gelişim
+                    {rec.origin_granularity === "yearly" ? "Yearly" : "Quarterly"} accident · {rec.development_granularity === "yearly" ? "Yearly" : "Quarterly"} development
                   </span>
                 </div>
                 <div className="rounded-lg border overflow-auto" style={{ borderColor: "var(--border)" }}>
@@ -362,13 +272,13 @@ function DatasetViewer({
             ))}
           </div>
         )}
-        {dataset.typeId !== "ucgen" && (
+        {!isTriangleType(dataset.typeId) && (
         <table className="w-full text-[12.5px] border-collapse">
           {dataset.typeId === "prim" ? (
             <>
               <thead>
                 <tr style={{ background: "var(--surface-alt)" }}>
-                  {["Branş", "Dönem", "EP"].map((h) => (
+                  {["Branch", "Period", "EP"].map((h) => (
                     <th key={h} className="px-4 py-2.5 text-left font-semibold border-b whitespace-nowrap" style={{ borderColor: "var(--border)", color: "var(--muted-strong)" }}>{h}</th>
                   ))}
                 </tr>
@@ -387,7 +297,7 @@ function DatasetViewer({
             <>
               <thead>
                 <tr style={{ background: "var(--surface-alt)" }}>
-                  {["Dosya No", "Branş", "Hasar Tarihi", "Gelişim Tarihi", "Ödeme", "Muallak"].map((h) => (
+                  {["Claim No", "Branch", "Loss Date", "Development Date", "Paid", "Outstanding"].map((h) => (
                     <th key={h} className="px-4 py-2.5 text-left font-semibold border-b whitespace-nowrap" style={{ borderColor: "var(--border)", color: "var(--muted-strong)" }}>{h}</th>
                   ))}
                 </tr>
@@ -410,7 +320,7 @@ function DatasetViewer({
         )}
       </div>
 
-      {totalPages > 1 && dataset.typeId !== "ucgen" && (
+      {totalPages > 1 && !isTriangleType(dataset.typeId) && (
         <div className="flex items-center gap-3 px-4 py-3 border-t flex-shrink-0" style={{ borderColor: "var(--border)" }}>
           <button disabled={page === 0} onClick={() => setPage((p) => p - 1)}
             className="px-3 py-1 rounded-lg text-[12px] border disabled:opacity-40" style={{ borderColor: "var(--border)" }}>
@@ -435,10 +345,18 @@ type RightView =
   | { kind: "viewer"; datasetId: string; typeId: string };
 
 function PeriodDetail({ period }: { period: DataPeriod }) {
-  const { setDataset, removeDataset, loadDatasetRecords } = useDataStore();
+  const { setDataset, removeDataset, loadDatasetRecords, periods } = useDataStore();
+  const provision = useProvisionModels();
+  // Roll-forward tabanı: large'ı olan DİĞER (önceki) dönem etiketleri.
+  const largeBaseOptions = periods
+    .filter((p) => p.id !== period.id && Object.values(p.datasets).some(
+      (d) => d.typeId === "large" || d.typeId === "large_ucgen",
+    ))
+    .map((p) => p.label);
   const [view, setView] = useState<RightView>({ kind: "overview" });
   const [showPrimWizard, setShowPrimWizard] = useState(false);
   const [showTriangleWizard, setShowTriangleWizard] = useState(false);
+  const [triangleWizardType, setTriangleWizardType] = useState<"ucgen" | "large_ucgen">("ucgen");
   const [viewerDataset, setViewerDataset] = useState<Dataset | null>(null);
   const [viewerLoading, setViewerLoading] = useState(false);
 
@@ -458,11 +376,17 @@ function PeriodDetail({ period }: { period: DataPeriod }) {
         gelisim_tarihi_max: result.result.gelisim_tarihi_max,
         total_odeme: result.result.total_odeme,
         total_muallak: result.result.total_muallak,
+        ...(typeId === "large"
+          ? { largeMethod: result.largeMethod ?? "direct", largeBasePeriodLabel: result.largeBasePeriodLabel }
+          : {}),
       },
       records: result.result.records,
     };
     // setDataset optimistic update'i hemen uygular; remote hata verse de overview'a dön
     setDataset(period.id, ds).catch(() => {});
+    // Rezervde SADECE model iskeleti oluştur (dönem + branş). Veriyi bağlamayı
+    // kullanıcı rezervde seçer. Large ayrı üçgen değil, aynı isimli modele bağlanır.
+    provision.provisionShells(period.label, result.result.brans_list, result.frequency);
     setView({ kind: "overview" });
   }
 
@@ -483,24 +407,27 @@ function PeriodDetail({ period }: { period: DataPeriod }) {
       records: r.records,
     };
     setDataset(period.id, ds).catch(() => {});
+    // Prim yalnızca veri; model iskeleti oluşturmaz. Exposure'ı rezervde (BF) kullanıcı bağlar.
     setView({ kind: "overview" });
   }
 
   // Üçgen wizard tamamlandığında
   async function handleTriangleImportDone(result: TriangleWizardResult) {
-    const rec = result.record;
+    const recs = result.records; // [paid, incurred]
     const ds: Dataset = {
       datasetId: newId(),
-      typeId: "ucgen",
+      typeId: triangleWizardType,
       meta: {
         filename: result.filename,
         uploadedAt: new Date().toISOString(),
-        record_count: rec.origin_periods.length,
-        brans_list: [rec.brans],
+        record_count: recs[0]?.origin_periods.length ?? 0,
+        brans_list: recs[0] ? [recs[0].brans] : [],
       },
-      records: [rec],
+      records: recs,
     };
     setDataset(period.id, ds).catch(() => {});
+    // Hazır üçgen: rezervde yalnız model iskeleti (branş) oluştur; veriyi kullanıcı bağlar.
+    if (recs[0]) provision.provisionShells(period.label, [recs[0].brans], recs[0].origin_granularity);
     setShowTriangleWizard(false);
   }
 
@@ -527,14 +454,18 @@ function PeriodDetail({ period }: { period: DataPeriod }) {
             className="p-1 rounded-lg hover:bg-[color:var(--surface-alt)] transition"
             style={{ color: "var(--muted-strong)" }}
           >
-            ← Geri
+            ← Back
           </button>
           <div className="text-[13px] font-semibold" style={{ color: "var(--foreground)" }}>
             {period.label} · {typeDef.label}
           </div>
         </div>
         <div className="flex-1 overflow-hidden">
-          <DataImportWizard onDone={(r) => handleImportDone(view.typeId, r)} />
+          <DataImportWizard
+            onDone={(r) => handleImportDone(view.typeId, r)}
+            largeMode={view.typeId === "large"}
+            basePeriodOptions={largeBaseOptions}
+          />
         </div>
       </div>
     );
@@ -562,14 +493,9 @@ function PeriodDetail({ period }: { period: DataPeriod }) {
   // Overview
   return (
     <div className="flex-1 overflow-auto p-6">
-      <div className="mb-5">
-        <div className="text-[18px] font-bold" style={{ color: "var(--foreground)" }}>{period.label}</div>
-        <div className="text-[12.5px] mt-0.5" style={{ color: "var(--muted)" }}>
-          Oluşturulma: {new Date(period.createdAt).toLocaleDateString("tr-TR")}
-        </div>
-      </div>
-
-      <div className="grid gap-3 md:grid-cols-2">
+      <div className="mb-5 flex items-start justify-between gap-4"><div><h1 className="text-[18px] font-semibold">{period.label}</h1><p className="mt-1 text-[12px]" style={{ color: "var(--muted-strong)" }}>Data sources and imported datasets for this valuation period.</p></div><div className="text-right"><div className="text-[11px] font-medium" style={{ color: "var(--muted-strong)" }}>Oracle source</div><div className="mt-0.5 text-[11px]" style={{ color: "var(--success)" }}>● Connected</div></div></div>
+      <div className="card overflow-hidden">
+        <div className="grid grid-cols-[minmax(190px,1.35fr)_minmax(120px,.75fr)_110px_104px] gap-4 border-b px-5 py-2.5 text-[10px] font-semibold uppercase tracking-wide" style={{ borderColor: "var(--border)", background: "var(--surface-alt)", color: "var(--muted-strong)" }}><span>Dataset</span><span>Source</span><span className="text-right">Records</span><span className="text-right">Action</span></div>
         {DATA_TYPES.map((def) => {
           const typeDatasets = Object.values(period.datasets).filter((d) => d.typeId === def.id);
           return (
@@ -580,8 +506,9 @@ function PeriodDetail({ period }: { period: DataPeriod }) {
               onImport={() =>
                 def.id === "prim"
                   ? setShowPrimWizard(true)
-                  : def.id === "ucgen"
-                  ? setShowTriangleWizard(true)
+                  : isTriangleType(def.id)
+                  ? (setTriangleWizardType(def.id as "ucgen" | "large_ucgen"),
+                    setShowTriangleWizard(true))
                   : setView({ kind: "wizard", typeId: def.id })
               }
               onView={(dsId) => openViewer(dsId)}
@@ -620,12 +547,12 @@ function EmptyState({ hasPeriods }: { hasPeriods: boolean }) {
         <TableIcon color="var(--muted)" />
       </div>
       <div className="text-[14px] font-semibold mb-1" style={{ color: "var(--muted-strong)" }}>
-        {hasPeriods ? "Bir dönem seç" : "Dönem oluştur"}
+        {hasPeriods ? "Select a period" : "Create a period"}
       </div>
       <div className="text-[12.5px]">
         {hasPeriods
-          ? "Sol panelden bir dönem seçerek verilerini yönet."
-          : "Sol panelden yeni bir dönem ekleyerek başla."}
+          ? "Select a period from the left panel to manage its data."
+          : "Add a new period from the left panel to get started."}
       </div>
     </div>
   );
@@ -638,7 +565,7 @@ export default function DataPage() {
     useDataStore();
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex h-full min-h-0 overflow-hidden">
       {/* Sol: dönem listesi */}
       <PeriodList
         periods={periods}
@@ -656,10 +583,7 @@ export default function DataPage() {
           style={{ borderColor: "var(--border)", background: "var(--surface)" }}
         >
           <div>
-            <div className="text-[14px] font-semibold" style={{ color: "var(--foreground)" }}>Veri</div>
-            <div className="text-[11.5px]" style={{ color: "var(--muted)" }}>
-              Dönem bazlı veri yönetimi
-            </div>
+            <div className="text-[14px] font-semibold" style={{ color: "var(--foreground)" }}>Data</div><div className="text-[11.5px]" style={{ color: "var(--muted)" }}>Period-based data management</div>
           </div>
         </div>
 

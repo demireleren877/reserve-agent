@@ -2,8 +2,14 @@
 
 import { useState, useEffect } from "react";
 import { useDataStore } from "@/lib/data-store";
-import type { ClaimRecord } from "@/lib/data-store";
+import type { ClaimRecord, Dataset } from "@/lib/data-store";
 import type { CashflowRecord } from "@/lib/api";
+import { sameBranchName, uniqueBranchNames } from "@/lib/branch-identity";
+
+// Hasar dataset'i typeId ile bulunur (datasetId rastgeledir; sabit "hasar" anahtarı yanlış).
+function findHasar(datasets?: Record<string, Dataset>): Dataset | undefined {
+  return datasets ? Object.values(datasets).find((d) => d.typeId === "hasar") : undefined;
+}
 
 interface Props {
   onLoad: (records: CashflowRecord[], meta: { periodLabel: string; brans: string; recordCount: number }) => void;
@@ -13,7 +19,7 @@ interface Props {
 export function LoadCashflowFromDataStore({ onLoad, onClose }: Props) {
   const store = useDataStore();
 
-  const periodsWithHasar = store.periods.filter((p) => p.datasets["hasar"]);
+  const periodsWithHasar = store.periods.filter((p) => findHasar(p.datasets));
 
   const [periodId, setPeriodId] = useState<string>(
     periodsWithHasar.find((p) => p.id === store.activePeriodId)?.id ?? periodsWithHasar[0]?.id ?? ""
@@ -27,15 +33,17 @@ export function LoadCashflowFromDataStore({ onLoad, onClose }: Props) {
   useEffect(() => {
     if (!periodId) return;
     const period = store.periods.find((p) => p.id === periodId);
-    const meta = period?.datasets["hasar"]?.meta;
+    const hasarDs = findHasar(period?.datasets);
+    const meta = hasarDs?.meta;
     if (meta?.brans_list?.length) {
-      setBransList(meta.brans_list);
-      setBrans((b) => (meta.brans_list!.includes(b) ? b : meta.brans_list![0]));
-    } else if (period) {
+      const list = uniqueBranchNames(meta.brans_list);
+      setBransList(list);
+      setBrans((b) => (list.some((name) => sameBranchName(name, b)) ? b : list[0]));
+    } else if (period && hasarDs) {
       setLoading(true);
-      store.loadDatasetRecords(periodId, "hasar")
+      store.loadDatasetRecords(periodId, hasarDs.datasetId)
         .then((ds) => {
-          const list = ds?.meta.brans_list ?? [];
+          const list = uniqueBranchNames(ds?.meta.brans_list ?? []);
           setBransList(list);
           setBrans(list[0] ?? "");
         })
@@ -50,14 +58,14 @@ export function LoadCashflowFromDataStore({ onLoad, onClose }: Props) {
     setLoading(true);
     try {
       const period = store.periods.find((p) => p.id === periodId);
-      let ds = period?.datasets["hasar"];
-      if (!ds?.records?.length) {
-        ds = await store.loadDatasetRecords(periodId, "hasar") ?? undefined;
+      let ds = findHasar(period?.datasets);
+      if (ds && !ds.records?.length) {
+        ds = await store.loadDatasetRecords(periodId, ds.datasetId) ?? undefined;
       }
-      if (!ds?.records?.length) throw new Error("Kayıt bulunamadı");
+      if (!ds?.records?.length) throw new Error("No records found");
 
-      const claimRecords = (ds.records as ClaimRecord[]).filter((r) => r.brans === brans);
-      if (!claimRecords.length) throw new Error(`${brans} branşına ait kayıt yok`);
+      const claimRecords = (ds.records as ClaimRecord[]).filter((r) => sameBranchName(r.brans, brans));
+      if (!claimRecords.length) throw new Error(`No records for branch ${brans}`);
 
       // origin_year + dev_date bazında odeme topla
       const grouped = new Map<string, number>();
@@ -73,7 +81,7 @@ export function LoadCashflowFromDataStore({ onLoad, onClose }: Props) {
         return { origin_year: parseInt(year), dev_date: devDate, paid };
       });
 
-      if (!cashflowRecords.length) throw new Error("Dönüştürülebilir kayıt bulunamadı");
+      if (!cashflowRecords.length) throw new Error("No convertible records found");
 
       onLoad(cashflowRecords, {
         periodLabel: period?.label ?? periodId,
@@ -92,17 +100,17 @@ export function LoadCashflowFromDataStore({ onLoad, onClose }: Props) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
       <div className="card w-full max-w-md shadow-xl border border-[color:var(--border)]">
         <div className="p-5 border-b border-[color:var(--border)] flex items-center justify-between">
-          <h2 className="text-sm font-semibold">Veri Modülünden Yükle</h2>
+          <h2 className="text-sm font-semibold">Load from Data Module</h2>
           <button onClick={onClose} className="text-[color:var(--muted)] hover:text-[color:var(--foreground)] text-lg px-1">×</button>
         </div>
 
         <div className="p-5 space-y-4">
           {/* Dönem */}
           <div>
-            <label className="block text-xs font-medium text-[color:var(--muted-strong)] mb-1">Dönem</label>
+            <label className="block text-xs font-medium text-[color:var(--muted-strong)] mb-1">Period</label>
             {periodsWithHasar.length === 0 ? (
               <p className="text-xs text-[color:var(--muted)]">
-                Hasar verisi yüklü dönem bulunamadı. Veri modülünden yükleyin.
+                No period with claim data found. Load it from the Data module.
               </p>
             ) : (
               <select
@@ -119,11 +127,11 @@ export function LoadCashflowFromDataStore({ onLoad, onClose }: Props) {
 
           {/* Branş */}
           <div>
-            <label className="block text-xs font-medium text-[color:var(--muted-strong)] mb-1">Branş</label>
+            <label className="block text-xs font-medium text-[color:var(--muted-strong)] mb-1">Branch</label>
             {loading ? (
-              <p className="text-xs text-[color:var(--muted)]">Yükleniyor…</p>
+              <p className="text-xs text-[color:var(--muted)]">Loading…</p>
             ) : bransList.length === 0 ? (
-              <p className="text-xs text-[color:var(--muted)]">Bu döneme hasar verisi yüklenmemiş.</p>
+              <p className="text-xs text-[color:var(--muted)]">No claim data loaded into this period.</p>
             ) : (
               <select
                 value={brans}
@@ -136,7 +144,7 @@ export function LoadCashflowFromDataStore({ onLoad, onClose }: Props) {
           </div>
 
           <p className="text-xs text-[color:var(--muted)] leading-relaxed">
-            Hasar kayıtlarındaki ödeme tutarları kaza yılı ve gelişim tarihine göre gruplanarak nakit akışı hesaplamasına aktarılır.
+            Paid amounts from claim records are grouped by accident year and development date and fed into the cashflow calculation.
           </p>
 
           {error && (
@@ -151,14 +159,14 @@ export function LoadCashflowFromDataStore({ onLoad, onClose }: Props) {
             onClick={onClose}
             className="px-4 py-2 text-sm rounded-md border border-[color:var(--border)] text-[color:var(--muted-strong)] hover:text-[color:var(--foreground)] transition"
           >
-            İptal
+            Cancel
           </button>
           <button
             onClick={handleLoad}
             disabled={loading || !periodId || !brans || bransList.length === 0}
             className="px-4 py-2 text-sm rounded-md bg-[color:var(--primary)] text-white font-medium hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading ? "Yükleniyor…" : "Yükle"}
+            {loading ? "Loading…" : "Load"}
           </button>
         </div>
       </div>

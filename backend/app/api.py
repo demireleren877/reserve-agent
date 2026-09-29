@@ -16,6 +16,7 @@ from app.cashflow.compute import (
     parse_records_from_bytes,
     triangle_to_cashflow_records,
 )
+from app.data.branch_identity import branch_identity_key, unique_branch_names
 from app.data.parser import inspect_file, parse_with_mapping
 from app.data.prim_parser import inspect_prim_file, parse_prim_with_mapping
 from app.data.triangle_builder import build_triangles
@@ -26,7 +27,9 @@ _XLSX_MAGIC = b"PK\x03\x04"
 _MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 
 from app.agent.client import AgentClient
-from app.agent.loop import run_agent_turn
+from app.agent.endpoint_guard import EndpointNotAllowed, validate_llm_base_url
+from app.agent.loop import GLOBAL_PROMPT, run_agent_turn
+from app.agent.tools import TOOL_SCHEMAS
 from app.core.chain_ladder import run_chain_ladder
 from app.core.excel_parser import (
     ParseError,
@@ -56,6 +59,22 @@ MODEL_CATALOG: list[ModelOption] = [
     ModelOption(id="qwen/qwen3.6-flash", label="Qwen 3.6 Flash"),
     ModelOption(id="google/gemini-3.1-flash-lite-preview", label="Gemini 3.1 Flash Lite (Preview)"),
 ]
+
+
+@router.get("/agent/tools")
+def agent_tools(_auth: dict = Depends(verify_firebase_token)) -> dict:
+    """LLM'e gönderilebilecek gerçek araç listesi (Agent Ayarları > Araçlar)."""
+    tools = [
+        {"name": s["function"]["name"], "description": s["function"].get("description", "")}
+        for s in TOOL_SCHEMAS
+    ]
+    return {"tools": tools, "count": len(tools)}
+
+
+@router.get("/agent/prompt")
+def agent_prompt(_auth: dict = Depends(verify_firebase_token)) -> dict:
+    """Yerleşik genel sistem promptu (Agent Ayarları'nda 'varsayılanı yükle')."""
+    return {"system_prompt": GLOBAL_PROMPT}
 
 
 @router.get("/models", response_model=ModelsResponse)
@@ -200,14 +219,37 @@ def agent_chat(req: ChatRequest, _auth: dict = Depends(verify_firebase_token)) -
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
 
-    client = AgentClient(model=req.model)
+    cfg = req.config
+    enabled = set(cfg.enabled_tools) if cfg is not None and cfg.enabled_tools is not None else None
+    if cfg is not None and cfg.base_url.strip():
+        # Kullanıcının kendi uç noktası: isteği sunucu attığı için adres doğrulanır.
+        try:
+            base_url = validate_llm_base_url(cfg.base_url)
+        except EndpointNotAllowed as e:
+            raise HTTPException(status_code=400, detail=f"agent_endpoint_not_allowed: {e}") from e
+        if not cfg.api_key.strip() or not cfg.model.strip():
+            raise HTTPException(status_code=400, detail="agent_not_configured")
+        client = AgentClient(
+            api_key=cfg.api_key.strip(),
+            model=cfg.model.strip(),
+            base_url=base_url,
+            temperature=cfg.temperature,
+        )
+    else:
+        own_model = cfg.model.strip() if cfg is not None else ""
+        client = AgentClient(
+            model=own_model or req.model,
+            temperature=cfg.temperature if cfg is not None else None,
+        )
+
     try:
         result = run_agent_turn(
-            client=client,
-            messages=[m.model_dump() for m in req.messages],
-            modules_payload=modules_payload,
+            client,
+            [m.model_dump() for m in req.messages],
+            modules_payload,
             full_history=req.full_history,
-            max_iterations=20,
+            global_prompt=cfg.system_prompt if cfg is not None else None,
+            enabled_tools=enabled,
         )
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Agent hatası: {e}") from e
@@ -503,7 +545,7 @@ async def data_import(
     if not records:
         raise HTTPException(status_code=400, detail="Geçerli kayıt bulunamadı")
 
-    brans_set: set[str] = set()
+    branch_names: list[str] = []
     hasar_min: str | None = None
     hasar_max: str | None = None
     gelisim_min: str | None = None
@@ -519,7 +561,7 @@ async def data_import(
     for r in records:
         h = r.hasar_tarihi.isoformat()
         g = r.gelisim_tarihi.isoformat()
-        brans_set.add(r.brans)
+        branch_names.append(r.brans)
         if hasar_min is None or h < hasar_min:
             hasar_min = h
         if hasar_max is None or h > hasar_max:
@@ -529,7 +571,8 @@ async def data_import(
         if gelisim_max is None or g > gelisim_max:
             gelisim_max = g
         total_odeme += r.odeme
-        key = (r.brans, r.dosya_no)
+        # Aynı branşın yazım farkları (YANGIN / Yangın / yangın) tek branş sayılır.
+        key = (branch_identity_key(r.brans), r.dosya_no)
         prev = last_muallak.get(key)
         if prev is None or g > prev[0]:
             last_muallak[key] = (g, r.muallak)
@@ -547,7 +590,7 @@ async def data_import(
 
     return {
         "record_count": len(records),
-        "brans_list": sorted(brans_set),
+        "brans_list": sorted(unique_branch_names(branch_names), key=branch_identity_key),
         "hasar_tarihi_min": hasar_min,
         "hasar_tarihi_max": hasar_max,
         "gelisim_tarihi_min": gelisim_min,
@@ -682,20 +725,20 @@ async def data_import_prim(
     if not records:
         raise HTTPException(status_code=400, detail="Geçerli kayıt bulunamadı")
 
-    brans_set: set[str] = set()
+    branch_names: list[str] = []
     donem_set: set[str] = set()
     total_ep = 0.0
     serialized: list[dict[str, Any]] = []
 
     for r in records:
-        brans_set.add(r.brans)
+        branch_names.append(r.brans)
         donem_set.add(r.donem)
         total_ep += r.ep
         serialized.append({"brans": r.brans, "donem": r.donem, "ep": r.ep})
 
     return {
         "record_count": len(records),
-        "brans_list": sorted(brans_set),
+        "brans_list": sorted(unique_branch_names(branch_names), key=branch_identity_key),
         "donem_list": sorted(donem_set),
         "total_ep": total_ep,
         "records": serialized,

@@ -1,4 +1,21 @@
 import { AuthError, verifyIdToken, type VerifiedToken } from "./auth";
+import {
+  TeamError,
+  acquireLock,
+  appendAuditEvent,
+  createUser,
+  deleteUser,
+  forceAcquireLock,
+  getLock,
+  listAuditEvents,
+  listUsers,
+  projectAuditStatements,
+  releaseLock,
+  resolveWorkspace,
+  updateUser,
+  type Result,
+  type Workspace,
+} from "./team";
 
 interface Env {
   DB: D1Database;
@@ -30,12 +47,13 @@ interface StateRow {
   chat_json: string | null;
   version: number;
   updated_at: number;
+  updated_by_name: string | null;
 }
 
 function corsHeaders(origin: string): HeadersInit {
   return {
     "Access-Control-Allow-Origin": origin,
-    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
     "Access-Control-Allow-Headers": "Authorization, Content-Type",
     "Access-Control-Max-Age": "86400",
     "Vary": "Origin",
@@ -109,14 +127,24 @@ async function ensureUser(env: Env, t: VerifiedToken): Promise<UserRow> {
   return row;
 }
 
-async function handleMe(env: Env, t: VerifiedToken, origin: string) {
+async function handleMe(env: Env, t: VerifiedToken, ws: Workspace, origin: string) {
   const user = await ensureUser(env, t);
+  // Ekip üyesi, çalışma alanı sahibinin planını kullanır.
+  const owner = ws.isOwner
+    ? user
+    : await env.DB.prepare(
+        "SELECT uid, email, plan, plan_selected_at, paddle_subscription_id, created_at, updated_at FROM users WHERE uid = ?",
+      )
+        .bind(ws.id)
+        .first<UserRow>();
   return json(
     {
       uid: user.uid,
       email: user.email,
-      plan: user.plan,
-      hasPlan: user.plan_selected_at !== null,
+      plan: owner?.plan ?? "free",
+      hasPlan: ws.isOwner ? user.plan_selected_at !== null : true,
+      role: ws.role,
+      workspace: { id: ws.id, is_owner: ws.isOwner, owner_email: owner?.email ?? null },
     },
     { status: 200 },
     origin,
@@ -158,6 +186,8 @@ async function handleSetPlan(
   if (plan !== "free" && plan !== "pro") {
     return err(400, "invalid_plan", origin);
   }
+  const ws = await resolveWorkspace(env.DB, t.uid, t.email);
+  if (!ws.isOwner) return err(403, "plan_managed_by_owner", origin);
   const user = await ensureUser(env, t);
   const now = Date.now();
 
@@ -174,12 +204,12 @@ async function handleSetPlan(
   return json({ uid: t.uid, plan, updated_at: now }, { status: 200 }, origin);
 }
 
-async function handleGetState(env: Env, t: VerifiedToken, origin: string) {
+async function handleGetState(env: Env, t: VerifiedToken, ws: Workspace, origin: string) {
   await ensureUser(env, t);
   const row = await env.DB.prepare(
-    "SELECT project_json, chat_json, version, updated_at FROM user_state WHERE uid = ?",
+    "SELECT project_json, chat_json, version, updated_at, updated_by_name FROM user_state WHERE uid = ?",
   )
-    .bind(t.uid)
+    .bind(ws.id)
     .first<StateRow>();
 
   if (!row) {
@@ -196,6 +226,7 @@ async function handleGetState(env: Env, t: VerifiedToken, origin: string) {
       chat: row.chat_json ? JSON.parse(row.chat_json) : null,
       version: row.version,
       updated_at: row.updated_at,
+      updated_by_name: row.updated_by_name ?? null,
     },
     { status: 200 },
     origin,
@@ -214,6 +245,7 @@ async function handlePutState(
   req: Request,
   env: Env,
   t: VerifiedToken,
+  ws: Workspace,
   origin: string,
 ) {
   let body: PutStateBody;
@@ -245,7 +277,7 @@ async function handlePutState(
   const existing = await env.DB.prepare(
     "SELECT project_json, chat_json, version FROM user_state WHERE uid = ?",
   )
-    .bind(t.uid)
+    .bind(ws.id)
     .first<{ project_json: string | null; chat_json: string | null; version: number }>();
 
   const currentVersion = existing?.version ?? 0;
@@ -267,18 +299,24 @@ async function handlePutState(
     chatStr !== undefined ? chatStr : existing?.chat_json ?? null;
   const nextVersion = currentVersion + 1;
 
-  if (existing) {
-    await env.DB.prepare(
-      "UPDATE user_state SET project_json = ?, chat_json = ?, version = ?, updated_at = ? WHERE uid = ?",
-    )
-      .bind(nextProject, nextChat, nextVersion, now, t.uid)
-      .run();
-  } else {
-    await env.DB.prepare(
-      "INSERT INTO user_state (uid, project_json, chat_json, version, updated_at) VALUES (?, ?, ?, ?, ?)",
-    )
-      .bind(t.uid, nextProject, nextChat, nextVersion, now)
-      .run();
+  // Ekipte iki kişi aynı anda yazabilir: güncelleme yalnız sürüm hâlâ okunduğu
+  // gibiyse uygulanır (masaüstündeki atomik WHERE version = beklenen).
+  const write = existing
+    ? env.DB.prepare(
+        "UPDATE user_state SET project_json = ?, chat_json = ?, version = ?, updated_at = ?, updated_by_name = ? WHERE uid = ? AND version = ?",
+      ).bind(nextProject, nextChat, nextVersion, now, ws.actorName, ws.id, currentVersion)
+    : env.DB.prepare(
+        "INSERT OR IGNORE INTO user_state (uid, project_json, chat_json, version, updated_at, updated_by_name) VALUES (?, ?, ?, ?, ?, ?)",
+      ).bind(ws.id, nextProject, nextChat, nextVersion, now, ws.actorName);
+  const [res] = await env.DB.batch([write]);
+  if (!res?.meta.changes) {
+    return err(409, "version_conflict", origin, "state changed concurrently");
+  }
+
+  // Görünüm logundaki olayları değiştirilemez denetim tablosuna yaz.
+  if (body.project !== undefined) {
+    const stmts = projectAuditStatements(env.DB, ws, body.project);
+    if (stmts.length) await env.DB.batch(stmts);
   }
 
   return json(
@@ -288,8 +326,8 @@ async function handlePutState(
   );
 }
 
-async function handleDeleteAll(env: Env, t: VerifiedToken, origin: string) {
-  await env.DB.prepare("DELETE FROM user_state WHERE uid = ?").bind(t.uid).run();
+async function handleDeleteAll(env: Env, ws: Workspace, origin: string) {
+  await env.DB.prepare("DELETE FROM user_state WHERE uid = ?").bind(ws.id).run();
   return json({ ok: true }, { status: 200 }, origin);
 }
 
@@ -310,24 +348,24 @@ interface DatasetMetaRow {
   updated_at: number;
 }
 
-async function handleListPeriods(env: Env, t: VerifiedToken, origin: string) {
+async function handleListPeriods(env: Env, t: VerifiedToken, ws: Workspace, origin: string) {
   await ensureUser(env, t);
 
   const periods = await env.DB.prepare(
     "SELECT period_id, label, created_at, updated_at FROM user_periods WHERE uid = ? ORDER BY created_at ASC",
-  ).bind(t.uid).all<PeriodRow>();
+  ).bind(ws.id).all<PeriodRow>();
 
   // Her dönem için dataset meta'ları çek (records hariç — büyük olabilir)
   const metas = await env.DB.prepare(
     "SELECT period_id, dataset_id, type_id, meta_json, updated_at FROM user_datasets WHERE uid = ? ORDER BY updated_at ASC",
-  ).bind(t.uid).all<DatasetMetaRow>();
+  ).bind(ws.id).all<DatasetMetaRow>();
 
   // period_id → {dataset_id: {typeId, ...meta}}
   const datasetsByPeriod: Record<string, Record<string, unknown>> = {};
   for (const row of metas.results) {
-    if (!datasetsByPeriod[row.period_id]) datasetsByPeriod[row.period_id] = {};
+    const bucket = (datasetsByPeriod[row.period_id] ??= {});
     const meta = JSON.parse(row.meta_json);
-    datasetsByPeriod[row.period_id][row.dataset_id] = { typeId: row.type_id, ...meta };
+    bucket[row.dataset_id] = { typeId: row.type_id, ...meta };
   }
 
   const result = periods.results.map((p) => ({
@@ -340,7 +378,7 @@ async function handleListPeriods(env: Env, t: VerifiedToken, origin: string) {
   return json(result, { status: 200 }, origin);
 }
 
-async function handleUpsertPeriod(req: Request, env: Env, t: VerifiedToken, origin: string) {
+async function handleUpsertPeriod(req: Request, env: Env, t: VerifiedToken, ws: Workspace, origin: string) {
   await ensureUser(env, t);
   let body: { period_id?: string; label?: string; created_at?: string };
   try { body = await req.json(); } catch { return err(400, "invalid_json", origin); }
@@ -353,25 +391,27 @@ async function handleUpsertPeriod(req: Request, env: Env, t: VerifiedToken, orig
 
   const existing = await env.DB.prepare(
     "SELECT period_id FROM user_periods WHERE uid = ? AND period_id = ?",
-  ).bind(t.uid, period_id).first();
+  ).bind(ws.id, period_id).first();
 
   if (existing) {
     await env.DB.prepare(
       "UPDATE user_periods SET label = ?, updated_at = ? WHERE uid = ? AND period_id = ?",
-    ).bind(label, now, t.uid, period_id).run();
+    ).bind(label, now, ws.id, period_id).run();
   } else {
     await env.DB.prepare(
       "INSERT INTO user_periods (uid, period_id, label, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-    ).bind(t.uid, period_id, label, createdAt, now).run();
+    ).bind(ws.id, period_id, label, createdAt, now).run();
   }
+  await appendAuditEvent(env.DB, ws, { action: "data.period_saved", details: { module: "data", target: label } });
 
   return json({ ok: true }, { status: 200 }, origin);
 }
 
-async function handleDeletePeriod(env: Env, t: VerifiedToken, periodId: string, origin: string) {
+async function handleDeletePeriod(env: Env, t: VerifiedToken, ws: Workspace, periodId: string, origin: string) {
   await ensureUser(env, t);
-  await env.DB.prepare("DELETE FROM user_datasets WHERE uid = ? AND period_id = ?").bind(t.uid, periodId).run();
-  await env.DB.prepare("DELETE FROM user_periods WHERE uid = ? AND period_id = ?").bind(t.uid, periodId).run();
+  await env.DB.prepare("DELETE FROM user_datasets WHERE uid = ? AND period_id = ?").bind(ws.id, periodId).run();
+  await env.DB.prepare("DELETE FROM user_periods WHERE uid = ? AND period_id = ?").bind(ws.id, periodId).run();
+  await appendAuditEvent(env.DB, ws, { action: "data.period_deleted", details: { module: "data", target: "Değerleme dönemi" } });
   return json({ ok: true }, { status: 200 }, origin);
 }
 
@@ -380,12 +420,12 @@ async function handleDeletePeriod(env: Env, t: VerifiedToken, periodId: string, 
 const MAX_DATASET_BYTES = 4 * 1024 * 1024; // 4 MB per dataset
 
 async function handleGetDataset(
-  env: Env, t: VerifiedToken, periodId: string, datasetId: string, origin: string,
+  env: Env, t: VerifiedToken, ws: Workspace, periodId: string, datasetId: string, origin: string,
 ) {
   await ensureUser(env, t);
   const row = await env.DB.prepare(
     "SELECT type_id, meta_json, records_json FROM user_datasets WHERE uid = ? AND period_id = ? AND dataset_id = ?",
-  ).bind(t.uid, periodId, datasetId).first<{ type_id: string; meta_json: string; records_json: string }>();
+  ).bind(ws.id, periodId, datasetId).first<{ type_id: string; meta_json: string; records_json: string }>();
 
   if (!row) return err(404, "not_found", origin);
   return json(
@@ -396,7 +436,7 @@ async function handleGetDataset(
 }
 
 async function handlePutDataset(
-  req: Request, env: Env, t: VerifiedToken, periodId: string, datasetId: string, origin: string,
+  req: Request, env: Env, t: VerifiedToken, ws: Workspace, periodId: string, datasetId: string, origin: string,
 ) {
   await ensureUser(env, t);
   let body: { typeId?: string; meta?: unknown; records?: unknown };
@@ -413,28 +453,38 @@ async function handlePutDataset(
   const now = Date.now();
   const existing = await env.DB.prepare(
     "SELECT dataset_id FROM user_datasets WHERE uid = ? AND period_id = ? AND dataset_id = ?",
-  ).bind(t.uid, periodId, datasetId).first();
+  ).bind(ws.id, periodId, datasetId).first();
 
   if (existing) {
     await env.DB.prepare(
       "UPDATE user_datasets SET meta_json = ?, records_json = ?, updated_at = ? WHERE uid = ? AND period_id = ? AND dataset_id = ?",
-    ).bind(metaStr, recordsStr, now, t.uid, periodId, datasetId).run();
+    ).bind(metaStr, recordsStr, now, ws.id, periodId, datasetId).run();
   } else {
     await env.DB.prepare(
       "INSERT INTO user_datasets (uid, period_id, dataset_id, type_id, meta_json, records_json, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-    ).bind(t.uid, periodId, datasetId, typeId, metaStr, recordsStr, now).run();
+    ).bind(ws.id, periodId, datasetId, typeId, metaStr, recordsStr, now).run();
   }
+  const meta = body.meta && typeof body.meta === "object" ? (body.meta as Record<string, unknown>) : {};
+  await appendAuditEvent(env.DB, ws, {
+    action: "data.dataset_saved",
+    details: {
+      module: "data",
+      target: typeof meta.filename === "string" ? meta.filename : "Dataset",
+      record_count: Array.isArray(body.records) ? body.records.length : null,
+    },
+  });
 
   return json({ ok: true }, { status: 200 }, origin);
 }
 
 async function handleDeleteDataset(
-  env: Env, t: VerifiedToken, periodId: string, datasetId: string, origin: string,
+  env: Env, t: VerifiedToken, ws: Workspace, periodId: string, datasetId: string, origin: string,
 ) {
   await ensureUser(env, t);
   await env.DB.prepare(
     "DELETE FROM user_datasets WHERE uid = ? AND period_id = ? AND dataset_id = ?",
-  ).bind(t.uid, periodId, datasetId).run();
+  ).bind(ws.id, periodId, datasetId).run();
+  await appendAuditEvent(env.DB, ws, { action: "data.dataset_deleted", details: { module: "data", target: "Dataset" } });
   return json({ ok: true }, { status: 200 }, origin);
 }
 
@@ -773,45 +823,90 @@ export default {
     }
 
     try {
+      await ensureUser(env, token);
+      const ws = await resolveWorkspace(env.DB, token.uid, token.email);
+      const send = (r: Result) =>
+        r.status === 204 ? new Response(null, { status: 204, headers: corsHeaders(origin) }) : json(r.body, { status: r.status }, origin);
+      const readJson = async () => {
+        try {
+          return (await req.json()) as Record<string, unknown>;
+        } catch {
+          throw new TeamError(400, "invalid_json");
+        }
+      };
+
       if (url.pathname === "/v1/me" && req.method === "GET") {
-        return await handleMe(env, token, origin);
+        return await handleMe(env, token, ws, origin);
       }
       if (url.pathname === "/v1/me/plan" && req.method === "POST") {
         return await handleSetPlan(req, env, token, origin);
       }
       if (url.pathname === "/v1/state" && req.method === "GET") {
-        return await handleGetState(env, token, origin);
+        return await handleGetState(env, token, ws, origin);
       }
       if (url.pathname === "/v1/state" && req.method === "PUT") {
-        return await handlePutState(req, env, token, origin);
+        return await handlePutState(req, env, token, ws, origin);
       }
       if (url.pathname === "/v1/state" && req.method === "DELETE") {
-        return await handleDeleteAll(env, token, origin);
+        return await handleDeleteAll(env, ws, origin);
       }
 
       // ─── Data endpoints ───────────────────────────────────────────────────
       if (url.pathname === "/v1/data/periods" && req.method === "GET") {
-        return await handleListPeriods(env, token, origin);
+        return await handleListPeriods(env, token, ws, origin);
       }
       if (url.pathname === "/v1/data/periods" && req.method === "POST") {
-        return await handleUpsertPeriod(req, env, token, origin);
+        return await handleUpsertPeriod(req, env, token, ws, origin);
       }
       // /v1/data/periods/:periodId
       const periodMatch = url.pathname.match(/^\/v1\/data\/periods\/([^/]+)$/);
-      if (periodMatch && req.method === "DELETE") {
-        return await handleDeletePeriod(env, token, periodMatch[1], origin);
+      if (periodMatch?.[1] && req.method === "DELETE") {
+        return await handleDeletePeriod(env, token, ws, periodMatch[1], origin);
       }
       // /v1/data/periods/:periodId/datasets/:datasetId
       const datasetMatch = url.pathname.match(/^\/v1\/data\/periods\/([^/]+)\/datasets\/([^/]+)$/);
-      if (datasetMatch) {
-        const [, pId, dsId] = datasetMatch;
-        if (req.method === "GET")    return await handleGetDataset(env, token, pId, dsId, origin);
-        if (req.method === "PUT")    return await handlePutDataset(req, env, token, pId, dsId, origin);
-        if (req.method === "DELETE") return await handleDeleteDataset(env, token, pId, dsId, origin);
+      if (datasetMatch?.[1] && datasetMatch[2]) {
+        const pId = datasetMatch[1];
+        const dsId = datasetMatch[2];
+        if (req.method === "GET")    return await handleGetDataset(env, token, ws, pId, dsId, origin);
+        if (req.method === "PUT")    return await handlePutDataset(req, env, token, ws, pId, dsId, origin);
+        if (req.method === "DELETE") return await handleDeleteDataset(env, token, ws, pId, dsId, origin);
+      }
+
+      // ─── Ekip: kullanıcılar, denetim, kilitler (masaüstüyle aynı yollar) ──
+      if (url.pathname === "/v1/admin/users") {
+        if (req.method === "GET") return send(await listUsers(env.DB, ws));
+        if (req.method === "POST") return send(await createUser(env.DB, ws, await readJson()));
+      }
+      const userMatch = url.pathname.match(/^\/v1\/admin\/users\/([^/]+)$/);
+      if (userMatch?.[1]) {
+        const userId = decodeURIComponent(userMatch[1]);
+        if (req.method === "PATCH") return send(await updateUser(env.DB, ws, userId, await readJson()));
+        if (req.method === "DELETE") return send(await deleteUser(env.DB, ws, userId));
+      }
+      if (url.pathname === "/v1/audit" && req.method === "GET") {
+        return send(await listAuditEvents(env.DB, ws, url.searchParams.get("limit")));
+      }
+      if (url.pathname === "/v1/locks/acquire" && req.method === "POST") {
+        const b = await readJson();
+        return send(await acquireLock(env.DB, ws, typeof b.lock_key === "string" ? b.lock_key : ""));
+      }
+      if (url.pathname === "/v1/locks/force-acquire" && req.method === "POST") {
+        const b = await readJson();
+        return send(await forceAcquireLock(env.DB, ws, typeof b.lock_key === "string" ? b.lock_key : ""));
+      }
+      if (url.pathname.startsWith("/v1/locks/")) {
+        const key = decodeURIComponent(url.pathname.slice("/v1/locks/".length));
+        if (req.method === "GET") return send(await getLock(env.DB, ws, key));
+        if (req.method === "DELETE") return send(await releaseLock(env.DB, ws, key));
       }
 
       return err(404, "not_found", origin);
     } catch (e) {
+      if (e instanceof TeamError) {
+        // Masaüstü (FastAPI) biçimi: istemci `detail` alanını okur.
+        return json({ error: e.code, message: e.code, detail: e.detail ?? e.code }, { status: e.status }, origin);
+      }
       const msg = e instanceof Error ? e.message : "internal_error";
       return err(500, "internal_error", origin, msg);
     }

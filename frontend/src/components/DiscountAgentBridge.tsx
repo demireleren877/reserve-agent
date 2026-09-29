@@ -8,15 +8,13 @@
  */
 
 import { useEffect, useMemo } from "react";
-import { useAgentRegistry } from "@/lib/agent-registry";
+import { useAgentRegistryWriter } from "@/lib/agent-registry";
 import { useProject } from "@/lib/project-store";
 import { computeBranchSummary } from "@/lib/reserve-pipeline";
 import {
   buildFlatRateFn,
   buildCurveFn,
-  defaultDiscountConfig,
   discountBranch,
-  discountWithStandard,
   type CurveNode,
 } from "@/lib/discount-engine";
 import type { AgentAction } from "@/types/triangle";
@@ -25,7 +23,7 @@ import type { Period, Branch } from "@/types/project";
 export function DiscountAgentBridge() {
   const { project, activeBranch } = useProject();
   const { registerSnapshot, registerActionHandler, unregisterActionHandler } =
-    useAgentRegistry();
+    useAgentRegistryWriter();
 
   const snapshot = useMemo(
     () => buildDiscountSnapshot(project.periods, activeBranch),
@@ -72,38 +70,11 @@ function buildDiscountSnapshot(periods: Period[], activeBranch: Branch | null) {
           duration_months: number;
         } = null;
 
-        // IFRS 17 varsayılan konfigürasyonla hızlı özet (BEL + RA = LIC)
-        let quickIfrs17: null | {
-          bel: number;
-          risk_adjustment: number;
-          lic: number;
-        } = null;
-
-        // per_origin: backend compute_discount için unpaid + ağırlıklı ortalama
-        // ödeme ayı (rate-bağımsız, gerçek aylık pattern'den). Aylık pattern'in
-        // tamamı gönderilmez — payload küçük kalır.
-        let perOrigin: { origin: string; unpaid: number; avg_month: number }[] = [];
-
         if (hasPattern && summary.rows.length > 0) {
           const rows = summary.rows.map((r) => ({
             origin: r.origin,
             unpaid: r.latest + r.ibnr,
           }));
-          perOrigin = rows
-            .filter((r) => r.unpaid > 0)
-            .map((r) => {
-              const weights = pattern[r.origin] ?? [];
-              const wsum = weights.reduce((s, w) => s + w.weight, 0);
-              const avgMonth =
-                wsum > 0
-                  ? weights.reduce((s, w) => s + w.month * w.weight, 0) / wsum
-                  : 0;
-              return {
-                origin: r.origin,
-                unpaid: Math.round(r.unpaid),
-                avg_month: Math.round(avgMonth * 10) / 10,
-              };
-            });
           const getRateFn = buildFlatRateFn(0.3);
           try {
             const res = discountBranch(rows, pattern, getRateFn);
@@ -113,16 +84,6 @@ function buildDiscountSnapshot(periods: Period[], activeBranch: Branch | null) {
               discount_amount: Math.round(res.totals.unpaid - res.totals.bel),
               discount_pct: Math.round(res.totals.discountPct * 10000) / 100,
               duration_months: Math.round(res.totals.duration * 10) / 10,
-            };
-            const r17 = discountWithStandard(
-              rows,
-              pattern,
-              defaultDiscountConfig("ifrs17"),
-            );
-            quickIfrs17 = {
-              bel: Math.round(r17.base.totals.bel),
-              risk_adjustment: Math.round(r17.riskAdjustment.total),
-              lic: Math.round(r17.lic),
             };
           } catch {
             // pattern uyumsuzluğu — sessizce geç
@@ -140,22 +101,17 @@ function buildDiscountSnapshot(periods: Period[], activeBranch: Branch | null) {
           origin_count: summary.rows.length,
           total_unpaid_liability: Math.round(summary.totals.latest + summary.totals.ibnr),
           quick_discount_at_30pct: quickDiscount,
-          quick_ifrs17_default: quickIfrs17,
-          per_origin: perOrigin,
           note: hasPattern
-            ? "compute_discount ile standart (ifrs4/ifrs17), faiz oranı/eğrisi ve Risk Adjustment parametreleri özelleştirilebilir."
-            : "Nakit akışı pattern eksik — Cashflow modülünde hesaplayın.",
+            ? "You can use a custom interest rate or curve with compute_discount."
+            : "Cashflow pattern missing — compute it in the Cashflow module.",
         };
       }),
   );
 
-  // session_state sarmalı: backend payload.get("session_state") ile okur
   return {
-    session_state: {
-      branches,
-      active_branch_id: activeBranch?.id ?? null,
-      note: "İskonto modülü: her branş için Unpaid Liability ve iskonto özeti. compute_discount ile detaylı hesap.",
-    },
+    branches,
+    active_branch_id: activeBranch?.id ?? null,
+    note: "Discount module: Unpaid Liability and discount summary per branch. Use compute_discount for a detailed calculation.",
   };
 }
 
@@ -176,7 +132,7 @@ export function computeDiscountForBranch(
   if (Object.keys(pattern).length === 0) {
     return {
       error:
-        "Bu branş için cashflow pattern hesaplanmamış. Cashflow modülünde önce hesaplamayı çalıştırın.",
+        "No cashflow pattern computed for this branch. Run the calculation in the Cashflow module first.",
     };
   }
 

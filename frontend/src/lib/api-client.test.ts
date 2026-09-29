@@ -127,7 +127,7 @@ describe("compute", () => {
       json: () => Promise.reject(new Error("gövde yok")),
     });
     vi.stubGlobal("fetch", fn);
-    await expect(compute(TRIANGLE)).rejects.toThrow("Hesaplama hatası");
+    await expect(compute(TRIANGLE)).rejects.toThrow("Calculation error");
   });
 });
 

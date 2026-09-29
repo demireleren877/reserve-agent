@@ -4,8 +4,8 @@ import { useRef, useState } from "react";
 import { inspectPrimFile, importPrimFile, type PrimInspectResult, type PrimImportResult } from "@/lib/api";
 
 const FIELDS = [
-  { id: "brans", label: "Branş" },
-  { id: "donem", label: "Dönem (Yıl)" },
+  { id: "brans", label: "Branch" },
+  { id: "donem", label: "Period (Year)" },
   { id: "ep",    label: "EP (Earned Premium)" },
 ] as const;
 
@@ -63,7 +63,7 @@ export function PrimImportWizard({ onDone, onCancel }: Props) {
         setStep("mapping");
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Dosya okunamadı");
+      setError(e instanceof Error ? e.message : "Could not read file");
     } finally {
       setLoading(false);
     }
@@ -74,7 +74,7 @@ export function PrimImportWizard({ onDone, onCancel }: Props) {
     const m = mapping as Record<string, string>;
     const missing = FIELDS.filter((f) => !m[f.id]).map((f) => f.label);
     if (missing.length) {
-      setError(`Eksik eşleştirme: ${missing.join(", ")}`);
+      setError(`Missing mapping: ${missing.join(", ")}`);
       return;
     }
     setStep("importing");
@@ -83,7 +83,7 @@ export function PrimImportWizard({ onDone, onCancel }: Props) {
       const importResult = await importPrimFile(file, selectedSheet, m);
       onDone({ filename: file.name, sheetName: selectedSheet, columnMapping: m, importResult });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "İçeri aktarma hatası");
+      setError(e instanceof Error ? e.message : "Import error");
       setStep("mapping");
     }
   }
@@ -96,7 +96,7 @@ export function PrimImportWizard({ onDone, onCancel }: Props) {
 
         {/* Başlık */}
         <div className="p-5 border-b border-[color:var(--border)] flex items-center justify-between">
-          <h2 className="text-sm font-semibold">Prim Verisi İçeri Aktar</h2>
+          <h2 className="text-sm font-semibold">Import Premium Data</h2>
           <button onClick={onCancel} className="text-[color:var(--muted)] hover:text-[color:var(--foreground)] text-lg px-1">×</button>
         </div>
 
@@ -112,10 +112,10 @@ export function PrimImportWizard({ onDone, onCancel }: Props) {
                 className="border-2 border-dashed border-[color:var(--border)] rounded-xl p-10 text-center cursor-pointer hover:border-[color:var(--primary)] transition"
               >
                 <p className="text-sm text-[color:var(--muted-strong)]">
-                  CSV veya Excel dosyası sürükleyin / tıklayın
+                  Drag / click a CSV or Excel file
                 </p>
                 <p className="text-xs text-[color:var(--muted)] mt-1">
-                  Beklenen sütunlar: Branş, Dönem, EP
+                  Expected columns: Branch, Period, EP
                 </p>
               </div>
               <input
@@ -125,14 +125,14 @@ export function PrimImportWizard({ onDone, onCancel }: Props) {
                 className="hidden"
                 onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
               />
-              {loading && <p className="text-xs text-[color:var(--muted)] text-center">İnceleniyor…</p>}
+              {loading && <p className="text-xs text-[color:var(--muted)] text-center">Inspecting…</p>}
             </>
           )}
 
           {/* SHEET */}
           {step === "sheet" && inspect && (
             <>
-              <p className="text-sm text-[color:var(--muted-strong)]">Excel sayfası seçin:</p>
+              <p className="text-sm text-[color:var(--muted-strong)]">Select an Excel sheet:</p>
               <div className="space-y-1.5">
                 {inspect.sheets.filter((s): s is string => s !== null).map((s) => (
                   <button
@@ -155,7 +155,7 @@ export function PrimImportWizard({ onDone, onCancel }: Props) {
           {step === "mapping" && inspect && (
             <>
               <p className="text-xs text-[color:var(--muted-strong)] mb-2">
-                Her alan için dosyadaki sütunu eşleştirin:
+                Map each field to a column in the file:
               </p>
               <div className="space-y-3">
                 {FIELDS.map((field) => (
@@ -166,7 +166,7 @@ export function PrimImportWizard({ onDone, onCancel }: Props) {
                       onChange={(e) => setMapping((m) => ({ ...m, [field.id]: e.target.value }))}
                       className="flex-1 text-sm border border-[color:var(--border)] rounded-md px-3 py-2 bg-[color:var(--surface)] text-[color:var(--foreground)]"
                     >
-                      <option value="">— Seçin —</option>
+                      <option value="">— Select —</option>
                       {headers.map((h, i) => (
                         <option key={`${i}:${h}`} value={h}>{h}</option>
                       ))}
@@ -178,7 +178,7 @@ export function PrimImportWizard({ onDone, onCancel }: Props) {
           )}
 
           {step === "importing" && (
-            <p className="text-sm text-[color:var(--muted)] text-center py-4">Aktarılıyor…</p>
+            <p className="text-sm text-[color:var(--muted)] text-center py-4">Importing…</p>
           )}
 
           {error && (
@@ -194,7 +194,7 @@ export function PrimImportWizard({ onDone, onCancel }: Props) {
             onClick={onCancel}
             className="px-4 py-2 text-sm rounded-md border border-[color:var(--border)] text-[color:var(--muted-strong)] hover:text-[color:var(--foreground)] transition"
           >
-            İptal
+            Cancel
           </button>
           {step === "mapping" && (
             <button
@@ -202,7 +202,7 @@ export function PrimImportWizard({ onDone, onCancel }: Props) {
               disabled={FIELDS.some((f) => !mapping[f.id])}
               className="px-4 py-2 text-sm rounded-md bg-[color:var(--primary)] text-white font-medium hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              İçeri Aktar
+              Import
             </button>
           )}
         </div>

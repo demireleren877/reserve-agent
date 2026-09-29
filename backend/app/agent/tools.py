@@ -202,6 +202,100 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
             },
         },
     },
+    # ── Desktop modelleme aksiyonları (LDF yöntemi, curve, karma, LDF ortalama, versiyon) ──
+    {
+        "type": "function",
+        "function": {
+            "name": "set_method",
+            "description": "LDF ortalama yöntemini değiştir: volume_weighted | simple_average | geometric_average.",
+            "parameters": {
+                "type": "object",
+                "properties": {"method": {"type": "string", "enum": ["volume_weighted", "simple_average", "geometric_average"]}},
+                "required": ["method"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "set_curve_model",
+            "description": "Curve sekmesinde bir gelişim adımı için model seç: 1=Initial, 2=Exp Decay, 3=Inv Power, 4=Power, 5=Weibull, 6=User Value.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "dev_period": {"type": "string", "description": "Gelişim adımı etiketi (dev_period)"},
+                    "model": {"type": "integer", "enum": [1, 2, 3, 4, 5, 6]},
+                },
+                "required": ["dev_period", "model"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "set_curve_include",
+            "description": "Curve tail-fit regresyonuna bir gelişim adımını dahil et/çıkar.",
+            "parameters": {
+                "type": "object",
+                "properties": {"dev_period": {"type": "string"}, "include": {"type": "boolean"}},
+                "required": ["dev_period", "include"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "set_karma_window",
+            "description": "Karma Volume: bir gelişim adımı (step) için ayrı LDF penceresi. window: '4'|'5'|'7'|'all'.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "step": {"type": "string", "description": "Adım indeksi (0-tabanlı, string)"},
+                    "window": {"type": "string", "enum": ["4", "5", "7", "all"]},
+                },
+                "required": ["step", "window"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "clear_karma",
+            "description": "Karma Volume ayarlarını temizle (global window'a dön).",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "average_ldf_pair",
+            "description": "LDF yumuşatma: aynı kaza yılı satırında yan yana iki oranı (step j ve j+1) ortalamayla değiştir/geri al (toggle).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "origin": {"type": "string"},
+                    "step": {"type": "integer", "description": "Sol hücrenin gelişim adımı j; çift (j, j+1)."},
+                },
+                "required": ["origin", "step"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "create_version",
+            "description": "Aktif branşta mevcut çalışmayı kopyalayan yeni senaryo/versiyon oluştur ve ona geç.",
+            "parameters": {"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"]},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "switch_version",
+            "description": "Aktif branşta ada göre bir versiyona geç (senaryo değiştir).",
+            "parameters": {"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"]},
+        },
+    },
     {
         "type": "function",
         "function": {
@@ -617,6 +711,31 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                 "mesajındaki gerçek nedeni (hazır üçgen yüklenmiş olması) aktar."
             ),
             "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_claim_movement",
+            "description": (
+                "Bir LDF geçişinin (origin × step) dosya bazlı hareketi: o adımda "
+                "ödemeye dönen, muallağı kapanan, yeniden açılan ve yeni giren "
+                "dosyalar; toplam ödeme/muallak değişimi ve |değişim| en büyük "
+                "dosyalar. 'Bu LDF neden bu kadar yüksek?', '2021 step 2'de ne "
+                "oldu?', 'aykırı geçişi hangi dosya taşıyor?' sorularında kullan — "
+                "get_file_summary yalnızca SON diagonal'i gösterir, adımlar "
+                "arasındaki hareketi göstermez. step 0-INDEXLI: step=0 → '1→2'. "
+                "Eleme kararı vermeden önce buraya bak: tek bir büyük dosyanın "
+                "taşıdığı geçiş, aykırı değil gerçek hasar olabilir."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "origin": {"type": "string", "description": "Kaza dönemi etiketi (ör. '2021')"},
+                    "step": {"type": "integer", "description": "Gelişim adımı, 0-indexli (0 → 1→2 geçişi)"},
+                },
+                "required": ["origin", "step"],
+            },
         },
     },
     # ─── Cashflow tools ───────────────────────────────────────────────────────
@@ -1253,6 +1372,45 @@ def dispatch_tool(
             "window": window,
             "_action": {"type": "set_window", "payload": {"window": window}},
         }
+    if name == "set_method":
+        method = str(args.get("method", ""))
+        if method not in {"volume_weighted", "simple_average", "geometric_average"}:
+            return {"error": f"Geçersiz method: {method}"}
+        return {"method": method, "_action": {"type": "set_method", "payload": {"method": method}}}
+    if name == "set_curve_model":
+        dev = str(args.get("dev_period", ""))
+        try:
+            model = int(args.get("model", 1))
+        except (TypeError, ValueError):
+            return {"error": "Geçersiz model"}
+        if model not in {1, 2, 3, 4, 5, 6}:
+            return {"error": "model 1-6 olmalı"}
+        return {"dev_period": dev, "model": model, "_action": {"type": "set_curve_model", "payload": {"dev_period": dev, "model": model}}}
+    if name == "set_curve_include":
+        dev = str(args.get("dev_period", ""))
+        include = bool(args.get("include", True))
+        return {"dev_period": dev, "include": include, "_action": {"type": "set_curve_include", "payload": {"dev_period": dev, "include": include}}}
+    if name == "set_karma_window":
+        step = str(args.get("step", ""))
+        window = str(args.get("window", "all"))
+        if window not in {"4", "5", "7", "all"}:
+            return {"error": f"Geçersiz window: {window}"}
+        return {"step": step, "window": window, "_action": {"type": "set_karma_window", "payload": {"step": step, "window": window}}}
+    if name == "clear_karma":
+        return {"cleared": True, "_action": {"type": "clear_karma", "payload": {}}}
+    if name == "average_ldf_pair":
+        origin = str(args.get("origin", ""))
+        try:
+            step = int(args.get("step", 0))
+        except (TypeError, ValueError):
+            return {"error": "Geçersiz step"}
+        return {"origin": origin, "step": step, "_action": {"type": "average_ldf_pair", "payload": {"origin": origin, "step": step}}}
+    if name == "create_version":
+        nm = str(args.get("name", "")).strip() or "New version"
+        return {"name": nm, "_action": {"type": "create_version", "payload": {"name": nm}}}
+    if name == "switch_version":
+        nm = str(args.get("name", "")).strip()
+        return {"name": nm, "_action": {"type": "switch_version", "payload": {"name": nm}}}
     if name == "set_selected_loss_ratio":
         origin = str(args.get("origin", ""))
         formula = str(args.get("formula", ""))
@@ -1420,6 +1578,8 @@ def dispatch_tool(
         return _get_ilr_triangle(triangle, session_state)  # type: ignore[arg-type]
     if name == "get_file_summary":
         return _get_file_summary(session_state)
+    if name == "get_claim_movement":
+        return _get_claim_movement(session_state, args)
     # ─── Cashflow ─────────────────────────────────────────────────────────────
     if name == "get_cashflow_state":
         return _get_cashflow_state(session_state)
@@ -2295,15 +2455,59 @@ def _get_file_summary(session_state: dict[str, Any] | None) -> dict[str, Any]:
     if not summary:
         return {
             "error": (
-                "Bu branşta dosya bazlı kırılım yok. Sütun adı sorun değil — "
-                "'Dosya No', 'DOSYA_NO' vb. otomatik tanınır. En olası neden: "
-                "üçgen, dosya bazlı hasar verisinden değil, hazır/toplulaştırılmış "
-                "bir üçgen dosyasından yüklenmiş; o formatta tekil dosya kırılımı "
-                "bulunmaz. Dosya analizi için Veri modülünden DOSYA_NO içeren hasar "
-                "veri setini yükleyip üçgeni oradan türetmek gerekir."
+                "Dosya bazlı özet bu oturumda agent'a aktarılmıyor (masaüstü "
+                "sürümünde snapshot 'file_data_summary' alanını henüz "
+                "doldurmuyor) — branşta DOSYA_NO verisi OLSA BİLE bu araç boş "
+                "döner. Kullanıcıya 'bu branşta dosya kırılımı yok' DEME; "
+                "dosya analizini arayüzdeki Dosya sekmesinden görebileceğini söyle."
             )
         }
     return summary
+
+
+def _get_claim_movement(
+    session_state: dict[str, Any] | None, args: dict[str, Any]
+) -> dict[str, Any]:
+    """Tek bir LDF geçişinin dosya bazlı hareketi.
+
+    Bridge `claim_movement[origin][step]` yapısını hazır kurar; burada yalnızca
+    indeksleme ve kullanıcıya dönük hata metni var. Var olmayan bir adım
+    istendiğinde mevcut adımları GERİ SÖYLÜYORUZ: model 0-indexli step'i sık
+    karıştırıyor ve elindeki tek ipucu hata mesajı oluyor.
+    """
+    if not session_state:
+        return {"error": "Session state yok."}
+    movement = session_state.get("claim_movement")
+    if not movement:
+        return {
+            "error": (
+                "Bu branşta dosya bazlı hareket yok — DOSYA_NO'lu ham veriden "
+                "yüklenmemiş (hazır üçgen) ya da tek diagonal var. Kullanıcıya "
+                "'veri yok' demeden önce bunu söyle."
+            )
+        }
+
+    origin = str(args.get("origin", ""))
+    by_origin = movement.get(origin)
+    if not by_origin:
+        return {
+            "error": f"'{origin}' için hareket yok.",
+            "available_origins": sorted(movement.keys()),
+        }
+
+    step = args.get("step")
+    try:
+        step_key = str(int(step))
+    except (TypeError, ValueError):
+        return {"error": f"step tam sayı olmalı, gelen: {step!r}"}
+
+    cell = by_origin.get(step_key)
+    if not cell:
+        return {
+            "error": f"'{origin}' için step={step_key} yok (step 0-INDEXLI).",
+            "available_steps": sorted(int(k) for k in by_origin.keys()),
+        }
+    return cell
 
 
 def _get_cashflow_state(session_state: dict[str, Any] | None) -> dict[str, Any]:

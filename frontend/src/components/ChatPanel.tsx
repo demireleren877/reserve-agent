@@ -8,13 +8,15 @@ import {
   type ReactNode,
   type KeyboardEvent,
 } from "react";
-import type { AgentAction, ChatMessage, ModelOption } from "@/types/triangle";
+import type { AgentAction, ChatMessage, ModelOption, AgentForm } from "@/types/triangle";
 import {
   chatWithAgent,
   listModels,
   type ModulesPayload,
   type RawMessage,
 } from "@/lib/api";
+import { AgentSettings } from "@/components/AgentSettings";
+import { useAgentConfig, isAgentConfigured } from "@/lib/agent/agent-config";
 import {
   loadSessions,
   saveSession,
@@ -33,9 +35,19 @@ interface ActiveContext {
   frequency: string;
 }
 
+// Agent yazma yaptığı turda snapshot ESKİ kalır (aksiyonlar tur bitince uygulanır).
+// Bu yüzden aksiyonlar uygulanıp snapshot güncellenince GİZLİ bir "devam" turu atarız;
+// agent taze veriyle devam eder / nihai toplamları okuyup verir. Bu metin kullanıcıya
+// gösterilmez — yalnız history'e girer.
+const AUTO_CONTINUE_TEXT =
+  "(System) Previous actions have been applied and the latest snapshot is ready. CONTINUE " +
+  "from where you left off: perform the next required modelling steps. If the model is complete, " +
+  "make no new changes; READ get_analysis_state and provide final Total Ultimate / IBNR / ULR with a brief rationale. Do not ask the user a question or request confirmation.";
+const MAX_AUTO_CONTINUE = 6;
+
 interface Props {
   modulesPayload: ModulesPayload;
-  onActions?: (actions: AgentAction[]) => void;
+  onActions?: (actions: AgentAction[]) => void | Promise<void>;
   onClose?: () => void;
   activeContext?: ActiveContext | null;
 }
@@ -56,12 +68,23 @@ export function ChatPanel({
   const [error, setError] = useState<string | null>(null);
   const [models, setModels] = useState<ModelOption[]>([]);
   const [model, setModel] = useState<string>("");
+  // ask_user ile gelen aktif form (doldurulup gönderilene kadar chat'te durur).
+  const [pendingForm, setPendingForm] = useState<AgentForm | null>(null);
+  // Her render'da güncel modulesPayload'a işaret eder — otomatik "devam" turunda
+  // aksiyonlar uygulandıktan sonraki TAZE snapshot'ı okumak için.
+  const modulesPayloadRef = useRef(modulesPayload);
+  modulesPayloadRef.current = modulesPayload;
   const [modelsLoading, setModelsLoading] = useState(true);
   const [modelsError, setModelsError] = useState<string | null>(null);
   const [fullHistory, setFullHistory] = useState<RawMessage[]>([]);
   const [sessionId, setSessionId] = useState<string>(() => newSessionId());
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [cfg] = useAgentConfig();
+  // Agent "aktif" = kullanıcı Ayarlar'da lokal LLM'i (base URL + model) tanımladıysa.
+  // /v1/models değil (lokal endpoint model listesi sunmaz).
+  const notConfigured = !isAgentConfigured(cfg);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -84,7 +107,7 @@ export function ChatPanel({
       })
       .catch((e) => {
         setModelsError(
-          e instanceof Error ? e.message : "Backend'e ulaşılamadı",
+          e instanceof Error ? e.message : "Could not reach the backend",
         );
       })
       .finally(() => setModelsLoading(false));
@@ -137,47 +160,91 @@ export function ChatPanel({
     setSessions(loadSessions(uid));
   }
 
+  // modulesPayloadRef önceki referanstan değişene (snapshot yeniden kurulana) kadar
+  // bekle — otomatik "devam" turu TAZE veriyle çalışsın. Zaman aşımı güvenlik.
+  async function waitForSnapshot(prev: unknown, timeoutMs = 5000) {
+    const start = Date.now();
+    while (modulesPayloadRef.current === prev && Date.now() - start < timeoutMs) {
+      await new Promise((r) => setTimeout(r, 40));
+    }
+  }
+
   async function dispatchSend(prompt: string) {
     if (!prompt.trim() || loading) return;
     setError(null);
+    setPendingForm(null); // yeni mesaj → varsa eski formu kapat
     const userMsg: ChatMessage = { role: "user", content: prompt };
-    const newMessages = [...messages, userMsg];
-    setMessages(newMessages);
+    let msgs: ChatMessage[] = [...messages, userMsg];
+    setMessages(msgs);
     setInput("");
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
     }
     setLoading(true);
-    try {
-      const resp = await chatWithAgent(
-        newMessages,
-        modulesPayload,
-        model || null,
-        null,
-        fullHistory,
-      );
-      if (resp.actions?.length && onActions) onActions(resp.actions);
-      const body = resp.actions?.length
-        ? `${resp.assistant_message || ""}\n\n✓ ${resp.actions.length} aksiyon uygulandı.`
-        : resp.assistant_message || "(boş yanıt)";
-      const finalMessages: ChatMessage[] = [
-        ...newMessages,
-        { role: "assistant", content: body.trim() },
-      ];
-      setMessages(finalMessages);
 
-      let nextHist = fullHistory;
-      if (resp.raw_additions?.length) {
-        nextHist = [
-          ...fullHistory,
-          { role: "user", content: userMsg.content } as RawMessage,
-          ...resp.raw_additions,
-        ];
-        setFullHistory(nextHist);
+    let hist = fullHistory;
+    let turnUserContent = prompt; // bu turda history'e yazılacak "user" içeriği
+    let extraUserMsg: ChatMessage | null = null; // otomatik turda backend'e ek (görünmez) user mesajı
+    let auto = 0;
+
+    try {
+      // Otomatik-devam döngüsü: agent YAZMA yaptıysa (actions), aksiyonlar uygulanıp
+      // snapshot güncellenene kadar bekle ve GİZLİ bir "devam" turu at → agent taze
+      // snapshot'ta modele devam eder / nihai toplamları OKUYUP verir. Kullanıcı
+      // tekrar bir şey yazmak zorunda kalmaz. Yazma bitince (actions=0) döngü durur.
+      for (;;) {
+        const sendMessages = extraUserMsg ? [...msgs, extraUserMsg] : msgs;
+        const prevSnap = modulesPayloadRef.current;
+        const resp = await chatWithAgent(
+          sendMessages,
+          prevSnap,
+          model || null,
+          null,
+          hist,
+        );
+
+        // 1) Aksiyonları uygula + güncel snapshot'ı bekle
+        if (resp.actions?.length && onActions) {
+          await onActions(resp.actions);
+          await waitForSnapshot(prevSnap);
+        }
+
+        const shouldContinue =
+          !!resp.actions?.length && !resp.form && auto < MAX_AUTO_CONTINUE;
+
+        // 2) Görünür assistant mesajı (boş+ara turlarda "…" ile kirletme)
+        const text = resp.assistant_message?.trim() ?? "";
+        if (text) {
+          msgs = [...msgs, { role: "assistant", content: text }];
+          setMessages(msgs);
+        } else if (!shouldContinue) {
+          msgs = [
+            ...msgs,
+            { role: "assistant", content: resp.actions?.length ? "Applied." : "(empty response)" },
+          ];
+          setMessages(msgs);
+        }
+        if (resp.form?.fields?.length) setPendingForm(resp.form);
+
+        // 3) History (görünmez otomatik user mesajı da dahil)
+        if (resp.raw_additions?.length) {
+          hist = [
+            ...hist,
+            { role: "user", content: turnUserContent } as RawMessage,
+            ...resp.raw_additions,
+          ];
+          setFullHistory(hist);
+        }
+
+        if (!shouldContinue) break;
+        // 4) Gizli otomatik "devam" turu hazırla
+        auto++;
+        extraUserMsg = { role: "user", content: AUTO_CONTINUE_TEXT };
+        turnUserContent = AUTO_CONTINUE_TEXT;
       }
-      if (uid) saveSession(uid, buildSession(finalMessages, nextHist));
+      if (uid) saveSession(uid, buildSession(msgs, hist));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Agent hatası");
+      setError(e instanceof Error ? e.message : "Agent error");
     } finally {
       setLoading(false);
     }
@@ -190,11 +257,25 @@ export function ChatPanel({
     }
   }
 
+  // Form gönderildi → cevapları okunur bir mesaja çevir, agent modele devam etsin.
+  function submitAgentForm(
+    form: AgentForm,
+    answers: Record<string, string | string[]>,
+  ) {
+    const lines = form.fields.map((f) => {
+      const v = answers[f.id];
+      const disp = Array.isArray(v) ? v.join(", ") : v ?? "";
+      return `- ${f.label} (${f.id}): ${disp}`;
+    });
+    setPendingForm(null);
+    dispatchSend(`Form responses:\n${lines.join("\n")}`);
+  }
+
   const freqLabel =
     activeContext?.frequency === "yearly"
-      ? "Yıllık"
+      ? "Yearly"
       : activeContext?.frequency === "quarterly"
-      ? "Çeyreklik"
+      ? "Quarterly"
       : activeContext?.frequency ?? "";
 
   return (
@@ -208,14 +289,15 @@ export function ChatPanel({
           <span className="text-sm font-semibold tracking-tight">Actuarius</span>
         </div>
         <div className="flex items-center gap-1 shrink-0">
-          {/* Model selector */}
-          {!modelsError && (
+          {/* Model selector — yalnız backend model listesi sunarsa. Lokal endpoint'te
+              model Agent Ayarları'ndan gelir, /v1/models boştur → gizle. */}
+          {!modelsError && models.length > 0 && (
             <select
               value={model}
               onChange={(e) => setModel(e.target.value)}
               disabled={modelsLoading || models.length === 0}
               className="h-6 max-w-[130px] rounded-md border border-[color:var(--border)] bg-[color:var(--surface-alt)] text-[11px] text-[color:var(--muted-strong)] px-1.5 outline-none focus:border-[color:var(--primary)] transition cursor-pointer disabled:opacity-50"
-              title="Model seç"
+              title="Select model"
             >
               {modelsLoading && <option value="">…</option>}
               {models.map((m) => (
@@ -235,7 +317,7 @@ export function ChatPanel({
                     setModels(r.models);
                     setModel(r.models[0]?.id ?? r.default);
                   })
-                  .catch((e) => setModelsError(e instanceof Error ? e.message : "Hata"))
+                  .catch((e) => setModelsError(e instanceof Error ? e.message : "Error"))
                   .finally(() => setModelsLoading(false));
               }}
             >
@@ -244,7 +326,7 @@ export function ChatPanel({
           )}
           <Divider />
           <HeaderBtn
-            title="Sohbet geçmişi"
+            title="Chat history"
             active={showHistory}
             onClick={() => {
               if (uid) setSessions(loadSessions(uid));
@@ -253,19 +335,24 @@ export function ChatPanel({
           >
             <HistoryIcon />
           </HeaderBtn>
-          <HeaderBtn title="Yeni sohbet" onClick={startNewChat}>
+          <HeaderBtn title="New chat" onClick={startNewChat}>
             <NewChatIcon />
+          </HeaderBtn>
+          <HeaderBtn title="Agent settings" active={showSettings} onClick={() => setShowSettings(true)}>
+            <SettingsIcon />
           </HeaderBtn>
           {onClose && (
             <>
               <Divider />
-              <HeaderBtn title="Kapat" onClick={onClose}>
+              <HeaderBtn title="Close" onClick={onClose}>
                 <CloseIcon />
               </HeaderBtn>
             </>
           )}
         </div>
       </div>
+
+      {showSettings && <AgentSettings onClose={() => setShowSettings(false)} />}
 
       {/* ── Context bar ── */}
       {activeContext && !showHistory && (
@@ -292,9 +379,9 @@ export function ChatPanel({
               onClick={() => setShowHistory(false)}
               className="text-[11px] text-[color:var(--muted)] hover:text-[color:var(--foreground)] transition flex items-center gap-1"
             >
-              <span>←</span> Geri
+              <span>←</span> Back
             </button>
-            <span className="text-sm font-medium">Geçmiş</span>
+            <span className="text-sm font-medium">History</span>
             <span className="ml-auto text-[11px] text-[color:var(--muted)]">
               {sessions.length} oturum
             </span>
@@ -302,7 +389,7 @@ export function ChatPanel({
           <div className="p-3 space-y-1">
             {sessions.length === 0 && (
               <div className="py-12 text-center text-xs text-[color:var(--muted)]">
-                Henüz kayıtlı sohbet yok
+                No saved chats yet
               </div>
             )}
             {[...sessions].reverse().map((s) => (
@@ -340,16 +427,32 @@ export function ChatPanel({
       ) : (
         /* ── Messages ── */
         <div ref={scrollRef} className="flex-1 overflow-y-auto">
-          {messages.length === 0 ? (
+          {notConfigured ? (
+            /* Agent yapılandırılmadı — Ayarlar'a yönlendir */
+            <div className="flex flex-col items-center justify-center h-full px-8 gap-4 text-center">
+              <div className="h-11 w-11 rounded-2xl grid place-items-center" style={{ background: "var(--surface-alt)", border: "1px solid var(--border)" }}>
+                <AgentIconLg />
+              </div>
+              <div>
+                <div className="text-sm font-semibold">Agent not configured</div>
+                <div className="text-xs text-[color:var(--muted)] mt-1 leading-relaxed">
+                  Set your local LLM (Base URL + Model) in Agent Settings to start.
+                </div>
+              </div>
+              <button onClick={() => setShowSettings(true)} className="btn btn-primary text-xs px-3">
+                Open settings
+              </button>
+            </div>
+          ) : messages.length === 0 ? (
             /* Empty state */
             <div className="flex flex-col items-center justify-center h-full px-8 gap-4 text-center">
               <div className="h-11 w-11 rounded-2xl bg-[color:var(--primary)] text-white grid place-items-center">
                 <AgentIconLg />
               </div>
               <div>
-                <div className="text-sm font-semibold">Nasıl yardımcı olabilirim?</div>
+                <div className="text-sm font-semibold">How can I help?</div>
                 <div className="text-xs text-[color:var(--muted)] mt-1 leading-relaxed">
-                  Rezerv analizi, IBNR hesaplama, LDF/BF ayarları ve senaryo sorularınızı yazın.
+                  Ask about reserve analysis, IBNR calculation, LDF/BF settings, and scenarios.
                 </div>
               </div>
             </div>
@@ -358,6 +461,13 @@ export function ChatPanel({
               {messages.map((m, i) => (
                 <MessageBubble key={i} message={m} />
               ))}
+              {pendingForm && !loading && (
+                <AgentFormCard
+                  key={pendingForm.title + pendingForm.fields.length}
+                  form={pendingForm}
+                  onSubmit={(ans) => submitAgentForm(pendingForm, ans)}
+                />
+              )}
               {loading && <TypingIndicator />}
               {error && (
                 <div className="text-xs text-[color:var(--danger)] bg-[color:var(--danger-soft)] border border-[color:var(--danger-soft)] rounded-lg px-3 py-2">
@@ -377,23 +487,23 @@ export function ChatPanel({
             value={input}
             onChange={(e) => { setInput(e.target.value); resizeTextarea(); }}
             onKeyDown={handleKeyDown}
-            placeholder="Mesaj yazın…"
-            disabled={loading}
+            placeholder={notConfigured ? "Configure the agent in settings…" : "Type a message…"}
+            disabled={loading || notConfigured}
             rows={1}
             className="flex-1 input-base resize-none leading-relaxed overflow-y-auto"
             style={{ minHeight: "38px", maxHeight: "128px" }}
           />
           <button
             onClick={() => dispatchSend(input)}
-            disabled={loading || !input.trim()}
+            disabled={loading || !input.trim() || notConfigured}
             className="btn btn-primary shrink-0 h-[38px] w-[38px] p-0 rounded-lg"
-            title="Gönder (Enter)"
+            title="Send (Enter)"
           >
             <SendIcon />
           </button>
         </div>
         <div className="text-[10px] text-[color:var(--muted)] mt-1.5 text-right">
-          Enter: gönder · Shift+Enter: yeni satır
+          Enter: send · Shift+Enter: new line
         </div>
       </div>
     </div>
@@ -401,6 +511,106 @@ export function ChatPanel({
 }
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
+
+// ask_user formu — chat içi tıklanabilir seçim/giriş kartı.
+function AgentFormCard({
+  form,
+  onSubmit,
+}: {
+  form: AgentForm;
+  onSubmit: (answers: Record<string, string | string[]>) => void;
+}) {
+  const [vals, setVals] = useState<Record<string, string | string[]>>(() => {
+    const init: Record<string, string | string[]> = {};
+    for (const f of form.fields) {
+      if (f.type === "multiselect") {
+        init[f.id] = Array.isArray(f.default)
+          ? f.default.map(String)
+          : f.default != null
+          ? [String(f.default)]
+          : [];
+      } else if (f.default != null) {
+        init[f.id] = String(f.default);
+      } else {
+        init[f.id] = f.type === "select" && f.options?.length ? f.options[0].value : "";
+      }
+    }
+    return init;
+  });
+  const [submitted, setSubmitted] = useState(false);
+
+  const setVal = (id: string, v: string | string[]) =>
+    setVals((prev) => ({ ...prev, [id]: v }));
+  const toggleMulti = (id: string, v: string) =>
+    setVals((prev) => {
+      const cur = Array.isArray(prev[id]) ? (prev[id] as string[]) : [];
+      return { ...prev, [id]: cur.includes(v) ? cur.filter((x) => x !== v) : [...cur, v] };
+    });
+
+  return (
+    <div className="rounded-2xl border border-[color:var(--border)] bg-[color:var(--surface-alt)] px-4 py-3 space-y-3">
+      <div className="text-sm font-semibold">{form.title}</div>
+      {form.fields.map((f) => (
+        <div key={f.id} className="space-y-1.5">
+          <div className="text-xs font-medium text-[color:var(--muted)]">{f.label}</div>
+          {f.hint && <div className="text-[11px] text-[color:var(--muted)]">{f.hint}</div>}
+
+          {(f.type === "select" || f.type === "multiselect") && f.options && (
+            <div className="flex flex-wrap gap-1.5">
+              {f.options.map((o) => {
+                const active =
+                  f.type === "multiselect"
+                    ? Array.isArray(vals[f.id]) && (vals[f.id] as string[]).includes(o.value)
+                    : vals[f.id] === o.value;
+                return (
+                  <button
+                    key={o.value}
+                    type="button"
+                    disabled={submitted}
+                    onClick={() =>
+                      f.type === "multiselect"
+                        ? toggleMulti(f.id, o.value)
+                        : setVal(f.id, o.value)
+                    }
+                    className={
+                      "text-xs px-3 py-1.5 rounded-full border transition-colors " +
+                      (active
+                        ? "bg-[color:var(--primary)] text-white border-[color:var(--primary)]"
+                        : "bg-[color:var(--surface)] border-[color:var(--border)] hover:border-[color:var(--primary)]")
+                    }
+                  >
+                    {o.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {(f.type === "text" || f.type === "number") && (
+            <input
+              type={f.type === "number" ? "number" : "text"}
+              disabled={submitted}
+              value={(vals[f.id] as string) ?? ""}
+              onChange={(e) => setVal(f.id, e.target.value)}
+              className="input-base text-sm w-full"
+            />
+          )}
+        </div>
+      ))}
+      <button
+        type="button"
+        disabled={submitted}
+        onClick={() => {
+          setSubmitted(true);
+          onSubmit(vals);
+        }}
+        className="btn btn-primary text-xs px-4 py-1.5"
+      >
+        {form.submit_label || "Submit"}
+      </button>
+    </div>
+  );
+}
 
 function MessageBubble({ message }: { message: ChatMessage }) {
   const isUser = message.role === "user";
@@ -624,6 +834,15 @@ function CloseIcon() {
   return (
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M18 6L6 18M6 6l12 12" />
+    </svg>
+  );
+}
+
+function SettingsIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
     </svg>
   );
 }

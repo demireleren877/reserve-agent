@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import type { Triangle } from "@/types/triangle";
 import { formatFactor, formatNumber } from "@/lib/api";
 import { type Window } from "@/lib/ldf";
+import { ExclusionDetailModal } from "@/components/ExclusionDetailModal";
 
 interface PerOriginRow {
   origin: string;
@@ -57,6 +58,18 @@ interface Props {
   manualLRCount: number;
   bfBasisCount: number;
   exclusionImpacts: ExclusionImpact[];
+  /** LARGE segment toplamları (yüklüyse). */
+  largeTotals?: {
+    latest: number;
+    selectedUltimate: number;
+    ibnr: number;
+  } | null;
+  /** ATTRITIONAL toplamları (Large yüklüyse) — kırılım her segmentte doğru olsun. */
+  attritionalTotals?: {
+    latest: number;
+    selectedUltimate: number;
+    ibnr: number;
+  } | null;
 }
 
 const DEFAULT_WINDOW: Window = "all";
@@ -68,8 +81,6 @@ export function SummaryTab(props: Props) {
     frequency,
     periodLabel,
     window,
-    selectedLDFs,
-    effectiveCDFs,
     excludedCells,
     rows,
     totals,
@@ -80,50 +91,58 @@ export function SummaryTab(props: Props) {
     exclusionImpacts,
   } = props;
 
+  const [showExclusionModal, setShowExclusionModal] = useState(false);
+
   const totalRawPremium = rows.reduce((s, r) => s + r.premium, 0);
   const totalULR =
     totalRawPremium > 0 ? totals.selectedUltimate / totalRawPremium : null;
 
-  const triangleLabel =
-    triangle?.triangle_type === "incurred" ? "Incurred" : "Paid";
+  const triangleLabel = triangle?.triangle_type === "incurred"
+    ? "Incurred"
+    : triangle?.triangle_type === "outstanding"
+    ? "Outstanding"
+    : "Paid";
+
+  // Origin başına elemelerin net IBNR etkisi (satırdaki tüm adımların toplamı)
+  const exclusionByOrigin = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const e of exclusionImpacts) {
+      m.set(e.origin, (m.get(e.origin) ?? 0) + e.ibnrImpact);
+    }
+    return m;
+  }, [exclusionImpacts]);
 
   const interventions = useMemo(() => {
     const items: { label: string; value: string; tone?: "muted" | "accent" }[] = [];
     if (String(window) !== String(DEFAULT_WINDOW)) {
-      items.push({ label: "Volume", value: `Son ${window}` });
+      items.push({ label: "Volume", value: `Last ${window}` });
     }
     if (excludedCells.size > 0) {
       items.push({
-        label: "Hücre eleme",
-        value: `${excludedCells.size} hücre`,
+        label: "Cell exclusion",
+        value: `${excludedCells.size} cells`,
         tone: "accent",
       });
     }
     if (curveOverrides.length > 0) {
       items.push({
-        label: "Curve override (tail truncation)",
+        label: "Curve override",
         value: `${curveOverrides.length} period`,
         tone: "accent",
       });
     }
     if (correctionEntries.length > 0) {
       items.push({
-        label: "BF Correction (annualization)",
+        label: "BF correction",
         value: `${correctionEntries.length} origin`,
         tone: "accent",
       });
     }
     if (manualLRCount > 0) {
-      items.push({
-        label: "Manuel Selected LR",
-        value: `${manualLRCount} origin`,
-      });
+      items.push({ label: "Manual LR", value: `${manualLRCount} origin` });
     }
     if (bfBasisCount > 0) {
-      items.push({
-        label: "BF temelinde origin",
-        value: `${bfBasisCount} origin`,
-      });
+      items.push({ label: "BF basis", value: `${bfBasisCount} origin` });
     }
     return items;
   }, [
@@ -138,7 +157,7 @@ export function SummaryTab(props: Props) {
   if (!triangle) {
     return (
       <div className="card p-10 text-center text-sm text-[color:var(--muted)]">
-        Önce Veri sekmesinden bir üçgen yükleyin.
+        Load a triangle from the Data tab first.
       </div>
     );
   }
@@ -152,387 +171,368 @@ export function SummaryTab(props: Props) {
     (s, e) => s + e.ibnrImpact,
     0,
   );
+  const hasExclusionCol = exclusionImpacts.length > 0;
+
+  // Kompozisyon: Latest (gelişmiş) + IBNR (rezerv) = Ultimate
+  const ult = totals.selectedUltimate;
+  const devFrac = ult > 0 ? totals.latest / ult : 0;
+  const ibnrFrac = ult > 0 ? totals.ibnr / ult : 0;
+  const devPct = devFrac * 100;
+  const ibnrPct = ibnrFrac * 100;
 
   return (
-    <div className="space-y-4">
-      {/* Başlık */}
-      <div className="card p-4">
-        <div className="flex items-start justify-between flex-wrap gap-3">
-          <div>
-            <h2 className="text-base font-semibold">{branchName}</h2>
-            <p className="text-xs text-[color:var(--muted-strong)] mt-0.5">
-              {periodLabel} ·{" "}
-              {frequency === "yearly" ? "Yıllık" : "Çeyreklik"} model ·{" "}
-              {triangleLabel} üçgeni · {originRange} ({triangle.origin_periods.length}{" "}
-              origin × {triangle.development_periods.length} dev period)
-            </p>
-          </div>
-          <div className="text-right text-[11px] text-[color:var(--muted)]">
-            Selected ULR
-            <div className="text-base font-semibold text-[color:var(--foreground)] tabular">
-              {totalULR != null ? `${(totalULR * 100).toFixed(1)}%` : "—"}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Final rakamlar */}
-      <div className="grid grid-cols-4 gap-3">
-        <Stat label={`Toplam ${triangleLabel}`} value={formatNumber(totals.latest)} />
-        <Stat label="Toplam Exposure (yıllık)" value={formatNumber(totals.exposure)} />
-        <Stat
-          label="Seçili Ultimate"
-          value={formatNumber(totals.selectedUltimate)}
-        />
-        <Stat label="Seçili IBNR" value={formatNumber(totals.ibnr)} accent />
-      </div>
-
-      {/* Aktüer müdahaleleri (default'tan sapan ne varsa) */}
-      <div className="card p-0 overflow-hidden">
-        <div className="px-4 py-3 border-b bg-[color:var(--surface-alt)]">
-          <h3 className="text-sm font-semibold">Aktüer Müdahaleleri</h3>
-          <p className="text-[11px] text-[color:var(--muted)] mt-0.5">
-            Default ayarlardan sapan tüm seçimler — ikinci hat inceleme için
-            kapsama listesi.
+    <div className="space-y-6">
+      {/* ── Başlık ── */}
+      <div className="flex items-end justify-between flex-wrap gap-3">
+        <div>
+          <h2 className="text-lg font-semibold tracking-tight">{branchName}</h2>
+          <p className="text-xs text-[color:var(--muted)] mt-1">
+            {periodLabel} · {frequency === "yearly" ? "Yearly" : "Quarterly"} ·{" "}
+            {triangleLabel} · {originRange} · {triangle.origin_periods.length}×
+            {triangle.development_periods.length}
           </p>
         </div>
-        {interventions.length === 0 ? (
-          <div className="p-4 text-sm text-[color:var(--muted-strong)]">
-            Model tüm varsayılan ayarlarda. Hücre eleme, curve override, BF
-            correction, manuel LR veya BF basis seçimi yok.
-          </div>
-        ) : (
-          <ul className="divide-y">
+        {interventions.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 justify-end">
             {interventions.map((it, i) => (
-              <li
+              <span
                 key={i}
-                className="px-4 py-2 flex items-center justify-between text-sm"
+                className={
+                  "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium tabular " +
+                  (it.tone === "accent"
+                    ? "bg-[color:var(--primary-soft)] text-[color:var(--primary)]"
+                    : "bg-[color:var(--surface-alt)] text-[color:var(--muted-strong)]")
+                }
               >
-                <span className="text-[color:var(--muted-strong)]">{it.label}</span>
-                <span
-                  className={
-                    "tabular font-medium " +
-                    (it.tone === "accent"
-                      ? "text-[color:var(--primary)]"
-                      : "")
-                  }
-                >
-                  {it.value}
-                </span>
-              </li>
+                <span className="opacity-60 font-normal">{it.label}</span>
+                {it.value}
+              </span>
             ))}
-          </ul>
+          </div>
         )}
       </div>
 
-      {/* Per-origin final */}
-      <div className="card p-0 overflow-hidden">
-        <div className="px-4 py-3 border-b bg-[color:var(--surface-alt)]">
-          <h3 className="text-sm font-semibold">Origin Bazında Final</h3>
-          <p className="text-[11px] text-[color:var(--muted)] mt-0.5">
-            Seçili Ultimate = origin başına seçilen temel (CL/BF). Correction
-            yıllık exposure'a tamamlama katsayısı; IBNR kısmi dönem üzerinden.
-          </p>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="text-sm w-full tabular">
-            <thead>
-              <tr className="text-[color:var(--muted-strong)] text-[11px] uppercase tracking-wide bg-[color:var(--background)]">
-                <th className="text-left px-3 py-2 font-semibold">Kaza</th>
-                <th className="text-right px-3 py-2 font-semibold">Latest</th>
-                <th className="text-right px-3 py-2 font-semibold">Exposure</th>
-                <th className="text-right px-3 py-2 font-semibold">k</th>
-                <th className="text-right px-3 py-2 font-semibold">CDF</th>
-                <th className="text-right px-3 py-2 font-semibold">% Dev</th>
-                <th className="text-left px-3 py-2 font-semibold">Temel</th>
-                <th className="text-right px-3 py-2 font-semibold">Sel. LR</th>
-                <th className="text-right px-3 py-2 font-semibold">
-                  Seçili Ult
-                </th>
-                <th className="text-right px-3 py-2 font-semibold">IBNR</th>
-                <th className="text-right px-3 py-2 font-semibold">ULR</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr
-                  key={r.origin}
-                  className="border-t hover:bg-[color:var(--surface-alt)]/40"
-                >
-                  <td className="px-3 py-1.5 font-medium">{r.origin}</td>
-                  <td className="text-right px-3 py-1.5">
-                    {formatNumber(r.latest)}
-                  </td>
-                  <td className="text-right px-3 py-1.5">
-                    {r.premium > 0 ? formatNumber(r.premium) : "—"}
-                  </td>
-                  <td
-                    className={
-                      "text-right px-3 py-1.5 " +
-                      (r.correction !== 1
-                        ? "text-[color:var(--primary)] font-medium"
-                        : "text-[color:var(--muted)]")
-                    }
-                  >
-                    {r.correction !== 1 ? `×${r.correction}` : "—"}
-                  </td>
-                  <td className="text-right px-3 py-1.5 text-[color:var(--muted-strong)]">
-                    {formatFactor(r.cdf)}
-                  </td>
-                  <td className="text-right px-3 py-1.5 text-[color:var(--muted-strong)]">
-                    {r.pctDeveloped != null
-                      ? `${(r.pctDeveloped * 100).toFixed(1)}%`
-                      : "—"}
-                  </td>
-                  <td className="px-3 py-1.5">
-                    <span
-                      className={
-                        "inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide " +
-                        (r.basis === "bf"
-                          ? "bg-[color:var(--primary-soft)] text-[color:var(--primary)]"
-                          : "bg-[color:var(--surface-alt)] text-[color:var(--muted-strong)]")
-                      }
-                    >
-                      {r.basis}
-                    </span>
-                  </td>
-                  <td
-                    className="text-right px-3 py-1.5 text-[color:var(--muted-strong)]"
-                    title={r.selectedLRInput ?? undefined}
-                  >
-                    {`${(r.selectedLR * 100).toFixed(1)}%`}
-                    {r.selectedLRInput && (
-                      <span className="ml-1 text-[9px] font-semibold text-[color:var(--primary)]">
-                        ƒ
-                      </span>
-                    )}
-                  </td>
-                  <td className="text-right px-3 py-1.5 font-semibold">
-                    {formatNumber(r.selectedUltimate)}
-                  </td>
-                  <td className="text-right px-3 py-1.5 font-semibold text-[color:var(--primary)]">
-                    {formatNumber(r.ibnr)}
-                  </td>
-                  <td className="text-right px-3 py-1.5 text-[color:var(--muted-strong)]">
-                    {r.ulr != null ? `${(r.ulr * 100).toFixed(1)}%` : "—"}
-                  </td>
-                </tr>
-              ))}
-              <tr className="border-t-2 border-[color:var(--border-strong)] font-semibold bg-[color:var(--surface-alt)]">
-                <td className="px-3 py-2">Toplam</td>
-                <td className="text-right px-3 py-2">
-                  {formatNumber(totals.latest)}
-                </td>
-                <td className="text-right px-3 py-2">
-                  {formatNumber(totals.exposure)}
-                </td>
-                <td colSpan={5} />
-                <td className="text-right px-3 py-2">
-                  {formatNumber(totals.selectedUltimate)}
-                </td>
-                <td className="text-right px-3 py-2 text-[color:var(--primary)]">
-                  {formatNumber(totals.ibnr)}
-                </td>
-                <td className="text-right px-3 py-2">
-                  {totalULR != null ? `${(totalULR * 100).toFixed(1)}%` : "—"}
-                </td>
-              </tr>
-            </tbody>
-          </table>
+      {/* ── Hero: IBNR + kompozisyon + ikincil metrikler ── */}
+      <div className="card p-6">
+        <div className="grid grid-cols-1 lg:grid-cols-[1.1fr_1fr] gap-6 lg:gap-10">
+          {/* Sol: hero IBNR + kompozisyon çubuğu */}
+          <div className="min-w-0">
+            <div className="label mb-1.5">Selected IBNR</div>
+            <div className="flex items-baseline gap-3 flex-wrap">
+              <span className="text-[2.75rem] leading-none font-semibold tabular text-[color:var(--primary)] tracking-tight">
+                {formatNumber(totals.ibnr)}
+              </span>
+              <span className="text-sm text-[color:var(--muted)]">
+                <span className="font-semibold text-[color:var(--muted-strong)]">
+                  {ibnrPct.toFixed(1)}%
+                </span>{" "}
+                of Ultimate
+              </span>
+            </div>
+
+            {/* Kompozisyon çubuğu: gelişmiş vs rezerv */}
+            <div className="mt-6">
+              <div className="flex h-2.5 w-full rounded-full overflow-hidden bg-[color:var(--surface-alt)]">
+                <div
+                  className="h-full"
+                  style={{
+                    width: `${devPct}%`,
+                    background: "var(--border-strong)",
+                  }}
+                  title={`${triangleLabel}: ${formatNumber(totals.latest)}`}
+                />
+                <div
+                  className="h-full"
+                  style={{
+                    width: `${ibnrPct}%`,
+                    background: "var(--primary)",
+                  }}
+                  title={`IBNR: ${formatNumber(totals.ibnr)}`}
+                />
+              </div>
+              <div className="flex justify-between mt-2.5 text-[11px]">
+                <span className="inline-flex items-center gap-1.5 text-[color:var(--muted-strong)]">
+                  <span
+                    className="w-2 h-2 rounded-full"
+                    style={{ background: "var(--border-strong)" }}
+                  />
+                  {triangleLabel} · {formatNumber(totals.latest)}{" "}
+                  <span className="text-[color:var(--muted)]">
+                    ({devPct.toFixed(1)}% developed)
+                  </span>
+                </span>
+                <span className="inline-flex items-center gap-1.5 text-[color:var(--primary)] font-medium">
+                  <span
+                    className="w-2 h-2 rounded-full"
+                    style={{ background: "var(--primary)" }}
+                  />
+                  IBNR
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Sağ: ikincil metrikler */}
+          <div className="grid grid-cols-2 gap-x-8 gap-y-5 lg:border-l lg:pl-10 content-center">
+            <Metric label="Selected Ultimate" value={formatNumber(ult)} />
+            <Metric
+              label={`Total ${triangleLabel}`}
+              value={formatNumber(totals.latest)}
+            />
+            <Metric
+              label="Exposure (annual)"
+              value={formatNumber(totals.exposure)}
+            />
+            <Metric
+              label="Selected ULR"
+              value={totalULR != null ? `${(totalULR * 100).toFixed(1)}%` : "—"}
+            />
+          </div>
         </div>
       </div>
 
-      {/* Eleme etkisi tablosu */}
-      <div className="card p-0 overflow-hidden">
-        <div className="px-4 py-3 border-b bg-[color:var(--surface-alt)]">
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <div>
-              <h3 className="text-sm font-semibold">
-                Eleme Etkisi {excludedCells.size > 0 && `(${excludedCells.size})`}
-              </h3>
-              <p className="text-[11px] text-[color:var(--muted)] mt-0.5">
-                Her satır: o eleme uygulanmasaydı toplam IBNR ne kadar değişirdi
-                (pozitif = eleme rezervi düşürmüş; negatif = yükseltmiş).
-              </p>
-            </div>
-            {exclusionImpacts.length > 0 && (
-              <div className="text-right">
-                <div className="text-[10px] uppercase text-[color:var(--muted)]">
-                  Elemelerin net IBNR etkisi
-                </div>
-                <div
-                  className={
-                    "text-base font-semibold tabular " +
-                    (ibnrSavedByExclusions > 0
-                      ? "text-[color:var(--success)]"
-                      : ibnrSavedByExclusions < 0
-                      ? "text-[color:var(--danger)]"
-                      : "")
-                  }
-                >
-                  {ibnrSavedByExclusions > 0 ? "+" : ""}
-                  {formatNumber(ibnrSavedByExclusions)}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-        {exclusionImpacts.length === 0 ? (
-          <div className="p-6 text-center text-sm text-[color:var(--muted)]">
-            Hiç hücre elenmemiş.
-          </div>
-        ) : (
+      {/* ── Origin Bazında Final ── */}
+      <section>
+        <SectionHeader
+          title="Final by Origin"
+          hint="Ultimate & IBNR per selected basis (CL/BF)"
+          action={
+            hasExclusionCol ? (
+              <button
+                onClick={() => setShowExclusionModal(true)}
+                className="btn text-[11px] py-1 px-2.5"
+              >
+                Exclusion detail · {exclusionImpacts.length}
+              </button>
+            ) : undefined
+          }
+        />
+        <div className="card overflow-hidden">
           <div className="overflow-x-auto">
             <table className="text-sm w-full tabular">
               <thead>
-                <tr className="text-[color:var(--muted-strong)] text-[11px] uppercase tracking-wide bg-[color:var(--background)]">
-                  <th className="text-left px-3 py-2 font-semibold">Kaza</th>
-                  <th className="text-left px-3 py-2 font-semibold">Adım</th>
-                  <th className="text-right px-3 py-2 font-semibold">LDF</th>
-                  <th className="text-right px-3 py-2 font-semibold">
-                    Kolon medyanı
-                  </th>
-                  <th className="text-right px-3 py-2 font-semibold">Sapma</th>
-                  <th className="text-right px-3 py-2 font-semibold">
-                    IBNR'a etkisi
-                  </th>
+                <tr className="text-[color:var(--muted)] text-[10.5px] uppercase tracking-wide">
+                  <th className="text-left font-medium px-4 py-2.5">Accident</th>
+                  <th className="text-right font-medium px-3 py-2.5">Latest</th>
+                  <th className="text-right font-medium px-3 py-2.5">Exposure</th>
+                  <th className="text-right font-medium px-3 py-2.5">k</th>
+                  <th className="text-right font-medium px-3 py-2.5">CDF</th>
+                  <th className="text-right font-medium px-3 py-2.5">% Dev</th>
+                  <th className="text-center font-medium px-3 py-2.5">Basis</th>
+                  <th className="text-right font-medium px-3 py-2.5">Sel. LR</th>
+                  <th className="text-right font-medium px-3 py-2.5">Selected Ult</th>
+                  <th className="text-right font-medium px-4 py-2.5">IBNR</th>
+                  {hasExclusionCol && (
+                    <th
+                      className="text-right font-medium px-3 py-2.5"
+                      title="Net IBNR effect of exclusions at this origin"
+                    >
+                      Eleme
+                    </th>
+                  )}
+                  <th className="text-right font-medium px-4 py-2.5">ULR</th>
                 </tr>
               </thead>
               <tbody>
-                {exclusionImpacts.map((e) => (
-                  <tr
-                    key={`${e.origin}|${e.step}`}
-                    className="border-t hover:bg-[color:var(--surface-alt)]/50"
-                  >
-                    <td className="px-3 py-1.5 font-medium">{e.origin}</td>
-                    <td className="px-3 py-1.5 text-[color:var(--muted)]">
-                      {e.step + 1}→{e.step + 2}
-                    </td>
-                    <td className="text-right px-3 py-1.5">
-                      {e.ldfValue != null ? formatFactor(e.ldfValue) : "—"}
-                    </td>
-                    <td className="text-right px-3 py-1.5 text-[color:var(--muted-strong)]">
-                      {e.median != null ? formatFactor(e.median) : "—"}
-                    </td>
-                    <td
-                      className={
-                        "text-right px-3 py-1.5 font-medium " +
-                        (e.deviationPct == null
-                          ? ""
-                          : e.deviationPct > 0
-                          ? "text-[color:var(--danger)]"
-                          : "text-[color:var(--primary)]")
-                      }
+                {rows.map((r) => {
+                  const exc = exclusionByOrigin.get(r.origin);
+                  return (
+                    <tr
+                      key={r.origin}
+                      className="border-t border-[color:var(--border)] hover:bg-[color:var(--surface-alt)]/50 transition-colors"
                     >
-                      {e.deviationPct == null
-                        ? "—"
-                        : `${e.deviationPct > 0 ? "+" : ""}${e.deviationPct.toFixed(1)}%`}
-                    </td>
-                    <td
-                      className={
-                        "text-right px-3 py-1.5 font-semibold " +
-                        (e.ibnrImpact > 0
-                          ? "text-[color:var(--success)]"
-                          : e.ibnrImpact < 0
-                          ? "text-[color:var(--danger)]"
-                          : "text-[color:var(--muted)]")
-                      }
-                    >
-                      {e.ibnrImpact > 0 ? "+" : ""}
-                      {formatNumber(e.ibnrImpact)}
-                    </td>
-                  </tr>
-                ))}
+                      <td className="px-4 py-2 font-medium">{r.origin}</td>
+                      <td className="text-right px-3 py-2">
+                        {formatNumber(r.latest)}
+                      </td>
+                      <td className="text-right px-3 py-2 text-[color:var(--muted-strong)]">
+                        {r.premium > 0 ? formatNumber(r.premium) : "—"}
+                      </td>
+                      <td
+                        className={
+                          "text-right px-3 py-2 " +
+                          (r.correction !== 1
+                            ? "text-[color:var(--primary)] font-medium"
+                            : "text-[color:var(--muted)]")
+                        }
+                      >
+                        {r.correction !== 1 ? `×${r.correction}` : "—"}
+                      </td>
+                      <td className="text-right px-3 py-2 text-[color:var(--muted-strong)]">
+                        {formatFactor(r.cdf)}
+                      </td>
+                      <td className="px-3 py-2">
+                        {r.pctDeveloped != null ? (
+                          <div className="flex items-center justify-end gap-2">
+                            <div className="w-11 h-1.5 rounded-full bg-[color:var(--surface-alt)] overflow-hidden hidden sm:block">
+                              <div
+                                className="h-full rounded-full"
+                                style={{
+                                  width: `${Math.min(100, r.pctDeveloped * 100)}%`,
+                                  background: "var(--border-strong)",
+                                }}
+                              />
+                            </div>
+                            <span className="text-[color:var(--muted-strong)] tabular w-11 text-right">
+                              {(r.pctDeveloped * 100).toFixed(1)}%
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="text-right text-[color:var(--muted)]">
+                            —
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        <span
+                          className={
+                            "inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide " +
+                            (r.basis === "bf"
+                              ? "bg-[color:var(--primary-soft)] text-[color:var(--primary)]"
+                              : "bg-[color:var(--surface-alt)] text-[color:var(--muted-strong)]")
+                          }
+                        >
+                          {r.basis}
+                        </span>
+                      </td>
+                      <td
+                        className="text-right px-3 py-2 text-[color:var(--muted-strong)]"
+                        title={r.selectedLRInput ?? undefined}
+                      >
+                        {`${(r.selectedLR * 100).toFixed(1)}%`}
+                        {r.selectedLRInput && (
+                          <span className="ml-1 text-[9px] font-semibold text-[color:var(--primary)]">
+                            ƒ
+                          </span>
+                        )}
+                      </td>
+                      <td className="text-right px-3 py-2 font-medium">
+                        {formatNumber(r.selectedUltimate)}
+                      </td>
+                      <td className="text-right px-4 py-2 font-semibold text-[color:var(--primary)]">
+                        {formatNumber(r.ibnr)}
+                      </td>
+                      {hasExclusionCol && (
+                        <td className="text-right px-3 py-2">
+                          {exc == null || exc === 0 ? (
+                            <span className="text-[color:var(--muted)]">—</span>
+                          ) : (
+                            <span
+                              className={
+                                "tabular font-medium " +
+                                (exc > 0
+                                  ? "text-[color:var(--success)]"
+                                  : "text-[color:var(--danger)]")
+                              }
+                            >
+                              {exc > 0 ? "+" : ""}
+                              {formatNumber(exc)}
+                            </span>
+                          )}
+                        </td>
+                      )}
+                      <td className="text-right px-4 py-2 text-[color:var(--muted-strong)]">
+                        {r.ulr != null ? `${(r.ulr * 100).toFixed(1)}%` : "—"}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-[color:var(--border-strong)] font-semibold bg-[color:var(--surface-alt)]/60">
+                  <td className="px-4 py-2.5">Total</td>
+                  <td className="text-right px-3 py-2.5">
+                    {formatNumber(totals.latest)}
+                  </td>
+                  <td className="text-right px-3 py-2.5">
+                    {formatNumber(totals.exposure)}
+                  </td>
+                  <td colSpan={5} />
+                  <td className="text-right px-3 py-2.5">{formatNumber(ult)}</td>
+                  <td className="text-right px-4 py-2.5 text-[color:var(--primary)]">
+                    {formatNumber(totals.ibnr)}
+                  </td>
+                  {hasExclusionCol && (
+                    <td
+                      className={
+                        "text-right px-3 py-2.5 " +
+                        (ibnrSavedByExclusions > 0
+                          ? "text-[color:var(--success)]"
+                          : ibnrSavedByExclusions < 0
+                          ? "text-[color:var(--danger)]"
+                          : "")
+                      }
+                    >
+                      {ibnrSavedByExclusions > 0 ? "+" : ""}
+                      {formatNumber(ibnrSavedByExclusions)}
+                    </td>
+                  )}
+                  <td className="text-right px-4 py-2.5">
+                    {totalULR != null ? `${(totalULR * 100).toFixed(1)}%` : "—"}
+                  </td>
+                </tr>
+              </tfoot>
             </table>
           </div>
-        )}
-      </div>
-
-      {/* LDF / CDF zinciri */}
-      <div className="card p-0 overflow-hidden">
-        <div className="px-4 py-3 border-b bg-[color:var(--surface-alt)]">
-          <h3 className="text-sm font-semibold">LDF & CDF Zinciri</h3>
-          <p className="text-[11px] text-[color:var(--muted)] mt-0.5">
-            Effective CDF, Curve sekmesindeki override'ları yansıtır.
+        </div>
+        {hasExclusionCol && (
+          <p className="text-[11px] text-[color:var(--muted)] mt-2 px-0.5">
+            The <span className="font-medium">Exclusion</span> column: the net IBNR effect of
+            exclusions at that origin (positive + lowered it, negative − raised it).
+            For a step-by-step breakdown{" "}
+            <button
+              onClick={() => setShowExclusionModal(true)}
+              className="text-[color:var(--primary)] font-medium hover:underline"
+            >
+              Exclusion detail
+            </button>
+            .
           </p>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="text-sm w-full tabular">
-            <thead>
-              <tr className="text-[color:var(--muted-strong)] text-[11px] uppercase tracking-wide bg-[color:var(--background)]">
-                <th className="text-left px-3 py-2 font-semibold">Adım</th>
-                <th className="text-right px-3 py-2 font-semibold">Selected LDF</th>
-                <th className="text-right px-3 py-2 font-semibold">
-                  Effective CDF (→ Ult)
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {selectedLDFs.map((ldf, i) => (
-                <tr key={i} className="border-t">
-                  <td className="px-3 py-1.5 text-[color:var(--muted-strong)]">
-                    {i + 1}→{i + 2}
-                  </td>
-                  <td className="text-right px-3 py-1.5">{formatFactor(ldf)}</td>
-                  <td className="text-right px-3 py-1.5 font-medium">
-                    {formatFactor(effectiveCDFs[i] ?? 1)}
-                  </td>
-                </tr>
-              ))}
-              {effectiveCDFs.length > selectedLDFs.length && (
-                <tr className="border-t">
-                  <td className="px-3 py-1.5 text-[color:var(--muted-strong)]">
-                    {selectedLDFs.length + 1} (tail)
-                  </td>
-                  <td className="text-right px-3 py-1.5 text-[color:var(--muted)]">—</td>
-                  <td className="text-right px-3 py-1.5 font-medium">
-                    {formatFactor(effectiveCDFs[selectedLDFs.length] ?? 1)}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        )}
+      </section>
+
+      {showExclusionModal && (
+        <ExclusionDetailModal
+          impacts={exclusionImpacts}
+          excludedCount={excludedCells.size}
+          onClose={() => setShowExclusionModal(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+function SectionHeader({
+  title,
+  hint,
+  action,
+}: {
+  title: string;
+  hint?: string;
+  action?: ReactNode;
+}) {
+  return (
+    <div className="flex items-baseline justify-between gap-3 mb-2.5 px-0.5">
+      <h3 className="text-sm font-semibold tracking-tight shrink-0">{title}</h3>
+      <div className="flex items-baseline gap-3 min-w-0">
+        {hint && (
+          <span className="text-[11px] text-[color:var(--muted)] truncate hidden sm:inline">
+            {hint}
+          </span>
+        )}
+        {action}
       </div>
     </div>
   );
 }
 
-function Stat({
-  label,
-  value,
-  accent,
-}: {
-  label: string;
-  value: string;
-  accent?: boolean;
-}) {
+function Metric({ label, value }: { label: string; value: ReactNode }) {
   return (
-    <div
-      className={
-        "card p-4 " +
-        (accent
-          ? "border-[color:var(--primary-border)] bg-[color:var(--primary-soft)]"
-          : "")
-      }
-    >
-      <div
-        className={
-          "text-[10px] uppercase tracking-wide mb-1 font-semibold " +
-          (accent
-            ? "text-[color:var(--primary)]"
-            : "text-[color:var(--muted-strong)]")
-        }
-      >
+    <div className="min-w-0">
+      <div className="text-[10px] uppercase tracking-wide font-semibold text-[color:var(--muted)]">
         {label}
       </div>
-      <div
-        className={
-          "text-xl font-semibold tabular " +
-          (accent ? "text-[color:var(--primary)]" : "")
-        }
-      >
+      <div className="text-lg font-semibold tabular mt-0.5 tracking-tight truncate">
         {value}
       </div>
     </div>

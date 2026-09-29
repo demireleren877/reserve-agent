@@ -518,7 +518,7 @@ class TestRollForwardEndpoint:
         assert data["paid_triangle"]["values"][2][1] == 1460
         # 2024 incurred age0 = 900 + 600 = 1500
         assert data["incurred_triangle"]["values"][3][0] == 1500
-        assert data["new_diagonal_files"]["2024"] == {"D": 900.0}
+        assert data["new_diagonal_files"]["2024"] == {"D": {"p": 900.0, "o": 600.0}}
 
     def test_roll_forward_missing_brans_400(self, client):
         resp = client.post("/v1/data/roll-forward", json={

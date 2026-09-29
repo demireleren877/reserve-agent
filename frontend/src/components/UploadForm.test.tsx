@@ -20,7 +20,7 @@ describe("UploadForm", () => {
 
   it("renders triangle type selector and file input", () => {
     render(<UploadForm onLoaded={() => {}} />);
-    expect(screen.getByLabelText(/excel dosyası/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/select excel file/i)).toBeInTheDocument();
     // 4 selects: triangle type, cumulative/incremental, origin granularity, dev granularity
     expect(screen.getAllByRole("combobox")).toHaveLength(4);
   });
@@ -40,7 +40,7 @@ describe("UploadForm", () => {
     const file = new File(["dummy"], "test.xlsx", {
       type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     });
-    await userEvent.upload(screen.getByLabelText(/excel dosyası/i), file);
+    await userEvent.upload(screen.getByLabelText(/select excel file/i), file);
 
     await waitFor(() => expect(onLoaded).toHaveBeenCalledWith(fakeTriangle));
   });
@@ -50,7 +50,7 @@ describe("UploadForm", () => {
 
     render(<UploadForm onLoaded={() => {}} />);
     const file = new File(["x"], "t.xlsx");
-    await userEvent.upload(screen.getByLabelText(/excel dosyası/i), file);
+    await userEvent.upload(screen.getByLabelText(/select excel file/i), file);
 
     await waitFor(() =>
       expect(screen.getByRole("alert")).toHaveTextContent(/bozuk/i),

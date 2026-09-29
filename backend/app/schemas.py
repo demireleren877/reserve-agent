@@ -106,9 +106,25 @@ class SessionState(BaseModel):
     per_origin: list[dict] = []
 
 
+class AgentConfigIn(BaseModel):
+    """Agent Ayarları ekranından gelen yapılandırma (masaüstüyle aynı alanlar).
+
+    `base_url` boşsa Actuarius'un kendi LLM uç noktası kullanılır; doluysa kullanıcının
+    kendi (OpenAI-uyumlu, herkese açık https) uç noktasıyla konuşulur.
+    """
+
+    base_url: str = ""
+    api_key: str = ""
+    model: str = ""
+    system_prompt: str | None = None
+    enabled_tools: list[str] | None = None
+    temperature: float | None = None
+
+
 class ChatRequest(BaseModel):
     messages: list[ChatMessage]
     model: str | None = None
+    config: AgentConfigIn | None = None
     # Yeni çok-modüllü payload: {"reserve": {"triangle": {...}, "session_state": {...}}, ...}
     modules: dict[str, dict] | None = None
     # Geriye dönük (sadece rezerv): üst seviye triangle + session_state

@@ -2,7 +2,7 @@
 
 import { AppSidebar } from "@/components/AppSidebar";
 import { AgentRegistryProvider } from "@/lib/agent-registry";
-import { GlobalAgentLauncher, GlobalAgentPanel } from "@/components/GlobalAgent";
+import { GlobalAgentPanel } from "@/components/GlobalAgent";
 import { ProjectProvider } from "@/lib/project-store";
 import { DataStoreProvider } from "@/lib/data-store";
 import { ReserveAgentBridge } from "@/components/ReserveAgentBridge";
@@ -17,7 +17,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     <AuthGate>
       {(me) => (
         <UserPlanProvider plan={me.plan}>
-        <ProjectProvider userId={me.uid}>
+        <ProjectProvider userId={me.uid} userName={me.username}>
         <DataStoreProvider userId={me.uid}>
           <AgentRegistryProvider>
             <ReserveAgentBridge />
@@ -31,7 +31,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               <AppSidebar />
               <div className="flex-1 min-w-0 flex flex-col">{children}</div>
             </div>
-            <GlobalAgentLauncher />
             <GlobalAgentPanel />
           </AgentRegistryProvider>
         </DataStoreProvider>

@@ -14,9 +14,9 @@ export function Breadcrumb({ onUploaded: _onUploaded }: BreadcrumbProps) {
 
   const freqLabel =
     project.activeFrequency === "yearly"
-      ? "Yıllık"
+      ? "Yearly"
       : project.activeFrequency === "quarterly"
-      ? "Çeyreklik"
+      ? "Quarterly"
       : null;
 
   return (
@@ -31,7 +31,7 @@ export function Breadcrumb({ onUploaded: _onUploaded }: BreadcrumbProps) {
         }
       >
         <FolderIcon />
-        Dönemler
+        Periods
       </button>
       {activePeriod && (
         <>
@@ -82,9 +82,9 @@ export function Breadcrumb({ onUploaded: _onUploaded }: BreadcrumbProps) {
           <button
             onClick={actions.goUp}
             className="text-xs text-[color:var(--muted)] hover:text-[color:var(--foreground)]"
-            title="Yukarı"
+            title="Up"
           >
-            ↑ Yukarı
+            ↑ Up
           </button>
         )}
       </div>
@@ -95,28 +95,34 @@ export function Breadcrumb({ onUploaded: _onUploaded }: BreadcrumbProps) {
 // —————————————————————— Logs button ——————————————————————
 
 const ACTION_LABELS: Record<string, string> = {
-  branch_created: "Branş oluşturuldu",
-  triangle_loaded: "Üçgen yüklendi",
-  set_method: "Metod değişti",
-  set_window: "Window değişti",
-  cell_toggled: "Hücre eleme/dahil",
-  exclusions_replaced: "Elemeler güncellendi",
-  exclusions_cleared: "Elemeler temizlendi",
-  premiums_updated: "Exposure güncellendi",
-  premiums_bulk: "Exposure (toplu)",
-  selected_lr_set: "Selected LR değişti",
-  selected_lr_bulk: "Selected LR (toplu)",
-  basis_set: "Temel değişti",
-  basis_bulk: "Temel (toplu)",
-  correction_set: "Correction değişti",
-  correction_bulk: "Correction (toplu)",
+  branch_created: "Branch created",
+  triangle_loaded: "Triangle loaded",
+  set_method: "Method changed",
+  set_window: "Window changed",
+  cell_toggled: "Cell exclude/include",
+  exclusions_replaced: "Exclusions updated",
+  exclusions_cleared: "Exclusions cleared",
+  premiums_updated: "Exposure updated",
+  premiums_bulk: "Exposure (bulk)",
+  selected_lr_set: "Selected LR changed",
+  selected_lr_bulk: "Selected LR (bulk)",
+  basis_set: "Basis changed",
+  basis_bulk: "Basis (bulk)",
+  correction_set: "Correction changed",
+  correction_bulk: "Correction (bulk)",
   curve_cdf_set: "Curve User Value",
-  curve_choice_set: "Curve seçimi",
-  curve_choice_bulk: "Curve seçimi (toplu)",
-  curve_reset: "Curve sıfırlandı",
+  curve_choice_set: "Curve selection",
+  curve_choice_bulk: "Curve selection (bulk)",
+  curve_reset: "Curve reset",
 };
 
-function BranchLogsButton() {
+export function BranchLogsButton({
+  onChangeDataSource,
+  dataSourceDisabled = false,
+}: {
+  onChangeDataSource?: () => void;
+  dataSourceDisabled?: boolean;
+} = {}) {
   const { activeBranch, activePeriod } = useProject();
   const popoverRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
@@ -132,11 +138,15 @@ function BranchLogsButton() {
     return () => document.removeEventListener("mousedown", onDown);
   }, [open]);
 
+  // Sadece bir model açıkken göster (breadcrumb kaldırıldı; header'da yaşar).
+  if (!activeBranch) return null;
+
   return (
     <div className="relative" ref={popoverRef}>
       <button
         onClick={() => setOpen((v) => !v)}
-        title="Loglar"
+        title="Model settings"
+        aria-label="Model settings"
         className={
           "p-1 rounded transition text-[color:var(--muted)] hover:text-[color:var(--foreground)] hover:bg-[color:var(--surface-alt)] " +
           (open ? "text-[color:var(--primary)]" : "")
@@ -148,28 +158,52 @@ function BranchLogsButton() {
       {open && (
         <div className="absolute right-0 top-full mt-1.5 card shadow-xl border z-[40] w-[520px] flex flex-col max-h-[420px]">
           <div className="flex items-center gap-2 px-3 py-2.5 border-b bg-[color:var(--surface-alt)]">
-            <span className="text-xs font-semibold flex-1">Loglar</span>
+            <span className="text-xs font-semibold flex-1">Model settings</span>
             {activeBranch && (
               <span className="text-[10px] text-[color:var(--muted)]">
                 {activePeriod?.label} / {activeBranch.name}
               </span>
             )}
           </div>
+          {onChangeDataSource && activeBranch && (
+            <div className="flex items-center gap-3 px-3 py-3 border-b bg-[color:var(--surface)]">
+              <div className="min-w-0 flex-1">
+                <div className="text-[11px] font-semibold text-[color:var(--foreground)]">Data source</div>
+                <div className="mt-0.5 text-[10px] text-[color:var(--muted)] truncate" title={activeBranch.triangleFileName ?? undefined}>
+                  {activeBranch.triangleFileName ?? "No named source"}
+                </div>
+              </div>
+              <button
+                type="button"
+                disabled={dataSourceDisabled}
+                onClick={() => {
+                  setOpen(false);
+                  onChangeDataSource();
+                }}
+                className="px-3 py-1.5 text-[11px] font-medium rounded-md border border-[color:var(--border)] bg-[color:var(--surface)] text-[color:var(--muted-strong)] hover:text-[color:var(--foreground)] hover:border-[color:var(--border-strong)] hover:bg-[color:var(--surface-alt)] transition disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Change
+              </button>
+            </div>
+          )}
+          <div className="px-3 py-1.5 border-b text-[10px] font-semibold text-[color:var(--muted-strong)] bg-[color:var(--surface-alt)]">
+            Activity log
+          </div>
           {!activeBranch ? (
-            <div className="p-6 text-center text-sm text-[color:var(--muted)]">Aktif branş yok.</div>
+            <div className="p-6 text-center text-sm text-[color:var(--muted)]">No active branch.</div>
           ) : (() => {
             const entries = [...activeBranch.history].reverse();
             return entries.length === 0 ? (
-              <div className="p-6 text-center text-sm text-[color:var(--muted)]">Henüz kayıt yok.</div>
+              <div className="p-6 text-center text-sm text-[color:var(--muted)]">No records yet.</div>
             ) : (
               <div className="overflow-y-auto overflow-x-auto flex-1">
                 <table className="text-[11px] w-full tabular">
                   <thead className="sticky top-0 bg-[color:var(--surface-alt)] z-10">
                     <tr className="border-b text-[10px] uppercase tracking-wide text-[color:var(--muted-strong)]">
-                      <th className="text-left px-3 py-1.5 font-semibold">Zaman</th>
-                      <th className="text-left px-3 py-1.5 font-semibold">Op.</th>
-                      <th className="text-left px-3 py-1.5 font-semibold">İşlem</th>
-                      <th className="text-left px-3 py-1.5 font-semibold">Detay</th>
+                      <th className="text-left px-3 py-1.5 font-semibold">Time</th>
+                      <th className="text-left px-3 py-1.5 font-semibold">Operation</th>
+                      <th className="text-left px-3 py-1.5 font-semibold">Action</th>
+                      <th className="text-left px-3 py-1.5 font-semibold">Details</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -180,8 +214,8 @@ function BranchLogsButton() {
                         </td>
                         <td className="px-3 py-1 whitespace-nowrap">
                           {e.source === "agent"
-                            ? <span className="px-1 py-0.5 rounded text-[9px] font-semibold bg-[color:var(--primary-soft)] text-[color:var(--primary)]">Agent</span>
-                            : <span className="text-[color:var(--muted)] text-[10px]">Sen</span>}
+                            ? <span title={`Agent · ${e.actorName ?? "Unknown"}`} className="px-1 py-0.5 rounded text-[9px] font-semibold bg-[color:var(--primary-soft)] text-[color:var(--primary)]">Agent · {e.actorName ?? "Unknown"}</span>
+                            : <span title={e.actorName ?? "Unknown"} className="text-[color:var(--muted)] text-[10px]">{e.actorName ?? "Unknown"}</span>}
                         </td>
                         <td className="px-3 py-1 font-medium whitespace-nowrap">{ACTION_LABELS[e.action] ?? e.action}</td>
                         <td className="px-3 py-1 text-[color:var(--muted-strong)] font-mono truncate max-w-[160px]">

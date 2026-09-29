@@ -10,11 +10,13 @@
     "db:migrate:remote": "wrangler d1 migrations apply reserve_agent --remote",
     "db:console:local": "wrangler d1 execute reserve_agent --local --command",
     "db:console:remote": "wrangler d1 execute reserve_agent --remote --command",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20251201.0",
     "typescript": "^5.7.0",
+    "vitest": "^3.2.7",
     "wrangler": "^4.0.0"
   }
 }

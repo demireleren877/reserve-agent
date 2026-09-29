@@ -22,20 +22,27 @@ import {
 import type { AgentAction } from "@/types/triangle";
 
 type ModuleSnapshot = Record<string, unknown>;
-type ActionHandler = (actions: AgentAction[]) => void;
+type ActionHandler = (actions: AgentAction[]) => void | Promise<void>;
 
 interface AgentRegistry {
   modulesPayload: Record<string, ModuleSnapshot>;
   registerSnapshot: (moduleName: string, snapshot: ModuleSnapshot | null) => void;
   registerActionHandler: (moduleName: string, handler: ActionHandler) => void;
   unregisterActionHandler: (moduleName: string) => void;
-  dispatchActions: (actions: AgentAction[]) => void;
+  /** Handler'lar (async olabilir — ör. üçgen yükleme) tamamlanınca resolve eder. */
+  dispatchActions: (actions: AgentAction[]) => Promise<void>;
   panelOpen: boolean;
   setPanelOpen: (open: boolean) => void;
   togglePanel: () => void;
 }
 
+type AgentRegistryWriter = Pick<
+  AgentRegistry,
+  "registerSnapshot" | "registerActionHandler" | "unregisterActionHandler"
+>;
+
 const Ctx = createContext<AgentRegistry | null>(null);
+const WriterCtx = createContext<AgentRegistryWriter | null>(null);
 
 export function AgentRegistryProvider({ children }: { children: ReactNode }) {
   const [modulesPayload, setModulesPayload] = useState<
@@ -73,7 +80,7 @@ export function AgentRegistryProvider({ children }: { children: ReactNode }) {
     delete handlersRef.current[moduleName];
   }, []);
 
-  const dispatchActions = useCallback((actions: AgentAction[]) => {
+  const dispatchActions = useCallback(async (actions: AgentAction[]) => {
     const byModule = new Map<string, AgentAction[]>();
     for (const a of actions) {
       const m = a.module || "reserve"; // legacy fallback
@@ -81,10 +88,12 @@ export function AgentRegistryProvider({ children }: { children: ReactNode }) {
       if (list) list.push(a);
       else byModule.set(m, [a]);
     }
+    const proms: (void | Promise<void>)[] = [];
     for (const [name, list] of byModule.entries()) {
       const handler = handlersRef.current[name];
-      if (handler) handler(list);
+      if (handler) proms.push(handler(list));
     }
+    await Promise.all(proms);
   }, []);
 
   const togglePanel = useCallback(() => setPanelOpen((v) => !v), []);
@@ -111,11 +120,28 @@ export function AgentRegistryProvider({ children }: { children: ReactNode }) {
     ],
   );
 
-  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+  const writerValue = useMemo<AgentRegistryWriter>(
+    () => ({ registerSnapshot, registerActionHandler, unregisterActionHandler }),
+    [registerSnapshot, registerActionHandler, unregisterActionHandler],
+  );
+
+  return (
+    <WriterCtx.Provider value={writerValue}>
+      <Ctx.Provider value={value}>{children}</Ctx.Provider>
+    </WriterCtx.Provider>
+  );
 }
 
 export function useAgentRegistry(): AgentRegistry {
   const v = useContext(Ctx);
   if (!v) throw new Error("AgentRegistryProvider eksik");
   return v;
+}
+
+/** Snapshot bridge'leri yalnız stabil yazma API'sine abone olur. Böylece başka
+ * bir modül snapshot kaydettiğinde bütün bridge'ler yeniden render edilmez. */
+export function useAgentRegistryWriter(): AgentRegistryWriter {
+  const value = useContext(WriterCtx);
+  if (!value) throw new Error("AgentRegistryProvider eksik");
+  return value;
 }

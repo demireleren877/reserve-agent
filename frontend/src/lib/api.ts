@@ -2,12 +2,14 @@ import type {
   ChatMessage,
   ChatResponse,
   ComputeResponse,
+  FileData,
   LDFMethod,
   ModelsResponse,
   Triangle,
   UploadOptions,
 } from "@/types/triangle";
 import { getFirebaseAuth } from "@/lib/auth/firebase";
+import { getAgentConfig, PROVIDER_DEFAULT_BASE_URL } from "@/lib/agent/agent-config";
 
 export const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE || "https://actuarial-api.onrender.com";
@@ -28,8 +30,8 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
 export async function uploadExcel(
   file: File,
   opts: UploadOptions,
-): Promise<{ triangle: Triangle; warnings: string[]; file_data?: Record<string, Record<string, Record<string, number>>> | null }> {
-  if (file.size > MAX_UPLOAD_BYTES) throw new Error("Dosya 10 MB sınırını aşıyor");
+): Promise<{ triangle: Triangle; warnings: string[]; file_data?: FileData | null }> {
+  if (file.size > MAX_UPLOAD_BYTES) throw new Error("File exceeds the 10 MB limit");
   const buffer = await file.arrayBuffer();
   const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer)));
   const authHeaders = await getAuthHeaders();
@@ -45,7 +47,7 @@ export async function uploadExcel(
     }),
   });
   if (!res.ok) {
-    const body = await res.json().catch(() => ({ detail: "Yükleme hatası" }));
+    const body = await res.json().catch(() => ({ detail: "Upload error" }));
     throw new Error(body.detail || `HTTP ${res.status}`);
   }
   return res.json();
@@ -76,7 +78,7 @@ export async function compute(
     body: JSON.stringify(body),
   });
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: "Hesaplama hatası" }));
+    const err = await res.json().catch(() => ({ detail: "Calculation error" }));
     throw new Error(err.detail || `HTTP ${res.status}`);
   }
   return res.json();
@@ -142,6 +144,18 @@ export async function chatWithAgent(
   if (fullHistory && fullHistory.length > 0) {
     body.full_history = fullHistory;
   }
+  // Agent Ayarları config'i (lokal LLM endpoint + system prompt + açık araçlar).
+  const cfg = getAgentConfig();
+  body.config = {
+    // Platform → boş base_url: backend kendi (sunucu tarafı) LLM'ini kullanır.
+    base_url: cfg.provider === "platform" ? "" : cfg.baseUrl.trim() || PROVIDER_DEFAULT_BASE_URL[cfg.provider] || "",
+    api_key: cfg.apiKey,
+    model: model ?? cfg.model,
+    // Boş → backend'in yerleşik GLOBAL_PROMPT'u (web ile birebir). Doluysa override.
+    system_prompt: cfg.systemPrompt.trim() ? cfg.systemPrompt : null,
+    enabled_tools: cfg.enabledToolIds,
+    temperature: cfg.temperature,
+  };
 
   const authHeaders = await getAuthHeaders();
   const res = await fetch(`${API_BASE}/v1/agent/chat`, {
@@ -150,17 +164,26 @@ export async function chatWithAgent(
     body: JSON.stringify(body),
   });
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: "Agent hatası" }));
+    const err = await res.json().catch(() => ({ detail: "Agent error" }));
     throw new Error(err.detail || `HTTP ${res.status}`);
   }
   return res.json();
+}
+
+/** Sunucudaki yerleşik GLOBAL sistem promptu (Ayarlar > 'varsayılanı yükle'). */
+export async function getAgentDefaultPrompt(): Promise<string> {
+  const authHeaders = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/v1/agent/prompt`, { headers: authHeaders });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const d = await res.json();
+  return (d.system_prompt as string) ?? "";
 }
 
 export async function uploadPremiums(
   file: File,
   originGranularity: "yearly" | "quarterly" = "yearly",
 ): Promise<Record<string, number>> {
-  if (file.size > MAX_UPLOAD_BYTES) throw new Error("Dosya 10 MB sınırını aşıyor");
+  if (file.size > MAX_UPLOAD_BYTES) throw new Error("File exceeds the 10 MB limit");
   const buffer = await file.arrayBuffer();
   const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer)));
   const authHeaders = await getAuthHeaders();
@@ -170,7 +193,7 @@ export async function uploadPremiums(
     body: JSON.stringify({ file_b64: base64, origin_granularity: originGranularity }),
   });
   if (!res.ok) {
-    const body = await res.json().catch(() => ({ detail: "Yükleme hatası" }));
+    const body = await res.json().catch(() => ({ detail: "Upload error" }));
     throw new Error(body.detail || `HTTP ${res.status}`);
   }
   const data = await res.json();
@@ -230,7 +253,7 @@ export async function uploadCashflowFile(file: File): Promise<{
   report_date: string;
   records: CashflowRecord[];
 }> {
-  if (file.size > 300 * 1024 * 1024) throw new Error("Dosya 300 MB sınırını aşıyor");
+  if (file.size > 300 * 1024 * 1024) throw new Error("File exceeds the 300 MB limit");
   const buffer = await file.arrayBuffer();
   const base64 = bufferToBase64(buffer);
   const authHeaders = await getAuthHeaders();
@@ -240,7 +263,7 @@ export async function uploadCashflowFile(file: File): Promise<{
     body: JSON.stringify({ file_b64: base64, filename: file.name }),
   });
   if (!res.ok) {
-    const body = await res.json().catch(() => ({ detail: "Yükleme hatası" }));
+    const body = await res.json().catch(() => ({ detail: "Upload error" }));
     throw new Error(body.detail || `HTTP ${res.status}`);
   }
   return res.json();
@@ -266,7 +289,7 @@ export async function computeCashflowFromTriangle(
     }),
   });
   if (!res.ok) {
-    const body = await res.json().catch(() => ({ detail: "Hesaplama hatası" }));
+    const body = await res.json().catch(() => ({ detail: "Calculation error" }));
     const detail = Array.isArray(body.detail)
       ? body.detail.map((e: { msg?: string }) => e.msg ?? JSON.stringify(e)).join("; ")
       : body.detail;
@@ -303,7 +326,7 @@ export async function computeCashflow(
     body: JSON.stringify({ records }),
   });
   if (!res.ok) {
-    const body = await res.json().catch(() => ({ detail: "Hesaplama hatası" }));
+    const body = await res.json().catch(() => ({ detail: "Calculation error" }));
     throw new Error(body.detail || `HTTP ${res.status}`);
   }
   return res.json();
@@ -331,7 +354,6 @@ export interface DataImportResult {
   gelisim_tarihi_max: string;
   total_odeme: number;
   total_muallak: number;
-  total_incurred?: number;
   records: {
     dosya_no: string;
     brans: string;
@@ -342,8 +364,69 @@ export interface DataImportResult {
   }[];
 }
 
+export interface OracleObject {
+  owner: string;
+  name: string;
+  type: "TABLE" | "VIEW";
+  qualified: string;
+}
+
+export interface OraclePreviewResult {
+  columns: string[];
+  rows: unknown[][];
+  row_count: number;
+}
+
+export interface OracleFetchResult {
+  columns: string[];
+  records: Record<string, unknown>[];
+  count: number;
+}
+
+/** Lists the tables and views available through the active desktop Oracle connection. */
+export async function listOracleObjects(search = ""): Promise<OracleObject[]> {
+  const authHeaders = await getAuthHeaders();
+  const params = new URLSearchParams({ limit: "300" });
+  if (search.trim()) params.set("search", search.trim());
+  const res = await fetch(`${API_BASE}/v1/data/oracle/tables?${params}`, { headers: authHeaders });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ detail: "Could not load Oracle objects" }));
+    throw new Error(body.detail || `HTTP ${res.status}`);
+  }
+  const data = await res.json();
+  return data.tables as OracleObject[];
+}
+
+export async function previewOracleObject(table: string): Promise<OraclePreviewResult> {
+  const authHeaders = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/v1/data/oracle/preview`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders },
+    body: JSON.stringify({ table, limit: 25 }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ detail: "Could not preview Oracle object" }));
+    throw new Error(body.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function fetchOracleObject(table: string): Promise<OracleFetchResult> {
+  const authHeaders = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/v1/data/oracle/fetch`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders },
+    body: JSON.stringify({ table, max_rows: 500000 }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ detail: "Could not fetch Oracle data" }));
+    throw new Error(body.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
 export async function inspectDataFile(file: File): Promise<DataInspectResult> {
-  if (file.size > 50 * 1024 * 1024) throw new Error("Dosya 50 MB sınırını aşıyor");
+  if (file.size > 50 * 1024 * 1024) throw new Error("File exceeds the 50 MB limit");
   const base64 = bufferToBase64(await file.arrayBuffer());
   const authHeaders = await getAuthHeaders();
   const res = await fetch(`${API_BASE}/v1/data/inspect`, {
@@ -352,7 +435,7 @@ export async function inspectDataFile(file: File): Promise<DataInspectResult> {
     body: JSON.stringify({ file_b64: base64, filename: file.name }),
   });
   if (!res.ok) {
-    const body = await res.json().catch(() => ({ detail: "İnceleme hatası" }));
+    const body = await res.json().catch(() => ({ detail: "Inspection error" }));
     throw new Error(body.detail || `HTTP ${res.status}`);
   }
   return res.json();
@@ -363,7 +446,7 @@ export async function importDataFile(
   sheetName: string | null,
   columnMapping: Record<string, string>,
 ): Promise<DataImportResult> {
-  if (file.size > 50 * 1024 * 1024) throw new Error("Dosya 50 MB sınırını aşıyor");
+  if (file.size > 50 * 1024 * 1024) throw new Error("File exceeds the 50 MB limit");
   const base64 = bufferToBase64(await file.arrayBuffer());
   const authHeaders = await getAuthHeaders();
   const res = await fetch(`${API_BASE}/v1/data/import`, {
@@ -377,7 +460,7 @@ export async function importDataFile(
     }),
   });
   if (!res.ok) {
-    const body = await res.json().catch(() => ({ detail: "İçeri aktarma hatası" }));
+    const body = await res.json().catch(() => ({ detail: "Import error" }));
     throw new Error(body.detail || `HTTP ${res.status}`);
   }
   return res.json();
@@ -408,7 +491,7 @@ export interface PrimImportResult {
 }
 
 export async function inspectPrimFile(file: File): Promise<PrimInspectResult> {
-  if (file.size > 50 * 1024 * 1024) throw new Error("Dosya 50 MB sınırını aşıyor");
+  if (file.size > 50 * 1024 * 1024) throw new Error("File exceeds the 50 MB limit");
   const base64 = bufferToBase64(await file.arrayBuffer());
   const authHeaders = await getAuthHeaders();
   const res = await fetch(`${API_BASE}/v1/data/inspect-prim`, {
@@ -417,7 +500,7 @@ export async function inspectPrimFile(file: File): Promise<PrimInspectResult> {
     body: JSON.stringify({ file_b64: base64, filename: file.name }),
   });
   if (!res.ok) {
-    const body = await res.json().catch(() => ({ detail: "İnceleme hatası" }));
+    const body = await res.json().catch(() => ({ detail: "Inspection error" }));
     throw new Error(body.detail || `HTTP ${res.status}`);
   }
   return res.json();
@@ -428,7 +511,7 @@ export async function importPrimFile(
   sheetName: string | null,
   columnMapping: Record<string, string>,
 ): Promise<PrimImportResult> {
-  if (file.size > 50 * 1024 * 1024) throw new Error("Dosya 50 MB sınırını aşıyor");
+  if (file.size > 50 * 1024 * 1024) throw new Error("File exceeds the 50 MB limit");
   const base64 = bufferToBase64(await file.arrayBuffer());
   const authHeaders = await getAuthHeaders();
   const res = await fetch(`${API_BASE}/v1/data/import-prim`, {
@@ -442,7 +525,7 @@ export async function importPrimFile(
     }),
   });
   if (!res.ok) {
-    const body = await res.json().catch(() => ({ detail: "İçeri aktarma hatası" }));
+    const body = await res.json().catch(() => ({ detail: "Import error" }));
     throw new Error(body.detail || `HTTP ${res.status}`);
   }
   return res.json();
@@ -453,7 +536,7 @@ export async function buildTriangleFromRecords(
   brans: string,
   originGranularity: "yearly" | "quarterly",
   developmentGranularity: "yearly" | "quarterly",
-): Promise<{ paidTriangle: Triangle; incurredTriangle: Triangle; countTriangle: Triangle | null; fileData?: Record<string, Record<string, Record<string, number>>> | null }> {
+): Promise<{ paidTriangle: Triangle; incurredTriangle: Triangle; countTriangle?: Triangle | null; fileData?: FileData | null }> {
   const authHeaders = await getAuthHeaders();
   const res = await fetch(`${API_BASE}/v1/data/build-triangle`, {
     method: "POST",
@@ -466,7 +549,7 @@ export async function buildTriangleFromRecords(
     }),
   });
   if (!res.ok) {
-    const body = await res.json().catch(() => ({ detail: "Üçgen oluşturma hatası" }));
+    const body = await res.json().catch(() => ({ detail: "Triangle build error" }));
     throw new Error(body.detail || `HTTP ${res.status}`);
   }
   const data = await res.json();
@@ -478,12 +561,6 @@ export async function buildTriangleFromRecords(
   };
 }
 
-/**
- * Roll-forward: mevcut üçgeni güncel dönem ARTIMSAL dosya-bazlı veriyle bir
- * gelişim dönemi ileri taşır. prior_paid zorunlu (artışlar ona eklenir).
- * new_diagonal_files: {origin: {dosya_no: artımsal_ödeme}} — çağıran taraf
- * bunu yeni diagonalin dev etiketiyle eşleyip fileData'ya çevirir.
- */
 export async function rollForwardTriangle(
   priorPaid: Triangle,
   priorIncurred: Triangle | null,
@@ -494,7 +571,8 @@ export async function rollForwardTriangle(
 ): Promise<{
   paidTriangle: Triangle;
   incurredTriangle: Triangle | null;
-  newDiagonalFiles: Record<string, Record<string, number>> | null;
+  // Yeni backend: {origin: {dosya: {p: artımsal ödeme, o: güncel muallak}}}. Eski: sayı (ödeme).
+  newDiagonalFiles: Record<string, Record<string, number | { p: number; o: number }>> | null;
 }> {
   const authHeaders = await getAuthHeaders();
   const res = await fetch(`${API_BASE}/v1/data/roll-forward`, {
@@ -510,7 +588,7 @@ export async function rollForwardTriangle(
     }),
   });
   if (!res.ok) {
-    const body = await res.json().catch(() => ({ detail: "Roll-forward hatası" }));
+    const body = await res.json().catch(() => ({ detail: "Roll-forward error" }));
     throw new Error(body.detail || `HTTP ${res.status}`);
   }
   const data = await res.json();

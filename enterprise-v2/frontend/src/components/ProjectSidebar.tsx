@@ -1,8 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useProject } from "@/lib/project-store";
+import { createContext, useContext, useEffect, useState } from "react";
+import { CopyAssumptionsModal } from "@/components/CopyAssumptionsModal";
+import { useProject, type CopyAssumptionsOptions } from "@/lib/project-store";
 import type { Branch, Period } from "@/types/project";
+
+/** Branş satırından modeli açmak için — ağacın derinliğinde prop taşımamak adına. */
+const CopyAssumptionsCtx = createContext<((b: Branch) => void) | null>(null);
 
 /** Sidebar'ın modüle özgü seçim + açma davranışı (reserve store-active, cashflow lokal-nav). */
 export interface SidebarNav {
@@ -29,6 +33,9 @@ export function ProjectSidebar({ nav }: { nav: SidebarNav }) {
   const [collapsed, setCollapsed] = useState(false);
   const [openPeriods, setOpenPeriods] = useState<Set<string>>(new Set());
   const [openBranches, setOpenBranches] = useState<Set<string>>(new Set());
+  // Varsayım kopyalama (eleme, volume, curve, prim, LR, correction, basis).
+  // Eskiden FolderBrowser'daydı; o ekran kaldırılınca özellik erişilemez kaldı.
+  const [copySource, setCopySource] = useState<Branch | null>(null);
 
   // Aktif yolu otomatik aç
   useEffect(() => {
@@ -53,6 +60,7 @@ export function ProjectSidebar({ nav }: { nav: SidebarNav }) {
   const filter = nav.branchFilter ?? (() => true);
 
   return (
+    <CopyAssumptionsCtx.Provider value={setCopySource}>
     <aside className="w-64 shrink-0 border-r bg-[color:var(--surface)] flex flex-col h-[calc(100vh-3.5rem)] sticky top-14">
       <div className="h-9 px-3 flex items-center gap-2 border-b shrink-0">
         <span className="text-[11px] font-semibold uppercase tracking-wide text-[color:var(--muted-strong)] flex-1">
@@ -89,6 +97,18 @@ export function ProjectSidebar({ nav }: { nav: SidebarNav }) {
         <AddPeriodRow onAdd={(label) => actions.createPeriod(label)} />
       </div>
     </aside>
+    {copySource && (
+      <CopyAssumptionsModal
+        sourceBranch={copySource}
+        allPeriods={project.periods}
+        onCancel={() => setCopySource(null)}
+        onConfirm={(targetBranchId: string, opts: CopyAssumptionsOptions) => {
+          actions.copyAssumptions(copySource.id, targetBranchId, opts);
+          setCopySource(null);
+        }}
+      />
+    )}
+    </CopyAssumptionsCtx.Provider>
   );
 }
 
@@ -165,6 +185,7 @@ function BranchNode({
   onToggle: () => void;
 }) {
   const { actions } = useProject();
+  const openCopyAssumptions = useContext(CopyAssumptionsCtx);
   const [adding, setAdding] = useState(false);
   const isActive = nav.branchActive && nav.selectedBranchId === branch.id;
   const versions = branch.versions ?? [];
@@ -181,6 +202,7 @@ function BranchNode({
         badge={branch.frequency === "yearly" ? "Y" : "Q"}
         emphasize={isActive}
         onDelete={() => { if (confirm(`Delete branch "${branch.name}"?`)) actions.deleteBranch(branch.id); }}
+        onCopyAssumptions={openCopyAssumptions ? () => openCopyAssumptions(branch) : undefined}
       />
       {open && (
         <div>
@@ -265,7 +287,7 @@ function VersionRow({
 // ── Satır primitifleri ────────────────────────────────────────────────────────
 
 function Row({
-  depth, active, emphasize, onClick, caret, dot, label, badge, onDelete,
+  depth, active, emphasize, onClick, caret, dot, label, badge, onDelete, onCopyAssumptions,
 }: {
   depth: number;
   active?: boolean;
@@ -276,6 +298,7 @@ function Row({
   label: string;
   badge?: string;
   onDelete?: () => void;
+  onCopyAssumptions?: () => void;
 }) {
   return (
     <div
@@ -298,6 +321,15 @@ function Row({
         <span className="text-[9px] font-semibold px-1 rounded bg-[color:var(--surface-alt)] text-[color:var(--muted)] tabular">
           {badge}
         </span>
+      )}
+      {onCopyAssumptions && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onCopyAssumptions(); }}
+          className="opacity-0 group-hover:opacity-100 text-[11px] text-[color:var(--muted)] hover:text-[color:var(--primary)]"
+          title="Copy assumptions to another branch"
+        >
+          ⧉
+        </button>
       )}
       {onDelete && (
         <button

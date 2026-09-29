@@ -538,6 +538,11 @@ def run_agent_turn(
     # Multi-turn tool history: önceki turların raw mesajları (tool çağrısı + sonuç).
     # Varsa, messages yerine bu kullanılır ve mevcut kullanıcı mesajı sonuna eklenir.
     full_history: list[dict[str, Any]] | None = None,
+    # Desktop Agent Ayarları: kullanıcının GLOBAL system prompt'u (None → yerleşik GLOBAL_PROMPT);
+    # modül prompt'ları/özetleri yine eklenir (1:1). enabled_tools verilirse LLM'e yalnız o
+    # araçlar gönderilir (Ayarlar > Tools aç/kapa).
+    global_prompt: str | None = None,
+    enabled_tools: set[str] | None = None,
 ) -> AgentTurnResult:
     # Legacy: triangle_payload geldiyse rezerv tek-modül olarak sar
     if modules_payload is None:
@@ -585,16 +590,23 @@ def run_agent_turn(
         sections.append(
             f"\n\n# {m.label.upper()} MODÜLÜ ({m.name})\n{m.system_prompt}"
         )
+    base_prompt = global_prompt if global_prompt is not None else GLOBAL_PROMPT
+    summary_block = "\n".join(summaries)
     # Her turda DEĞİŞEN tek parça durum özeti. Prompt'un ortasında durursa
     # ondan sonraki ~16k karakterlik modül prompt'ları da her turda yeniden
     # prefill ediliyor ve lokal modelde KV-cache'in tamamı boşa gidiyor
     # (qwen3.5-9b, LAN: durum ortadayken 10,8 sn → sonda 1,6 sn). Statik kısım
     # önde sabit kalsın, değişen blok en sona.
+    try:
+        head = base_prompt.format(module_summaries="(Güncel durum bu mesajın SONUNDA, «DURUM (güncel)» bölümünde.)")
+    except (KeyError, IndexError):
+        # Kullanıcı prompt'unda {module_summaries} yoksa yalnız statik kısım.
+        head = base_prompt
     system = (
-        GLOBAL_PROMPT.format(module_summaries="(Güncel durum bu mesajın SONUNDA, «DURUM (güncel)» bölümünde.)")
+        head
         + "".join(sections)
         + "\n\n# DURUM (güncel)\n"
-        + "\n".join(summaries)
+        + summary_block
         + _STATE_BLOCK_BOUNDARY
     )
 
@@ -604,6 +616,8 @@ def run_agent_turn(
     for m in active_modules:
         for s in m.tool_schemas:
             tname = s["function"]["name"]
+            if enabled_tools is not None and tname not in enabled_tools:
+                continue
             if tname in tool_to_module:
                 # Aynı isim iki modülde olsa modül-prefiksli ekleyebiliriz;
                 # şimdilik registry öncelik kuralı: ilk gelen kazanır.
@@ -664,16 +678,18 @@ def run_agent_turn(
         tool_calls: list[ToolCall] = response.get("tool_calls", [])
 
         if not tool_calls:
-            # Model boş içerik döndürebiliyor (tool çağrısı da yoksa). Ham hâlde
-            # kullanıcı sohbette BOMBOŞ bir cevap görüyor ve neyin olduğunu
-            # anlamıyor. Bu turda tool çalıştıysa ne yapıldığını özetle,
-            # çalışmadıysa durumu açıkça söyle.
+            # Boş final ama bu turda tool çalıştıysa, ne yapıldığını özetle
+            # ("(empty response)" yerine kullanıcıya faydalı bir şey dönsün).
             final_text = content or ""
             if not final_text.strip():
                 if tool_invocations:
                     names = ", ".join(dict.fromkeys(t["name"] for t in tool_invocations))
                     final_text = f"Uygulandı: {names}."
                 else:
+                    # Model ne metin ne tool çağrısı üretti. Buraya kadar
+                    # gelinip boş string dönerse kullanıcı sohbette BOŞ bir
+                    # cevap görüyor ve neyin olduğunu anlamıyor. Sessizce boş
+                    # dönmektense ne olduğunu söyle.
                     final_text = (
                         "Bu soruya cevap üretemedim (model boş yanıt döndü). "
                         "Soruyu biraz daha somut yazar mısın — hangi branş, "
@@ -697,10 +713,11 @@ def run_agent_turn(
             # Aynı yazma işlemini ikinci kez uygulamayı reddet. Model bir
             # aksiyonu uyguladıktan sonra aynı çağrıyı tekrarlıyor (Haiku ile
             # ölçüldü: set_method iki kez, çelişkili promptla altı kez) —
-            # bazı araçlarda sonuç aynı kalıyor ama exclude_cells gibi
-            # araçlarda durumu bozar ve her tekrar iterasyon bütçesinden yiyor.
-            # ask_user'da olduğu gibi reddedip ne yapacağını söylüyoruz; sessiz
-            # yok sayma modeli tekrar denemeye itiyordu.
+            # set_method'da zararsız görünüyor ama exclude_cells ya da
+            # create_version'da durumu bozar ve her tekrar iterasyon
+            # bütçesinden yiyor. ask_user'da olduğu gibi reddedip ne
+            # yapacağını söylüyoruz; sessiz yok sayma modeli tekrar
+            # denemeye itiyordu.
             _sig = (tc.name, json.dumps(tc.arguments, sort_keys=True, default=str))
             if _sig in applied_writes:
                 output = {

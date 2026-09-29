@@ -71,8 +71,15 @@ def build_cases(project: dict) -> list[dict]:
              expect_tools=READ, expect_numbers=[ult_q2]),
         dict(id="T3", kat="tek-değer", q="IBNR neden negatif çıkıyor, kısaca açıkla.",
              # Kavramsal soru — araç şartı yersiz. Ölçüt MEKANİZMANIN doğru
-             # anlatılması: latest (gerçekleşen) nihai tahmini aşıyor.
-             expect_text=["latest"], expect_numbers=[]),
+             # anlatılması: gerçekleşen hasar nihai tahmini aşıyor.
+             # Birebir "latest" aramak doğruluğu değil kelime seçimini ölçüyordu
+             # ve koşudan koşuya değişiyordu; iki kavramın da geçmesi yeterli.
+             expect_text=[
+                 ["latest", "son diagonal", "gerçekleşen", "kümülatif",
+                  "ödenmiş", "ödenen", "gerçekleşmiş"],
+                 ["ultimate", "nihai"],
+             ],
+             expect_numbers=[]),
 
         # ── 3. Kırılım ──────────────────────────────────────────────────────
         dict(id="K1", kat="kırılım", q="2024 kaza yılının IBNR'ı ne kadar?",

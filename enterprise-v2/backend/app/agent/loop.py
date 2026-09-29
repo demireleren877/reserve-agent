@@ -481,6 +481,22 @@ _QUESTION_RE = re.compile(
 )
 
 
+# Görünüm taşıyan araçların MEŞRU tetikleyicileri. Soru sorulduğunda bu
+# araçlar listeden düşer; ama "veri sekmesine geçer misin?" hem soru hem
+# gerçek bir navigasyon isteği, onu engellemek kullanıcıyı kırar.
+_NAV_INTENT_RE = re.compile(
+    r"\b(sekme\w*|sayfa\w*|ekran\w*|mod[uü]l\w*|tab)\b"
+    r"|\bbran[şs]\w*\s+(ge[çc]|git|a[çc])\w*"
+    r"|\b(ge[çc]i[şs]\s*yap|yönlendir)\w*",
+    re.IGNORECASE,
+)
+
+
+def _wants_navigation(messages: list[dict[str, Any]]) -> bool:
+    last = next((m for m in reversed(messages) if m.get("role") == "user"), None)
+    return bool(_NAV_INTENT_RE.search(str((last or {}).get("content") or "")))
+
+
 def _is_question(messages: list[dict[str, Any]]) -> bool:
     last = next((m for m in reversed(messages) if m.get("role") == "user"), None)
     return bool(_QUESTION_RE.search(str((last or {}).get("content") or "")))
@@ -640,7 +656,14 @@ def run_agent_turn(
         _drop: set[str] = set()
         if _answered or ((_ran & _STATE_READ_TOOLS) and _asked):
             _drop.add("ask_user")
-        if _asked and (_answered or (_ran & _STATE_READ_TOOLS)):
+        # Soru sorulduysa görünüm taşıyan araçları İLK iterasyondan itibaren
+        # düşür. Eskiden koruma yalnızca bir okuma aracı çalıştıktan SONRA
+        # devreye giriyordu; ilk turda navigate_to masada olduğu için model
+        # "2024'ün primi 5 milyar değil mi?" sorusuna sekme değiştirerek
+        # cevap veriyordu (Haiku ile ölçüldü). Gerçek bir navigasyon isteği
+        # (sekme/sayfa/branş adı geçen) soru biçiminde de gelebilir, o
+        # engellenmiyor.
+        if _asked and not _wants_navigation(messages):
             _drop |= _VIEW_MOVING_TOOLS
         if _drop:
             turn_tools = [

@@ -32,6 +32,18 @@ class ScriptedClient:
         return self.script.pop(0) if self.script else {"content": "bitti", "tool_calls": []}
 
 
+class ToolCapturingClient(ScriptedClient):
+    """Modele HANGİ araçların sunulduğunu kaydeder."""
+
+    def __init__(self, script=None):
+        super().__init__(script or [{"content": "tamam", "tool_calls": []}])
+        self.tools_seen: list[list[dict]] = []
+
+    def chat(self, messages, tools):
+        self.tools_seen.append(list(tools))
+        return super().chat(messages, tools)
+
+
 def _tri() -> Triangle:
     return Triangle(
         origin_periods=["2021", "2022", "2023"],
@@ -350,3 +362,45 @@ class TestDuplicateWriteGuard:
             res = run_agent_turn(client, [{"role": "user", "content": "basit ortalamaya çevir"}],
                                  _payload())
             assert len(res.actions) == 1
+
+
+class TestNavigationGuardIsPreventive:
+    """Soru sorulduğunda görünüm taşıyan araçlar İLK turdan itibaren düşer.
+
+    Regresyon (Haiku ile ölçüldü): "2024'ün primi 5 milyar TL değil mi?"
+    sorusuna ajan navigate_to üretti. Koruma yalnızca bir okuma aracı
+    çalıştıktan SONRA devreye giriyordu, ilk iterasyonda araç masadaydı.
+    """
+
+    def _names(self, client):
+        """İlk çağrıda modele sunulan araç adları."""
+        return {t["function"]["name"] for t in client.tools_seen[0]}
+
+    def test_question_hides_navigation_from_the_first_call(self):
+        client = ToolCapturingClient()
+        run_agent_turn(client, [{"role": "user", "content": "2024'ün primi 5 milyar TL değil mi?"}],
+                       _payload())
+        assert "navigate_to" not in self._names(client)
+        assert "select_branch" not in self._names(client)
+
+    def test_explicit_navigation_survives_even_as_a_question(self):
+        """'Veri sekmesine geçer misin?' hem soru hem gerçek istek.
+
+        (navigate_to data modülünde; bu payload reserve modülünü taşıyor,
+        o yüzden aynı filtreden geçen select_branch üzerinden ölçüyoruz.)
+        """
+        client = ToolCapturingClient()
+        run_agent_turn(client, [{"role": "user", "content": "Veri sekmesine geçer misin?"}],
+                       _payload())
+        assert "select_branch" in self._names(client)
+
+    def test_plain_command_is_untouched(self):
+        client = ToolCapturingClient()
+        run_agent_turn(client, [{"role": "user", "content": "Veri sekmesine geç."}], _payload())
+        assert "select_branch" in self._names(client)
+
+    def test_branch_switch_request_survives(self):
+        client = ToolCapturingClient()
+        run_agent_turn(client, [{"role": "user", "content": "ENGINEERING branşına geçer misin?"}],
+                       _payload())
+        assert "select_branch" in self._names(client)

@@ -134,29 +134,53 @@ def _extract_json(text: str) -> dict:
     return {"content": text, "tool_calls": []}
 
 
-def _call_claude(system: str, user: str, timeout: float) -> str:
-    with tempfile.TemporaryDirectory() as tmp:
-        sp = os.path.join(tmp, "system.txt")
-        with open(sp, "w", encoding="utf-8") as fh:
-            fh.write(system or "Sen yardımcı bir asistansın.")
-        cmd = [
-            CLAUDE, "-p", user,
-            "--model", MODEL,
-            "--system-prompt-file", sp,
-            "--output-format", "json",
-            "--max-turns", "1",
-            "--allowedTools", "",
-        ]
-        proc = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=timeout,
-            cwd=tmp,  # proje CLAUDE.md'si sızmasın
-        )
-    if proc.returncode != 0:
-        raise RuntimeError(f"claude exit {proc.returncode}: {proc.stderr[:400]}")
-    try:
-        return json.loads(proc.stdout).get("result") or ""
-    except json.JSONDecodeError:
-        return proc.stdout
+def _call_claude(system: str, user: str, timeout: float, attempts: int = 3) -> str:
+    """Tek bir Haiku turu. Geçici hatada yeniden dener.
+
+    Prompt argv yerine STDIN'den gider: araç kataloğu + konuşma 30k karakteri
+    geçiyor ve argüman olarak taşımak hem kırılgan hem de süreç listesinde
+    tüm promptu görünür kılıyor.
+
+    Yeniden deneme şart: ilk tam koşuda 73 senaryonun 33'ü "claude exit 1" ile
+    düştü ve rapor bunları AJAN hatası gibi gösterdi. Geçici bir sağlayıcı
+    hatasının kalıcı bir test sonucuna dönüşmesi, ölçümün kendisini bozuyor.
+    """
+    last = ""
+    for attempt in range(attempts):
+        with tempfile.TemporaryDirectory() as tmp:
+            sp = os.path.join(tmp, "system.txt")
+            with open(sp, "w", encoding="utf-8") as fh:
+                fh.write(system or "Sen yardımcı bir asistansın.")
+            cmd = [
+                CLAUDE, "-p",
+                "--model", MODEL,
+                "--system-prompt-file", sp,
+                "--output-format", "json",
+                "--max-turns", "1",
+                "--allowedTools", "",
+            ]
+            try:
+                proc = subprocess.run(
+                    cmd, input=user, capture_output=True, text=True,
+                    timeout=timeout, cwd=tmp,  # proje CLAUDE.md'si sızmasın
+                )
+            except subprocess.TimeoutExpired:
+                last = f"timeout ({timeout}s)"
+                proc = None
+
+        if proc is not None and proc.returncode == 0:
+            try:
+                return json.loads(proc.stdout).get("result") or ""
+            except json.JSONDecodeError:
+                return proc.stdout
+        if proc is not None:
+            # Hata metni stdout'ta da olabiliyor; ikisini de taşı yoksa
+            # "exit 1:" diye boş bir mesaj kalıyor ve teşhis imkânsızlaşıyor.
+            last = (f"exit {proc.returncode} | stderr={proc.stderr.strip()[:300]}"
+                    f" | stdout={proc.stdout.strip()[:300]}")
+        if attempt < attempts - 1:
+            time.sleep(2 ** attempt * 3)
+    raise RuntimeError(f"claude {attempts} denemede başarısız: {last}")
 
 
 class Handler(BaseHTTPRequestHandler):

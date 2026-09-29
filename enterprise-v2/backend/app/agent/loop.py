@@ -427,7 +427,18 @@ sorulduğunda MUTLAKA araç çağır:
   * BAŞKA branş/dönem detayı    -> get_branch_state(branch_id)
   * nakit akışı                 -> get_cashflow_state / get_cashflow_pattern_state
   * iskonto                     -> get_discount_state
-Yalnızca yukarıda YAZAN bir toplamı tekrar edeceksen araç çağırma."""
+Yalnızca yukarıda YAZAN bir toplamı tekrar edeceksen araç çağırma.
+
+KAPSAM — dönemleri TOPLAMA. Dönemler (2026Q1, 2026Q2 ...) aynı portföyün
+ARDIŞIK DEĞERLEMELERİdir; IBNR'larını toplamak aynı rezervi iki kez saymaktır.
+Blokta her dönemin kendi alt toplamı yazılıdır; branş satırlarını kendin
+toplama, yazan alt toplamı kullan.
+Kapsam belirtilmemiş "toplam IBNR / toplam rezerv" sorusu AKTİF DÖNEMİ
+kastediyor demektir — aktif dönemin toplamını ver ve hangi dönem olduğunu
+cevapta söyle, ve aktif branşın bu toplam içindeki payını tek cümleyle ekle —
+kullanıcı hangi kapsamı sorduğunu böylece görür. Kullanıcı tek bir branş
+kastediyorsa branş adını yazar.
+Birden fazla dönem karşılaştırılacaksa toplamı değil, dönem dönem ver."""
 
 # Bu araçlar çalıştıysa cevabın SAYISAL karşılığı elde edilmiş demektir; o turda
 # ask_user ile form açmak kullanıcıya cevap yerine soru döndürür. Prompt'ta

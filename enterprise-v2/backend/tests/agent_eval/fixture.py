@@ -234,8 +234,26 @@ def build_project() -> dict[str, Any]:
     all_tot = dict(ibnr=0.0, selected_ultimate=0.0, latest=0.0)
     for p in periods:
         for b in p["branches"]:
-            for k in all_tot:
+            for k in ("ibnr", "selected_ultimate", "latest"):
                 all_tot[k] += b["totals"][k]
+
+    # Bridge'in gerçekte gönderdiği alanlar. Eskiden fixture bunları hiç
+    # doldurmuyordu; durum bloğu "0 branş" yazıyor ve dönem bazlı toplamlar
+    # görünmüyordu — yani eval, üretimdeki bloğu test etmiyordu.
+    all_tot["branch_count"] = sum(len(p["branches"]) for p in periods)
+    all_tot["branch_with_data_count"] = all_tot["branch_count"]
+    all_tot["grand_total_ibnr"] = all_tot["ibnr"]
+    all_tot["per_period_ibnr"] = [
+        dict(period_id=p["id"], label=p["label"],
+             ibnr=sum(b["totals"]["ibnr"] for b in p["branches"]),
+             branch_count=len(p["branches"]))
+        for p in periods
+    ]
+    _active_pid = periods[0]["id"]
+    all_tot["active_period_id"] = _active_pid
+    all_tot["active_period_ibnr"] = next(
+        r["ibnr"] for r in all_tot["per_period_ibnr"] if r["period_id"] == _active_pid
+    )
 
     return dict(periods=periods, active_branch=active_branch,
                 totals_all_branches=all_tot)

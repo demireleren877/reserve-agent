@@ -22,6 +22,8 @@ def build_cases(project: dict) -> list[dict]:
     q1f = per["2026Q1"]["branches"][0]
 
     ibnr_q2 = q2f["totals"]["ibnr"]
+    # Aktif DÖNEMİN toplamı — kapsamsız "toplam IBNR" bunu kastediyor.
+    ibnr_period_q2 = sum(b["totals"]["ibnr"] for b in per["2026Q2"]["branches"])
     ibnr_q1 = q1f["totals"]["ibnr"]
     ult_q2 = q2f["totals"]["selected_ultimate"]
     eng_ibnr = q2e["totals"]["ibnr"]
@@ -52,8 +54,14 @@ def build_cases(project: dict) -> list[dict]:
              expect_text=["volume"], read_only=True),
 
         # ── 2. Tek değer ────────────────────────────────────────────────────
+        # Kapsamsız "toplam" = AKTİF DÖNEMİN toplamı (bkz. _STATE_BLOCK_BOUNDARY).
+        # Tek bir branşın IBNR'ı bir "toplam" değildir; ajan dönem toplamını
+        # verip aktif branşın payını da söylemeli. Araç zorunlu değil —
+        # sayı durum bloğunda hazır yazıyor, araç çağırmak boşuna tur.
         dict(id="T1", kat="tek-değer", q="Toplam IBNR ne kadar?",
-             expect_tools=READ, expect_numbers=[ibnr_q2]),
+             expect_numbers=[ibnr_period_q2]),
+        dict(id="T1b", kat="tek-değer", q="Aktif branşın IBNR'ı ne kadar?",
+             expect_numbers=[ibnr_q2]),
         dict(id="T2", kat="tek-değer", q="Seçilmiş ultimate toplamı kaç?",
              expect_tools=READ, expect_numbers=[ult_q2]),
         dict(id="T3", kat="tek-değer", q="IBNR neden negatif çıkıyor, kısaca açıkla.",

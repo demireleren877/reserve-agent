@@ -12,15 +12,16 @@ import styles from "@/app/landing.module.css";
 /**
  * Landing — TR (/) ve EN (/en) tarafından paylaşılır; metinler `c` sözlüğünden gelir.
  *
- * Görsel dil: karanlık, sinematik bir hero (gerçek 3D gelişim üçgeni döngüsü) ve
- * agent/kurumsal bölümler; arada sıcak açık zeminli, sakin ürün bölümleri.
+ * Görsel dil: temiz kağıt, kobalt veri. Hero'da gelişim üçgeninin gerçek 3D hali
+ * (beyaz zeminli döngü, multiply ile sayfaya karışır) ve imleçle hafif derinlik.
  * Hareket: `data-reveal` taşıyan öğeler görünür alana girince `data-in` alır.
  * prefers-reduced-motion açıksa her şey baştan görünür, otomatik akışlar durur.
  */
 
 const FILM = "/film/actuarius-film.mp4";
-const HERO_LOOP = "/film/hero-loop";
-const HERO_POSTER = "/film/hero-poster.jpg";
+const HERO_LOOP = "/film/hero-loop-light";
+const HERO_POSTER = "/film/hero-light-poster.jpg";
+const FILM_POSTER = "/film/hero-poster.jpg";
 const MODULE_CYCLE_MS = 7000;
 
 type IconName = "arrow" | "check" | "data" | "model" | "flow" | "discount" | "spark" | "lock" | "menu" | "close" | "play" | "layers" | "trail";
@@ -254,6 +255,19 @@ export function LandingPage({ c }: { c: LandingContent }) {
     d.close();
   };
 
+  // Hero sahnesi imleçle hafifçe eğilir (yalnızca hassas işaretçilerde).
+  const heroRef = useRef<HTMLElement>(null);
+  const tilt = (e: React.PointerEvent<HTMLElement>) => {
+    if (e.pointerType !== "mouse" || prefersReducedMotion()) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    e.currentTarget.style.setProperty("--tx", ((e.clientX - r.left) / r.width - 0.5).toFixed(3));
+    e.currentTarget.style.setProperty("--ty", ((e.clientY - r.top) / r.height - 0.5).toFixed(3));
+  };
+  const untilt = () => {
+    heroRef.current?.style.setProperty("--tx", "0");
+    heroRef.current?.style.setProperty("--ty", "0");
+  };
+
   const navItems = [["modules", c.nav.modules], ["agent", c.nav.agent], ["governance", c.nav.governance], ["pricing", c.nav.pricing]];
   const lines = (s: string) => s.split("\n").map((l, i) => <span key={i} className={styles.line}>{l}</span>);
 
@@ -299,16 +313,10 @@ export function LandingPage({ c }: { c: LandingContent }) {
       </header>
 
       <main id="main-content">
-        {/* ── Hero — sinematik ── */}
-        <section className={styles.hero} aria-labelledby="hero-title">
-          <video className={styles.heroVideo} poster={HERO_POSTER} autoPlay muted loop playsInline preload="auto" aria-hidden="true">
-            <source src={`${HERO_LOOP}.webm`} type="video/webm" />
-            <source src={`${HERO_LOOP}.mp4`} type="video/mp4" />
-          </video>
-          <div className={styles.heroShade} aria-hidden="true" />
-          <div className={styles.heroGrid} aria-hidden="true" />
-
-          <div className={`${styles.wrap} ${styles.heroInner}`}>
+        {/* ── Hero ── */}
+        <section className={styles.hero} aria-labelledby="hero-title" onPointerMove={tilt} onPointerLeave={untilt} ref={heroRef}>
+          <div className={styles.heroBackdrop} aria-hidden="true" />
+          <div className={`${styles.wrap} ${styles.heroGrid}`}>
             <div className={styles.heroCopy}>
               <p className={styles.eyebrow} data-reveal><span className={styles.pulse} />{c.hero.eyebrow}</p>
               <h1 id="hero-title" data-reveal style={{ ["--d" as string]: "80ms" }}>
@@ -318,7 +326,7 @@ export function LandingPage({ c }: { c: LandingContent }) {
               <p className={styles.lede} data-reveal style={{ ["--d" as string]: "160ms" }}>{c.hero.lede}</p>
               <div className={styles.actions} data-reveal style={{ ["--d" as string]: "240ms" }}>
                 <Link className={styles.button} href="/reserve">{c.hero.ctaPrimary}<Icon name="arrow" /></Link>
-                <a className={styles.buttonGlass} href="#modules">{c.hero.ctaSecondary}</a>
+                <a className={styles.buttonOutline} href="#modules">{c.hero.ctaSecondary}</a>
                 <button type="button" className={styles.filmButton} onClick={openFilm}>
                   <span className={styles.playDot}><Icon name="play" /></span>
                   {c.hero.film}
@@ -328,11 +336,21 @@ export function LandingPage({ c }: { c: LandingContent }) {
               <p className={styles.heroNote} data-reveal style={{ ["--d" as string]: "320ms" }}>{c.hero.note}</p>
             </div>
 
-            <div className={styles.heroCaption} data-reveal style={{ ["--d" as string]: "500ms" }}>
-              <span className={styles.captionTag}>ACTUARIUS / DEVELOPMENT ENGINE</span>
-              <span className={styles.captionText}>{c.hero.caption}</span>
-              <span className={styles.captionAgent}><Icon name="spark" />AI + actuarial intelligence</span>
-            </div>
+            <figure className={styles.heroArt} data-reveal style={{ ["--d" as string]: "200ms" }}>
+              <div className={styles.artCaption}><span>ACTUARIUS / DEVELOPMENT ENGINE</span><span>01—∞</span></div>
+              <div className={styles.artStage}>
+                <video className={styles.heroVideo} poster={HERO_POSTER} autoPlay muted loop playsInline preload="auto" aria-hidden="true">
+                  <source src={`${HERO_LOOP}.webm`} type="video/webm" />
+                  <source src={`${HERO_LOOP}.mp4`} type="video/mp4" />
+                </video>
+                <span className={`${styles.artTag} ${styles.tagObserved}`}><i />{c.demo.observed}</span>
+                <span className={`${styles.artTag} ${styles.tagProjected}`}><i />{c.demo.projection}</span>
+              </div>
+              <figcaption>
+                <span className={styles.artAgent}><Icon name="spark" />AI + actuarial intelligence</span>
+                <span>{c.hero.caption}</span>
+              </figcaption>
+            </figure>
           </div>
 
           <div className={`${styles.wrap} ${styles.heroRail}`} data-reveal style={{ ["--d" as string]: "420ms" }}>
@@ -437,15 +455,15 @@ export function LandingPage({ c }: { c: LandingContent }) {
           </div>
         </section>
 
-        {/* ── Agent — karanlık, canlanan sohbet ── */}
+        {/* ── Agent — canlanan sohbet ── */}
         <section id="agent" className={styles.agentSection}>
           <div className={styles.orbits} aria-hidden="true"><i /><i /><i /></div>
           <div className={`${styles.wrap} ${styles.agentGrid}`}>
             <div className={styles.agentCopy} data-reveal>
-              <span className={styles.sectionLabelDark}><Icon name="spark" />{c.agent.label}</span>
+              <span className={styles.sectionLabel}><Icon name="spark" />{c.agent.label}</span>
               <h2>{lines(c.agent.h2)}</h2>
               <p>{c.agent.p}</p>
-              <ul className={styles.featureListDark}>{c.agent.features.map((t) => <li key={t}><Icon name="check" />{t}</li>)}</ul>
+              <ul className={styles.featureList}>{c.agent.features.map((t) => <li key={t}><Icon name="check" />{t}</li>)}</ul>
               <div className={styles.toolChips}>
                 {c.agent.tools.map((t) => <span key={t.m} title={t.d}>{t.m}</span>)}
               </div>
@@ -580,7 +598,7 @@ export function LandingPage({ c }: { c: LandingContent }) {
           <div className={styles.contactGlow} aria-hidden="true" />
           <div className={`${styles.wrap} ${styles.contactGrid}`}>
             <div className={styles.contactCopy} data-reveal>
-              <span className={styles.sectionLabelDark}>{c.contact.label}</span>
+              <span className={styles.sectionLabel}>{c.contact.label}</span>
               <h2>{lines(c.contact.h2)}</h2>
               <p>{c.contact.p}</p>
               <p className={styles.contactNote}>{c.contact.note}</p>
@@ -595,7 +613,7 @@ export function LandingPage({ c }: { c: LandingContent }) {
                   <span className={styles.okIcon}><Icon name="check" /></span>
                   <h3>{c.contact.okTitle}</h3>
                   <p>{c.contact.okBody.replace("{to}", sentEmail)}</p>
-                  <button type="button" className={styles.buttonGhostDark} onClick={() => setStatus("idle")}>{c.contact.again}</button>
+                  <button type="button" className={styles.buttonOutline} onClick={() => setStatus("idle")}>{c.contact.again}</button>
                 </div>
               ) : (
                 <form onSubmit={submitContact} aria-busy={status === "sending"}>
@@ -647,7 +665,7 @@ export function LandingPage({ c }: { c: LandingContent }) {
       >
         <div className={styles.filmBox}>
           <button type="button" className={styles.filmClose} onClick={closeFilm} aria-label={c.hero.filmClose}><Icon name="close" /></button>
-          <video src={FILM} poster={HERO_POSTER} controls playsInline preload="none" />
+          <video src={FILM} poster={FILM_POSTER} controls playsInline preload="none" />
         </div>
       </dialog>
     </div>

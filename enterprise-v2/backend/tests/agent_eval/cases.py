@@ -121,8 +121,13 @@ def build_cases(project: dict) -> list[dict]:
         # Bu senaryo eskiden TÜM dönemlerin toplamını bekliyordu, yani testin
         # kendisi hatayı doğruluyordu: 2026Q1 ile 2026Q2 ardışık değerlemeler,
         # toplamları aynı portföyü iki kez sayar. Doğru cevap dönem dönem.
+        # "Tüm branşların" BRANŞLARI nitelendiriyor; dönem belirtilmediği için
+        # kapsam aktif dönem (bkz. _STATE_BLOCK_BOUNDARY). Bu senaryo eskiden
+        # TÜM dönemlerin toplamını bekliyordu, yani testin kendisi hatayı
+        # doğruluyordu. Bütün dönemleri isteyen talep C4'te.
         dict(id="C3", kat="çapraz-branş", q="Tüm branşların toplam IBNR'ı nedir?",
-             expect_numbers=[period_ibnr["2026Q2"], period_ibnr["2026Q1"]], tol=0.02),
+             expect_numbers=[period_ibnr["2026Q2"], ibnr_q2, eng_ibnr], tol=0.02,
+             forbid_numbers=[sum(period_ibnr.values())]),
         dict(id="C4", kat="çapraz-branş",
              q="Bütün dönemlerin IBNR'ını toplayıp tek rakam söyle.",
              # Talep açıkça yanlış: ajan uyarmalı, uydurulmuş bir toplam vermemeli.
@@ -329,10 +334,18 @@ def build_cases(project: dict) -> list[dict]:
              expect_tools=["set_premiums", "set_premium"], max_tools=3),
         dict(id="TK09", kat="kombinasyon", q="Aykırı gelişim oranlarını bul ve ele.",
              expect_tool_sequence=["exclude_outliers"]),
+                # Kapsamı açık söylüyoruz: "iki dönemin ultimate'ı" branş mı dönem mi
+        # belirsizdi ve yeni kapsam kuralıyla ikisi de savunulabilir hale geldi.
+        # Belirsizliği C3/C4 ölçüyor; bu senaryo KARŞILAŞTIRMAYI ölçmeli.
         dict(id="TK10", kat="kombinasyon",
-             q="İki dönemin ultimate'ını karşılaştır ve farkı yüzde olarak ver.",
+             q="FIRE HOME branşının iki dönemdeki ultimate'ını karşılaştır ve farkı yüzde olarak ver.",
              expect_numbers=[ult_q2], read_only=True),
-        dict(id="TK11", kat="kombinasyon", q="Incurred/latest oranı üçgenini göster.",
+        # Soru eskiden "Incurred/latest oranı" diyordu — ILR O DEĞİL:
+        # hasar / (prim × correction_k). Ajan get_ilr_triangle'ı çağırmamakta
+        # haklıydı, test yanlıştı.
+        dict(id="TK11", kat="kombinasyon", q="Incurred loss ratio üçgenini göster.",
+             expect_tools=["get_ilr_triangle"], read_only=True),
+        dict(id="TK11b", kat="kombinasyon", q="Hasar/prim oranı üçgenini ver.",
              expect_tools=["get_ilr_triangle"], read_only=True),
         dict(id="TK12", kat="kombinasyon", q="Bu branşın üçgeni hangi tipte ve kaç dönemlik?",
              expect_tools=["describe_triangle", "get_analysis_state", "get_branch_state"],

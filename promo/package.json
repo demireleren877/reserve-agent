@@ -2,20 +2,31 @@
   "name": "actuarius-promo",
   "version": "1.0.0",
   "private": true,
-  "description": "Actuarius Enterprise tanıtım videosu (Remotion)",
+  "description": "Actuarius tanıtım filmleri (Remotion + Three.js)",
   "scripts": {
     "studio": "remotion studio",
-    "render": "remotion render ActuariusPromo out/actuarius.mp4",
+    "score": "python3 scripts/score.py && remotion ffmpeg -y -loglevel error -i public/score.wav -c:a aac -b:a 256k -f mp4 public/score.m4a",
+    "render": "remotion render ActuariusFilm out/actuarius-film.mp4 --gl=swangle --concurrency=4 --jpeg-quality=94 --crf=16 --x264-preset=slow",
+    "render:classic": "remotion render ActuariusPromo out/actuarius.mp4",
+    "still": "remotion still ActuariusFilm out/still.png --gl=swangle",
+    "typecheck": "tsc --noEmit",
     "upgrade": "remotion upgrade"
   },
   "dependencies": {
-    "@remotion/cli": "^4.0.0",
+    "@fontsource/inter": "^5.3.0",
+    "@fontsource/jetbrains-mono": "^5.3.0",
+    "@react-three/drei": "^10.7.9",
+    "@react-three/fiber": "^9.8.1",
+    "@remotion/cli": "^4.0.529",
+    "@remotion/three": "^4.0.529",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "remotion": "^4.0.0"
+    "remotion": "^4.0.529",
+    "three": "^0.169.0"
   },
   "devDependencies": {
     "@types/react": "^19.0.0",
-    "typescript": "^5.6.0"
+    "typescript": "^5.6.0",
+    "@types/three": "^0.169.0"
   }
 }

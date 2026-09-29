@@ -3,9 +3,9 @@
 > End-to-end actuarial analysis platform for insurers, reinsurers and consulting
 > actuaries. IBNR loss reserving with Chain-Ladder and Bornhuetter-Ferguson,
 > cash flow projection and IFRS 17 discounting in one system. An AI agent
-> operates every module: it closes the valuation period, builds the model,
-> produces the report and records the reasoning behind each decision in an
-> audit trail.
+> supports workflows across data, reserving, cash flow and discounting,
+> with model actions and results visible in the interface. The actuary
+> remains in control of assumptions and review.
 
 Website: https://actuarius.com.tr (Turkish) · https://actuarius.com.tr/en (English)
 Contact: info@actuarius.com.tr
@@ -14,15 +14,17 @@ Audience: reserving actuaries, actuarial managers, audit and review teams
 
 ## What makes it different
 
-Most loss reserving software is operated entirely by hand. Actuarius exposes
-every module to an AI agent with 45 tools, so the agent can carry a valuation
-from raw data to a signed-off report on its own — while every action stays
-visible in the UI, reversible, and written to the audit trail.
+Actuarius connects claim data, reserve modelling, payment patterns and
+discounting in one working environment. An AI agent can inspect model state
+and apply supported changes, reducing manual hand-offs between these steps.
+Model summaries, scenario comparisons and Excel exports support actuarial
+review; the agent does not replace professional judgement or sign-off.
 
 ## Modules
 
-- **Data** — Claim, earned premium and large-loss data by valuation period.
-  Uploaded as Excel/CSV or read directly from an Oracle table.
+- **Data** — Claim-level loss data, earned premium and ready-made development
+  triangles by valuation period. Uploaded as Excel/CSV, or read directly
+  from an Oracle table in Enterprise deployments.
 - **Reserving** — Development triangle, LDF selection and cell exclusion,
   parametric tail fitting (exponential, inverse power, power, Weibull),
   incurred loss ratio triangle, Bornhuetter-Ferguson, frequency-severity,
@@ -42,17 +44,24 @@ visible in the UI, reversible, and written to the audit trail.
 
 ## AI agent
 
-The agent holds 45 tools across four modules (reserving 31, cash flow 10,
-discounting 2, data and navigation 2). It reads state, decides, applies the
-change and writes the rationale. It respects user roles and model locks; every
-step it takes is reversible and recorded.
+The agent can build triangles from imported data, inspect development ratios,
+apply cell exclusions, select CL/BF bases and update model assumptions. It also
+supports cash flow settings and discounting calculations. Tool calls and
+results are visible in the interface. Final assumptions and interpretation
+remain the actuary's responsibility.
+
+Enterprise supports a configurable OpenAI-compatible LLM endpoint, including
+a local or company-network model server. Agent availability depends on the
+configured endpoint and model; desktop calculation modules can operate
+without an internet connection.
 
 ## Governance
 
-- Roles: admin and user separation
-- Model lock: only one person edits a model at a time
-- Audit trail: every write stored with who, when, what and why
+- Working history: model changes can be reviewed in the application
 - Versions: scenarios kept separately and compared side by side
+- Enterprise roles: admin and user separation
+- Enterprise editing locks: coordinate access to shared models
+- Enterprise audit trail: server-side records with user, model and time context
 
 ## Pricing
 
@@ -96,6 +105,9 @@ content is the pages listed above.
 
 Actuarius, sigorta şirketleri ve aktüerler için uçtan uca aktüeryal analiz
 platformudur. Chain-Ladder ve Bornhuetter-Ferguson ile IBNR rezerv hesabı,
-nakit akışı projeksiyonu ve IFRS 17 iskonto tek sistemde toplanır. Dört modülde
-45 aracı olan bir AI agent dönemi kapatır, modeli kurar, raporu üretir ve her
-kararın gerekçesini denetim izine yazar. Türkçe sayfa: https://actuarius.com.tr
+nakit akışı projeksiyonu ve IFRS 17 iskonto tek sistemde toplanır. AI agent,
+yüklenen veriden üçgen oluşturmayı, model varsayımlarını güncellemeyi ve
+modüller arası iş akışlarını destekler. Sonuçların değerlendirilmesi aktüerin
+kontrolündedir. Oracle veri bağlantısı, çok kullanıcılı düzenleme kilitleri ve
+sunucu taraflı denetim kayıtları Enterprise kurulumda sunulur.
+Türkçe sayfa: https://actuarius.com.tr

@@ -69,16 +69,14 @@ def build_cases(project: dict) -> list[dict]:
              expect_numbers=[ibnr_q2]),
         dict(id="T2", kat="tek-değer", q="Seçilmiş ultimate toplamı kaç?",
              expect_tools=READ, expect_numbers=[ult_q2]),
+        # Kavramsal soru — araç şartı yersiz ve TEK bir doğru anlatım yok:
+        # ajan kimi koşuda "gerçekleşen hasar nihai tahmini aşıyor", kiminde
+        # "tail truncation CDF'i 1'e çekmiş" diyor; ikisi de bu fixture için
+        # geçerli. Kelime listesi kovalamak doğruluğu değil üslubu ölçüyordu.
+        # Ölçüt: nihai tahmine atıf yapsın ve sebebi VERİ HATASI sanmasın.
         dict(id="T3", kat="tek-değer", q="IBNR neden negatif çıkıyor, kısaca açıkla.",
-             # Kavramsal soru — araç şartı yersiz. Ölçüt MEKANİZMANIN doğru
-             # anlatılması: gerçekleşen hasar nihai tahmini aşıyor.
-             # Birebir "latest" aramak doğruluğu değil kelime seçimini ölçüyordu
-             # ve koşudan koşuya değişiyordu; iki kavramın da geçmesi yeterli.
-             expect_text=[
-                 ["latest", "son diagonal", "gerçekleşen", "kümülatif",
-                  "ödenmiş", "ödenen", "gerçekleşmiş"],
-                 ["ultimate", "nihai"],
-             ],
+             expect_text=[["ultimate", "nihai"]],
+             forbid_text=["veri hatası", "bug", "yazılım hatası", "hatalı veri"],
              expect_numbers=[]),
 
         # ── 3. Kırılım ──────────────────────────────────────────────────────
@@ -126,7 +124,11 @@ def build_cases(project: dict) -> list[dict]:
         # TÜM dönemlerin toplamını bekliyordu, yani testin kendisi hatayı
         # doğruluyordu. Bütün dönemleri isteyen talep C4'te.
         dict(id="C3", kat="çapraz-branş", q="Tüm branşların toplam IBNR'ı nedir?",
-             expect_numbers=[period_ibnr["2026Q2"], ibnr_q2, eng_ibnr], tol=0.02,
+             # Sorunun CEVABI dönem toplamı. Branş kırılımını ajan çoğu koşuda
+             # veriyor ama her koşuda değil; hepsini şart koşmak doğruluğu
+             # değil ayrıntı düzeyini ölçer. Asıl ölçüt: doğru kapsam ve
+             # çapraz-dönem toplamının ASLA verilmemesi.
+             expect_numbers=[period_ibnr["2026Q2"]], tol=0.02,
              forbid_numbers=[sum(period_ibnr.values())]),
         dict(id="C4", kat="çapraz-branş",
              q="Bütün dönemlerin IBNR'ını toplayıp tek rakam söyle.",

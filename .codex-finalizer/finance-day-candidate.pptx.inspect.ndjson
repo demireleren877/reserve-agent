@@ -1,0 +1,226 @@
+{"kind":"deck","id":"pr/lck3m3","name":"Deck"}
+{"kind":"layout","layoutId":"923cc6b4-3a53-43d4-8970-27f57c478a51","name":"Master","type":"master"}
+{"kind":"layout","layoutId":"37751163-9b13-42c5-81f4-7e50634fa53e","name":"Title Slide","type":"title"}
+{"kind":"slide","id":"sl/m7fouf","slide":1,"title":"FINANCE DAY 2026","textShapes":7}
+{"kind":"shape","id":"sh/u9sfyh47","slide":1,"bbox":[72,68,54,8]}
+{"kind":"textbox","id":"sh/hcjytwni","slide":1,"text":"FINANCE DAY 2026","textPreview":"FINANCE DAY 2026","textChars":16,"textLines":1,"bbox":[72,102,360,28]}
+{"kind":"textbox","id":"sh/gbax0rmx","slide":1,"text":"Aktüeryada yapay zekâ","textPreview":"Aktüeryada yapay zekâ","textChars":21,"textLines":1,"bbox":[72,188,1040,86]}
+{"kind":"textbox","id":"sh/3e1gv65o","slide":1,"text":"Kontrollü bir finans alanında somut kullanım","textPreview":"Kontrollü bir finans alanında somut kullanım","textChars":44,"textLines":1,"bbox":[72,286,820,52]}
+{"kind":"textbox","id":"sh/idsf2143","slide":1,"text":"Actuarius Enterprise","textPreview":"Actuarius Enterprise","textChars":20,"textLines":1,"bbox":[72,566,520,42]}
+{"kind":"textbox","id":"sh/5gjyxwnu","slide":1,"text":"Ürün yaklaşımı, güvenlik çerçevesi ve pilot önerisi","textPreview":"Ürün yaklaşımı, güvenlik çerçevesi ve pilot önerisi","textChars":51,"textLines":1,"bbox":[72,615,680,28]}
+{"kind":"shape","id":"sh/4fax4bm9","slide":1,"bbox":[1030,120,178,420]}
+{"kind":"textbox","id":"sh/zihwj25k","slide":1,"text":"AI","textPreview":"AI","textChars":2,"textLines":1,"bbox":[1050,190,138,88]}
+{"kind":"shape","id":"sh/yhofqx4z","slide":1,"bbox":[1075,312,88,4]}
+{"kind":"textbox","id":"sh/03ep4f6h","slide":1,"text":"KONTROL\nALTINDA","textPreview":"KONTROL | ALTINDA","textChars":15,"textLines":2,"bbox":[1052,355,134,80]}
+{"kind":"notes","id":"nt/m7fouf","slide":1,"text":"Bu sunumun amacı yalnızca bir ürün göstermek değil. Finansın hata toleransı düşük alanlarından birinde yapay zekâyı nasıl kontrollü kullanabileceğimizi anlatmak.\nActuarius, bu yaklaşımı aktüeryal rezerv süreci üzerinde somutlaştırıyor."}
+{"kind":"slide","id":"sl/lpmcau","slide":2,"title":"Aktüeryada AI neden farklı","textShapes":16}
+{"kind":"textbox","id":"sh/szedkv6p","slide":2,"text":"Aktüeryada AI neden farklı","textPreview":"Aktüeryada AI neden farklı","textChars":26,"textLines":1,"bbox":[72,54,1136,70]}
+{"kind":"textbox","id":"sh/7y5crq54","slide":2,"text":"Rezerv sonucu finansal tablolara girer. Bu nedenle hız kadar izlenebilirlik ve tekrar üretilebilirlik de gerekir.","textPreview":"Rezerv sonucu finansal tablolara girer. Bu nedenle hız kadar izlenebilirlik ve tekrar üretilebilirlik de gerekir.","textChars":113,"textLines":1,"bbox":[72,142,760,98]}
+{"kind":"textbox","id":"sh/6xwviloj","slide":2,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[72,290,45,32]}
+{"kind":"textbox","id":"sh/5wnupgny","slide":2,"text":"Hata maliyeti","textPreview":"Hata maliyeti","textChars":13,"textLines":1,"bbox":[135,288,250,34]}
+{"kind":"textbox","id":"sh/kvedgv6t","slide":2,"text":"Yanlış bir sayı kararları ve raporlamayı etkiler.","textPreview":"Yanlış bir sayı kararları ve raporlamayı etkiler.","textChars":49,"textLines":1,"bbox":[395,290,760,38]}
+{"kind":"shape","id":"sh/julcnq58","slide":2,"bbox":[135,343,1020,1]}
+{"kind":"textbox","id":"sh/itcvelon","slide":2,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[72,368,45,32]}
+{"kind":"textbox","id":"sh/ps7e1kni","slide":2,"text":"Açıklanabilirlik","textPreview":"Açıklanabilirlik","textChars":16,"textLines":1,"bbox":[135,366,250,34]}
+{"kind":"textbox","id":"sh/4rydsf6x","slide":2,"text":"Sonucun hangi veri ve varsayımla oluştuğu görünmelidir.","textPreview":"Sonucun hangi veri ve varsayımla oluştuğu görünmelidir.","textChars":55,"textLines":1,"bbox":[395,368,760,38]}
+{"kind":"shape","id":"sh/6t0f6lob","slide":2,"bbox":[135,421,1020,1]}
+{"kind":"textbox","id":"sh/7u9wzqpw","slide":2,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[72,446,45,32]}
+{"kind":"textbox","id":"sh/svix8v6h","slide":2,"text":"Veri sınırı","textPreview":"Veri sınırı","textChars":11,"textLines":1,"bbox":[135,444,250,34]}
+{"kind":"textbox","id":"sh/twry1072","slide":2,"text":"Hasar ve poliçe verisi kurum politikasına uygun kalmalıdır.","textPreview":"Hasar ve poliçe verisi kurum politikasına uygun kalmalıdır.","textChars":59,"textLines":1,"bbox":[395,446,760,38]}
+{"kind":"shape","id":"sh/ypgf21of","slide":2,"bbox":[135,499,1020,1]}
+{"kind":"textbox","id":"sh/jqpwv6pk","slide":2,"text":"04","textPreview":"04","textChars":2,"textLines":1,"bbox":[72,524,45,32]}
+{"kind":"textbox","id":"sh/krix4b65","slide":2,"text":"Uzman onayı","textPreview":"Uzman onayı","textChars":11,"textLines":1,"bbox":[135,522,250,34]}
+{"kind":"textbox","id":"sh/lsrexg7q","slide":2,"text":"Nihai kararın sahibi aktüerdir.","textPreview":"Nihai kararın sahibi aktüerdir.","textChars":31,"textLines":1,"bbox":[395,524,760,38]}
+{"kind":"textbox","id":"sh/2lkfe5oj","slide":2,"text":"Finance Day 2026","textPreview":"Finance Day 2026","textChars":16,"textLines":1,"bbox":[72,674,300,20]}
+{"kind":"textbox","id":"sh/3mtg7a54","slide":2,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[1160,672,48,20]}
+{"kind":"notes","id":"nt/lpmcau","slide":2,"text":"Aktüerya, üretken yapay zekânın sınırsız hareket edebileceği bir alan değil.\nBu kısıt bir engel değil. Doğru mimariyi tarif ediyor: hesap, veri sınırı, kayıt ve insan onayı ayrı ayrı korunmalı."}
+{"kind":"slide","id":"sl/0xf2uj","slide":3,"title":"Çalışma prensibi","textShapes":11}
+{"kind":"textbox","id":"sh/zep03alc","slide":3,"text":"Çalışma prensibi","textPreview":"Çalışma prensibi","textChars":16,"textLines":1,"bbox":[72,54,1136,70]}
+{"kind":"textbox","id":"sh/0fy1cf2h","slide":3,"text":"Hesabı deterministik motor üretir. AI bağlamı toplar ve açıklamayı hızlandırır. Aktüer onaylar.","textPreview":"Hesabı deterministik motor üretir. AI bağlamı toplar ve açıklamayı hızlandırır. Aktüer onaylar.","textChars":95,"textLines":1,"bbox":[72,125,1040,58]}
+{"kind":"shape","id":"sh/lgri5k32","slide":3,"bbox":[72,245,308,260]}
+{"kind":"shape","id":"sh/mh0jepkn","slide":3,"bbox":[72,245,308,7]}
+{"kind":"textbox","id":"sh/ni907ul8","slide":3,"text":"AI KATMANI","textPreview":"AI KATMANI","textChars":10,"textLines":1,"bbox":[100,285,252,26]}
+{"kind":"textbox","id":"sh/8ji1gz2t","slide":3,"text":"Soruyu anlar\nDoğru analizi seçer\nTaslak açıklama üretir","textPreview":"Soruyu anlar | Doğru analizi seçer | Taslak açıklama üretir","textChars":55,"textLines":3,"bbox":[100,340,252,120]}
+{"kind":"shape","id":"sh/9kri9k3e","slide":3,"bbox":[454,245,308,260]}
+{"kind":"shape","id":"sh/2lwz2lkj","slide":3,"bbox":[454,245,308,7]}
+{"kind":"textbox","id":"sh/3m50vql4","slide":3,"text":"HESAP MOTORU","textPreview":"HESAP MOTORU","textChars":12,"textLines":1,"bbox":[482,285,252,26]}
+{"kind":"textbox","id":"sh/j2l4zq5k","slide":3,"text":"Versiyonlu yöntemler\nAynı girdiye aynı sonuç\nKontrol testleri","textPreview":"Versiyonlu yöntemler | Aynı girdiye aynı sonuç | Kontrol testleri","textChars":61,"textLines":3,"bbox":[482,340,252,120]}
+{"kind":"shape","id":"sh/y1cn6loz","slide":3,"bbox":[836,245,308,260]}
+{"kind":"shape","id":"sh/l43m1gnq","slide":3,"bbox":[836,245,308,7]}
+{"kind":"textbox","id":"sh/k3u58b65","slide":3,"text":"AKTÜER","textPreview":"AKTÜER","textChars":6,"textLines":1,"bbox":[864,285,252,26]}
+{"kind":"textbox","id":"sh/by14v65o","slide":3,"text":"Varsayımı değerlendirir\nİstisnayı inceler\nNihai sonucu onaylar","textPreview":"Varsayımı değerlendirir | İstisnayı inceler | Nihai sonucu onaylar","textChars":62,"textLines":3,"bbox":[864,340,252,120]}
+{"kind":"shape","id":"sh/axsn21o3","slide":3,"bbox":[380,375,74,0]}
+{"kind":"shape","id":"sh/x03mxgne","slide":3,"bbox":[762,375,74,0]}
+{"kind":"textbox","id":"sh/wzu54b6t","slide":3,"text":"Kontrol noktası: AI hiçbir aşamada kayıtsız ve doğrulanmamış bir rezerv sonucu üretmez.","textPreview":"Kontrol noktası: AI hiçbir aşamada kayıtsız ve doğrulanmamış bir rezerv sonucu üretmez.","textChars":87,"textLines":1,"bbox":[145,565,990,50]}
+{"kind":"textbox","id":"sh/na14r65c","slide":3,"text":"Finance Day 2026","textPreview":"Finance Day 2026","textChars":16,"textLines":1,"bbox":[72,674,300,20]}
+{"kind":"textbox","id":"sh/m9s3y1or","slide":3,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[1160,672,48,20]}
+{"kind":"notes","id":"nt/0xf2uj","slide":3,"text":"Bizim yaklaşımımızda AI hesap motorunun yerine geçmiyor.\nAI, aktüerin doğal dildeki sorusunu ilgili kontrole ve hesap fonksiyonuna bağlıyor. Sayıyı versiyonlu motor döndürüyor. Aktüer bağlamı ve varsayımı değerlendirerek onaylıyor."}
+{"kind":"slide","id":"sl/j8cfjd","slide":4,"title":"Veri hazırlığı tek bir kapanış bağlamında","textShapes":15}
+{"kind":"textbox","id":"sh/p43yt83m","slide":4,"text":"Veri hazırlığı tek bir kapanış bağlamında","textPreview":"Veri hazırlığı tek bir kapanış bağlamında","textChars":41,"textLines":1,"bbox":[72,54,1136,70]}
+{"kind":"textbox","id":"sh/21sfidkv","slide":4,"text":"Dosya yükleme, kolon eşleme ve dönem bağlamı aynı çalışma alanında tutulur.","textPreview":"Dosya yükleme, kolon eşleme ve dönem bağlamı aynı çalışma alanında tutulur.","textChars":75,"textLines":1,"bbox":[72,122,760,48]}
+{"kind":"textbox","id":"sh/0zaxg325","slide":4,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[72,218,45,30]}
+{"kind":"textbox","id":"sh/10jep83q","slide":4,"text":"Veriyi tanı","textPreview":"Veriyi tanı","textChars":11,"textLines":1,"bbox":[130,215,310,34]}
+{"kind":"textbox","id":"sh/exsfetkz","slide":4,"text":"Dosya yapısını ve alanları kontrol et","textPreview":"Dosya yapısını ve alanları kontrol et","textChars":37,"textLines":1,"bbox":[130,257,310,48]}
+{"kind":"textbox","id":"sh/fy1wnylk","slide":4,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[72,334,45,30]}
+{"kind":"textbox","id":"sh/kvuxsn29","slide":4,"text":"Döneme bağla","textPreview":"Döneme bağla","textChars":12,"textLines":1,"bbox":[130,331,310,34]}
+{"kind":"textbox","id":"sh/lwny1sju","slide":4,"text":"Aynı kapanış bağlamını koru","textPreview":"Aynı kapanış bağlamını koru","textChars":27,"textLines":1,"bbox":[130,373,310,48]}
+{"kind":"textbox","id":"sh/1gzm1s3q","slide":4,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[72,450,45,30]}
+{"kind":"textbox","id":"sh/0fqlsn25","slide":4,"text":"Analize hazırla","textPreview":"Analize hazırla","textChars":15,"textLines":1,"bbox":[130,447,310,34]}
+{"kind":"textbox","id":"sh/feh4zilk","slide":4,"text":"Eksik veya uyumsuz alanları görünür kıl","textPreview":"Eksik veya uyumsuz alanları görünür kıl","textChars":39,"textLines":1,"bbox":[130,489,310,48]}
+{"kind":"textbox","id":"sh/et836xkf","slide":4,"text":"AI fırsatı","textPreview":"AI fırsatı","textChars":10,"textLines":1,"bbox":[72,574,110,25]}
+{"kind":"textbox","id":"sh/dszmxs3u","slide":4,"text":"Kolon önerisi, kalite kontrol özeti ve anomali açıklaması","textPreview":"Kolon önerisi, kalite kontrol özeti ve anomali açıklaması","textChars":57,"textLines":1,"bbox":[190,570,285,48]}
+{"kind":"textbox","id":"sh/sr6l4n29","slide":4,"text":"Finance Day 2026","textPreview":"Finance Day 2026","textChars":16,"textLines":1,"bbox":[72,674,300,20]}
+{"kind":"textbox","id":"sh/rqx4vilo","slide":4,"text":"04","textPreview":"04","textChars":2,"textLines":1,"bbox":[1160,672,48,20]}
+{"kind":"image","id":"im/a5sjut4b","slide":4,"name":"","geometry":"roundRect","alt":"Actuarius Enterprise veri kolon eşleme ekranı","bbox":[520,180,688,430]}
+{"kind":"notes","id":"nt/j8cfjd","slide":4,"text":"İlk değer noktası veri hazırlığı. Aktüer bugün önemli zamanını dosya yapısını anlamaya ve hatayı aramaya ayırıyor.\nAI burada karar vermek yerine kolon eşleme önerisi, kalite özeti ve anomali açıklaması sağlayabilir. Kullanıcı her eşlemeyi görür ve onaylar."}
+{"kind":"slide","id":"sl/riwfct","slide":5,"title":"Rezerv modeli insan kontrolünde ilerler","textShapes":7}
+{"kind":"textbox","id":"sh/3y9w7mhs","slide":5,"text":"Rezerv modeli insan kontrolünde ilerler","textPreview":"Rezerv modeli insan kontrolünde ilerler","textChars":39,"textLines":1,"bbox":[72,54,1136,70]}
+{"kind":"textbox","id":"sh/4zidg7yd","slide":5,"text":"Model adımları görünür kalır. Seçim ve dışlama kararları aktüerin çalışma kaydına dönüşür.","textPreview":"Model adımları görünür kalır. Seçim ve dışlama kararları aktüerin çalışma kaydına dönüşür.","textChars":90,"textLines":1,"bbox":[72,120,1050,48]}
+{"kind":"shape","id":"sh/qlkfihgj","slide":5,"bbox":[1000,210,208,390]}
+{"kind":"textbox","id":"sh/rmtwbmh4","slide":5,"text":"AI’nın rolü","textPreview":"AI’nın rolü","textChars":11,"textLines":1,"bbox":[1026,245,160,30]}
+{"kind":"textbox","id":"sh/cn2xkry9","slide":5,"text":"Seçilen faktörü açıklamak\n\nDönemler arası farkı araştırmak\n\nKontrol soruları önermek","textPreview":"Seçilen faktörü açıklamak |  | Dönemler arası farkı araştırmak |  | Kontrol soruları önermek","textChars":84,"textLines":5,"bbox":[1026,306,160,210]}
+{"kind":"textbox","id":"sh/dobedwzu","slide":5,"text":"Seçim yetkisi aktüerde kalır","textPreview":"Seçim yetkisi aktüerde kalır","textChars":28,"textLines":1,"bbox":[1026,540,160,40]}
+{"kind":"textbox","id":"sh/6pgv6xgz","slide":5,"text":"Finance Day 2026","textPreview":"Finance Day 2026","textChars":16,"textLines":1,"bbox":[72,674,300,20]}
+{"kind":"textbox","id":"sh/7qpwz2hk","slide":5,"text":"05","textPreview":"05","textChars":2,"textLines":1,"bbox":[1160,672,48,20]}
+{"kind":"image","id":"im/4zi183ed","slide":5,"name":"","geometry":"roundRect","alt":"Actuarius Enterprise LDF seçim ekranı","bbox":[72,188,900,450]}
+{"kind":"notes","id":"nt/riwfct","slide":5,"text":"Model ekranında her adım görünür. Aktüer hangi gelişim faktörünü kullandığını ve hangi hücreyi dışladığını açık biçimde görür.\nAI’nın katkısı, seçimi aktüer adına yapmak değil. Seçimi açıklamak, dönem farklarını araştırmak ve kontrol sorularını hızlandırmak."}
+{"kind":"slide","id":"sl/dwzl2i","slide":6,"title":"AI kullanım alanları","textShapes":13}
+{"kind":"textbox","id":"sh/gruhor6p","slide":6,"text":"AI kullanım alanları","textPreview":"AI kullanım alanları","textChars":20,"textLines":1,"bbox":[72,54,1136,70]}
+{"kind":"shape","id":"sh/e5szm1oj","slide":6,"bbox":[72,166,8,62]}
+{"kind":"textbox","id":"sh/t4jydwny","slide":6,"text":"Doğal dilde analiz","textPreview":"Doğal dilde analiz","textChars":18,"textLines":1,"bbox":[105,162,470,30]}
+{"kind":"textbox","id":"sh/s3ahkr6d","slide":6,"text":"Aktüer sorusunu ilgili veri ve modele bağlama","textPreview":"Aktüer sorusunu ilgili veri ve modele bağlama","textChars":45,"textLines":1,"bbox":[105,202,470,45]}
+{"kind":"shape","id":"sh/r21gbm5s","slide":6,"bbox":[72,269,8,62]}
+{"kind":"textbox","id":"sh/61szihon","slide":6,"text":"Kontrol ve karşılaştırma","textPreview":"Kontrol ve karşılaştırma","textChars":24,"textLines":1,"bbox":[105,265,470,30]}
+{"kind":"textbox","id":"sh/d0nipgn2","slide":6,"text":"Dönem, branş ve yöntem farklarını inceleme","textPreview":"Dönem, branş ve yöntem farklarını inceleme","textChars":42,"textLines":1,"bbox":[105,305,470,45]}
+{"kind":"shape","id":"sh/czehwb6x","slide":6,"bbox":[72,372,8,62]}
+{"kind":"textbox","id":"sh/yh87atof","slide":6,"text":"Açıklama taslağı","textPreview":"Açıklama taslağı","textChars":16,"textLines":1,"bbox":[105,368,470,30]}
+{"kind":"textbox","id":"sh/ji183yp0","slide":6,"text":"Sonucun dayanaklarını rapor diline dönüştürme","textPreview":"Sonucun dayanaklarını rapor diline dönüştürme","textChars":45,"textLines":1,"bbox":[105,408,470,45]}
+{"kind":"shape","id":"sh/kjapc36l","slide":6,"bbox":[72,475,8,62]}
+{"kind":"textbox","id":"sh/lkjq5o76","slide":6,"text":"İş akışı desteği","textPreview":"İş akışı desteği","textChars":16,"textLines":1,"bbox":[105,471,470,30]}
+{"kind":"textbox","id":"sh/ad8769oj","slide":6,"text":"Eksik adımı ve bekleyen kontrolü hatırlatma","textPreview":"Eksik adımı ve bekleyen kontrolü hatırlatma","textChars":43,"textLines":1,"bbox":[105,511,470,45]}
+{"kind":"shape","id":"sh/beh8zep4","slide":6,"bbox":[650,535,558,74]}
+{"kind":"textbox","id":"sh/wfqp8j69","slide":6,"text":"Temel kural","textPreview":"Temel kural","textChars":11,"textLines":1,"bbox":[674,553,110,22]}
+{"kind":"textbox","id":"sh/xgzq1o7u","slide":6,"text":"AI, doğrulanmış fonksiyonları çağırır ve sonucu kaynak bağlamıyla sunar.","textPreview":"AI, doğrulanmış fonksiyonları çağırır ve sonucu kaynak bağlamıyla sunar.","textChars":72,"textLines":1,"bbox":[790,548,390,43]}
+{"kind":"textbox","id":"sh/u9cridon","slide":6,"text":"Finance Day 2026","textPreview":"Finance Day 2026","textChars":16,"textLines":1,"bbox":[72,674,300,20]}
+{"kind":"textbox","id":"sh/val8bip8","slide":6,"text":"06","textPreview":"06","textChars":2,"textLines":1,"bbox":[1160,672,48,20]}
+{"kind":"image","id":"im/y54v61sr","slide":6,"name":"","geometry":"roundRect","alt":"Actuarius Enterprise Ultimate ve IBNR ekranı","bbox":[650,150,558,349]}
+{"kind":"notes","id":"nt/dwzl2i","slide":6,"text":"Dört kullanım alanı öncelikli. İlki doğal dilde analiz, ikincisi kontroller, üçüncüsü açıklama taslağı, dördüncüsü süreç desteği.\nBu yeteneklerin ortak kuralı aynı: AI serbestçe sayı uydurmaz. Doğrulanmış fonksiyonları çağırır ve dönen sonucu kaynak bağlamıyla sunar."}
+{"kind":"slide","id":"sl/mat810","slide":7,"title":"Örnek yönetici sorusu","textShapes":17}
+{"kind":"textbox","id":"sh/3ilcjux4","slide":7,"text":"Örnek yönetici sorusu","textPreview":"Örnek yönetici sorusu","textChars":21,"textLines":1,"bbox":[72,54,1136,70]}
+{"kind":"textbox","id":"sh/4jetcfep","slide":7,"text":"“2025Q4 Motor IBNR neden değişti?”","textPreview":"“2025Q4 Motor IBNR neden değişti?”","textChars":34,"textLines":1,"bbox":[72,132,1000,55]}
+{"kind":"shape","id":"sh/5knulkfa","slide":7,"bbox":[72,250,250,230]}
+{"kind":"textbox","id":"sh/qlwbepwv","slide":7,"text":"1","textPreview":"1","textChars":1,"textLines":1,"bbox":[96,270,40,40]}
+{"kind":"textbox","id":"sh/r65cnuxg","slide":7,"text":"Bağlam","textPreview":"Bağlam","textChars":6,"textLines":1,"bbox":[96,328,200,34]}
+{"kind":"textbox","id":"sh/s7etgzel","slide":7,"text":"Dönem ve branşı belirler","textPreview":"Dönem ve branşı belirler","textChars":24,"textLines":1,"bbox":[96,382,200,66]}
+{"kind":"shape","id":"sh/d8nup4f6","slide":7,"bbox":[366,250,250,230]}
+{"kind":"textbox","id":"sh/6psb25gb","slide":7,"text":"2","textPreview":"2","textChars":1,"textLines":1,"bbox":[390,270,40,40]}
+{"kind":"textbox","id":"sh/7q1sbaxw","slide":7,"text":"Kontrol","textPreview":"Kontrol","textChars":7,"textLines":1,"bbox":[390,328,200,34]}
+{"kind":"textbox","id":"sh/zmtcba10","slide":7,"text":"Veri, LDF ve varsayımı karşılaştırır","textPreview":"Veri, LDF ve varsayımı karşılaştırır","textChars":36,"textLines":1,"bbox":[390,382,200,66]}
+{"kind":"shape","id":"sh/elkb250f","slide":7,"bbox":[660,250,250,230]}
+{"kind":"textbox","id":"sh/18vudkj6","slide":7,"text":"3","textPreview":"3","textChars":1,"textLines":1,"bbox":[684,270,40,40]}
+{"kind":"textbox","id":"sh/0n2t4fil","slide":7,"text":"Hesap","textPreview":"Hesap","textChars":5,"textLines":1,"bbox":[684,328,200,34]}
+{"kind":"textbox","id":"sh/rits7q14","slide":7,"text":"Motor doğrulanmış sonuçları döndürür","textPreview":"Motor doğrulanmış sonuçları döndürür","textChars":36,"textLines":1,"bbox":[684,382,200,66]}
+{"kind":"shape","id":"sh/qhkbyl0j","slide":7,"bbox":[954,250,250,230]}
+{"kind":"textbox","id":"sh/dkbu90ju","slide":7,"text":"4","textPreview":"4","textChars":1,"textLines":1,"bbox":[978,270,40,40]}
+{"kind":"textbox","id":"sh/cj2t0vip","slide":7,"text":"Açıklama","textPreview":"Açıklama","textChars":8,"textLines":1,"bbox":[978,328,200,34]}
+{"kind":"textbox","id":"sh/3e9s3q1s","slide":7,"text":"Etki kaynaklarını taslak metne çevirir","textPreview":"Etki kaynaklarını taslak metne çevirir","textChars":38,"textLines":1,"bbox":[978,382,200,66]}
+{"kind":"shape","id":"sh/2d0bul07","slide":7,"bbox":[322,365,44,0]}
+{"kind":"shape","id":"sh/6p0b6l4f","slide":7,"bbox":[616,365,44,0]}
+{"kind":"shape","id":"sh/7a9cfql0","slide":7,"bbox":[910,365,44,0]}
+{"kind":"textbox","id":"sh/sbid8vm5","slide":7,"text":"Çıktı: yöneticiye kısa yanıt, aktüere inceleme izi","textPreview":"Çıktı: yöneticiye kısa yanıt, aktüere inceleme izi","textChars":50,"textLines":1,"bbox":[300,554,680,48]}
+{"kind":"textbox","id":"sh/tcruhg3q","slide":7,"text":"Finance Day 2026","textPreview":"Finance Day 2026","textChars":16,"textLines":1,"bbox":[72,674,300,20]}
+{"kind":"textbox","id":"sh/ud0val4b","slide":7,"text":"07","textPreview":"07","textChars":2,"textLines":1,"bbox":[1160,672,48,20]}
+{"kind":"notes","id":"nt/mat810","slide":7,"text":"Bu soru bugün birden fazla dosya ve ekran arasında araştırma gerektirebilir.\nAgent önce bağlamı belirler, sonra ilgili kontrollere gider. Hesap motoru sonuçları verir. Agent bunları kısa bir açıklamaya çevirir. Aktüer ayrıntılı inceleme izini korur."}
+{"kind":"slide","id":"sl/tp4xtw","slide":8,"title":"Kurumsal kontrol modeli","textShapes":24}
+{"kind":"textbox","id":"sh/5s3ap47y","slide":8,"text":"Kurumsal kontrol modeli","textPreview":"Kurumsal kontrol modeli","textChars":23,"textLines":1,"bbox":[72,54,1136,70]}
+{"kind":"textbox","id":"sh/ipcru9o7","slide":8,"text":"Temel ürün çalışıyor. Yönetim katmanını kontrollü pilot sırasında tamamlamayı planlıyoruz.","textPreview":"Temel ürün çalışıyor. Yönetim katmanını kontrollü pilot sırasında tamamlamayı planlıyoruz.","textChars":90,"textLines":1,"bbox":[72,122,1060,48]}
+{"kind":"textbox","id":"sh/jqlsnups","slide":8,"text":"MEVCUT TEMEL","textPreview":"MEVCUT TEMEL","textChars":12,"textLines":1,"bbox":[72,202,350,26]}
+{"kind":"textbox","id":"sh/wnu9sz6h","slide":8,"text":"HEDEF KONTROLLER","textPreview":"HEDEF KONTROLLER","textChars":16,"textLines":1,"bbox":[690,202,400,26]}
+{"kind":"textbox","id":"sh/xo3al472","slide":8,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[72,262,42,28]}
+{"kind":"textbox","id":"sh/alsrqpob","slide":8,"text":"Yerel masaüstü uygulaması","textPreview":"Yerel masaüstü uygulaması","textChars":25,"textLines":1,"bbox":[132,257,430,36]}
+{"kind":"textbox","id":"sh/vmlsjupw","slide":8,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[72,338,42,28]}
+{"kind":"textbox","id":"sh/8ja9ofq5","slide":8,"text":"Şirket ağı içindeki Oracle","textPreview":"Şirket ağı içindeki Oracle","textChars":26,"textLines":1,"bbox":[132,333,430,36]}
+{"kind":"textbox","id":"sh/9kjahk7q","slide":8,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[72,414,42,28]}
+{"kind":"textbox","id":"sh/lona9gfe","slide":8,"text":"Deterministik hesap motoru","textPreview":"Deterministik hesap motoru","textChars":26,"textLines":1,"bbox":[132,409,430,36]}
+{"kind":"textbox","id":"sh/kne9gbyt","slide":8,"text":"04","textPreview":"04","textChars":2,"textLines":1,"bbox":[72,490,42,28]}
+{"kind":"textbox","id":"sh/jm5876x8","slide":8,"text":"Kullanıcı ve işlem kaydı altyapısı","textPreview":"Kullanıcı ve işlem kaydı altyapısı","textChars":34,"textLines":1,"bbox":[132,485,430,36]}
+{"kind":"textbox","id":"sh/ylwrelg3","slide":8,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[690,262,42,28]}
+{"kind":"textbox","id":"sh/xknq5gfi","slide":8,"text":"Parolalar için kurumsal kasa","textPreview":"Parolalar için kurumsal kasa","textChars":28,"textLines":1,"bbox":[750,257,450,36]}
+{"kind":"textbox","id":"sh/wje9cbyx","slide":8,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[690,338,42,28]}
+{"kind":"textbox","id":"sh/bi5836xc","slide":8,"text":"Modül ve veri bazlı yetki","textPreview":"Modül ve veri bazlı yetki","textChars":25,"textLines":1,"bbox":[750,333,450,36]}
+{"kind":"textbox","id":"sh/ahcra1gr","slide":8,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[690,414,42,28]}
+{"kind":"textbox","id":"sh/9g3q1wf6","slide":8,"text":"Değiştirilemez kapanış kaydı","textPreview":"Değiştirilemez kapanış kaydı","textChars":28,"textLines":1,"bbox":[750,409,450,36]}
+{"kind":"textbox","id":"sh/ofu98ryl","slide":8,"text":"04","textPreview":"04","textChars":2,"textLines":1,"bbox":[690,490,42,28]}
+{"kind":"textbox","id":"sh/0zy9or6h","slide":8,"text":"Kurum içi ve bulut AI politikası","textPreview":"Kurum içi ve bulut AI politikası","textChars":32,"textLines":1,"bbox":[750,485,450,36]}
+{"kind":"shape","id":"sh/107axwn2","slide":8,"bbox":[622,228,1,340]}
+{"kind":"textbox","id":"sh/exgrm1or","slide":8,"text":"İlke","textPreview":"İlke","textChars":4,"textLines":1,"bbox":[72,594,55,22]}
+{"kind":"textbox","id":"sh/fypsv65w","slide":8,"text":"AI erişimi kurum politikası, kayıt ve insan onayı ile sınırlandırılır.","textPreview":"AI erişimi kurum politikası, kayıt ve insan onayı ile sınırlandırılır.","textChars":70,"textLines":1,"bbox":[140,588,800,36]}
+{"kind":"textbox","id":"sh/sve9kr6l","slide":8,"text":"Finance Day 2026","textPreview":"Finance Day 2026","textChars":16,"textLines":1,"bbox":[72,674,300,20]}
+{"kind":"textbox","id":"sh/dw7qtwn6","slide":8,"text":"08","textPreview":"08","textChars":2,"textLines":1,"bbox":[1160,672,48,20]}
+{"kind":"notes","id":"nt/tp4xtw","slide":8,"text":"Bu slaytta mevcut durum ile hedef kontrol katmanını açıkça ayırıyoruz.\nYerel çalışma, Oracle bağlantısı ve deterministik motor elimizde. Kurumsal parola kasası, ayrıntılı yetki, değiştirilemez kapanış ve AI sağlayıcı politikası pilotun kontrol kapsamını oluşturmalı."}
+{"kind":"slide","id":"sl/ou2n36","slide":9,"title":"Pilot başarısını ölçme biçimi","textShapes":17}
+{"kind":"textbox","id":"sh/to7yxg3m","slide":9,"text":"Pilot başarısını ölçme biçimi","textPreview":"Pilot başarısını ölçme biçimi","textChars":29,"textLines":1,"bbox":[72,54,1136,70]}
+{"kind":"textbox","id":"sh/6lgfmlkv","slide":9,"text":"Etki iddiasını kullanım verisiyle doğrulayacağız. Başlangıç değerini pilot öncesinde ölçüp aynı kapanış akışıyla karşılaştıracağız.","textPreview":"Etki iddiasını kullanım verisiyle doğrulayacağız. Başlangıç değerini pilot öncesinde ölçüp aynı kapanış akışıyla karşılaştıracağız.","textChars":131,"textLines":1,"bbox":[72,122,1080,72]}
+{"kind":"textbox","id":"sh/7mpgv6lg","slide":9,"text":"1","textPreview":"1","textChars":1,"textLines":1,"bbox":[72,238,45,34]}
+{"kind":"textbox","id":"sh/gbixsv2x","slide":9,"text":"Kapanış süresi","textPreview":"Kapanış süresi","textChars":14,"textLines":1,"bbox":[142,236,310,34]}
+{"kind":"textbox","id":"sh/hcry103i","slide":9,"text":"Veri alımından onaylı sonuca kadar geçen süre","textPreview":"Veri alımından onaylı sonuca kadar geçen süre","textChars":45,"textLines":1,"bbox":[470,238,700,42]}
+{"kind":"shape","id":"sh/upgfqlkr","slide":9,"bbox":[142,293,1020,1]}
+{"kind":"textbox","id":"sh/fapgzqlc","slide":9,"text":"2","textPreview":"2","textChars":1,"textLines":1,"bbox":[72,320,45,34]}
+{"kind":"textbox","id":"sh/wfexgr2t","slide":9,"text":"Analiz süresi","textPreview":"Analiz süresi","textChars":13,"textLines":1,"bbox":[142,318,310,34]}
+{"kind":"textbox","id":"sh/xgnepw3e","slide":9,"text":"Fark ve anomali araştırmasına ayrılan uzman zamanı","textPreview":"Fark ve anomali araştırmasına ayrılan uzman zamanı","textChars":50,"textLines":1,"bbox":[470,320,700,42]}
+{"kind":"shape","id":"sh/xgv2l8zi","slide":9,"bbox":[142,375,1020,1]}
+{"kind":"textbox","id":"sh/wfmlcnyx","slide":9,"text":"3","textPreview":"3","textChars":1,"textLines":1,"bbox":[72,402,45,34]}
+{"kind":"textbox","id":"sh/vetkjihs","slide":9,"text":"Yeniden çalışma","textPreview":"Yeniden çalışma","textChars":15,"textLines":1,"bbox":[142,400,310,34]}
+{"kind":"textbox","id":"sh/adkjadg7","slide":9,"text":"Hata veya eksik bağlam nedeniyle tekrarlanan adımlar","textPreview":"Hata veya eksik bağlam nedeniyle tekrarlanan adımlar","textChars":52,"textLines":1,"bbox":[470,402,700,42]}
+{"kind":"shape","id":"sh/5kv2pszu","slide":9,"bbox":[142,457,1020,1]}
+{"kind":"textbox","id":"sh/kjmlgny9","slide":9,"text":"4","textPreview":"4","textChars":1,"textLines":1,"bbox":[72,484,45,34]}
+{"kind":"textbox","id":"sh/jidkniho","slide":9,"text":"Denetim kapsamı","textPreview":"Denetim kapsamı","textChars":15,"textLines":1,"bbox":[142,482,310,34]}
+{"kind":"textbox","id":"sh/ih43edg3","slide":9,"text":"Kaynağı ve onayı kayıtlı kritik işlemlerin oranı","textPreview":"Kaynağı ve onayı kayıtlı kritik işlemlerin oranı","textChars":48,"textLines":1,"bbox":[470,484,700,42]}
+{"kind":"textbox","id":"sh/t8f2tszq","slide":9,"text":"Hedef yüzdeler pilot başlangıcında gerçek baz değerlerle belirlenecek.","textPreview":"Hedef yüzdeler pilot başlangıcında gerçek baz değerlerle belirlenecek.","textChars":70,"textLines":1,"bbox":[72,605,900,32]}
+{"kind":"textbox","id":"sh/s76lk7y5","slide":9,"text":"Finance Day 2026","textPreview":"Finance Day 2026","textChars":16,"textLines":1,"bbox":[72,674,300,20]}
+{"kind":"textbox","id":"sh/cnedcvat","slide":9,"text":"09","textPreview":"09","textChars":2,"textLines":1,"bbox":[1160,672,48,20]}
+{"kind":"notes","id":"nt/ou2n36","slide":9,"text":"Sunumda doğrulanmamış verimlilik oranları kullanmıyoruz.\nPilot öncesinde mevcut kapanış süresini, analiz zamanını ve yeniden çalışmayı ölçeceğiz. Aynı akışın Actuarius ile yürütülen kapanışını karşılaştıracağız."}
+{"kind":"slide","id":"sl/7i40q3","slide":10,"title":"90 günlük kontrollü pilot","textShapes":14}
+{"kind":"textbox","id":"sh/mdgny1gf","slide":10,"text":"90 günlük kontrollü pilot","textPreview":"90 günlük kontrollü pilot","textChars":25,"textLines":1,"bbox":[72,54,1136,70]}
+{"kind":"textbox","id":"sh/9g7m9gzq","slide":10,"text":"Tek branş ve tek kapanış dönemi ile başlayıp kontrol kapsamını aşamalı genişletme önerisi","textPreview":"Tek branş ve tek kapanış dönemi ile başlayıp kontrol kapsamını aşamalı genişletme önerisi","textChars":89,"textLines":1,"bbox":[72,122,1060,48]}
+{"kind":"shape","id":"sh/8fy50by5","slide":10,"bbox":[72,224,308,310]}
+{"kind":"shape","id":"sh/vip4bqhw","slide":10,"bbox":[72,224,308,8]}
+{"kind":"textbox","id":"sh/ahgn2lgb","slide":10,"text":"GÜN 0–30","textPreview":"GÜN 0–30","textChars":8,"textLines":1,"bbox":[98,262,160,26]}
+{"kind":"textbox","id":"sh/xkr6d0z2","slide":10,"text":"Hazırlık","textPreview":"Hazırlık","textChars":8,"textLines":1,"bbox":[98,307,250,40]}
+{"kind":"textbox","id":"sh/wjy54vyh","slide":10,"text":"Baz metrikler\nVeri kapsamı\nKullanıcı ve yetki matrisi\nAI kullanım politikası","textPreview":"Baz metrikler | Veri kapsamı | Kullanıcı ve yetki matrisi | AI kullanım politikası","textChars":76,"textLines":4,"bbox":[98,370,250,125]}
+{"kind":"shape","id":"sh/rm54zmhs","slide":10,"bbox":[454,224,308,310]}
+{"kind":"shape","id":"sh/qlwnqhg7","slide":10,"bbox":[454,224,308,8]}
+{"kind":"textbox","id":"sh/0vydgze1","slide":10,"text":"GÜN 31–60","textPreview":"GÜN 31–60","textChars":9,"textLines":1,"bbox":[480,262,160,26]}
+{"kind":"textbox","id":"sh/1w7up4f6","slide":10,"text":"Paralel çalışma","textPreview":"Paralel çalışma","textChars":15,"textLines":1,"bbox":[480,307,250,40]}
+{"kind":"textbox","id":"sh/etgve9wv","slide":10,"text":"Mevcut süreçle yan yana çalışma\nSonuç mutabakatı\nKullanıcı geri bildirimi\nKontrol kayıtları","textPreview":"Mevcut süreçle yan yana çalışma | Sonuç mutabakatı | Kullanıcı geri bildirimi | Kontrol kayıtları","textChars":91,"textLines":4,"bbox":[480,370,250,125]}
+{"kind":"shape","id":"sh/fupcnexg","slide":10,"bbox":[836,224,308,310]}
+{"kind":"shape","id":"sh/ozydkjex","slide":10,"bbox":[836,224,308,8]}
+{"kind":"textbox","id":"sh/p0retofi","slide":10,"text":"GÜN 61–90","textPreview":"GÜN 61–90","textChars":9,"textLines":1,"bbox":[862,262,160,26]}
+{"kind":"textbox","id":"sh/2xgvi9wr","slide":10,"text":"Değerlendirme","textPreview":"Değerlendirme","textChars":13,"textLines":1,"bbox":[862,307,250,40]}
+{"kind":"textbox","id":"sh/nypcrexc","slide":10,"text":"Başarı metrikleri\nRisk ve kontrol bulguları\nÖlçekleme kararı\nSonraki branş planı","textPreview":"Başarı metrikleri | Risk ve kontrol bulguları | Ölçekleme kararı | Sonraki branş planı","textChars":80,"textLines":4,"bbox":[862,370,250,125]}
+{"kind":"shape","id":"sh/43ed8fet","slide":10,"bbox":[380,379,74,0]}
+{"kind":"shape","id":"sh/54nuhkfe","slide":10,"bbox":[762,379,74,0]}
+{"kind":"textbox","id":"sh/l8v2pw3q","slide":10,"text":"Pilot sonunda ölçekleme kararı ölçülen fayda ve kontrol sonuçlarına dayanır.","textPreview":"Pilot sonunda ölçekleme kararı ölçülen fayda ve kontrol sonuçlarına dayanır.","textChars":76,"textLines":1,"bbox":[168,586,944,40]}
+{"kind":"textbox","id":"sh/knm1wr25","slide":10,"text":"Finance Day 2026","textPreview":"Finance Day 2026","textChars":16,"textLines":1,"bbox":[72,674,300,20]}
+{"kind":"textbox","id":"sh/jmdknmlk","slide":10,"text":"10","textPreview":"10","textChars":2,"textLines":1,"bbox":[1160,672,48,20]}
+{"kind":"notes","id":"nt/7i40q3","slide":10,"text":"Öneri, tek branş ve bir kapanış dönemiyle başlamaktır.\nİlk ay veri ve kontrol kapsamını hazırlarız. İkinci ay mevcut süreçle yan yana çalışırız. Son ay ölçümleri, riskleri ve ölçekleme kararını yönetime sunarız."}
+{"kind":"slide","id":"sl/rpchhk","slide":11,"title":"ÖNERİ","textShapes":15}
+{"kind":"textbox","id":"sh/ih0va903","slide":11,"text":"ÖNERİ","textPreview":"ÖNERİ","textChars":5,"textLines":1,"bbox":[72,72,180,26]}
+{"kind":"textbox","id":"sh/5krelozu","slide":11,"text":"Bir branşta 90 günlük\nkontrollü pilot","textPreview":"Bir branşta 90 günlük | kontrollü pilot","textChars":37,"textLines":2,"bbox":[72,132,900,130]}
+{"kind":"shape","id":"sh/kjidcji9","slide":11,"bbox":[72,356,336,170]}
+{"kind":"textbox","id":"sh/7mtwneh0","slide":11,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[96,380,42,26]}
+{"kind":"textbox","id":"sh/6l0vet0f","slide":11,"text":"Yönetici sponsoru","textPreview":"Yönetici sponsoru","textChars":17,"textLines":1,"bbox":[96,422,286,34]}
+{"kind":"textbox","id":"sh/tobepozq","slide":11,"text":"Kapsam ve karar noktalarının sahipliği","textPreview":"Kapsam ve karar noktalarının sahipliği","textChars":38,"textLines":1,"bbox":[96,466,286,46]}
+{"kind":"shape","id":"sh/sn2dgji5","slide":11,"bbox":[454,356,336,170]}
+{"kind":"textbox","id":"sh/nqpcbuhg","slide":11,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[478,380,42,26]}
+{"kind":"textbox","id":"sh/mpgv2p0v","slide":11,"text":"Aktüerya ile IT temsilcisi","textPreview":"Aktüerya ile IT temsilcisi","textChars":26,"textLines":1,"bbox":[478,422,286,34]}
+{"kind":"textbox","id":"sh/03axkvmd","slide":11,"text":"Veri, güvenlik ve çalışma düzeninin kurulması","textPreview":"Veri, güvenlik ve çalışma düzeninin kurulması","textChars":45,"textLines":1,"bbox":[478,466,286,46]}
+{"kind":"shape","id":"sh/l43et03y","slide":11,"bbox":[836,356,336,170]}
+{"kind":"textbox","id":"sh/y1sfi547","slide":11,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[860,380,42,26]}
+{"kind":"textbox","id":"sh/z21wrals","slide":11,"text":"Ortak başarı ölçütleri","textPreview":"Ortak başarı ölçütleri","textChars":22,"textLines":1,"bbox":[860,422,286,34]}
+{"kind":"textbox","id":"sh/8ruxofmp","slide":11,"text":"Pilot öncesi baz değer ve kapanış sonrası karşılaştırma","textPreview":"Pilot öncesi baz değer ve kapanış sonrası karşılaştırma","textChars":55,"textLines":1,"bbox":[860,466,286,46]}
+{"kind":"textbox","id":"sh/9s3exk3u","slide":11,"text":"Actuarius Enterprise","textPreview":"Actuarius Enterprise","textChars":20,"textLines":1,"bbox":[72,616,360,30]}
+{"kind":"textbox","id":"sh/m5cfm54j","slide":11,"text":"Sorular ve değerlendirmeler","textPreview":"Sorular ve değerlendirmeler","textChars":27,"textLines":1,"bbox":[800,616,408,30]}
+{"kind":"textbox","id":"sh/nqlwval4","slide":11,"text":"Finance Day 2026","textPreview":"Finance Day 2026","textChars":16,"textLines":1,"bbox":[72,674,300,20]}
+{"kind":"textbox","id":"sh/ovqdcbm5","slide":11,"text":"11","textPreview":"11","textChars":2,"textLines":1,"bbox":[1160,672,48,20]}
+{"kind":"notes","id":"nt/rpchhk","slide":11,"text":"Yönetimden talebimiz geniş ölçekli bir teknoloji yatırımı kararı değil.\nTek branşta, ölçülebilir ve kontrollü bir pilot için sponsor, aktüerya ve IT temsilcisi ile ortak başarı kriterleri istiyoruz.\nPilot sonunda faydayı ve kontrol sonuçlarını birlikte değerlendirebiliriz."}

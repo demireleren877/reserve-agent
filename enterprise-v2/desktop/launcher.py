@@ -232,7 +232,25 @@ def main() -> None:
         else:
             win.load_html(ERROR_HTML)
 
-    webview.start(_on_ready, window)  # pencere kapanana kadar bloklar
+    # private_mode=False ŞART: pywebview varsayılan olarak gizli moda açılıyor ve
+    # o modda localStorage pencere kapanınca siliniyor. Ajan ayarları (sağlayıcı,
+    # model, anahtar) orada duruyordu — her açılışta yeniden girmek gerekiyordu.
+    # storage_path'i bağlantı ayarlarıyla aynı klasöre veriyoruz ki hem öngörülebilir
+    # olsun hem de kaldırırken tek yer temizlensin.
+    try:
+        from app.desktop_config import config_dir  # noqa: E402
+
+        storage = config_dir() / "webview"
+    except Exception:  # backend import edilemezse yine de kalıcı olsun
+        storage = Path.home() / ".actuarius" / "webview"
+    storage.mkdir(parents=True, exist_ok=True)
+
+    webview.start(
+        _on_ready,
+        window,
+        private_mode=False,
+        storage_path=str(storage),
+    )  # pencere kapanana kadar bloklar
 
     server.should_exit = True
     thread.join(timeout=5)

@@ -193,3 +193,122 @@ export function buildFileSummary(
     largest: all.slice(0, topN),
   };
 }
+
+// ─── LDF geçişinin dosya bazlı hareketi ───────────────────────────────────────
+
+export interface ClaimMovementRow {
+  dosya_no: string;
+  p_delta: number;
+  o_delta: number;
+  inc_delta: number;
+  tag: ClaimChangeTag;
+}
+
+export interface ClaimMovementCell {
+  origin: string;
+  step: number;
+  from: string;
+  to: string;
+  n_claims: number;
+  paid_delta: number;
+  os_delta: number;
+  inc_delta: number;
+  new_claims: number;
+  closed: number;
+  reopened: number;
+  top: ClaimMovementRow[];
+}
+
+export type ClaimMovement = Record<string, Record<string, ClaimMovementCell>>;
+
+/**
+ * Bir LDF geçişini (d → d+1) dosya bazında açar: hangi dosya ödemeye döndü,
+ * hangi muallak kapandı, aykırı LDF'i hangi tek dosya taşıyor.
+ *
+ * `get_file_summary` yalnızca son diagonal'i gösterdiği için "2021 step 2 LDF
+ * neden 1.8?" sorusuna cevap veremiyordu; bu yapı o soruyu cevaplar.
+ *
+ * Ağırlık dengesi: her hücrede yalnızca |inc_delta| en büyük `topN` dosya
+ * taşınır, gerisi toplamlarda kalır. Tüm dosyaları taşımak session_state'i
+ * üçgenin kendisinden büyük yapardı.
+ */
+export function buildClaimMovement(
+  triangle: Triangle | null | undefined,
+  fileData: FileData | null | undefined,
+  topN = 8,
+): ClaimMovement | null {
+  if (!triangle || !fileData || Object.keys(fileData).length === 0) return null;
+
+  const reconciled = reconcileFileDataSnapshots(triangle, fileData);
+  const out: ClaimMovement = {};
+
+  for (const origin of triangle.origin_periods) {
+    const byDate = reconciled[origin] ?? {};
+    const dates = Object.keys(byDate);
+    if (dates.length < 2) continue;
+
+    for (let step = 0; step < dates.length - 1; step += 1) {
+      const prev = (byDate[dates[step]] ?? {}) as Record<string, FileLeaf>;
+      const next = (byDate[dates[step + 1]] ?? {}) as Record<string, FileLeaf>;
+      const claims = new Set([...Object.keys(prev), ...Object.keys(next)]);
+      if (!claims.size) continue;
+
+      const rows: ClaimMovementRow[] = [];
+      let paidDelta = 0;
+      let osDelta = 0;
+      let newClaims = 0;
+      let closed = 0;
+      let reopened = 0;
+
+      for (const dosya of claims) {
+        const a = prev[dosya];
+        const b = next[dosya];
+        const ap = a ? filePaid(a) : 0;
+        const ao = a ? fileOs(a) : 0;
+        const bp = b ? filePaid(b) : 0;
+        const bo = b ? fileOs(b) : 0;
+        const dp = bp - ap;
+        const do_ = bo - ao;
+        if (dp === 0 && do_ === 0) continue;
+
+        paidDelta += dp;
+        osDelta += do_;
+        if (!a && b) newClaims += 1;
+        if (ao > 0 && bo === 0) closed += 1;
+        if (ao === 0 && bo > 0 && a) reopened += 1;
+
+        rows.push({
+          dosya_no: dosya,
+          p_delta: Math.round(dp),
+          o_delta: Math.round(do_),
+          inc_delta: Math.round(dp + do_),
+          tag: classifyClaimChange(
+            b ? { p: bp, o: bo, inc: bp + bo } : undefined,
+            a ? { p: ap, o: ao, inc: ap + ao } : undefined,
+            dp + do_,
+          ),
+        });
+      }
+
+      if (!rows.length) continue;
+      rows.sort((x, y) => Math.abs(y.inc_delta) - Math.abs(x.inc_delta));
+
+      (out[origin] ??= {})[String(step)] = {
+        origin,
+        step,
+        from: dates[step],
+        to: dates[step + 1],
+        n_claims: rows.length,
+        paid_delta: Math.round(paidDelta),
+        os_delta: Math.round(osDelta),
+        inc_delta: Math.round(paidDelta + osDelta),
+        new_claims: newClaims,
+        closed,
+        reopened,
+        top: rows.slice(0, topN),
+      };
+    }
+  }
+
+  return Object.keys(out).length ? out : null;
+}

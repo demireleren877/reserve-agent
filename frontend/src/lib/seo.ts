@@ -24,14 +24,14 @@ export const FEATURES = [
   "Roll-forward ile dönem kapanışı ve Actual vs Expected mutabakatı",
   "Nakit akışı projeksiyonu (çeyreklik ve aylık ödeme deseni)",
   "IFRS 17 iskonto: getiri eğrisi, illikidite primi, risk marjı ve LIC",
-  "Senaryo versiyonları ve model kilidi",
-  "Kullanıcı, model ve zaman bağlamlı denetim izi",
-  "Excel ve CSV çıktısı, Oracle tablosundan veri okuma",
-  "Tüm modülleri yürütebilen AI Agent (45 araç)",
+  "Senaryo versiyonları; Enterprise kurulumda çok kullanıcılı model kilidi",
+  "Enterprise kurulumda kullanıcı, model ve zaman bağlamlı denetim izi",
+  "Excel ve CSV çıktısı; Enterprise kurulumda Oracle tablosundan veri okuma",
+  "Veri, rezerv, nakit akışı ve iskonto iş akışlarını destekleyen AI Agent",
 ] as const;
 
 export const MODULES = [
-  { name: "Veri", desc: "Dönem bazlı hasar, prim ve büyük hasar verisi; Oracle veya Excel/CSV." },
+  { name: "Veri", desc: "Dönem bazlı hasar, prim ve hazır üçgen verisi; Excel/CSV, Enterprise kurulumda Oracle." },
   { name: "Rezerv", desc: "Chain-Ladder ve Bornhuetter-Ferguson ile ultimate ve IBNR." },
   { name: "Nakit Akışı", desc: "Ödeme deseninden çeyreklik ve aylık nakit akışı projeksiyonu." },
   { name: "İskonto", desc: "IFRS 17 eğrisi, illikidite primi ve risk marjı ile LIC." },
@@ -55,7 +55,7 @@ export const FAQ_TR: { q: string; a: string }[] = [
   },
   {
     q: "AI Agent tam olarak ne yapabiliyor?",
-    a: "Agent dört modülde toplam 45 araca sahiptir. Veriyi bağlar, üçgeni kurar, aykırı gelişim oranlarını eler, genç kaza dönemlerini BF bazına alır, a priori hasar oranını olgun yıllardan türetir, nakit akışını ve iskontoyu çalıştırır ve kapanış raporunu üretir. Uyguladığı her adım arayüzde görünür, geri alınabilir ve denetim kaydına yazılır.",
+    a: "Agent, yüklenen veriden üçgen oluşturabilir; gelişim oranlarını inceleyip hücre elemesi, CL/BF baz seçimi ve model varsayımlarını uygulayabilir. Nakit akışı ayarlarını ve iskonto hesabını da destekler. Araç çağrıları ve sonuçları arayüzde izlenir; nihai varsayım seçimi ve sonuçların değerlendirilmesi aktüerin kontrolündedir.",
   },
   {
     q: "Verilerimi nasıl yüklerim?",
@@ -63,11 +63,11 @@ export const FAQ_TR: { q: string; a: string }[] = [
   },
   {
     q: "Model değişiklikleri denetlenebiliyor mu?",
-    a: "Evet. Her yazma işlemi kim, ne zaman, hangi branş ve model üzerinde ne değiştirdi bilgisiyle denetim izine yazılır. Model kilidi sayesinde bir modeli aynı anda tek kişi düzenler; senaryolar ayrı versiyonlarda tutulur ve yan yana karşılaştırılır.",
+    a: "Model değişiklikleri çalışma geçmişinde izlenebilir; senaryolar ayrı versiyonlarda tutulur ve karşılaştırılır. Enterprise kurulumda kullanıcı ve zaman bilgisi içeren sunucu taraflı denetim kayıtları ile çok kullanıcılı düzenleme kilitleri bulunur.",
   },
   {
     q: "Dönem kapanışı nasıl ilerliyor?",
-    a: "Yeni dönem verisi yüklenir, önceki dönemin modeli roll-forward ile taşınabilir, yeni köşegen beklenenle karşılaştırılır (Actual vs Expected), sapan kohortlar revize edilir, nakit akışı ve iskonto hesaplanır, ardından rapor üretilip model kilitlenir.",
+    a: "Yeni dönem verisi yüklenir, önceki dönemin modeli roll-forward ile taşınabilir ve yeni köşegen beklenenle karşılaştırılır (Actual vs Expected). Aktüer, sapmaları inceleyip modeli revize eder; nakit akışı ve iskonto hesaplanır. Model özeti ve Excel çıktısı değerlendirme sürecini destekler.",
   },
   {
     q: "IFRS 17 iskonto desteği var mı?",
@@ -136,9 +136,9 @@ export function softwareSchema(locale: "tr" | "en" = "tr") {
     description:
       locale === "en"
         ? "End-to-end actuarial analysis platform: data management, IBNR reserving with Chain-Ladder and " +
-          "Bornhuetter-Ferguson, cash flow projection and IFRS 17 discounting. An AI agent runs every module."
+          "Bornhuetter-Ferguson, cash flow projection and IFRS 17 discounting. An AI agent supports workflows across the modules."
         : "Uçtan uca aktüeryal analiz platformu: veri yönetimi, Chain-Ladder ve Bornhuetter-Ferguson ile " +
-          "IBNR rezerv hesabı, nakit akışı projeksiyonu ve IFRS 17 iskonto. AI Agent tüm modülleri yürütür.",
+          "IBNR rezerv hesabı, nakit akışı projeksiyonu ve IFRS 17 iskonto. AI Agent modüller arası iş akışlarını destekler.",
     featureList: locale === "en" ? [...FEATURES_EN] : [...FEATURES],
     publisher: { "@id": `${SITE.url}/#organization` },
     offers: PRICING.map((p) => ({
@@ -193,10 +193,10 @@ export const FEATURES_EN = [
   "Roll-forward period close and Actual vs Expected reconciliation",
   "Cash flow projection (quarterly and monthly payment pattern)",
   "IFRS 17 discounting: yield curve, illiquidity premium, risk adjustment and LIC",
-  "Scenario versions and model locking",
-  "Audit trail scoped by user, model and time",
-  "Excel and CSV export, direct read from Oracle tables",
-  "An AI agent that operates every module (45 tools)",
+  "Scenario versions; multi-user model locking in Enterprise deployments",
+  "Enterprise audit trail scoped by user, model and time",
+  "Excel and CSV export; direct read from Oracle tables in Enterprise deployments",
+  "An AI agent supporting data, reserving, cash flow and discounting workflows",
 ] as const;
 
 /** İngilizce SSS — /en sayfasındaki görünür içerik ve FAQPage şeması. */
@@ -211,7 +211,7 @@ export const FAQ_EN: { q: string; a: string }[] = [
   },
   {
     q: "What can the AI agent actually do?",
-    a: "The agent has 45 tools across four modules. It connects the data, builds the triangle, excludes outlying development ratios, moves immature accident periods onto a BF basis, derives the a priori loss ratio from mature years, runs cash flow and discounting, and produces the closing report. Every step it applies is visible in the interface, reversible and written to the audit trail.",
+    a: "The agent can build a triangle from imported data, inspect development ratios, and apply cell exclusions, CL/BF basis choices and model assumptions. It also supports cash flow settings and discounting calculations. Tool calls and results are visible in the interface; the actuary retains responsibility for final assumptions and interpretation.",
   },
   {
     q: "How do I load my data?",
@@ -219,11 +219,11 @@ export const FAQ_EN: { q: string; a: string }[] = [
   },
   {
     q: "Can model changes be audited?",
-    a: "Yes. Every write is recorded with who made it, when, and on which line of business and model. Model locking means only one person edits a model at a time; scenarios are kept as separate versions and compared side by side.",
+    a: "Model changes can be reviewed in the working history; scenarios are kept as separate versions and compared. Enterprise deployments add server-side audit records with user and time context, plus editing locks for multi-user work.",
   },
   {
     q: "How does the period close work?",
-    a: "New period data is loaded, the previous model can be carried forward with roll-forward, the new diagonal is compared against expectation (Actual vs Expected), deviating cohorts are revised, cash flow and discounting are calculated, then the report is produced and the model is locked.",
+    a: "New period data is loaded, the previous model can be carried forward with roll-forward, and the new diagonal is compared against expectation (Actual vs Expected). The actuary reviews deviations and revises the model, then calculates cash flow and discounting. Model summaries and Excel exports support the review process.",
   },
   {
     q: "Is IFRS 17 discounting supported?",

@@ -1,0 +1,87 @@
+[
+  {
+    "n": 1,
+    "title": "",
+    "note": "Süre: 45 saniye.\nBir dönem kapanışını düşünelim. Önce veriyi topluyoruz, ardından kontrolleri çalıştırıyor, mizanla mutabakat kuruyor, analizleri hazırlıyor ve modellere geçiyoruz. Her adım değerli, ancak adımlar arasındaki aktarım da ciddi dikkat istiyor. Actuarius fikri bu akışı tek bir çalışma ortamında birleştirme ihtiyacından doğuyor. Bugün çalışan temeli ve agent ile yönetilebilir uçtan uca süreç vizyonumuzu paylaşacağım."
+  },
+  {
+    "n": 2,
+    "title": "Projenin çıkış noktası",
+    "note": "Süre: 65 saniye.\nProjenin çıkış noktası tek bir hesaplama ihtiyacı değildi. Analize geçmeden önce veriyi hazırlama, kontrol sonuçlarını toplama ve doğru sürümü bulma ihtiyacı vardı. Bu işleri farklı yerlerde yürüttüğümüzde aradaki bağı ekip hafızası koruyor. Hedefimiz bu bağı sistemin koruması. Buradaki mevcut süreç çizimi operasyonel bir hipotezdir, ölçülmüş bir şirket zaman etüdü değildir."
+  },
+  {
+    "n": 3,
+    "title": "Dağınık süreçlerin görünmeyen maliyeti",
+    "note": "Süre: 60 saniye.\nBu maliyeti yalnızca dakika olarak düşünmemeliyiz. Aynı kontrolün yeniden yapılması, farklı analizlerde farklı filtre kullanılması ve bir model sonucunun kaynağını tekrar araştırmak zorunda kalmak da maliyet. Zaman, tutarlılık ve erişim birbirine bağlı. Tek ortam yaklaşımı bu üç ihtiyacı aynı süreç üzerinde karşılamayı hedefliyor."
+  },
+  {
+    "n": 4,
+    "title": "Uçtan uca tek bir iş akışı",
+    "note": "Süre: 80 saniye.\nÖnerdiğimiz kapsam verinin alınmasıyla başlıyor. Veri kalitesi kontrolleri, mizan mutabakatı ve gerekli analiz raporları modelleme öncesindeki adımları oluşturuyor. Modelleme ve sonuç açıklaması aynı dönem bağlamında devam ediyor. Agent bu sürecin erişim ve yönlendirme katmanı. Bu çizim hedef kapsamdır. Mevcut üründe veri, modelleme, nakit akışı ve iskonto temeli var. Otomatik mizan mutabakatı ve bütün adımları yöneten orkestrasyon geliştirme kapsamıdır.\nKaynak: enterprise-v2/README.md, enterprise-v2/KULLANIM_KILAVUZU.md, enterprise-v2/backend/app/agent/tools.py."
+  },
+  {
+    "n": 5,
+    "title": "Veri ve model aynı bağlamı paylaşır",
+    "note": "Süre: 75 saniye.\nBir modeli yalnızca sonucuyla saklamak yeterli değil. Hangi veri sürümünü kullandı, hangi kontrollerden geçti, hangi varsayım setiyle üretildi ve hangi rapora girdi? Hedefimiz bu bağı modelden kaynağa kadar korumak. Böylece bir veri düzeltmesinin etkilediği analiz ve modelleri de görebiliriz. Tam veri soy ağacı hedef tasarımdır. Mevcut dönem ve proje yapısı bunun başlangıç noktasıdır.\nKaynak: enterprise-v2/frontend/src/lib/project-store.tsx."
+  },
+  {
+    "n": 6,
+    "title": "Veri kalitesi sürecin ilk kontrol kapısı",
+    "note": "Süre: 65 saniye.\nEksik tarih, mükerrer kayıt, beklenmeyen tutar veya dönem uyumsuzluğu modelin içinde keşfedilmemeli. Hedef süreçte kuralları veri girişinde çalıştırıyoruz. Kurallar ölçülebilir ve tekrar üretilebilir olmalı. Agent kontrol sonucunu özetleyebilir ve uzmanı sorunlu kayıtlara yönlendirebilir. Kritik hatada akışı durdurma ve istisna sahibine yönlendirme hedef kontrol davranışlarıdır."
+  },
+  {
+    "n": 7,
+    "title": "Mizan mutabakatı analize bağlanır",
+    "note": "Süre: 70 saniye.\nMizan kontrolünü ayrı bir dosyada yapılan son kontrol olarak bırakmak istemiyoruz. Aktüeryal veri toplamlarını ilgili muhasebe hesaplarıyla aynı dönem, para birimi ve kapsamda karşılaştırmayı planlıyoruz. Hesap eşlemesi ve toleranslar finans ile birlikte tanımlanmalı. Fark olduğunda agent farkı gizlemez, ilgili kalemleri inceleme listesine taşır. Mutabakat sağlanmadan veya yetkili istisna onayı olmadan sonraki aşamaya geçilmemesi hedeflenir. Bu modül mevcut üründe tamamlanmış değildir."
+  },
+  {
+    "n": 8,
+    "title": "Raporlar modellerin hazırlık adımı olur",
+    "note": "Süre: 65 saniye.\nGerekli raporları her seferinde yeniden tarif etmek yerine dönem ve branşa bağlı analiz setleri tanımlamayı öneriyoruz. Hasar gelişimi, büyük hasar incelemesi, dönemsel değişim ve gerçekleşen–beklenen karşılaştırmaları model seçimlerine bağlanır. Bu yaklaşım varsayımların dayanağını görünür kılar. Mevcut ürün bu analizlerin bir kısmını içeriyor. Otomatik sıralama, bağımlılık yönetimi ve kontrol kapıları geliştirme kapsamıdır.\nKaynak: enterprise-v2/KULLANIM_KILAVUZU.md ve enterprise-v2/frontend/src/app/reserve/page.tsx."
+  },
+  {
+    "n": 9,
+    "title": "Agent, sürecin ortak erişim noktası",
+    "note": "Süre: 70 saniye.\nAgent ile kurulacak ilişkiyi bir komut örneğiyle anlatalım. Kullanıcı dönem ve branşı söyleyip bir çalışma başlatmak istiyor. Agent kapsamı netleştirir, gerekli fonksiyonları çağırır ve kontrol sonuçlarını sunar. Kullanıcı her alt ekranı tek tek aramak yerine aynı çalışma bağlamında ilerler. Buradaki cümle hedef etkileşim örneğidir, bugün bu uçtan uca komutun eksiksiz çalıştığı iddiası değildir."
+  },
+  {
+    "n": 10,
+    "title": "Bir dönem kapanışının hedef akışı",
+    "note": "Süre: 90 saniye.\nŞimdi komutun arkasında nasıl bir süreç görmek istediğimizi anlatalım. İlk olarak agent veri alımını başlatır ve kalite sonuçlarını toplar. İkinci aşamada mizan farkı bulduğunu varsayalım. Akış durur ve aktüer ile finans sorumlusuna inceleme sunar. Düzeltme ya da yetkili istisna onayından sonra raporlar çalışır ve model taslağı hazırlanır. Son adımda aktüer varsayımı ve sonucu değerlendirir. Buradaki gösterim canlı demo değildir, önerilen süreç senaryosudur."
+  },
+  {
+    "n": 11,
+    "title": "Modele erişim, soruyla başlar",
+    "note": "Süre: 60 saniye.\nAgent’ın ikinci değeri süreci başlatmanın ötesinde modele erişim. Yönetici ya da aktüer belirli bir soruyu sorduğunda dönem, branş, model ve veri bağlamını birlikte kullanmasını istiyoruz. Veri–model ilişkisi güçlü olduğunda açıklama da güçlenir. AI açıklaması kaynak sonuçlarla kontrol edilmeli, belirsizlik varsa açıkça belirtilmeli.\nKaynak: enterprise-v2/backend/app/agent/tools.py."
+  },
+  {
+    "n": 12,
+    "title": "Beklediğimiz değer",
+    "note": "Süre: 65 saniye.\nİlk kazanım tekrarlı işlerin azalması. İkinci kazanım aynı veri ve kontrol tanımlarının kullanılmasıyla daha tutarlı analiz. Üçüncü kazanım model sonucuna erişimin ve araştırmanın kolaylaşması. Bunları gerçekleşmiş sonuçlar olarak sunmuyoruz. Pilotla ölçeceğimiz fayda hipotezleri olarak tanımlıyoruz. Aktüerin zamanı arttığında daha fazla senaryoya, varsayım incelemesine ve karar desteğine ayrılabilir."
+  },
+  {
+    "n": 13,
+    "title": "Başarıyı iş akışında ölçeceğiz",
+    "note": "Süre: 60 saniye.\nZaman kazanımı iddiasını aynı kapsamda karşılaştırmalıyız. Bir kapanışta veri hazırlığından değerlendirmeye kadar geçen süreyi ve uzman dokunuşunu ölçebiliriz. Yeniden çalışma sayısı tutarlılık için, kaynak ve kontrol bağlantısı tamamlanmış modellerin oranı izlenebilirlik için yardımcı göstergelerdir. Henüz başlangıç verisi olmadığı için yüzde kazanç vermiyoruz. Hedefleri baz ölçümden sonra belirleyebiliriz."
+  },
+  {
+    "n": 14,
+    "title": "Uzmanlık ve kontrol sürecin içinde kalır",
+    "note": "Süre: 65 saniye.\nUçtan uca otomasyon kurarken karar yetkisini açık tutuyoruz. Kontrol kuralları ve hesap fonksiyonları tekrar üretilebilir olmalı. Agent bu fonksiyonları çağırır, çıktıları birleştirir ve istisnaları sunar. Aktüer varsayım ve nihai değerlendirmeden sorumlu kalır. Kurum içi veya dışı AI kullanımı veri politikası ve yetki kapsamıyla belirlenir. Bu slayt hedef işletim modelidir. Tam yetki matrisi, değiştirilemez kayıt ve kurumsal secret yönetimi uygulama öncesi tamamlanacak kontrol ihtiyaçlarıdır."
+  },
+  {
+    "n": 15,
+    "title": "Çalışan temel, genişleyen süreç",
+    "note": "Süre: 80 saniye.\nBugün elimizde veri yönetimi, rezerv modelleri, nakit akışı ve iskonto modülleri ile agent araç entegrasyonu içeren çalışan bir ürün temeli var. Şirket içinde tarif ettiğimiz uçtan uca sürece ulaşmak için standart veri kalite paketleri, mizan mutabakatı, rapor bağımlılıkları ve süreç orkestrasyonunu eklemeyi öneriyoruz. Kurumsal kontrol katmanı da bu kapsamla birlikte tamamlanmalı. Mevcut özelliği ve hedefi ayırmak, çalışmanın güvenilirliğini artırır.\nKaynaklar: enterprise-v2/README.md, enterprise-v2/KULLANIM_KILAVUZU.md, enterprise-v2/backend/app/agent/tools.py. İnceleme tarihi: 8 Eylül 2026."
+  },
+  {
+    "n": 16,
+    "title": "Finans için öğrenme alanı",
+    "note": "Süre: 60 saniye.\nAktüeryada bu yaklaşımı geliştirmek, finansın diğer alanları için de aktarılabilir bir çalışma biçimi oluşturabilir. Ortak yapı veri, kontrol, analiz ve karar. İleride mutabakat, yönetim raporlaması veya bütçe senaryolarında benzer prensipler değerlendirilebilir. Bunları mevcut ürün kapsamı veya onaylanmış yol haritası olarak değil, aktüerya çalışmasından öğrenme fırsatları olarak düşünmeliyiz."
+  },
+  {
+    "n": 17,
+    "title": "",
+    "note": "Süre: 45 saniye.\nBaşlangıç sorumuza dönelim. Aktüerin zamanını veri ve dosyalar arasındaki bağı korumaya mı, sonuçları değerlendirmeye mi ayırmasını istiyoruz? Actuarius ile veri, kontrol ve modelleri tek çalışma ortamında bağlamayı hedefliyoruz. Agent bu akışa erişimi kolaylaştırıyor. Önümüzdeki adım, şirket sürecini tek branş üzerinde birlikte tanımlamak ve faydayı gerçek kapanış verisiyle ölçmek. Sorularınızı ve hangi akışta başlamamız gerektiğine dair görüşlerinizi almak isterim."
+  }
+]

@@ -22,7 +22,7 @@ import {
 import type { LargeTriangles } from "@/lib/provision-models";
 import { computeBranchSummary } from "@/lib/reserve-pipeline";
 import { computeAttritionalSummary, attritionalWorkingTriangle, hasLarge } from "@/lib/large-split";
-import { buildFileSummary } from "@/lib/file-analysis";
+import { buildClaimMovement, buildFileSummary } from "@/lib/file-analysis";
 import { useDataStore } from "@/lib/data-store";
 import {
   buildTriangleFromRecords,
@@ -193,6 +193,16 @@ export function ReserveAgentBridge() {
         activeBranch.fileData,
       );
       if (fileSummary) legacyFields.file_data_summary = fileSummary;
+
+      // LDF geçişlerinin dosya bazlı hareketi — get_claim_movement bunu okur.
+      // Son diagonal özeti "şu an ne var"ı söylüyor, bu "aradaki adımda ne
+      // oldu"yu: aykırı bir LDF'i tek bir dosyanın mı taşıdığı ancak burada
+      // görülür.
+      const claimMovement = buildClaimMovement(
+        activeBranch.triangle,
+        activeBranch.fileData,
+      );
+      if (claimMovement) legacyFields.claim_movement = claimMovement;
 
       // Curve/tail durumu — get_analysis_state bunu okuyor ve prompt "kuyruk
       // nereden kesildi?" sorusunu buradan cevaplamayı emrediyor. Hiçbir bridge
@@ -538,6 +548,9 @@ interface ProjectSnapshot {
     branch_count: number;
     branch_with_data_count: number;
     grand_total_ibnr: number;
+    per_period_ibnr: { period_id: string; label: string; ibnr: number; branch_count: number }[];
+    active_period_id: string | null;
+    active_period_ibnr: number | null;
     grand_total_selected_ultimate: number;
   };
 }
@@ -561,6 +574,16 @@ export function buildProjectSnapshot(
 ): ProjectSnapshot {
   const periodSnaps: PeriodSnapshot[] = [];
   let withData = 0;
+  // Dönem bazlı IBNR: dönemler ARDIŞIK DEĞERLEMELER, toplanmaz. Ajan durum
+  // bloğunda dört branşı alt alta görüp hepsini topluyordu (Haiku ile ölçüldü:
+  // "Toplam IBNR ne kadar?" → 2026Q1 + 2026Q2 = aynı portföy iki kez).
+  const perPeriodIbnr = new Map<string, { label: string; ibnr: number; branches: number }>();
+  const addToPeriod = (id: string, label: string, ibnr: number) => {
+    const row = perPeriodIbnr.get(id) ?? { label, ibnr: 0, branches: 0 };
+    row.ibnr += ibnr;
+    row.branches += 1;
+    perPeriodIbnr.set(id, row);
+  };
   let totalIbnr = 0;
   let totalSelectedUlt = 0;
   let totalBranches = 0;
@@ -577,6 +600,7 @@ export function buildProjectSnapshot(
           if (snap.has_triangle) withData += 1;
           totalIbnr += snap.totals.ibnr;
           totalSelectedUlt += snap.totals.selected_ultimate;
+          addToPeriod(p.id, p.label, snap.totals.ibnr);
           branchSnaps.push(snap);
           continue;
         }
@@ -605,6 +629,7 @@ export function buildProjectSnapshot(
       if (summary.has_triangle) withData += 1;
       totalIbnr += summary.totals.ibnr;
       totalSelectedUlt += summary.totals.selected_ultimate;
+      addToPeriod(p.id, p.label, summary.totals.ibnr);
       const t = b.triangle;
       let filledCells = 0;
       let totalCells = 0;
@@ -683,8 +708,19 @@ export function buildProjectSnapshot(
     totals_all_branches: {
       branch_count: totalBranches,
       branch_with_data_count: withData,
+      // TÜM dönemlerin toplamı — ardışık değerlemeleri topladığı için tek
+      // başına anlamlı bir rezerv büyüklüğü DEĞİL. Geriye dönük uyum için
+      // duruyor; durum bloğu artık per_period_ibnr'ı gösteriyor.
       grand_total_ibnr: totalIbnr,
       grand_total_selected_ultimate: totalSelectedUlt,
+      per_period_ibnr: [...perPeriodIbnr.entries()].map(([id, r]) => ({
+        period_id: id,
+        label: r.label,
+        ibnr: r.ibnr,
+        branch_count: r.branches,
+      })),
+      active_period_id: activePeriod?.id ?? null,
+      active_period_ibnr: activePeriod ? (perPeriodIbnr.get(activePeriod.id)?.ibnr ?? null) : null,
     },
   };
 }

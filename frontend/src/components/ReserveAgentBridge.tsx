@@ -223,6 +223,9 @@ interface ProjectSnapshot {
     branch_count: number;
     branch_with_data_count: number;
     grand_total_ibnr: number;
+    per_period_ibnr: { period_id: string; label: string; ibnr: number; branch_count: number }[];
+    active_period_id: string | null;
+    active_period_ibnr: number | null;
     grand_total_selected_ultimate: number;
   };
 }
@@ -234,6 +237,16 @@ function buildProjectSnapshot(
 ): ProjectSnapshot {
   const periodSnaps: PeriodSnapshot[] = [];
   let withData = 0;
+  // Dönem bazlı IBNR: dönemler ARDIŞIK DEĞERLEMELER, toplanmaz. Ajan durum
+  // bloğunda branşları alt alta görüp hepsini topluyordu (Haiku ile ölçüldü:
+  // "Toplam IBNR ne kadar?" → iki dönem toplanmış, aynı portföy iki kez).
+  const perPeriodIbnr = new Map<string, { label: string; ibnr: number; branches: number }>();
+  const addToPeriod = (id: string, label: string, ibnr: number) => {
+    const row = perPeriodIbnr.get(id) ?? { label, ibnr: 0, branches: 0 };
+    row.ibnr += ibnr;
+    row.branches += 1;
+    perPeriodIbnr.set(id, row);
+  };
   let totalIbnr = 0;
   let totalSelectedUlt = 0;
   let totalBranches = 0;
@@ -245,6 +258,7 @@ function buildProjectSnapshot(
       const summary = computeBranchSummary(b);
       if (summary.has_triangle) withData += 1;
       totalIbnr += summary.totals.ibnr;
+      addToPeriod(p.id, p.label, summary.totals.ibnr);
       totalSelectedUlt += summary.totals.selected_ultimate;
 
       const isActive = activeBranch?.id === b.id;
@@ -325,8 +339,19 @@ function buildProjectSnapshot(
     totals_all_branches: {
       branch_count: totalBranches,
       branch_with_data_count: withData,
+      // TÜM dönemlerin toplamı — ardışık değerlemeleri topladığı için tek
+      // başına anlamlı bir rezerv büyüklüğü DEĞİL. Geriye dönük uyum için
+      // duruyor; durum bloğu artık per_period_ibnr'ı gösteriyor.
       grand_total_ibnr: totalIbnr,
       grand_total_selected_ultimate: totalSelectedUlt,
+      per_period_ibnr: [...perPeriodIbnr.entries()].map(([id, r]) => ({
+        period_id: id,
+        label: r.label,
+        ibnr: r.ibnr,
+        branch_count: r.branches,
+      })),
+      active_period_id: activePeriod?.id ?? null,
+      active_period_ibnr: activePeriod ? (perPeriodIbnr.get(activePeriod.id)?.ibnr ?? null) : null,
     },
   };
 }

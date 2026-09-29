@@ -1,344 +1,73 @@
 import { FAQ_TR, FAQ_EN } from "@/lib/seo";
 
-/**
- * Landing içeriği — tek kaynak, iki dil.
- *
- * Sayfa iki dilde yayınlanıyor (TR: /, EN: /en). Metinler burada tutulur ki
- * iki kopya birbirinden ayrışmasın; bileşen yalnızca düzeni bilir.
- */
-
 export type Locale = "tr" | "en";
-
 export interface LandingContent {
-  locale: Locale;
-  /** Bu dilin kanonik yolu — hreflang ve dil seçici için. */
-  path: string;
-  nav: {
-    modules: string; agent: string; close: string; modeling: string;
-    governance: string; faq: string; pricing: string;
-    login: string; cta: string; otherLang: string; otherLangPath: string;
-  };
-  hero: {
-    eyebrow: string; title1: string; title2: string; lede: string;
-    ctaPrimary: string; ctaSecondary: string; note: string; agentStrip: string;
-    film: string; filmClose: string;
-  };
-  /** Hero altındaki rakam bandı */
-  stats: { v: number; pre?: string; suf?: string; l: string }[];
-  modules: {
-    label: string; h2: string; p: string;
-    items: { t: string; s: string; d: string; shot: string }[];
-  };
-  agent: {
-    label: string; h2: string; p: string;
-    tools: { m: string; n: number; d: string }[];
-    /** Agent konsolunda akan örnek adımlar */
-    console: string; log: { m: string; d: string }[];
-  };
-  close: { label: string; h2: string; p: string; steps: { n: string; t: string; d: string }[] };
-  modeling: {
-    label: string; h2: string; p: string; frame: string;
-    prev: string; next: string; tablist: string;
-    steps: { t: string; d: string; shot: string; copy: string }[];
-  };
+  locale: Locale; path: string;
+  nav: { modules: string; agent: string; governance: string; pricing: string; login: string; cta: string; otherLang: string; otherLangPath: string; menu: string; skip: string };
+  hero: { eyebrow: string; title1: string; title2: string; lede: string; ctaPrimary: string; ctaSecondary: string; note: string; caption: string };
+  intro: { title: string; p: string; items: { t: string; d: string }[] };
+  modules: { label: string; h2: string; p: string; items: { t: string; s: string; d: string; title: string; tags: string[] }[] };
+  demo: { label: string; period: string; branch: string; source: string; observed: string; projection: string; year: string; development: string; paid: string; outstanding: string; claim: string; selection: string; triangle: string; pattern: string; curve: string; nominal: string; discounted: string; note: string; summary: string; status: string[] };
+  agent: { label: string; h2: string; p: string; prompt: string; example: string; reply: string; steps: string[]; footnote: string; features: string[]; tools: { m: string; d: string }[] };
   governance: { label: string; h2: string; p: string; items: { t: string; d: string }[] };
-  pricing: {
-    label: string; h2: string; p: string;
-    plans: { n: string; p: string; s: string; f: string[]; h: string; a: string; on?: boolean }[];
-  };
-  faq: { label: string; h2: string; p: string; items: { q: string; a: string }[] };
-  contact: {
-    label: string; h2: string; p: string;
-    name: string; email: string; company: string; optional: string;
-    message: string; placeholder: string;
-    submit: string; sending: string; tryFree: string;
-    okTitle: string; okBody: string; okFallback: string; again: string;
-    note: string; genericError: string;
-  };
-  footer: { privacy: string; terms: string; contact: string };
+  enterprise: { label: string; title: string; p: string; cloud: string; local: string; database: string; model: string; private: string; cta: string };
+  pricing: { label: string; h2: string; p: string; recommended: string; plans: { n: string; p: string; s: string; d: string; f: string[]; h: string; a: string; on?: boolean }[] };
+  faq: { h2: string; p: string; items: { q: string; a: string }[] };
+  contact: { label: string; h2: string; p: string; name: string; email: string; company: string; optional: string; message: string; placeholder: string; submit: string; sending: string; okTitle: string; okBody: string; again: string; note: string; genericError: string };
+  footer: { tagline: string; privacy: string; terms: string; contact: string; rights: string };
 }
 
-const SHOTS = {
-  dataMap: "/shots/data-map.webp",
-  ldf: "/shots/ldf.webp",
-  cashflow: "/shots/cashflow.webp",
-  discount: "/shots/discount.webp",
-  dataTab: "/shots/data-tab.webp",
-  files: "/shots/files.webp",
-  curve: "/shots/curve.webp",
-  ilr: "/shots/ilr.webp",
-  bf: "/shots/bf.webp",
-  ultimate: "/shots/ultimate.webp",
-};
-
 export const TR: LandingContent = {
-  locale: "tr",
-  path: "/",
-  nav: {
-    modules: "Modüller", agent: "Agent", close: "Kapanış", modeling: "Modelleme",
-    governance: "Yönetişim", faq: "SSS", pricing: "Fiyat",
-    login: "Giriş", cta: "Ücretsiz başlayın", otherLang: "EN", otherLangPath: "/en",
-  },
-  hero: {
-    eyebrow: "Uçtan uca aktüeryal analiz platformu",
-    title1: "Aktüeryal işin tamamı,",
-    title2: "tek platformda.",
-    lede:
-      "Veri yönetimi, rezerv modelleme, nakit akışı, iskonto ve raporlama aynı sistemde. " +
-      "AI Agent bu modüllerin hepsinde çalışır — dönemi kapatır, modeli kurar, raporu üretir " +
-      "ve her kararın gerekçesini bırakır.",
-    ctaPrimary: "Ücretsiz başlayın",
-    ctaSecondary: "Kurumsal demo",
-    note: "Kredi kartı gerekmez · Excel, CSV veya Oracle ile başlayın",
-    agentStrip: "hepsinde çalışır",
-    film: "Filmi izleyin",
-    filmClose: "Kapat",
-  },
-  stats: [
-    { v: 45, l: "agent aracı, dört modülde" },
-    { v: 4, l: "modül, tek veri katmanı" },
-    { v: 7, l: "adımlık model akışı" },
-    { v: 100, pre: "%", l: "yazma işlemi denetim izinde" },
-  ],
+  locale: "tr", path: "/",
+  nav: { modules: "Platform", agent: "AI Agent", governance: "Kurumsal", pricing: "Planlar", login: "Giriş yap", cta: "Ücretsiz başla", otherLang: "EN", otherLangPath: "/en", menu: "Menü", skip: "İçeriğe geç" },
+  hero: { eyebrow: "AI destekli aktüeryal çalışma alanı", title1: "Veriden karara.", title2: "Tek bir platform.", lede: "Veriyi bağlayın, modellerinizi oluşturun, sonuçların arkasını görün. Rezervden nakit akışına, tüm süreç AI Agent ile aynı çalışma alanında.", ctaPrimary: "Ücretsiz başlayın", ctaSecondary: "Platformu keşfedin", note: "Kredi kartı gerekmez. Excel veya CSV ile başlayın.", caption: "Geçmişi anlayın. Geleceği modelleyin." },
+  intro: { title: "Daha az dosya trafiği.\nDaha fazla içgörü.", p: "Aktüeryal işin değeri, dosyaları birleştirmekte değil; ne söylediklerini anlamakta. Actuarius, veri ile model arasındaki mesafeyi kapatır.", items: [{ t: "Bağlantılı veri", d: "Hasar, prim ve üçgenler aynı dönem bağlamında." }, { t: "Görünür varsayımlar", d: "Faktörden nihai hasara, modelin mantığı elinizin altında." }, { t: "Odaklı analiz", d: "Sonuçtan kaynak dosyaya kadar inen bir bakış." }] },
   modules: {
-    label: "Modüller",
-    h2: "Dört modül, tek veri katmanı",
-    p: "Aynı dönem, aynı branş ve aynı varsayım seti üzerinde çalışırlar; birindeki değişiklik diğerlerine yansır.",
+    label: "Bütün süreç. Ortak bir dil.", h2: "Birbirinden kopuk araçlar değil,\nbağlantılı bir iş akışı.", p: "Veriyi bir kez hazırlayın. Rezerv, ödeme deseni ve iskonto çalışmalarını aynı platformda ilerletin.",
     items: [
-      { t: "Veri", s: "Bağlı", d: "Dönem bazlı hasar, prim ve büyük hasar verisi. Oracle tablosundan doğrudan ya da Excel/CSV ile.", shot: SHOTS.dataMap },
-      { t: "Rezerv", s: "Modelleniyor", d: "Chain-Ladder ve Bornhuetter–Ferguson; gelişim faktörleri, kuyruk, large ayrımı, frekans-şiddet, senaryo versiyonları.", shot: SHOTS.ldf },
-      { t: "Nakit Akışı", s: "Hazır", d: "Ödeme deseninden çeyreklik ve aylık nakit akışı projeksiyonu; rezervle tutarlı kalır.", shot: SHOTS.cashflow },
-      { t: "İskonto", s: "Hazır", d: "IFRS 17 eğrisi, illikidite primi ve risk marjı ile yükümlülük iskontosu (LIC).", shot: SHOTS.discount },
+      { t: "Veri", s: "Hazırlayın", title: "Sağlam bir model,\nanlaşılır veriyle başlar.", d: "Hasar ve prim dosyalarını içe aktarın, alanları eşleştirin ve dönemleri düzenleyin. Hazır üçgenlerle ya da dosya bazlı veriyle çalışın.", tags: ["Excel / CSV", "Alan eşleştirme", "Dönem yönetimi"] },
+      { t: "Rezerv", s: "Modelleyin", title: "Sadece sonucu değil,\nnedenini de görün.", d: "Gelişim faktörlerini inceleyin, aykırı hücreleri değerlendirin. Chain-Ladder ve BF seçimlerini kaza dönemi bazında yönetin.", tags: ["Chain-Ladder & BF", "LDF & kuyruk", "Dosya analizi"] },
+      { t: "Nakit Akışı", s: "Projeksiyon yapın", title: "Rezervin zaman\niçindeki karşılığı.", d: "Ödeme gelişiminden desen oluşturun. Çeyreklik veya aylık nakit akışlarıyla gelecekteki ödeme dağılımını analiz edin.", tags: ["Ödeme deseni", "Aylık / çeyreklik", "LDF seçimi"] },
+      { t: "İskonto", s: "Değerleyin", title: "Gelecek ödemeleri\nbugünün değeriyle okuyun.", d: "Getiri eğrisi, illikidite primi ve risk marjı varsayımlarıyla gerçekleşmiş hasar yükümlülüğünü değerlendirin.", tags: ["IFRS 17 LIC", "Getiri eğrisi", "Risk marjı"] },
     ],
   },
+  demo: { label: "Temsili ürün akışı", period: "Değerleme", branch: "Branş", source: "Hasar verisi", observed: "Gözlenen", projection: "Projeksiyon", year: "Kaza yılı", development: "Gelişim dönemi", paid: "Ödenen", outstanding: "Muallak", claim: "Dosya no", selection: "Seçili LDF", triangle: "Gelişim üçgeni", pattern: "Ödeme deseni", curve: "Getiri eğrisi", nominal: "Nominal", discounted: "İskontolu", note: "Gösterim amaçlı örnek veriler. Gerçek hesaplama değildir.", summary: "Veri → Model → Karar", status: ["Veri hazır", "Model çalışma alanı", "Ödeme projeksiyonu", "Değerleme görünümü"] },
   agent: {
-    label: "AI Agent",
-    h2: "Tüm modüllerde çalışan bir aktüeryal asistan",
-    p:
-      "Agent sohbet etmekle kalmaz; veriyi bağlar, üçgeni kurar, aykırı oranı eler, genç kohortları " +
-      "BF'e alır, nakit akışını ve iskontoyu çalıştırır, raporu çıkarır. Rol ve model kilidine uyar; " +
-      "her adım geri alınabilir ve denetime yazılır.",
-    tools: [
-      { m: "Rezerv", n: 31, d: "Üçgen, eleme, kuyruk, BF, senaryo, roll-forward" },
-      { m: "Nakit Akışı", n: 10, d: "Desen, LDF, hariç tutma, eğri" },
-      { m: "İskonto", n: 2, d: "Durum okuma ve LIC hesabı" },
-      { m: "Veri & Navigasyon", n: 2, d: "Dönem listesi, modüller arası geçiş" },
-    ],
-    console: "Agent · çalışıyor",
-    log: [
-      { m: "Veri bağlandı", d: "Motor · 2025Q4 · ödeme ve muallak" },
-      { m: "Üçgen kuruldu", d: "10 × 10 · kümülatif" },
-      { m: "Aykırı hücre elendi", d: "2019 · 36→48 · tek büyük hasar" },
-      { m: "Genç yıllar BF'e taşındı", d: "2024–2025 · a priori %82,0" },
-      { m: "Kuyruk seçildi", d: "Inverse power · R² 0,998" },
-      { m: "Rapor üretildi, model kilitlendi", d: "Excel · segment kırılımı" },
-    ],
+    label: "Actuarius AI Agent", h2: "Siz yönü belirleyin.\nAgent modelde çalışsın.", p: "Sohbetin ötesinde, modelinizle çalışan bir asistan. İsteğinizi aktüeryal araçlara dönüştürür; uygulanan değişiklikleri aynı arayüzde takip edersiniz.", prompt: "Fire & Home verileri hazır. Üçgeni oluştur, gelişim faktörlerini incele ve rezerv modelini hazırla.", example: "Örnek agent senaryosu", reply: "Model akışını hazırladım. İncelemeniz için adımları özetliyorum:", steps: ["Dönem ve branş verisi modele bağlandı", "Gelişim faktörleri ve aykırı hücreler incelendi", "CL / BF varsayımları değerlendirmeye hazır"], footnote: "Temsili senaryo · Aktüeryal değerlendirme ve nihai karar sizde.", features: ["Doğal dille model yönetimi", "Arayüzde görünür işlemler", "İstediğiniz anda manuel kontrol"], tools: [{ m: "Rezerv", d: "Üçgen, LDF, hücre eleme, kuyruk ve BF varsayımları" }, { m: "Nakit Akışı", d: "Ödeme deseni ve gelişim faktörleri" }, { m: "İskonto", d: "Varsayımlar ve LIC hesabı" }, { m: "Veri", d: "Veri durumu ve modüller arası geçiş" }],
   },
-  close: {
-    label: "Dönem kapanışı",
-    h2: "Kapanış beş adımda tamamlanır",
-    p: "Agent bu adımları uçtan uca yürütebilir; siz onaylar ve gerektiğinde devralırsınız.",
-    steps: [
-      { n: "01", t: "Veri yüklenir", d: "Yeni dönemin hasar, prim ve büyük hasar setleri bağlanır." },
-      { n: "02", t: "Mutabakat", d: "Yeni köşegen beklenenle karşılaştırılır; sapan kohortlar işaretlenir." },
-      { n: "03", t: "Revizyon", d: "Model güncellenir: eleme, baz seçimi, a priori oran, correction." },
-      { n: "04", t: "Projeksiyon", d: "Nakit akışı deseni ve IFRS 17 iskontosu hesaplanır." },
-      { n: "05", t: "Rapor ve kilit", d: "Özet, segment kırılımı ve Excel çıktısı üretilir; model kilitlenir." },
-    ],
-  },
-  modeling: {
-    label: "Modelleme ve raporlama",
-    h2: "Yedi adımlık model akışı",
-    p: "Rezerv modülündeki sekmeler süreci birebir izler; her adımın çıktısı bir sonrakini besler.",
-    frame: "rezerv / 2026Q2 / Fire & Home",
-    prev: "Önceki adım", next: "Sonraki adım", tablist: "Modelleme adımları",
-    steps: [
-      { t: "Veri", d: "Üçgen önizleme", shot: SHOTS.dataTab, copy: "Ödeme ve muallak üçgenleri kümülatif ya da artımsal olarak; veri modülünden çekilir veya Excel'den yüklenir." },
-      { t: "Dosya", d: "Hasar kırılımı", shot: SHOTS.files, copy: "Hangi dosya hangi hücreyi taşıyor? Medyan, değişim katsayısı ve konsantrasyon ile dosya bazında dağılım." },
-      { t: "LDF", d: "Gelişim faktörleri", shot: SHOTS.ldf, copy: "Hacim penceresi seçilir, aykırı hücre elenir; seçili LDF ve CDF zinciri anında güncellenir." },
-      { t: "Curve", d: "Kuyruk uydurma", shot: SHOTS.curve, copy: "Exponential, inverse power, power ve Weibull; adım bazında seçim ve elle CDF girişi." },
-      { t: "ILR", d: "Hasar oranı üçgeni", shot: SHOTS.ilr, copy: "Kazanılmış prime göre hasar oranı gelişimi — BF için a priori oran buradan okunur." },
-      { t: "BF", d: "Bornhuetter–Ferguson", shot: SHOTS.bf, copy: "Exposure, yıllıklaştırma katsayısı ve beklenen hasar oranı; kohort bazında CL/BF seçimi." },
-      { t: "Ultimate / IBNR", d: "Rezerv projeksiyonu", shot: SHOTS.ultimate, copy: "Kaza yılı bazında nihai hasar, IBNR ve ULR — seçilen bazla birlikte." },
-    ],
-  },
-  governance: {
-    label: "Yönetişim",
-    h2: "Denetime hazır çalışma",
-    p: "Kim neyi neden değiştirdi sorusu sonradan yeniden kurulmaz — kaydedilir.",
-    items: [
-      { t: "Roller", d: "Admin ve kullanıcı ayrımı; modül ve veri erişimi role bağlı." },
-      { t: "Model kilidi", d: "Bir modeli aynı anda tek kişi düzenler; diğerleri salt-okunur görür." },
-      { t: "Denetim izi", d: "Her yazma işlemi kim · ne zaman · ne · neden bilgisiyle saklanır." },
-      { t: "Versiyonlar", d: "Senaryolar ayrı versiyonda tutulur; karşılaştırma yan yana yapılır." },
-    ],
-  },
-  pricing: {
-    label: "Fiyatlandırma",
-    h2: "Ücretsiz başlayın",
-    p: "Ekip ve modül ihtiyacı büyüdükçe yükseltin.",
-    plans: [
-      { n: "Free", p: "₺0", s: "kalıcı", f: ["1 dönem · 1 branş", "Rezerv modülü", "AI Agent", "Excel çıktısı"], h: "/reserve", a: "Ücretsiz başlayın" },
-      { n: "Pro", p: "₺100", s: "aylık", f: ["Sınırsız dönem ve branş", "Nakit akışı ve iskonto", "Senaryo versiyonları", "Tüm agent araçları"], h: "/onboarding/plan", a: "Pro'ya geçin", on: true },
-      { n: "Enterprise", p: "Özel", s: "kuruma göre", f: ["Çoklu kullanıcı ve roller", "Oracle entegrasyonu", "Kurumsal audit akışı", "On-premise"], h: "#contact", a: "Görüşme planlayın" },
-    ],
-  },
-  faq: {
-    label: "Sık sorulan sorular",
-    h2: "Merak edilenler",
-    p: "Aradığınızı bulamazsanız aşağıdaki formdan yazın, aynı gün dönelim.",
-    items: FAQ_TR,
-  },
-  contact: {
-    label: "Kurumsal demo",
-    h2: "Bir sonraki kapanışı birlikte yapalım.",
-    p: "Ekibinizin süreci nasıl işliyor anlatın; kurumsal kurulum, entegrasyon ve fiyatlandırmayı birlikte konuşalım. Genelde aynı gün dönüş yapıyoruz.",
-    name: "Ad soyad", email: "E-posta", company: "Şirket", optional: "(opsiyonel)",
-    message: "Mesaj",
-    placeholder: "Kaç branş, hangi dönem sıklığı, mevcut süreçte en çok ne zaman kaybediyorsunuz?",
-    submit: "Mesaj gönderin", sending: "Gönderiliyor…", tryFree: "Önce ücretsiz deneyin",
-    okTitle: "Mesajınız ulaştı.",
-    okBody: "En kısa sürede {to} dönüş yapacağız.",
-    okFallback: "belirttiğiniz adrese",
-    again: "Yeni mesaj gönder",
-    note: "Doğrudan yazmak isterseniz:",
-    genericError: "Mesaj gönderilemedi.",
-  },
-  footer: { privacy: "Gizlilik", terms: "Şartlar", contact: "İletişim" },
+  governance: { label: "Kontrol sizde kalır", h2: "Güçlü modeller.\nAçık bir karar izi.", p: "Varsayımı sonuçtan ayırmadan çalışın. Kurumsal sürümde erişim, model kilidi ve denetim kayıtlarıyla ekip sürecini yönetin.", items: [{ t: "Senaryo versiyonları", d: "Farklı varsayımları ayrı modellerde değerlendirin." }, { t: "Model kilidi", d: "Kurumsal ekipte eşzamanlı düzenleme çakışmalarını önleyin." }, { t: "Denetim kayıtları", d: "Kurumsal değişiklikleri kullanıcı ve model bağlamında izleyin." }] },
+  enterprise: { label: "Actuarius Enterprise", title: "Sizin altyapınız.\nSizin çalışma biçiminiz.", p: "Masaüstü deneyimi, Oracle veri bağlantısı ve kurum içi kurulum. Yerel veya kurumunuzun seçtiği uyumlu LLM uç noktasıyla agent kullanımını yapılandırın.", cloud: "Web üzerinden başlayın", local: "Kurum içi çalışma alanı", database: "Oracle veri katmanı", model: "Yapılandırılabilir AI", private: "Kuruma özel kurulum", cta: "Kurumsal demoyu planlayın" },
+  pricing: { label: "İhtiyacınıza göre büyür", h2: "Küçük başlayın.\nBirlikte ölçekleyin.", p: "İlk modelinizden kurumsal çalışma alanınıza.", recommended: "Tüm analiz akışı", plans: [
+    { n: "Free", p: "₺0", s: "kalıcı", d: "İlk modelinizi oluşturun.", f: ["1 dönem · 1 branş", "Rezerv modülü", "AI Agent", "Excel çıktısı"], h: "/reserve", a: "Ücretsiz başlayın" },
+    { n: "Pro", p: "₺100", s: "/ ay", d: "Analiz alanınızı genişletin.", f: ["Sınırsız dönem ve branş", "Nakit akışı ve iskonto", "Senaryo versiyonları", "Tüm modüllerde AI Agent"], h: "/onboarding/plan", a: "Pro'ya geçin", on: true },
+    { n: "Enterprise", p: "Size özel", s: "", d: "Ekibiniz ve altyapınız için.", f: ["Çoklu kullanıcı ve roller", "Oracle entegrasyonu", "Kurumsal denetim kayıtları", "Kurum içi kurulum"], h: "#contact", a: "Birlikte değerlendirelim" },
+  ] },
+  faq: { h2: "Aklınızdaki\nsorular.", p: "Daha fazlasını konuşmak için bize ulaşın.", items: FAQ_TR },
+  contact: { label: "Birlikte bakalım", h2: "Bir sonraki modeliniz,\nyeni bir başlangıç olsun.", p: "Mevcut sürecinizi anlatın. Ekibinize uygun çalışma alanını birlikte değerlendirelim.", name: "Ad soyad", email: "İş e-postası", company: "Şirket", optional: "isteğe bağlı", message: "Size nasıl yardımcı olabiliriz?", placeholder: "Ekibinizi ve üzerinde çalıştığınız süreci kısaca anlatın…", submit: "Görüşme talebi gönder", sending: "Gönderiliyor…", okTitle: "Mesajınız bize ulaştı.", okBody: "{to} adresinden sizinle iletişime geçeceğiz.", again: "Yeni mesaj gönder", note: "Doğrudan yazmak isterseniz", genericError: "Mesaj gönderilemedi. Lütfen tekrar deneyin." },
+  footer: { tagline: "Aktüeryal işin bağlantılı hali.", privacy: "Gizlilik", terms: "Kullanım şartları", contact: "İletişim", rights: "Tüm hakları saklıdır." },
 };
 
 export const EN: LandingContent = {
-  locale: "en",
-  path: "/en",
-  nav: {
-    modules: "Modules", agent: "Agent", close: "Close", modeling: "Modelling",
-    governance: "Governance", faq: "FAQ", pricing: "Pricing",
-    login: "Sign in", cta: "Start free", otherLang: "TR", otherLangPath: "/",
-  },
-  hero: {
-    eyebrow: "End-to-end actuarial analysis platform",
-    title1: "Every part of reserving,",
-    title2: "on one platform.",
-    lede:
-      "Data management, reserve modelling, cash flow and IFRS 17 discounting in a single system. " +
-      "An AI agent works across all of them — it closes the period, builds the model, produces the " +
-      "report and records the reasoning behind every decision.",
-    ctaPrimary: "Start free",
-    ctaSecondary: "Book a demo",
-    note: "No credit card required · Start with Excel, CSV or Oracle",
-    agentStrip: "works across all",
-    film: "Watch the film",
-    filmClose: "Close",
-  },
-  stats: [
-    { v: 45, l: "agent tools across four modules" },
-    { v: 4, l: "modules, one data layer" },
-    { v: 7, l: "step model flow" },
-    { v: 100, suf: "%", l: "of writes in the audit trail" },
-  ],
-  modules: {
-    label: "Modules",
-    h2: "Four modules, one data layer",
-    p: "They run on the same period, the same line of business and the same set of assumptions; a change in one is reflected in the others.",
-    items: [
-      { t: "Data", s: "Connected", d: "Claim, premium and large-loss data by valuation period. Straight from an Oracle table or via Excel/CSV.", shot: SHOTS.dataMap },
-      { t: "Reserving", s: "Modelling", d: "Chain-Ladder and Bornhuetter–Ferguson; development factors, tail fitting, large-loss split, frequency-severity, scenario versions.", shot: SHOTS.ldf },
-      { t: "Cash Flow", s: "Ready", d: "Quarterly and monthly cash flow projection from the payment pattern; stays consistent with the reserve.", shot: SHOTS.cashflow },
-      { t: "Discounting", s: "Ready", d: "Liability discounting (LIC) with an IFRS 17 yield curve, illiquidity premium and risk adjustment.", shot: SHOTS.discount },
-    ],
-  },
-  agent: {
-    label: "AI Agent",
-    h2: "An actuarial assistant that works across every module",
-    p:
-      "The agent does more than chat: it connects the data, builds the triangle, excludes outlying " +
-      "link ratios, moves immature cohorts to BF, runs cash flow and discounting, and produces the " +
-      "report. It respects roles and model locks; every step is reversible and written to the audit trail.",
-    tools: [
-      { m: "Reserving", n: 31, d: "Triangle, exclusions, tail, BF, scenarios, roll-forward" },
-      { m: "Cash Flow", n: 10, d: "Pattern, LDF, exclusions, curve" },
-      { m: "Discounting", n: 2, d: "State read and LIC calculation" },
-      { m: "Data & Navigation", n: 2, d: "Period listing, moving between modules" },
-    ],
-    console: "Agent · running",
-    log: [
-      { m: "Data connected", d: "Motor · 2025Q4 · paid and outstanding" },
-      { m: "Triangle built", d: "10 × 10 · cumulative" },
-      { m: "Outlier cell excluded", d: "2019 · 36→48 · single large claim" },
-      { m: "Young years moved to BF", d: "2024–2025 · a priori 82.0%" },
-      { m: "Tail selected", d: "Inverse power · R² 0.998" },
-      { m: "Report produced, model locked", d: "Excel · segment breakdown" },
-    ],
-  },
-  close: {
-    label: "Period close",
-    h2: "The close takes five steps",
-    p: "The agent can run these end to end; you approve and take over whenever you want.",
-    steps: [
-      { n: "01", t: "Load the data", d: "Claim, premium and large-loss sets for the new period are connected." },
-      { n: "02", t: "Reconcile", d: "The new diagonal is compared with what was expected; deviating cohorts are flagged." },
-      { n: "03", t: "Revise", d: "The model is updated: exclusions, basis choice, a priori loss ratio, correction factor." },
-      { n: "04", t: "Project", d: "The cash flow pattern and IFRS 17 discounting are calculated." },
-      { n: "05", t: "Report and lock", d: "Summary, segment breakdown and Excel output are produced; the model is locked." },
-    ],
-  },
-  modeling: {
-    label: "Modelling and reporting",
-    h2: "A seven-step model flow",
-    p: "The tabs in the reserving module follow the process one to one; each step feeds the next.",
-    frame: "reserving / 2026Q2 / Fire & Home",
-    prev: "Previous step", next: "Next step", tablist: "Modelling steps",
-    steps: [
-      { t: "Data", d: "Triangle preview", shot: SHOTS.dataTab, copy: "Paid and incurred triangles, cumulative or incremental; pulled from the data module or uploaded from Excel." },
-      { t: "Claims", d: "Claim breakdown", shot: SHOTS.files, copy: "Which claim drives which cell? Distribution by claim file with median, coefficient of variation and concentration." },
-      { t: "LDF", d: "Development factors", shot: SHOTS.ldf, copy: "Pick the averaging window, exclude an outlying cell; the selected LDF and the CDF chain update instantly." },
-      { t: "Curve", d: "Tail fitting", shot: SHOTS.curve, copy: "Exponential, inverse power, power and Weibull; per-step selection and manual CDF entry." },
-      { t: "ILR", d: "Loss ratio triangle", shot: SHOTS.ilr, copy: "Loss ratio development against earned premium — the a priori for BF is read here." },
-      { t: "BF", d: "Bornhuetter–Ferguson", shot: SHOTS.bf, copy: "Exposure, annualisation factor and expected loss ratio; CL/BF basis chosen per cohort." },
-      { t: "Ultimate / IBNR", d: "Reserve projection", shot: SHOTS.ultimate, copy: "Ultimate loss, IBNR and ULR by accident year — together with the selected basis." },
-    ],
-  },
-  governance: {
-    label: "Governance",
-    h2: "Audit-ready by construction",
-    p: "Who changed what, and why, is not reconstructed afterwards — it is recorded.",
-    items: [
-      { t: "Roles", d: "Admin and user separation; module and data access follow the role." },
-      { t: "Model lock", d: "Only one person edits a model at a time; everyone else sees it read-only." },
-      { t: "Audit trail", d: "Every write is stored with who · when · what · why." },
-      { t: "Versions", d: "Scenarios are kept as separate versions and compared side by side." },
-    ],
-  },
-  pricing: {
-    label: "Pricing",
-    h2: "Start free",
-    p: "Upgrade as your team and module needs grow.",
-    plans: [
-      { n: "Free", p: "₺0", s: "forever", f: ["1 period · 1 line of business", "Reserving module", "AI Agent", "Excel export"], h: "/reserve", a: "Start free" },
-      { n: "Pro", p: "₺100", s: "per month", f: ["Unlimited periods and lines", "Cash flow and discounting", "Scenario versions", "All agent tools"], h: "/onboarding/plan", a: "Go Pro", on: true },
-      { n: "Enterprise", p: "Custom", s: "per organisation", f: ["Multiple users and roles", "Oracle integration", "Enterprise audit workflow", "On-premise"], h: "#contact", a: "Talk to us" },
-    ],
-  },
-  faq: {
-    label: "Frequently asked questions",
-    h2: "Questions we get",
-    p: "If you cannot find what you are looking for, write to us using the form below — we usually reply the same day.",
-    items: FAQ_EN,
-  },
-  contact: {
-    label: "Book a demo",
-    h2: "Let us run your next close together.",
-    p: "Tell us how your team works today; we will go through enterprise setup, integration and pricing with you. We usually reply the same business day.",
-    name: "Full name", email: "Email", company: "Company", optional: "(optional)",
-    message: "Message",
-    placeholder: "How many lines of business, what valuation frequency, and where does your current process cost you the most time?",
-    submit: "Send message", sending: "Sending…", tryFree: "Try it free first",
-    okTitle: "Your message is in.",
-    okBody: "We will get back to you at {to} shortly.",
-    okFallback: "the address you gave",
-    again: "Send another message",
-    note: "Prefer to write directly:",
-    genericError: "The message could not be sent.",
-  },
-  footer: { privacy: "Privacy", terms: "Terms", contact: "Contact" },
+  locale: "en", path: "/en",
+  nav: { modules: "Platform", agent: "AI Agent", governance: "Enterprise", pricing: "Plans", login: "Sign in", cta: "Start free", otherLang: "TR", otherLangPath: "/", menu: "Menu", skip: "Skip to content" },
+  hero: { eyebrow: "The AI-powered actuarial workspace", title1: "From data to decision.", title2: "One connected platform.", lede: "Connect your data, build your models, understand the results. From reserving to cash flow, bring your workflow together with an AI agent.", ctaPrimary: "Start for free", ctaSecondary: "Explore the platform", note: "No credit card required. Start with Excel or CSV.", caption: "Understand the past. Model what comes next." },
+  intro: { title: "Less file juggling.\nMore insight.", p: "The value of actuarial work is in understanding the data, not moving it between files. Actuarius brings your data and models closer together.", items: [{ t: "Connected data", d: "Claims, premiums and triangles in one period context." }, { t: "Visible assumptions", d: "From development factors to ultimate loss, the logic stays in view." }, { t: "Focused analysis", d: "Follow a result all the way to the underlying claim." }] },
+  modules: { label: "One workflow. A shared language.", h2: "Not a collection of tools.\nA connected way to work.", p: "Prepare your data once. Develop your reserve, payment pattern and discounting analysis on the same platform.", items: [
+    { t: "Data", s: "Prepare", title: "A sound model starts\nwith clear data.", d: "Import claim and premium files, map fields and organise valuation periods. Work with claim-level data or ready-made triangles.", tags: ["Excel / CSV", "Field mapping", "Valuation periods"] },
+    { t: "Reserving", s: "Model", title: "See the result.\nUnderstand the reasoning.", d: "Explore development factors and evaluate outliers. Manage Chain-Ladder and BF selections by accident period.", tags: ["Chain-Ladder & BF", "LDF & tail", "Claim-level analysis"] },
+    { t: "Cash Flow", s: "Project", title: "Your reserve,\nwith a time dimension.", d: "Build a pattern from payment development. Analyse future payments with quarterly or monthly cash flow projections.", tags: ["Payment patterns", "Monthly / quarterly", "LDF selection"] },
+    { t: "Discounting", s: "Value", title: "Future payments.\nPresent-day value.", d: "Evaluate the liability for incurred claims using yield curve, illiquidity premium and risk adjustment assumptions.", tags: ["IFRS 17 LIC", "Yield curves", "Risk adjustment"] },
+  ] },
+  demo: { label: "Illustrative product flow", period: "Valuation", branch: "Line of business", source: "Claims data", observed: "Observed", projection: "Projected", year: "Accident year", development: "Development period", paid: "Paid", outstanding: "Outstanding", claim: "Claim ID", selection: "Selected LDF", triangle: "Development triangle", pattern: "Payment pattern", curve: "Yield curve", nominal: "Nominal", discounted: "Discounted", note: "Illustrative sample data, not an actual calculation.", summary: "Data → Model → Decision", status: ["Data ready", "Model workspace", "Payment projection", "Valuation view"] },
+  agent: { label: "Actuarius AI Agent", h2: "You set the direction.\nYour agent works the model.", p: "An assistant that goes beyond conversation. It turns your request into actuarial tool actions, with changes visible in the same workspace.", prompt: "The Fire & Home data is ready. Build the triangle, review development factors and prepare the reserve model.", example: "Example agent scenario", reply: "The model workflow is prepared. Here are the steps for your review:", steps: ["Period and line-of-business data connected", "Development factors and outliers reviewed", "CL / BF assumptions ready for assessment"], footnote: "Illustrative scenario · Actuarial judgement and the final decision remain yours.", features: ["Model management in natural language", "Actions visible in the interface", "Manual control whenever you need it"], tools: [{ m: "Reserving", d: "Triangles, LDFs, exclusions, tails and BF assumptions" }, { m: "Cash Flow", d: "Payment patterns and development factors" }, { m: "Discounting", d: "Assumptions and LIC calculation" }, { m: "Data", d: "Data status and navigation between modules" }] },
+  governance: { label: "Stay in control", h2: "Powerful models.\nA clear decision trail.", p: "Keep assumptions close to their results. The enterprise edition adds access controls, model locks and audit records for team workflows.", items: [{ t: "Scenario versions", d: "Evaluate different assumptions in separate model versions." }, { t: "Model locks", d: "Prevent conflicting edits across your enterprise team." }, { t: "Audit records", d: "Track enterprise changes in their user and model context." }] },
+  enterprise: { label: "Actuarius Enterprise", title: "Your infrastructure.\nYour way of working.", p: "A desktop experience, Oracle data connectivity and on-premise deployment. Configure the agent with a local or organisation-selected compatible LLM endpoint.", cloud: "Start on the web", local: "Your enterprise workspace", database: "Oracle data layer", model: "Configurable AI", private: "Organisation-specific setup", cta: "Plan an enterprise demo" },
+  pricing: { label: "Room to grow", h2: "Start small.\nScale together.", p: "From your first model to a team-wide workspace.", recommended: "The complete analysis flow", plans: [
+    { n: "Free", p: "₺0", s: "forever", d: "Build your first model.", f: ["1 period · 1 line of business", "Reserving module", "AI Agent", "Excel export"], h: "/reserve", a: "Start for free" },
+    { n: "Pro", p: "₺100", s: "/ month", d: "Extend your analysis.", f: ["Unlimited periods and lines", "Cash flow and discounting", "Scenario versions", "AI Agent across modules"], h: "/onboarding/plan", a: "Go Pro", on: true },
+    { n: "Enterprise", p: "Tailored", s: "", d: "For your team and infrastructure.", f: ["Multiple users and roles", "Oracle integration", "Enterprise audit records", "On-premise deployment"], h: "#contact", a: "Let’s talk" },
+  ] },
+  faq: { h2: "Good\nquestions.", p: "Get in touch if you would like to know more.", items: FAQ_EN },
+  contact: { label: "Let’s take a look", h2: "Your next model.\nA new way forward.", p: "Tell us about your process. Let’s explore the right workspace for your team.", name: "Full name", email: "Work email", company: "Company", optional: "optional", message: "How can we help?", placeholder: "Tell us a little about your team and workflow…", submit: "Request a conversation", sending: "Sending…", okTitle: "Your message is in.", okBody: "We will be in touch at {to}.", again: "Send another message", note: "Prefer to email us?", genericError: "Your message could not be sent. Please try again." },
+  footer: { tagline: "Actuarial work, connected.", privacy: "Privacy", terms: "Terms of use", contact: "Contact", rights: "All rights reserved." },
 };

@@ -57,7 +57,7 @@ export function WebMcpTools({
         annotations: { readOnlyHint: true },
         execute: () => ({
           modules: c.modules.items.map((m) => ({ name: m.t, status: m.s, description: m.d })),
-          agentTools: c.agent.tools.map((t) => ({ module: t.m, toolCount: t.n, covers: t.d })),
+          agentTools: c.agent.tools.map((t) => ({ module: t.m, covers: t.d })),
         }),
       },
       {

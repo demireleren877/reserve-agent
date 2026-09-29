@@ -6,6 +6,11 @@ CANLI bir LLM gerektirir (pytest ile koşmaz — ayrı çalıştırılır):
     python tests/agent_eval/run_eval.py \
         --base-url http://192.168.1.112:1234/v1 --model qwen/qwen3.5-9b
 
+Uzak sağlayıcı da olur — Anthropic'in OpenAI-uyumlu ucu:
+
+    ANTHROPIC_API_KEY=... python tests/agent_eval/run_eval.py \
+        --base-url https://api.anthropic.com/v1 --model claude-haiku-4-5-20251001
+
 Sorular gerçek bir rezerv aktüerinin soracağı sırada ve dilde yazıldı:
 durum tespiti → tek değer → kırılım → dönemsel gelişim → çapraz branş →
 varsayım denetimi → senaryo → veri kalitesi → tuzak. Her cevap, fixture'dan
@@ -74,6 +79,8 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--base-url", default=os.getenv("AGENT_BASE_URL", "http://localhost:1234/v1"))
     ap.add_argument("--model", default=os.getenv("AGENT_MODEL", "qwen/qwen3.5-9b"))
+    ap.add_argument("--api-key", default=os.getenv("AGENT_API_KEY"),
+                    help="uzak sağlayıcı için anahtar; lokal sunucularda gereksiz")
     ap.add_argument("--max-iterations", type=int, default=6)
     ap.add_argument("--only", help="yalnız bu kategori")
     ap.add_argument("--ids", help="yalnız bu soru id'leri (virgülle)")
@@ -93,7 +100,11 @@ def main() -> int:
         "discount": {"session_state": discount_session_state(project)},
         "data": {"session_state": data_session_state(project)},
     }
-    client = AgentClient(model=a.model, base_url=a.base_url, api_key="local",
+    # Anthropic'in OpenAI-uyumlu ucu aynı istemciyle çalışır (Bearer +
+    # /chat/completions), o yüzden ayrı sağlayıcı koduna gerek yok. Anahtar
+    # bayrakla ya da ANTHROPIC_API_KEY/AGENT_API_KEY ile gelir.
+    key = a.api_key or os.getenv("ANTHROPIC_API_KEY") or "local"
+    client = AgentClient(model=a.model, base_url=a.base_url, api_key=key,
                          timeout=a.timeout)
 
     cases = build_cases(project)

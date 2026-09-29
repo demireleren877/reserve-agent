@@ -32,6 +32,18 @@ class ScriptedClient:
         return self.script.pop(0) if self.script else {"content": "bitti", "tool_calls": []}
 
 
+class ToolCapturingClient(ScriptedClient):
+    """Modele HANGİ araçların sunulduğunu kaydeder."""
+
+    def __init__(self, script=None):
+        super().__init__(script or [{"content": "tamam", "tool_calls": []}])
+        self.tools_seen: list[list[dict]] = []
+
+    def chat(self, messages, tools):
+        self.tools_seen.append(list(tools))
+        return super().chat(messages, tools)
+
+
 def _tri() -> Triangle:
     return Triangle(
         origin_periods=["2021", "2022", "2023"],
@@ -285,3 +297,102 @@ class TestAskUserBlockedOnQuestions:
         run_agent_turn(client, [{"role": "user", "content": "Q2'yi modelleyebilir misin?"}],
                        _payload(), max_iterations=4)
         assert "ask_user" in client.tool_lists[1]
+
+
+class TestDuplicateWriteGuard:
+    """Aynı yazma işlemini ikinci kez uygulamayı reddetme.
+
+    Haiku ile ölçüldü (ev2 fork'unda): model bir aksiyonu uyguladıktan sonra
+    aynı çağrıyı tekrarlıyordu. Bazı araçlarda sonuç aynı kalıyor ama
+    exclude_cells gibi araçlarda durum bozulur — ve her tekrar tur
+    bütçesinden yiyor.
+    """
+
+    def _script(self, n):
+        call = {"content": None, "tool_calls": [
+            ToolCall("c", "set_window", {"window": "5"})]}
+        return [call] * n + [{"content": "Volume 5'e çekildi.", "tool_calls": []}]
+
+    def test_identical_write_applied_once(self):
+        client = ScriptedClient(self._script(3))
+        res = run_agent_turn(client, [{"role": "user", "content": "volume'ü 5 yap"}],
+                             _payload())
+        assert len(res.actions) == 1, f"aksiyon tekrarlandı: {res.actions}"
+
+    def test_repeat_is_rejected_with_a_reason(self):
+        client = ScriptedClient(self._script(2))
+        run_agent_turn(client, [{"role": "user", "content": "volume'ü 5 yap"}], _payload())
+        tool_msgs = [m for conv in client.seen for m in conv if m.get("role") == "tool"]
+        errors = [json.loads(m["content"]).get("error", "") for m in tool_msgs]
+        assert any("zaten uygulandı" in e for e in errors), \
+            "tekrar sessizce yutuldu; model neden durması gerektiğini görmüyor"
+
+    def test_different_arguments_still_apply(self):
+        """Fikir değiştirmek tekrar değildir."""
+        client = ScriptedClient([
+            {"content": None, "tool_calls": [ToolCall("c1", "set_window", {"window": "5"})]},
+            {"content": None, "tool_calls": [ToolCall("c2", "set_window", {"window": "7"})]},
+            {"content": "oldu", "tool_calls": []},
+        ])
+        res = run_agent_turn(client, [{"role": "user", "content": "x"}], _payload())
+        assert len(res.actions) == 2, "farklı argümanlı ikinci yazma da engellendi"
+
+    def test_empty_answer_fallback_does_not_repeat_tool_names(self):
+        client = ScriptedClient([
+            {"content": None, "tool_calls": [ToolCall("c1", "set_window", {"window": "5"})]},
+            {"content": None, "tool_calls": [ToolCall("c2", "set_window", {"window": "7"})]},
+            {"content": "", "tool_calls": []},
+        ])
+        res = run_agent_turn(client, [{"role": "user", "content": "x"}], _payload())
+        assert res.assistant_message.count("set_window") == 1, res.assistant_message
+
+    def test_a_later_turn_may_repeat_the_same_write(self):
+        """Kayıt TUR başınadır. Kullanıcı sonraki mesajında aynı şeyi
+        isterse uygulanmalı — 'zaten yaptım' demek kullanıcıyı kilitler."""
+        for _ in range(2):
+            client = ScriptedClient(self._script(1))
+            res = run_agent_turn(client, [{"role": "user", "content": "volume'ü 5 yap"}],
+                                 _payload())
+            assert len(res.actions) == 1
+
+
+class TestNavigationGuardIsPreventive:
+    """Soru sorulduğunda görünüm taşıyan araçlar İLK turdan itibaren düşer.
+
+    Regresyon (Haiku ile ölçüldü): "2024'ün primi 5 milyar TL değil mi?"
+    sorusuna ajan navigate_to üretti. Koruma yalnızca bir okuma aracı
+    çalıştıktan SONRA devreye giriyordu, ilk iterasyonda araç masadaydı.
+    """
+
+    def _names(self, client):
+        """İlk çağrıda modele sunulan araç adları."""
+        return {t["function"]["name"] for t in client.tools_seen[0]}
+
+    def test_question_hides_navigation_from_the_first_call(self):
+        client = ToolCapturingClient()
+        run_agent_turn(client, [{"role": "user", "content": "2024'ün primi 5 milyar TL değil mi?"}],
+                       _payload())
+        assert "navigate_to" not in self._names(client)
+        assert "select_branch" not in self._names(client)
+
+    def test_explicit_navigation_survives_even_as_a_question(self):
+        """'Veri sekmesine geçer misin?' hem soru hem gerçek istek.
+
+        (navigate_to data modülünde; bu payload reserve modülünü taşıyor,
+        o yüzden aynı filtreden geçen select_branch üzerinden ölçüyoruz.)
+        """
+        client = ToolCapturingClient()
+        run_agent_turn(client, [{"role": "user", "content": "Veri sekmesine geçer misin?"}],
+                       _payload())
+        assert "select_branch" in self._names(client)
+
+    def test_plain_command_is_untouched(self):
+        client = ToolCapturingClient()
+        run_agent_turn(client, [{"role": "user", "content": "Veri sekmesine geç."}], _payload())
+        assert "select_branch" in self._names(client)
+
+    def test_branch_switch_request_survives(self):
+        client = ToolCapturingClient()
+        run_agent_turn(client, [{"role": "user", "content": "ENGINEERING branşına geçer misin?"}],
+                       _payload())
+        assert "select_branch" in self._names(client)

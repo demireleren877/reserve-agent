@@ -178,42 +178,74 @@ def _reserve_dispatch(
 
 
 def _reserve_context(state: dict[str, Any] | None) -> str:
+    """Durum bloğunun rezerv bölümü.
+
+    Branşlar DÖNEME göre gruplanır ve her dönemin kendi alt toplamı yazılır.
+    Düz liste verildiğinde model dört satırı toplayıp "toplam IBNR" diye
+    sunuyordu (Haiku ile ölçüldü) — oysa dönemler aynı portföyün ARDIŞIK
+    değerlemeleri; toplanmaları aynı rezervi iki kez saymak demek.
+    """
     if not state:
         return "proje yüklenmedi."
     periods = state.get("periods") or []
     totals = state.get("totals_all_branches") or {}
-    n_branches = totals.get("branch_count", 0)
-    n_with_data = totals.get("branch_with_data_count", 0)
-    grand_ibnr = totals.get("grand_total_ibnr")
     active = state.get("active") or {}
+    active_period_id = active.get("period_id") or totals.get("active_period_id")
 
-    # Mevcut branş listesi (isim+id) — agent'ın kapsamı görmesi için
-    branch_listing: list[str] = []
+    # Sayımlar totals'tan gelir; bridge doldurmadıysa listeden türet —
+    # aksi halde blok "0 branş" derken altında dört branş listeliyordu.
+    n_branches = totals.get("branch_count")
+    if not n_branches:
+        n_branches = sum(len(p.get("branches", [])) for p in periods)
+    n_with_data = totals.get("branch_with_data_count")
+    if n_with_data is None:
+        n_with_data = sum(
+            1 for p in periods for b in p.get("branches", []) if b.get("has_triangle")
+        )
+
+    def _fmt(v: Any) -> str:
+        try:
+            return f"{float(v):,.0f}"
+        except (TypeError, ValueError):
+            return "—"
+
+    blocks: list[str] = []
     for p in periods:
+        rows: list[str] = []
+        subtotal = 0.0
+        have = False
         for b in p.get("branches", []):
             mark = "*" if b.get("is_active") else " "
             ibnr = (b.get("totals") or {}).get("ibnr")
-            ibnr_str = f"{float(ibnr):,.0f}" if ibnr is not None else "—"
-            branch_listing.append(
-                f"{mark} {p.get('label', '?')}/{b.get('frequency', '?')}/"
-                f"{b.get('name', '?')}#{b.get('id', '?')} → IBNR {ibnr_str}"
+            if isinstance(ibnr, (int, float)):
+                subtotal += float(ibnr)
+                have = True
+            rows.append(
+                f"{mark} {b.get('frequency', '?')}/{b.get('name', '?')}"
+                f"#{b.get('id', '?')} → IBNR {_fmt(ibnr)}"
             )
+        if not rows:
+            continue
+        is_active_period = p.get("id") == active_period_id
+        head = f"{p.get('label', '?')}" + (" [AKTİF DÖNEM]" if is_active_period else "")
+        if have:
+            head += f" — dönem toplamı IBNR {_fmt(subtotal)}"
+        blocks.append("  " + head + "\n      " + "\n      ".join(rows))
 
     bits = [f"{len(periods)} dönem, {n_branches} branş ({n_with_data} veri ile)"]
-    if grand_ibnr is not None:
-        try:
-            bits.append(f"toplam IBNR: {float(grand_ibnr):,.0f}")
-        except (TypeError, ValueError):
-            pass
+    ap_ibnr = totals.get("active_period_ibnr")
+    if ap_ibnr is not None:
+        bits.append(f"aktif dönem toplam IBNR: {_fmt(ap_ibnr)}")
     if active.get("branch_name"):
         bits.append(
-            f"AKTİF: {active['branch_name']} ({active.get('period_label', '?')}, {active.get('frequency', '?')})"
+            f"AKTİF: {active['branch_name']} ({active.get('period_label', '?')}, "
+            f"{active.get('frequency', '?')})"
         )
     else:
         bits.append("AKTİF BRANŞ YOK")
     summary = " | ".join(bits)
-    if branch_listing:
-        summary += "\n  Mevcut branşlar:\n    " + "\n    ".join(branch_listing)
+    if blocks:
+        summary += "\n  Dönemler ve branşlar:\n" + "\n".join(blocks)
     return summary
 
 

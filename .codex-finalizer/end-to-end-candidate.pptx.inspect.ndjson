@@ -1,0 +1,276 @@
+{"kind":"deck","id":"pr/mwxuug","name":"Deck"}
+{"kind":"layout","layoutId":"5f88df0c-e004-48a7-8ef5-717e3001f151","name":"Master","type":"master"}
+{"kind":"layout","layoutId":"2bcc069e-7141-4022-8c42-e0eabe3bd84c","name":"Title Slide","type":"title"}
+{"kind":"slide","id":"sl/y7rmrr","slide":1,"title":"Finance Day  /  Actuarius","textShapes":6}
+{"kind":"textbox","id":"sh/hk3adov2","slide":1,"text":"Finance Day  /  Actuarius","textPreview":"Finance Day  /  Actuarius","textChars":25,"textLines":1,"bbox":[72,677,800,18]}
+{"kind":"textbox","id":"sh/uhsri9wb","slide":1,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[1166,677,42,18]}
+{"kind":"textbox","id":"sh/vilsbedw","slide":1,"text":"Aktüeryal iş akışında yapay zekâ","textPreview":"Aktüeryal iş akışında yapay zekâ","textChars":32,"textLines":1,"bbox":[72,82,900,35]}
+{"kind":"textbox","id":"sh/47u983ud","slide":1,"text":"Veriden karara,\ntek çalışma ortamı","textPreview":"Veriden karara, | tek çalışma ortamı","textChars":34,"textLines":2,"bbox":[72,204,1120,170]}
+{"kind":"textbox","id":"sh/583ah8vy","slide":1,"text":"Veri, kontroller, analiz ve modelleri\nagent ile yönetilen bir sürece bağlamak","textPreview":"Veri, kontroller, analiz ve modelleri | agent ile yönetilen bir sürece bağlamak","textChars":77,"textLines":2,"bbox":[76,437,1050,100]}
+{"kind":"textbox","id":"sh/i5cr6tcn","slide":1,"text":"Actuarius Enterprise","textPreview":"Actuarius Enterprise","textChars":20,"textLines":1,"bbox":[76,579,850,42]}
+{"kind":"notes","id":"nt/y7rmrr","slide":1,"text":"Süre: 45 saniye.\nBir dönem kapanışını düşünelim. Önce veriyi topluyoruz, ardından kontrolleri çalıştırıyor, mizanla mutabakat kuruyor, analizleri hazırlıyor ve modellere geçiyoruz. Her adım değerli, ancak adımlar arasındaki aktarım da ciddi dikkat istiyor. Actuarius fikri bu akışı tek bir çalışma ortamında birleştirme ihtiyacından doğuyor. Bugün çalışan temeli ve agent ile yönetilebilir uçtan uca süreç vizyonumuzu paylaşacağım."}
+{"kind":"slide","id":"sl/a0437r","slide":2,"title":"Projenin çıkış noktası","textShapes":15}
+{"kind":"textbox","id":"sh/h4vixsf2","slide":2,"text":"Projenin çıkış noktası","textPreview":"Projenin çıkış noktası","textChars":22,"textLines":1,"bbox":[72,65,1136,112]}
+{"kind":"textbox","id":"sh/uhkz2xwb","slide":2,"text":"Finance Day  /  Actuarius","textPreview":"Finance Day  /  Actuarius","textChars":25,"textLines":1,"bbox":[72,677,800,18]}
+{"kind":"textbox","id":"sh/fit0v2xw","slide":2,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[1166,677,42,18]}
+{"kind":"textbox","id":"sh/sf2h0nel","slide":2,"text":"Analizin öncesinde ve arasında\nne kadar iş yapıyoruz?","textPreview":"Analizin öncesinde ve arasında | ne kadar iş yapıyoruz?","textChars":53,"textLines":2,"bbox":[72,192,1100,120]}
+{"kind":"shape","id":"sh/tgbitsf6","slide":2,"bbox":[72,363,209.6,149]}
+{"kind":"textbox","id":"sh/6dkzydwf","slide":2,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[88,378,177.6,24]}
+{"kind":"textbox","id":"sh/7et0rix0","slide":2,"text":"Veriyi\ntopla","textPreview":"Veriyi | topla","textChars":12,"textLines":2,"bbox":[88,416,177.6,94]}
+{"kind":"shape","id":"sh/kbihw3e9","slide":2,"bbox":[303.6,363,209.6,149]}
+{"kind":"textbox","id":"sh/5cbyp8fu","slide":2,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[319.6,378,177.6,24]}
+{"kind":"textbox","id":"sh/9wrax4n2","slide":2,"text":"Kontrolü\ntekrarla","textPreview":"Kontrolü | tekrarla","textChars":17,"textLines":2,"bbox":[319.6,416,177.6,94]}
+{"kind":"shape","id":"sh/ovytoz6h","slide":2,"bbox":[535.2,363,209.6,149]}
+{"kind":"textbox","id":"sh/nupsvu5w","slide":2,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[551.2,378,177.6,24]}
+{"kind":"textbox","id":"sh/mtgrm9or","slide":2,"text":"Raporu\nçalıştır","textPreview":"Raporu | çalıştır","textChars":15,"textLines":2,"bbox":[551.2,416,177.6,94]}
+{"kind":"shape","id":"sh/1s7at476","slide":2,"bbox":[766.8,363,209.6,149]}
+{"kind":"textbox","id":"sh/0ry9kz6l","slide":2,"text":"04","textPreview":"04","textChars":2,"textLines":1,"bbox":[782.8,378,177.6,24]}
+{"kind":"textbox","id":"sh/zqpsrup0","slide":2,"text":"Modele\naktar","textPreview":"Modele | aktar","textChars":12,"textLines":2,"bbox":[782.8,416,177.6,94]}
+{"kind":"shape","id":"sh/epgripof","slide":2,"bbox":[998.4,363,209.6,149]}
+{"kind":"textbox","id":"sh/do7apk7u","slide":2,"text":"05","textPreview":"05","textChars":2,"textLines":1,"bbox":[1014.4,378,177.6,24]}
+{"kind":"textbox","id":"sh/cne9gf69","slide":2,"text":"Farkı\naçıkla","textPreview":"Farkı | açıkla","textChars":12,"textLines":2,"bbox":[1014.4,416,177.6,94]}
+{"kind":"shape","id":"sh/47itwfe5","slide":2,"bbox":[0,0,0,0]}
+{"kind":"shape","id":"sh/58ra5kfq","slide":2,"bbox":[0,0,0,0]}
+{"kind":"shape","id":"sh/i50bupwf","slide":2,"bbox":[0,0,0,0]}
+{"kind":"shape","id":"sh/369s3uxk","slide":2,"bbox":[0,0,0,0]}
+{"kind":"textbox","id":"sh/g3i9sfe9","slide":2,"text":"Her aktarım, bağlamı ve doğru sürümü koruma ihtiyacı doğuruyor.","textPreview":"Her aktarım, bağlamı ve doğru sürümü koruma ihtiyacı doğuruyor.","textChars":63,"textLines":1,"bbox":[72,557,1110,65]}
+{"kind":"notes","id":"nt/a0437r","slide":2,"text":"Süre: 65 saniye.\nProjenin çıkış noktası tek bir hesaplama ihtiyacı değildi. Analize geçmeden önce veriyi hazırlama, kontrol sonuçlarını toplama ve doğru sürümü bulma ihtiyacı vardı. Bu işleri farklı yerlerde yürüttüğümüzde aradaki bağı ekip hafızası koruyor. Hedefimiz bu bağı sistemin koruması. Buradaki mevcut süreç çizimi operasyonel bir hipotezdir, ölçülmüş bir şirket zaman etüdü değildir."}
+{"kind":"slide","id":"sl/q5tfoa","slide":3,"title":"Dağınık süreçlerin görünmeyen maliyeti","textShapes":12}
+{"kind":"textbox","id":"sh/m9w7qdw7","slide":3,"text":"Dağınık süreçlerin görünmeyen maliyeti","textPreview":"Dağınık süreçlerin görünmeyen maliyeti","textChars":38,"textLines":1,"bbox":[72,65,1136,112]}
+{"kind":"textbox","id":"sh/9c761sfy","slide":3,"text":"Finance Day  /  Actuarius","textPreview":"Finance Day  /  Actuarius","textChars":25,"textLines":1,"bbox":[72,677,800,18]}
+{"kind":"textbox","id":"sh/obypsned","slide":3,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[1166,677,42,18]}
+{"kind":"textbox","id":"sh/bepo3ix4","slide":3,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[72,220,60,42]}
+{"kind":"textbox","id":"sh/adg7uxwj","slide":3,"text":"Uzman zamanı","textPreview":"Uzman zamanı","textChars":12,"textLines":1,"bbox":[160,217,375,55]}
+{"kind":"textbox","id":"sh/xg765sfu","slide":3,"text":"Tekrarlı hazırlık ve aktarım işleri analize ayrılan zamanı daraltıyor.","textPreview":"Tekrarlı hazırlık ve aktarım işleri analize ayrılan zamanı daraltıyor.","textChars":70,"textLines":1,"bbox":[585,220,590,72]}
+{"kind":"shape","id":"sh/wfypwnep","slide":3,"bbox":[160,309,1015,0]}
+{"kind":"textbox","id":"sh/ji9o72x0","slide":3,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[72,349,60,42]}
+{"kind":"textbox","id":"sh/yh07yxwf","slide":3,"text":"Analiz tutarlılığı","textPreview":"Analiz tutarlılığı","textChars":18,"textLines":1,"bbox":[160,346,375,55]}
+{"kind":"textbox","id":"sh/0r25wvm1","slide":3,"text":"Farklı dosya ve filtreler sonuçları karşılaştırmayı zorlaştırabiliyor.","textPreview":"Farklı dosya ve filtreler sonuçları karşılaştırmayı zorlaştırabiliyor.","textChars":70,"textLines":1,"bbox":[585,349,590,72]}
+{"kind":"shape","id":"sh/lsbm50nm","slide":3,"bbox":[160,438,1015,0]}
+{"kind":"textbox","id":"sh/y5knul4b","slide":3,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[72,478,60,42]}
+{"kind":"textbox","id":"sh/zqt43q5w","slide":3,"text":"Veri–model ilişkisi","textPreview":"Veri–model ilişkisi","textChars":19,"textLines":1,"bbox":[160,475,375,55]}
+{"kind":"textbox","id":"sh/8v250fmd","slide":3,"text":"Bir sonuçtan kaynak veriye dönmek ek araştırma gerektiriyor.","textPreview":"Bir sonuçtan kaynak veriye dönmek ek araştırma gerektiriyor.","textChars":60,"textLines":1,"bbox":[585,478,590,72]}
+{"kind":"shape","id":"sh/9wv69kny","slide":3,"bbox":[160,567,1015,0]}
+{"kind":"notes","id":"nt/q5tfoa","slide":3,"text":"Süre: 60 saniye.\nBu maliyeti yalnızca dakika olarak düşünmemeliyiz. Aynı kontrolün yeniden yapılması, farklı analizlerde farklı filtre kullanılması ve bir model sonucunun kaynağını tekrar araştırmak zorunda kalmak da maliyet. Zaman, tutarlılık ve erişim birbirine bağlı. Tek ortam yaklaşımı bu üç ihtiyacı aynı süreç üzerinde karşılamayı hedefliyor."}
+{"kind":"slide","id":"sl/gtog0x","slide":4,"title":"Uçtan uca tek bir iş akışı","textShapes":18}
+{"kind":"textbox","id":"sh/lkf2hcba","slide":4,"text":"Uçtan uca tek bir iş akışı","textPreview":"Uçtan uca tek bir iş akışı","textChars":26,"textLines":1,"bbox":[72,65,1136,112]}
+{"kind":"textbox","id":"sh/yxojmxsj","slide":4,"text":"Finance Day  /  Actuarius","textPreview":"Finance Day  /  Actuarius","textChars":25,"textLines":1,"bbox":[72,677,800,18]}
+{"kind":"textbox","id":"sh/zyxkf2t4","slide":4,"text":"04","textPreview":"04","textChars":2,"textLines":1,"bbox":[1166,677,42,18]}
+{"kind":"textbox","id":"sh/cv61knut","slide":4,"text":"Hedef süreç: mevcut ürün temeli üzerine kurulacak uçtan uca otomasyon","textPreview":"Hedef süreç: mevcut ürün temeli üzerine kurulacak uçtan uca otomasyon","textChars":69,"textLines":1,"bbox":[72,633,1100,24]}
+{"kind":"shape","id":"sh/dwf2dsby","slide":4,"bbox":[72,232,171,165]}
+{"kind":"textbox","id":"sh/qt4jixcn","slide":4,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[88,247,139,24]}
+{"kind":"textbox","id":"sh/buxkb2t8","slide":4,"text":"Veri\nalımı","textPreview":"Veri | alımı","textChars":10,"textLines":2,"bbox":[88,285,139,110]}
+{"kind":"shape","id":"sh/orm1gnuh","slide":4,"bbox":[265,232,171,165]}
+{"kind":"textbox","id":"sh/psv29sb2","slide":4,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[281,247,139,24]}
+{"kind":"textbox","id":"sh/xovul07e","slide":4,"text":"Veri\nkalitesi","textPreview":"Veri | kalitesi","textChars":13,"textLines":2,"bbox":[281,285,139,110]}
+{"kind":"shape","id":"sh/cnmdcfqt","slide":4,"bbox":[458,232,171,165]}
+{"kind":"textbox","id":"sh/bmdcjap8","slide":4,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[474,247,139,24]}
+{"kind":"textbox","id":"sh/al4ba583","slide":4,"text":"Mizan\nmutabakatı","textPreview":"Mizan | mutabakatı","textChars":16,"textLines":2,"bbox":[474,285,139,110]}
+{"kind":"shape","id":"sh/pkvuh07i","slide":4,"bbox":[651,232,171,165]}
+{"kind":"textbox","id":"sh/ojmt8vqx","slide":4,"text":"04","textPreview":"04","textChars":2,"textLines":1,"bbox":[667,247,139,24]}
+{"kind":"textbox","id":"sh/nydcfqpc","slide":4,"text":"Analiz\nraporları","textPreview":"Analiz | raporları","textChars":16,"textLines":2,"bbox":[667,285,139,110]}
+{"kind":"shape","id":"sh/2xkb6l8r","slide":4,"bbox":[844,232,171,165]}
+{"kind":"textbox","id":"sh/1wbudg76","slide":4,"text":"05","textPreview":"05","textChars":2,"textLines":1,"bbox":[860,247,139,24]}
+{"kind":"textbox","id":"sh/0v2t4vql","slide":4,"text":"Model\noluşturma","textPreview":"Model | oluşturma","textChars":15,"textLines":2,"bbox":[860,285,139,110]}
+{"kind":"shape","id":"sh/sz6d0vyh","slide":4,"bbox":[1037,232,171,165]}
+{"kind":"textbox","id":"sh/t0fut0f2","slide":4,"text":"06","textPreview":"06","textChars":2,"textLines":1,"bbox":[1053,247,139,24]}
+{"kind":"textbox","id":"sh/6dovylgr","slide":4,"text":"Sonuç ve\naçıklama","textPreview":"Sonuç ve | açıklama","textChars":17,"textLines":2,"bbox":[1053,285,139,110]}
+{"kind":"shape","id":"sh/rexcrqxw","slide":4,"bbox":[0,0,0,0]}
+{"kind":"shape","id":"sh/4bmtwbyl","slide":4,"bbox":[0,0,0,0]}
+{"kind":"shape","id":"sh/5cfupgf6","slide":4,"bbox":[0,0,0,0]}
+{"kind":"shape","id":"sh/i94bu1gf","slide":4,"bbox":[0,0,0,0]}
+{"kind":"shape","id":"sh/jadcn6x0","slide":4,"bbox":[0,0,0,0]}
+{"kind":"shape","id":"sh/o7qd8fyp","slide":4,"bbox":[72,453,1136,0]}
+{"kind":"textbox","id":"sh/p8zu1kfa","slide":4,"text":"AGENT","textPreview":"AGENT","textChars":5,"textLines":1,"bbox":[72,480,200,42]}
+{"kind":"textbox","id":"sh/z21grehc","slide":4,"text":"Süreci başlatır, durumunu takip eder, istisnaları uzmana taşır","textPreview":"Süreci başlatır, durumunu takip eder, istisnaları uzmana taşır","textChars":62,"textLines":1,"bbox":[286,482,920,86]}
+{"kind":"notes","id":"nt/gtog0x","slide":4,"text":"Süre: 80 saniye.\nÖnerdiğimiz kapsam verinin alınmasıyla başlıyor. Veri kalitesi kontrolleri, mizan mutabakatı ve gerekli analiz raporları modelleme öncesindeki adımları oluşturuyor. Modelleme ve sonuç açıklaması aynı dönem bağlamında devam ediyor. Agent bu sürecin erişim ve yönlendirme katmanı. Bu çizim hedef kapsamdır. Mevcut üründe veri, modelleme, nakit akışı ve iskonto temeli var. Otomatik mizan mutabakatı ve bütün adımları yöneten orkestrasyon geliştirme kapsamıdır.\nKaynak: enterprise-v2/README.md, enterprise-v2/KULLANIM_KILAVUZU.md, enterprise-v2/backend/app/agent/tools.py."}
+{"kind":"slide","id":"sl/47e45w","slide":5,"title":"Veri ve model aynı bağlamı paylaşır","textShapes":17}
+{"kind":"textbox","id":"sh/6p0fyhoz","slide":5,"text":"Veri ve model aynı bağlamı paylaşır","textPreview":"Veri ve model aynı bağlamı paylaşır","textChars":35,"textLines":1,"bbox":[72,65,1136,112]}
+{"kind":"textbox","id":"sh/tsbetc7q","slide":5,"text":"Finance Day  /  Actuarius","textPreview":"Finance Day  /  Actuarius","textChars":25,"textLines":1,"bbox":[72,677,800,18]}
+{"kind":"textbox","id":"sh/sr2x0765","slide":5,"text":"05","textPreview":"05","textChars":2,"textLines":1,"bbox":[1166,677,42,18]}
+{"kind":"textbox","id":"sh/fetgvmpg","slide":5,"text":"Hedef tasarım: veri sürümü, kontrol sonucu ve model bağlantısını kalıcılaştırma","textPreview":"Hedef tasarım: veri sürümü, kontrol sonucu ve model bağlantısını kalıcılaştırma","textChars":79,"textLines":1,"bbox":[72,633,1100,24]}
+{"kind":"textbox","id":"sh/etkf2hob","slide":5,"text":"Bir sonucun arkasındaki zincir","textPreview":"Bir sonucun arkasındaki zincir","textChars":30,"textLines":1,"bbox":[72,182,1100,52]}
+{"kind":"shape","id":"sh/1gbyxw7m","slide":5,"bbox":[72,297,209.6,155]}
+{"kind":"textbox","id":"sh/gf2x4r61","slide":5,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[88,312,177.6,24]}
+{"kind":"textbox","id":"sh/vi9wj2pc","slide":5,"text":"Kaynak\nveri","textPreview":"Kaynak | veri","textChars":11,"textLines":2,"bbox":[88,350,177.6,100]}
+{"kind":"shape","id":"sh/uxgfqxor","slide":5,"bbox":[303.6,297,209.6,155]}
+{"kind":"textbox","id":"sh/o7yhcjyp","slide":5,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[319.6,312,177.6,24]}
+{"kind":"textbox","id":"sh/p87i5ozu","slide":5,"text":"Kontrol\nsonucu","textPreview":"Kontrol | sonucu","textChars":14,"textLines":2,"bbox":[319.6,350,177.6,100]}
+{"kind":"shape","id":"sh/25gza9gj","slide":5,"bbox":[535.2,297,209.6,155]}
+{"kind":"textbox","id":"sh/n6p03eh4","slide":5,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[551.2,312,177.6,24]}
+{"kind":"textbox","id":"sh/cbihgjyl","slide":5,"text":"Varsayım\nseti","textPreview":"Varsayım | seti","textChars":13,"textLines":2,"bbox":[551.2,350,177.6,100]}
+{"kind":"shape","id":"sh/xcri9of6","slide":5,"bbox":[766.8,297,209.6,155]}
+{"kind":"textbox","id":"sh/a9gzetgf","slide":5,"text":"04","textPreview":"04","textChars":2,"textLines":1,"bbox":[782.8,312,177.6,24]}
+{"kind":"textbox","id":"sh/bap07yh0","slide":5,"text":"Model\nsürümü","textPreview":"Model | sürümü","textChars":12,"textLines":2,"bbox":[782.8,350,177.6,100]}
+{"kind":"shape","id":"sh/sfeh4zyh","slide":5,"bbox":[998.4,297,209.6,155]}
+{"kind":"textbox","id":"sh/dgnyx4z2","slide":5,"text":"05","textPreview":"05","textChars":2,"textLines":1,"bbox":[1014.4,312,177.6,24]}
+{"kind":"textbox","id":"sh/twfy1grq","slide":5,"text":"Yönetim\nçıktısı","textPreview":"Yönetim | çıktısı","textChars":15,"textLines":2,"bbox":[1014.4,350,177.6,100]}
+{"kind":"shape","id":"sh/sb6x8vq5","slide":5,"bbox":[0,0,0,0]}
+{"kind":"shape","id":"sh/7axwzq9k","slide":5,"bbox":[0,0,0,0]}
+{"kind":"shape","id":"sh/69of6l8z","slide":5,"bbox":[0,0,0,0]}
+{"kind":"shape","id":"sh/h0zy50rm","slide":5,"bbox":[0,0,0,0]}
+{"kind":"textbox","id":"sh/gzqxcvq1","slide":5,"text":"“Bu sonuç nereden geldi?”","textPreview":"“Bu sonuç nereden geldi?”","textChars":25,"textLines":1,"bbox":[72,510,900,55]}
+{"kind":"textbox","id":"sh/fyxg3q9w","slide":5,"text":"Aynı dönem ve branş bağlamında izlenebilir yanıt","textPreview":"Aynı dönem ve branş bağlamında izlenebilir yanıt","textChars":48,"textLines":1,"bbox":[72,575,1060,40]}
+{"kind":"notes","id":"nt/47e45w","slide":5,"text":"Süre: 75 saniye.\nBir modeli yalnızca sonucuyla saklamak yeterli değil. Hangi veri sürümünü kullandı, hangi kontrollerden geçti, hangi varsayım setiyle üretildi ve hangi rapora girdi? Hedefimiz bu bağı modelden kaynağa kadar korumak. Böylece bir veri düzeltmesinin etkilediği analiz ve modelleri de görebiliriz. Tam veri soy ağacı hedef tasarımdır. Mevcut dönem ve proje yapısı bunun başlangıç noktasıdır.\nKaynak: enterprise-v2/frontend/src/lib/project-store.tsx."}
+{"kind":"slide","id":"sl/dd20k3","slide":6,"title":"Veri kalitesi sürecin ilk kontrol kapısı","textShapes":13}
+{"kind":"textbox","id":"sh/ilc7at43","slide":6,"text":"Veri kalitesi sürecin ilk kontrol kapısı","textPreview":"Veri kalitesi sürecin ilk kontrol kapısı","textChars":40,"textLines":1,"bbox":[72,65,1136,112]}
+{"kind":"textbox","id":"sh/5o3q583u","slide":6,"text":"Finance Day  /  Actuarius","textPreview":"Finance Day  /  Actuarius","textChars":25,"textLines":1,"bbox":[72,677,800,18]}
+{"kind":"textbox","id":"sh/4nupc3m9","slide":6,"text":"06","textPreview":"06","textChars":2,"textLines":1,"bbox":[1166,677,42,18]}
+{"kind":"textbox","id":"sh/rql87ylk","slide":6,"text":"Önerilen otomasyon: kurala dayalı kontroller ve agent destekli istisna incelemesi","textPreview":"Önerilen otomasyon: kurala dayalı kontroller ve agent destekli istisna incelemesi","textChars":81,"textLines":1,"bbox":[72,633,1100,24]}
+{"kind":"textbox","id":"sh/qpcret4z","slide":6,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[72,214,60,42]}
+{"kind":"textbox","id":"sh/dsnq983q","slide":6,"text":"Alan ve kayıt kontrolleri","textPreview":"Alan ve kayıt kontrolleri","textChars":25,"textLines":1,"bbox":[160,211,375,55]}
+{"kind":"textbox","id":"sh/sre9g3m5","slide":6,"text":"Eksik alan, mükerrer kayıt, tarih ve tutar uyumsuzlukları","textPreview":"Eksik alan, mükerrer kayıt, tarih ve tutar uyumsuzlukları","textChars":57,"textLines":1,"bbox":[585,214,590,72]}
+{"kind":"shape","id":"sh/7u18velg","slide":6,"bbox":[160,303,1015,0]}
+{"kind":"textbox","id":"sh/6ts7294v","slide":6,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[72,343,60,42]}
+{"kind":"textbox","id":"sh/wrmdw76t","slide":6,"text":"Dönem karşılaştırması","textPreview":"Dönem karşılaştırması","textChars":21,"textLines":1,"bbox":[160,340,375,55]}
+{"kind":"textbox","id":"sh/xsve5c7e","slide":6,"text":"Hacim, toplam ve dağılımdaki beklenmeyen değişimler","textPreview":"Hacim, toplam ve dağılımdaki beklenmeyen değişimler","textChars":51,"textLines":1,"bbox":[585,343,590,72]}
+{"kind":"shape","id":"sh/ap4vuhon","slide":6,"bbox":[160,432,1015,0]}
+{"kind":"textbox","id":"sh/vqdw3mp8","slide":6,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[72,472,60,42]}
+{"kind":"textbox","id":"sh/kv6d0r6p","slide":6,"text":"İstisna yönetimi","textPreview":"İstisna yönetimi","textChars":16,"textLines":1,"bbox":[160,469,375,55]}
+{"kind":"textbox","id":"sh/5wfe9wna","slide":6,"text":"Kritik bulguda duraklama, sorumlu atama ve düzeltme kaydı","textPreview":"Kritik bulguda duraklama, sorumlu atama ve düzeltme kaydı","textChars":57,"textLines":1,"bbox":[585,472,590,72]}
+{"kind":"shape","id":"sh/itovyhoj","slide":6,"bbox":[160,561,1015,0]}
+{"kind":"notes","id":"nt/dd20k3","slide":6,"text":"Süre: 65 saniye.\nEksik tarih, mükerrer kayıt, beklenmeyen tutar veya dönem uyumsuzluğu modelin içinde keşfedilmemeli. Hedef süreçte kuralları veri girişinde çalıştırıyoruz. Kurallar ölçülebilir ve tekrar üretilebilir olmalı. Agent kontrol sonucunu özetleyebilir ve uzmanı sorunlu kayıtlara yönlendirebilir. Kritik hatada akışı durdurma ve istisna sahibine yönlendirme hedef kontrol davranışlarıdır."}
+{"kind":"slide","id":"sl/7shfmh","slide":7,"title":"Mizan mutabakatı analize bağlanır","textShapes":9}
+{"kind":"textbox","id":"sh/hkzil036","slide":7,"text":"Mizan mutabakatı analize bağlanır","textPreview":"Mizan mutabakatı analize bağlanır","textChars":33,"textLines":1,"bbox":[72,65,1136,112]}
+{"kind":"textbox","id":"sh/uh8jq54v","slide":7,"text":"Finance Day  /  Actuarius","textPreview":"Finance Day  /  Actuarius","textChars":25,"textLines":1,"bbox":[72,677,800,18]}
+{"kind":"textbox","id":"sh/vih0jqlg","slide":7,"text":"07","textPreview":"07","textChars":2,"textLines":1,"bbox":[1166,677,42,18]}
+{"kind":"textbox","id":"sh/47a1wfmx","slide":7,"text":"Planlanan modül: hesap eşlemeleri, kapsam ve toleranslar Finans ile tanımlanacak","textPreview":"Planlanan modül: hesap eşlemeleri, kapsam ve toleranslar Finans ile tanımlanacak","textChars":80,"textLines":1,"bbox":[72,633,1100,24]}
+{"kind":"shape","id":"sh/58j2pk3i","slide":7,"bbox":[72,234,425,133]}
+{"kind":"textbox","id":"sh/i5sju54r","slide":7,"text":"Aktüeryal veri toplamı","textPreview":"Aktüeryal veri toplamı","textChars":22,"textLines":1,"bbox":[100,277,370,60]}
+{"kind":"shape","id":"sh/361knalc","slide":7,"bbox":[783,234,425,133]}
+{"kind":"textbox","id":"sh/kb61kbmt","slide":7,"text":"İlgili mizan hesapları","textPreview":"İlgili mizan hesapları","textChars":22,"textLines":1,"bbox":[811,277,370,60]}
+{"kind":"textbox","id":"sh/lcfidg3e","slide":7,"text":"MUTABAKAT","textPreview":"MUTABAKAT","textChars":9,"textLines":1,"bbox":[527,280,230,43]}
+{"kind":"shape","id":"sh/hwr2dovy","slide":7,"bbox":[497,302,28,0]}
+{"kind":"shape","id":"sh/gvil4jed","slide":7,"bbox":[749,302,34,0]}
+{"kind":"textbox","id":"sh/vu9kbeds","slide":7,"text":"Aynı dönem · Aynı kapsam · Aynı para birimi","textPreview":"Aynı dönem · Aynı kapsam · Aynı para birimi","textChars":43,"textLines":1,"bbox":[72,411,1090,48]}
+{"kind":"textbox","id":"sh/ut0329w7","slide":7,"text":"Fark varsa inceleme. Uygunsa analize geçiş.","textPreview":"Fark varsa inceleme. Uygunsa analize geçiş.","textChars":43,"textLines":1,"bbox":[72,514,1090,75]}
+{"kind":"notes","id":"nt/7shfmh","slide":7,"text":"Süre: 70 saniye.\nMizan kontrolünü ayrı bir dosyada yapılan son kontrol olarak bırakmak istemiyoruz. Aktüeryal veri toplamlarını ilgili muhasebe hesaplarıyla aynı dönem, para birimi ve kapsamda karşılaştırmayı planlıyoruz. Hesap eşlemesi ve toleranslar finans ile birlikte tanımlanmalı. Fark olduğunda agent farkı gizlemez, ilgili kalemleri inceleme listesine taşır. Mutabakat sağlanmadan veya yetkili istisna onayı olmadan sonraki aşamaya geçilmemesi hedeflenir. Bu modül mevcut üründe tamamlanmış değildir."}
+{"kind":"slide","id":"sl/49niqs","slide":8,"title":"Raporlar modellerin hazırlık adımı olur","textShapes":9}
+{"kind":"textbox","id":"sh/8jylgzq5","slide":8,"text":"Raporlar modellerin hazırlık adımı olur","textPreview":"Raporlar modellerin hazırlık adımı olur","textChars":39,"textLines":1,"bbox":[72,65,1136,112]}
+{"kind":"textbox","id":"sh/7i5knupk","slide":8,"text":"Finance Day  /  Actuarius","textPreview":"Finance Day  /  Actuarius","textChars":25,"textLines":1,"bbox":[72,677,800,18]}
+{"kind":"textbox","id":"sh/mhw3ep8f","slide":8,"text":"08","textPreview":"08","textChars":2,"textLines":1,"bbox":[1166,677,42,18]}
+{"kind":"textbox","id":"sh/lgn2lk7u","slide":8,"text":"Mevcut analiz yetenekleri üzerine önerilen otomatik çalışma sırası","textPreview":"Mevcut analiz yetenekleri üzerine önerilen otomatik çalışma sırası","textChars":66,"textLines":1,"bbox":[72,633,1100,24]}
+{"kind":"textbox","id":"sh/kfelcfq9","slide":8,"text":"Standart analiz seti","textPreview":"Standart analiz seti","textChars":20,"textLines":1,"bbox":[72,216,480,53]}
+{"kind":"textbox","id":"sh/ze5kjapo","slide":8,"text":"Hasar gelişimi\nBüyük hasar incelemesi\nDönemsel değişim\nGerçekleşen–beklenen","textPreview":"Hasar gelişimi | Büyük hasar incelemesi | Dönemsel değişim | Gerçekleşen–beklenen","textChars":75,"textLines":4,"bbox":[72,300,480,230]}
+{"kind":"textbox","id":"sh/ydwja583","slide":8,"text":"Model çalışma alanı","textPreview":"Model çalışma alanı","textChars":19,"textLines":1,"bbox":[680,216,530,53]}
+{"kind":"textbox","id":"sh/5cr2xo7y","slide":8,"text":"Gelişim faktörü seçimi\nYöntem karşılaştırması\nVarsayım ve senaryolar\nRezerv, nakit akışı ve iskonto","textPreview":"Gelişim faktörü seçimi | Yöntem karşılaştırması | Varsayım ve senaryolar | Rezerv, nakit akışı ve iskonto","textChars":99,"textLines":4,"bbox":[680,300,530,230]}
+{"kind":"shape","id":"sh/4bilojqd","slide":8,"bbox":[72,569,1136,0]}
+{"kind":"textbox","id":"sh/i1cjyl0v","slide":8,"text":"Her model seçimi ilgili analiz ve veri sürümüyle ilişkilendirilir.","textPreview":"Her model seçimi ilgili analiz ve veri sürümüyle ilişkilendirilir.","textChars":66,"textLines":1,"bbox":[72,588,1110,40]}
+{"kind":"notes","id":"nt/49niqs","slide":8,"text":"Süre: 65 saniye.\nGerekli raporları her seferinde yeniden tarif etmek yerine dönem ve branşa bağlı analiz setleri tanımlamayı öneriyoruz. Hasar gelişimi, büyük hasar incelemesi, dönemsel değişim ve gerçekleşen–beklenen karşılaştırmaları model seçimlerine bağlanır. Bu yaklaşım varsayımların dayanağını görünür kılar. Mevcut ürün bu analizlerin bir kısmını içeriyor. Otomatik sıralama, bağımlılık yönetimi ve kontrol kapıları geliştirme kapsamıdır.\nKaynak: enterprise-v2/KULLANIM_KILAVUZU.md ve enterprise-v2/frontend/src/app/reserve/page.tsx."}
+{"kind":"slide","id":"sl/ef37p0","slide":9,"title":"Agent, sürecin ortak erişim noktası","textShapes":7}
+{"kind":"textbox","id":"sh/9wjml8na","slide":9,"text":"Agent, sürecin ortak erişim noktası","textPreview":"Agent, sürecin ortak erişim noktası","textChars":35,"textLines":1,"bbox":[72,65,1136,112]}
+{"kind":"textbox","id":"sh/2t83ad4z","slide":9,"text":"Finance Day  /  Actuarius","textPreview":"Finance Day  /  Actuarius","textChars":25,"textLines":1,"bbox":[72,677,800,18]}
+{"kind":"textbox","id":"sh/nuhkji54","slide":9,"text":"09","textPreview":"09","textChars":2,"textLines":1,"bbox":[1166,677,42,18]}
+{"kind":"textbox","id":"sh/wjalgnm1","slide":9,"text":"Hedef etkileşim örneği","textPreview":"Hedef etkileşim örneği","textChars":22,"textLines":1,"bbox":[72,633,1100,24]}
+{"kind":"textbox","id":"sh/xkjmps3m","slide":9,"text":"“Motor branşının dönem verisini hazırla.\nKalite ve mizan kontrollerini çalıştır.\nSorun yoksa analizleri ve modeli oluştur.”","textPreview":"“Motor branşının dönem verisini hazırla. | Kalite ve mizan kontrollerini çalıştır. | Sorun yoksa analizleri ve modeli oluştur.”","textChars":123,"textLines":3,"bbox":[72,211,1125,250]}
+{"kind":"textbox","id":"sh/ahs3ed4v","slide":9,"text":"Tek talep","textPreview":"Tek talep","textChars":9,"textLines":1,"bbox":[72,529,280,50]}
+{"kind":"textbox","id":"sh/bi14ni5g","slide":9,"text":"Bağlantılı işlemler ve görünür kontrol noktaları","textPreview":"Bağlantılı işlemler ve görünür kontrol noktaları","textChars":48,"textLines":1,"bbox":[390,535,810,80]}
+{"kind":"notes","id":"nt/ef37p0","slide":9,"text":"Süre: 70 saniye.\nAgent ile kurulacak ilişkiyi bir komut örneğiyle anlatalım. Kullanıcı dönem ve branşı söyleyip bir çalışma başlatmak istiyor. Agent kapsamı netleştirir, gerekli fonksiyonları çağırır ve kontrol sonuçlarını sunar. Kullanıcı her alt ekranı tek tek aramak yerine aynı çalışma bağlamında ilerler. Buradaki cümle hedef etkileşim örneğidir, bugün bu uçtan uca komutun eksiksiz çalıştığı iddiası değildir."}
+{"kind":"slide","id":"sl/c74bcj","slide":10,"title":"Bir dönem kapanışının hedef akışı","textShapes":13}
+{"kind":"textbox","id":"sh/d4zipwza","slide":10,"text":"Bir dönem kapanışının hedef akışı","textPreview":"Bir dönem kapanışının hedef akışı","textChars":33,"textLines":1,"bbox":[72,65,1136,112]}
+{"kind":"textbox","id":"sh/q18jeh0j","slide":10,"text":"Finance Day  /  Actuarius","textPreview":"Finance Day  /  Actuarius","textChars":25,"textLines":1,"bbox":[72,677,800,18]}
+{"kind":"textbox","id":"sh/r2h0nmh4","slide":10,"text":"10","textPreview":"10","textChars":2,"textLines":1,"bbox":[1166,677,42,18]}
+{"kind":"textbox","id":"sh/4z61c7id","slide":10,"text":"Kavramsal senaryo: otomasyon akışı ve insan müdahalesi","textPreview":"Kavramsal senaryo: otomasyon akışı ve insan müdahalesi","textChars":54,"textLines":1,"bbox":[72,633,1100,24]}
+{"kind":"textbox","id":"sh/p0zilczy","slide":10,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[72,205,60,42]}
+{"kind":"textbox","id":"sh/2xojah0n","slide":10,"text":"Talep ve hazırlık","textPreview":"Talep ve hazırlık","textChars":17,"textLines":1,"bbox":[160,202,375,55]}
+{"kind":"textbox","id":"sh/3yx0j2h8","slide":10,"text":"Agent dönem kapsamını alır, veriyi ve kontrolleri hazırlar.","textPreview":"Agent dönem kapsamını alır, veriyi ve kontrolleri hazırlar.","textChars":59,"textLines":1,"bbox":[585,205,590,72]}
+{"kind":"shape","id":"sh/8va1obyx","slide":10,"bbox":[160,294,1015,0]}
+{"kind":"textbox","id":"sh/9wj2xgzi","slide":10,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[72,334,60,42]}
+{"kind":"textbox","id":"sh/twnqhwry","slide":10,"text":"Fark ve müdahale","textPreview":"Fark ve müdahale","textChars":16,"textLines":1,"bbox":[160,331,375,55]}
+{"kind":"textbox","id":"sh/8ve98rqd","slide":10,"text":"Mizan farkında süreç durur. Uzman farkı çözer veya gerekçeli istisnayı onaylar.","textPreview":"Mizan farkında süreç durur. Uzman farkı çözer veya gerekçeli istisnayı onaylar.","textChars":79,"textLines":1,"bbox":[585,334,590,72]}
+{"kind":"shape","id":"sh/7u58fm9s","slide":10,"bbox":[160,423,1015,0]}
+{"kind":"textbox","id":"sh/6tcr6h87","slide":10,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[72,463,60,42]}
+{"kind":"textbox","id":"sh/ls3qdcrm","slide":10,"text":"Model ve değerlendirme","textPreview":"Model ve değerlendirme","textChars":22,"textLines":1,"bbox":[160,460,375,55]}
+{"kind":"textbox","id":"sh/kru94rq1","slide":10,"text":"Raporlar ve model taslağı oluşur. Aktüer varsayımı ve sonucu değerlendirir.","textPreview":"Raporlar ve model taslağı oluşur. Aktüer varsayımı ve sonucu değerlendirir.","textChars":75,"textLines":1,"bbox":[585,463,590,72]}
+{"kind":"shape","id":"sh/jql8bm9g","slide":10,"bbox":[160,552,1015,0]}
+{"kind":"notes","id":"nt/c74bcj","slide":10,"text":"Süre: 90 saniye.\nŞimdi komutun arkasında nasıl bir süreç görmek istediğimizi anlatalım. İlk olarak agent veri alımını başlatır ve kalite sonuçlarını toplar. İkinci aşamada mizan farkı bulduğunu varsayalım. Akış durur ve aktüer ile finans sorumlusuna inceleme sunar. Düzeltme ya da yetkili istisna onayından sonra raporlar çalışır ve model taslağı hazırlanır. Son adımda aktüer varsayımı ve sonucu değerlendirir. Buradaki gösterim canlı demo değildir, önerilen süreç senaryosudur."}
+{"kind":"slide","id":"sl/dusu4r","slide":11,"title":"Modele erişim, soruyla başlar","textShapes":7}
+{"kind":"textbox","id":"sh/hkb6pwby","slide":11,"text":"Modele erişim, soruyla başlar","textPreview":"Modele erişim, soruyla başlar","textChars":29,"textLines":1,"bbox":[72,65,1136,112]}
+{"kind":"textbox","id":"sh/uxknu1sn","slide":11,"text":"Finance Day  /  Actuarius","textPreview":"Finance Day  /  Actuarius","textChars":25,"textLines":1,"bbox":[72,677,800,18]}
+{"kind":"textbox","id":"sh/vyton6t8","slide":11,"text":"11","textPreview":"11","textChars":2,"textLines":1,"bbox":[1166,677,42,18]}
+{"kind":"textbox","id":"sh/8v25srah","slide":11,"text":"Örnek sorular: yetkili veri ve model kapsamına bağlı agent desteği","textPreview":"Örnek sorular: yetkili veri ve model kapsamına bağlı agent desteği","textChars":66,"textLines":1,"bbox":[72,633,1100,24]}
+{"kind":"textbox","id":"sh/twb6lwb2","slide":11,"text":"“Rezerv değişimini hangi dönemler açıklıyor?”","textPreview":"“Rezerv değişimini hangi dönemler açıklıyor?”","textChars":45,"textLines":1,"bbox":[72,220,1110,70]}
+{"kind":"textbox","id":"sh/6t0nqhsb","slide":11,"text":"“Bu varsayımı değiştirirsek sonuç nasıl etkilenir?”","textPreview":"“Bu varsayımı değiştirirsek sonuç nasıl etkilenir?”","textChars":51,"textLines":1,"bbox":[72,332,1110,90]}
+{"kind":"textbox","id":"sh/7u94jmtw","slide":11,"text":"“Kaynak veriye ve kontrol sonucuna dönebilir miyim?”","textPreview":"“Kaynak veriye ve kontrol sonucuna dönebilir miyim?”","textChars":52,"textLines":1,"bbox":[72,461,1110,95]}
+{"kind":"notes","id":"nt/dusu4r","slide":11,"text":"Süre: 60 saniye.\nAgent’ın ikinci değeri süreci başlatmanın ötesinde modele erişim. Yönetici ya da aktüer belirli bir soruyu sorduğunda dönem, branş, model ve veri bağlamını birlikte kullanmasını istiyoruz. Veri–model ilişkisi güçlü olduğunda açıklama da güçlenir. AI açıklaması kaynak sonuçlarla kontrol edilmeli, belirsizlik varsa açıkça belirtilmeli.\nKaynak: enterprise-v2/backend/app/agent/tools.py."}
+{"kind":"slide","id":"sl/vnfu14","slide":12,"title":"Beklediğimiz değer","textShapes":13}
+{"kind":"textbox","id":"sh/2hk761o7","slide":12,"text":"Beklediğimiz değer","textPreview":"Beklediğimiz değer","textChars":18,"textLines":1,"bbox":[72,65,1136,112]}
+{"kind":"textbox","id":"sh/pkb6hgny","slide":12,"text":"Finance Day  /  Actuarius","textPreview":"Finance Day  /  Actuarius","textChars":25,"textLines":1,"bbox":[72,677,800,18]}
+{"kind":"textbox","id":"sh/4j2p8b6d","slide":12,"text":"12","textPreview":"12","textChars":2,"textLines":1,"bbox":[1166,677,42,18]}
+{"kind":"textbox","id":"sh/fetob65w","slide":12,"text":"Beklenen faydalar: gerçekleşen etki pilot ölçümüyle doğrulanacak","textPreview":"Beklenen faydalar: gerçekleşen etki pilot ölçümüyle doğrulanacak","textChars":64,"textLines":1,"bbox":[72,633,1100,24]}
+{"kind":"textbox","id":"sh/utk721ob","slide":12,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[72,211,60,42]}
+{"kind":"textbox","id":"sh/hgb6dwnm","slide":12,"text":"Zaman kazanımı","textPreview":"Zaman kazanımı","textChars":14,"textLines":1,"bbox":[160,208,375,55]}
+{"kind":"textbox","id":"sh/gf2p4r61","slide":12,"text":"Tekrarlı veri hazırlığı, rapor çalıştırma ve aktarımın azalması","textPreview":"Tekrarlı veri hazırlığı, rapor çalıştırma ve aktarımın azalması","textChars":63,"textLines":1,"bbox":[585,211,590,72]}
+{"kind":"shape","id":"sh/7q9o7mpk","slide":12,"bbox":[160,300,1015,0]}
+{"kind":"textbox","id":"sh/6p0nyhoz","slide":12,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[72,340,60,42]}
+{"kind":"textbox","id":"sh/07e5sfmx","slide":12,"text":"Daha tutarlı analiz","textPreview":"Daha tutarlı analiz","textChars":19,"textLines":1,"bbox":[160,337,375,55]}
+{"kind":"textbox","id":"sh/18n61k3i","slide":12,"text":"Ortak veri sürümü, kontrol seti ve yöntem tanımları","textPreview":"Ortak veri sürümü, kontrol seti ve yöntem tanımları","textChars":51,"textLines":1,"bbox":[585,340,590,72]}
+{"kind":"shape","id":"sh/e5cnq547","slide":12,"bbox":[160,429,1015,0]}
+{"kind":"textbox","id":"sh/f6lozalc","slide":12,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[72,469,60,42]}
+{"kind":"textbox","id":"sh/s3u5ovm1","slide":12,"text":"Daha güçlü karar desteği","textPreview":"Daha güçlü karar desteği","textChars":24,"textLines":1,"bbox":[160,466,375,55]}
+{"kind":"textbox","id":"sh/d436x03m","slide":12,"text":"Modele hızlı erişim ve sonucun dayanağına geri dönüş","textPreview":"Modele hızlı erişim ve sonucun dayanağına geri dönüş","textChars":52,"textLines":1,"bbox":[585,469,590,72]}
+{"kind":"shape","id":"sh/q1cnml4v","slide":12,"bbox":[160,558,1015,0]}
+{"kind":"notes","id":"nt/vnfu14","slide":12,"text":"Süre: 65 saniye.\nİlk kazanım tekrarlı işlerin azalması. İkinci kazanım aynı veri ve kontrol tanımlarının kullanılmasıyla daha tutarlı analiz. Üçüncü kazanım model sonucuna erişimin ve araştırmanın kolaylaşması. Bunları gerçekleşmiş sonuçlar olarak sunmuyoruz. Pilotla ölçeceğimiz fayda hipotezleri olarak tanımlıyoruz. Aktüerin zamanı arttığında daha fazla senaryoya, varsayım incelemesine ve karar desteğine ayrılabilir."}
+{"kind":"slide","id":"sl/8l9wxc","slide":13,"title":"Başarıyı iş akışında ölçeceğiz","textShapes":11}
+{"kind":"textbox","id":"sh/t83alg3q","slide":13,"text":"Başarıyı iş akışında ölçeceğiz","textPreview":"Başarıyı iş akışında ölçeceğiz","textChars":30,"textLines":1,"bbox":[72,65,1136,112]}
+{"kind":"textbox","id":"sh/65srq1kf","slide":13,"text":"Finance Day  /  Actuarius","textPreview":"Finance Day  /  Actuarius","textChars":25,"textLines":1,"bbox":[72,677,800,18]}
+{"kind":"textbox","id":"sh/761sj6l0","slide":13,"text":"13","textPreview":"13","textChars":2,"textLines":1,"bbox":[1166,677,42,18]}
+{"kind":"textbox","id":"sh/k3a9or29","slide":13,"text":"Ölçüm tasarımı: hedef yüzdeler başlangıç değerleri toplandıktan sonra belirlenecek","textPreview":"Ölçüm tasarımı: hedef yüzdeler başlangıç değerleri toplandıktan sonra belirlenecek","textChars":82,"textLines":1,"bbox":[72,633,1100,24]}
+{"kind":"textbox","id":"sh/54jahw3u","slide":13,"text":"Süre","textPreview":"Süre","textChars":4,"textLines":1,"bbox":[72,249,345,100]}
+{"kind":"textbox","id":"sh/ihsrm1k3","slide":13,"text":"Veriden model\ndeğerlendirmesine","textPreview":"Veriden model | değerlendirmesine","textChars":31,"textLines":2,"bbox":[72,380,340,90]}
+{"kind":"textbox","id":"sh/j21sfmlo","slide":13,"text":"Tekrar","textPreview":"Tekrar","textChars":6,"textLines":1,"bbox":[459,249,345,100]}
+{"kind":"textbox","id":"sh/wfq9kr2d","slide":13,"text":"Manuel işlem ve\nyeniden çalışma","textPreview":"Manuel işlem ve | yeniden çalışma","textChars":31,"textLines":2,"bbox":[459,380,340,90]}
+{"kind":"textbox","id":"sh/xgjadw3i","slide":13,"text":"İz","textPreview":"İz","textChars":2,"textLines":1,"bbox":[846,249,345,100]}
+{"kind":"textbox","id":"sh/t8j2loja","slide":13,"text":"Kaynağa bağlı\nmodel oranı","textPreview":"Kaynağa bağlı | model oranı","textChars":25,"textLines":2,"bbox":[846,380,340,90]}
+{"kind":"shape","id":"sh/87a1cjip","slide":13,"bbox":[72,531,1136,0]}
+{"kind":"textbox","id":"sh/7m1kje1k","slide":13,"text":"Aynı branş, aynı dönem kapsamı, karşılaştırılabilir çıktı","textPreview":"Aynı branş, aynı dönem kapsamı, karşılaştırılabilir çıktı","textChars":57,"textLines":1,"bbox":[72,566,1120,60]}
+{"kind":"notes","id":"nt/8l9wxc","slide":13,"text":"Süre: 60 saniye.\nZaman kazanımı iddiasını aynı kapsamda karşılaştırmalıyız. Bir kapanışta veri hazırlığından değerlendirmeye kadar geçen süreyi ve uzman dokunuşunu ölçebiliriz. Yeniden çalışma sayısı tutarlılık için, kaynak ve kontrol bağlantısı tamamlanmış modellerin oranı izlenebilirlik için yardımcı göstergelerdir. Henüz başlangıç verisi olmadığı için yüzde kazanç vermiyoruz. Hedefleri baz ölçümden sonra belirleyebiliriz."}
+{"kind":"slide","id":"sl/vdmuee","slide":14,"title":"Uzmanlık ve kontrol sürecin içinde kalır","textShapes":13}
+{"kind":"textbox","id":"sh/g7qtsfix","slide":14,"text":"Uzmanlık ve kontrol sürecin içinde kalır","textPreview":"Uzmanlık ve kontrol sürecin içinde kalır","textChars":40,"textLines":1,"bbox":[72,65,1136,112]}
+{"kind":"textbox","id":"sh/f6hsza1c","slide":14,"text":"Finance Day  /  Actuarius","textPreview":"Finance Day  /  Actuarius","textChars":25,"textLines":1,"bbox":[72,677,800,18]}
+{"kind":"textbox","id":"sh/u58bq50r","slide":14,"text":"14","textPreview":"14","textChars":2,"textLines":1,"bbox":[1166,677,42,18]}
+{"kind":"textbox","id":"sh/pwja5kje","slide":14,"text":"Hedef işletim modeli: erişim, veri politikası ve işlem kayıtlarıyla desteklenecek","textPreview":"Hedef işletim modeli: erişim, veri politikası ve işlem kayıtlarıyla desteklenecek","textChars":81,"textLines":1,"bbox":[72,633,1100,24]}
+{"kind":"shape","id":"sh/4vatwfit","slide":14,"bbox":[72,248,364,160]}
+{"kind":"textbox","id":"sh/3u1s3u18","slide":14,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[88,263,332,24]}
+{"kind":"textbox","id":"sh/2t8bup03","slide":14,"text":"Kurallar ve\nhesap motoru","textPreview":"Kurallar ve | hesap motoru","textChars":24,"textLines":2,"bbox":[88,301,332,105]}
+{"kind":"shape","id":"sh/50fat0ja","slide":14,"bbox":[458,248,364,160]}
+{"kind":"textbox","id":"sh/kz69kvip","slide":14,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[474,263,332,24]}
+{"kind":"textbox","id":"sh/y5obq54j","slide":14,"text":"Agent ile\niş akışı","textPreview":"Agent ile | iş akışı","textChars":18,"textLines":2,"bbox":[474,301,332,105]}
+{"kind":"shape","id":"sh/z6xsjql4","slide":14,"bbox":[844,248,364,160]}
+{"kind":"textbox","id":"sh/k7qtsvm9","slide":14,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[860,263,332,24]}
+{"kind":"textbox","id":"sh/l8zal03u","slide":14,"text":"Aktüer\ndeğerlendirmesi","textPreview":"Aktüer | değerlendirmesi","textChars":22,"textLines":2,"bbox":[860,301,332,105]}
+{"kind":"shape","id":"sh/m98bu54f","slide":14,"bbox":[0,0,0,0]}
+{"kind":"shape","id":"sh/7uhsnal0","slide":14,"bbox":[0,0,0,0]}
+{"kind":"textbox","id":"sh/8vqtwfml","slide":14,"text":"Tekrar üretilebilir hesap","textPreview":"Tekrar üretilebilir hesap","textChars":25,"textLines":1,"bbox":[72,462,345,75]}
+{"kind":"textbox","id":"sh/9wzapk36","slide":14,"text":"Görünür işlem ve istisna","textPreview":"Görünür işlem ve istisna","textChars":24,"textLines":1,"bbox":[458,462,345,75]}
+{"kind":"textbox","id":"sh/ux8byp4r","slide":14,"text":"Açık karar sorumluluğu","textPreview":"Açık karar sorumluluğu","textChars":22,"textLines":1,"bbox":[844,462,345,75]}
+{"kind":"notes","id":"nt/vdmuee","slide":14,"text":"Süre: 65 saniye.\nUçtan uca otomasyon kurarken karar yetkisini açık tutuyoruz. Kontrol kuralları ve hesap fonksiyonları tekrar üretilebilir olmalı. Agent bu fonksiyonları çağırır, çıktıları birleştirir ve istisnaları sunar. Aktüer varsayım ve nihai değerlendirmeden sorumlu kalır. Kurum içi veya dışı AI kullanımı veri politikası ve yetki kapsamıyla belirlenir. Bu slayt hedef işletim modelidir. Tam yetki matrisi, değiştirilemez kayıt ve kurumsal secret yönetimi uygulama öncesi tamamlanacak kontrol ihtiyaçlarıdır."}
+{"kind":"slide","id":"sl/rbw79y","slide":15,"title":"Çalışan temel, genişleyen süreç","textShapes":8}
+{"kind":"textbox","id":"sh/ilcful07","slide":15,"text":"Çalışan temel, genişleyen süreç","textPreview":"Çalışan temel, genişleyen süreç","textChars":31,"textLines":1,"bbox":[72,65,1136,112]}
+{"kind":"textbox","id":"sh/5ony5gji","slide":15,"text":"Finance Day  /  Actuarius","textPreview":"Finance Day  /  Actuarius","textChars":25,"textLines":1,"bbox":[72,677,800,18]}
+{"kind":"textbox","id":"sh/knexwvix","slide":15,"text":"15","textPreview":"15","textChars":2,"textLines":1,"bbox":[1166,677,42,18]}
+{"kind":"textbox","id":"sh/7q5g7q1o","slide":15,"text":"Mevcut ürün temeli","textPreview":"Mevcut ürün temeli","textChars":18,"textLines":1,"bbox":[72,206,540,52]}
+{"kind":"textbox","id":"sh/6pwfyl03","slide":15,"text":"Veri ve dönem yönetimi\nRezerv modelleme\nNakit akışı ve iskonto\nAgent araç entegrasyonu","textPreview":"Veri ve dönem yönetimi | Rezerv modelleme | Nakit akışı ve iskonto | Agent araç entegrasyonu","textChars":86,"textLines":4,"bbox":[72,302,520,225]}
+{"kind":"textbox","id":"sh/tcny90ju","slide":15,"text":"Uçtan uca geliştirme kapsamı","textPreview":"Uçtan uca geliştirme kapsamı","textChars":28,"textLines":1,"bbox":[675,206,533,90]}
+{"kind":"textbox","id":"sh/sbex0vi9","slide":15,"text":"Standart kalite kontrol paketleri\nMizan mutabakatı\nRapor ve model orkestrasyonu\nKurumsal yetki ve onay akışı","textPreview":"Standart kalite kontrol paketleri | Mizan mutabakatı | Rapor ve model orkestrasyonu | Kurumsal yetki ve onay akışı","textChars":108,"textLines":4,"bbox":[675,302,533,225]}
+{"kind":"shape","id":"sh/fepgba1k","slide":15,"bbox":[72,568,1136,0]}
+{"kind":"textbox","id":"sh/edwf250z","slide":15,"text":"Önerilen ilk uygulama: tek branşta, mevcut kapanışla paralel çalışma","textPreview":"Önerilen ilk uygulama: tek branşta, mevcut kapanışla paralel çalışma","textChars":68,"textLines":1,"bbox":[72,594,1120,40]}
+{"kind":"notes","id":"nt/rbw79y","slide":15,"text":"Süre: 80 saniye.\nBugün elimizde veri yönetimi, rezerv modelleri, nakit akışı ve iskonto modülleri ile agent araç entegrasyonu içeren çalışan bir ürün temeli var. Şirket içinde tarif ettiğimiz uçtan uca sürece ulaşmak için standart veri kalite paketleri, mizan mutabakatı, rapor bağımlılıkları ve süreç orkestrasyonunu eklemeyi öneriyoruz. Kurumsal kontrol katmanı da bu kapsamla birlikte tamamlanmalı. Mevcut özelliği ve hedefi ayırmak, çalışmanın güvenilirliğini artırır.\nKaynaklar: enterprise-v2/README.md, enterprise-v2/KULLANIM_KILAVUZU.md, enterprise-v2/backend/app/agent/tools.py. İnceleme tarihi: 8 Eylül 2026."}
+{"kind":"slide","id":"sl/dso4vc","slide":16,"title":"Finans için öğrenme alanı","textShapes":9}
+{"kind":"textbox","id":"sh/9kbyhgzq","slide":16,"text":"Finans için öğrenme alanı","textPreview":"Finans için öğrenme alanı","textChars":25,"textLines":1,"bbox":[72,65,1136,112]}
+{"kind":"textbox","id":"sh/mx0fm10z","slide":16,"text":"Finance Day  /  Actuarius","textPreview":"Finance Day  /  Actuarius","textChars":25,"textLines":1,"bbox":[72,677,800,18]}
+{"kind":"textbox","id":"sh/ny9gf6hk","slide":16,"text":"16","textPreview":"16","textChars":2,"textLines":1,"bbox":[1166,677,42,18]}
+{"kind":"textbox","id":"sh/0vixkri9","slide":16,"text":"Gelecek kullanım fırsatları: kapsam ve uygunluk ayrı değerlendirilecek","textPreview":"Gelecek kullanım fırsatları: kapsam ve uygunluk ayrı değerlendirilecek","textChars":70,"textLines":1,"bbox":[72,633,1100,24]}
+{"kind":"textbox","id":"sh/1wrydwzu","slide":16,"text":"Veri + Kontrol + Analiz + Karar","textPreview":"Veri + Kontrol + Analiz + Karar","textChars":31,"textLines":1,"bbox":[72,238,1120,90]}
+{"kind":"textbox","id":"sh/et0fi103","slide":16,"text":"Mutabakat süreçleri","textPreview":"Mutabakat süreçleri","textChars":19,"textLines":1,"bbox":[72,430,350,80]}
+{"kind":"textbox","id":"sh/zu9gb6ho","slide":16,"text":"Yönetim raporlaması","textPreview":"Yönetim raporlaması","textChars":19,"textLines":1,"bbox":[460,430,350,80]}
+{"kind":"textbox","id":"sh/cryxgrix","slide":16,"text":"Bütçe ve senaryolar","textPreview":"Bütçe ve senaryolar","textChars":19,"textLines":1,"bbox":[848,430,350,80]}
+{"kind":"textbox","id":"sh/ds7y9wzi","slide":16,"text":"Aktüeryadaki deneyim, benzer finans iş akışlarına yön verebilir.","textPreview":"Aktüeryadaki deneyim, benzer finans iş akışlarına yön verebilir.","textChars":64,"textLines":1,"bbox":[72,558,1110,68]}
+{"kind":"notes","id":"nt/dso4vc","slide":16,"text":"Süre: 60 saniye.\nAktüeryada bu yaklaşımı geliştirmek, finansın diğer alanları için de aktarılabilir bir çalışma biçimi oluşturabilir. Ortak yapı veri, kontrol, analiz ve karar. İleride mutabakat, yönetim raporlaması veya bütçe senaryolarında benzer prensipler değerlendirilebilir. Bunları mevcut ürün kapsamı veya onaylanmış yol haritası olarak değil, aktüerya çalışmasından öğrenme fırsatları olarak düşünmeliyiz."}
+{"kind":"slide","id":"sl/179a6n","slide":17,"title":"Finance Day  /  Actuarius","textShapes":5}
+{"kind":"textbox","id":"sh/gr6hc7ep","slide":17,"text":"Finance Day  /  Actuarius","textPreview":"Finance Day  /  Actuarius","textChars":25,"textLines":1,"bbox":[72,677,800,18]}
+{"kind":"textbox","id":"sh/fqx032x4","slide":17,"text":"17","textPreview":"17","textChars":2,"textLines":1,"bbox":[1166,677,42,18]}
+{"kind":"textbox","id":"sh/epozaxwj","slide":17,"text":"Actuarius","textPreview":"Actuarius","textChars":9,"textLines":1,"bbox":[72,104,1000,50]}
+{"kind":"textbox","id":"sh/pgzi9cf6","slide":17,"text":"Daha az aktarım.\nDaha fazla analiz.","textPreview":"Daha az aktarım. | Daha fazla analiz.","textChars":35,"textLines":2,"bbox":[72,236,1120,175]}
+{"kind":"textbox","id":"sh/ov61g7el","slide":17,"text":"Veriden modele uzanan bağı güçlendiren,\nagent ile yönetilebilen bir çalışma ortamı","textPreview":"Veriden modele uzanan bağı güçlendiren, | agent ile yönetilebilen bir çalışma ortamı","textChars":82,"textLines":2,"bbox":[72,463,1100,110]}
+{"kind":"notes","id":"nt/179a6n","slide":17,"text":"Süre: 45 saniye.\nBaşlangıç sorumuza dönelim. Aktüerin zamanını veri ve dosyalar arasındaki bağı korumaya mı, sonuçları değerlendirmeye mi ayırmasını istiyoruz? Actuarius ile veri, kontrol ve modelleri tek çalışma ortamında bağlamayı hedefliyoruz. Agent bu akışa erişimi kolaylaştırıyor. Önümüzdeki adım, şirket sürecini tek branş üzerinde birlikte tanımlamak ve faydayı gerçek kapanış verisiyle ölçmek. Sorularınızı ve hangi akışta başlamamız gerektiğine dair görüşlerinizi almak isterim."}

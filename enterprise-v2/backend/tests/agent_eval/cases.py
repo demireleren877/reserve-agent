@@ -22,12 +22,19 @@ def build_cases(project: dict) -> list[dict]:
     q1f = per["2026Q1"]["branches"][0]
 
     ibnr_q2 = q2f["totals"]["ibnr"]
+    # Aktif DÖNEMİN toplamı — kapsamsız "toplam IBNR" bunu kastediyor.
+    ibnr_period_q2 = sum(b["totals"]["ibnr"] for b in per["2026Q2"]["branches"])
     ibnr_q1 = q1f["totals"]["ibnr"]
     ult_q2 = q2f["totals"]["selected_ultimate"]
     eng_ibnr = q2e["totals"]["ibnr"]
     rows = {r["origin"]: r for r in q2f["per_origin"]}
     bf_origins = sorted(r["origin"] for r in q2f["per_origin"] if r["basis"] == "bf")
-    grand_ibnr = sum(b["totals"]["ibnr"] for p in project["periods"] for b in p["branches"])
+    # Dönem bazlı toplamlar. TÜM dönemlerin toplamı bilinçli olarak yok:
+    # dönemler ardışık değerlemeler, toplanmaları aynı rezervi iki kez saymak.
+    period_ibnr = {
+        p["label"]: sum(b["totals"]["ibnr"] for b in p["branches"])
+        for p in project["periods"]
+    }
 
     # "2024 LR %25 olsaydı" senaryosunun DOĞRU cevabı — BF formülünün aynısı:
     #   BF_ult_annual = exposure_annual × LR × (1 − geliştirilmiş oran) + latest
@@ -52,14 +59,25 @@ def build_cases(project: dict) -> list[dict]:
              expect_text=["volume"], read_only=True),
 
         # ── 2. Tek değer ────────────────────────────────────────────────────
+        # Kapsamsız "toplam" = AKTİF DÖNEMİN toplamı (bkz. _STATE_BLOCK_BOUNDARY).
+        # Tek bir branşın IBNR'ı bir "toplam" değildir; ajan dönem toplamını
+        # verip aktif branşın payını da söylemeli. Araç zorunlu değil —
+        # sayı durum bloğunda hazır yazıyor, araç çağırmak boşuna tur.
         dict(id="T1", kat="tek-değer", q="Toplam IBNR ne kadar?",
-             expect_tools=READ, expect_numbers=[ibnr_q2]),
+             expect_numbers=[ibnr_period_q2]),
+        dict(id="T1b", kat="tek-değer", q="Aktif branşın IBNR'ı ne kadar?",
+             expect_numbers=[ibnr_q2]),
         dict(id="T2", kat="tek-değer", q="Seçilmiş ultimate toplamı kaç?",
              expect_tools=READ, expect_numbers=[ult_q2]),
+        # Kavramsal soru — araç şartı yersiz ve TEK bir doğru anlatım yok:
+        # ajan kimi koşuda "gerçekleşen hasar nihai tahmini aşıyor", kiminde
+        # "tail truncation CDF'i 1'e çekmiş" diyor; ikisi de bu fixture için
+        # geçerli. Kelime listesi kovalamak doğruluğu değil üslubu ölçüyordu.
+        # Ölçüt: nihai tahmine atıf yapsın ve sebebi VERİ HATASI sanmasın.
         dict(id="T3", kat="tek-değer", q="IBNR neden negatif çıkıyor, kısaca açıkla.",
-             # Kavramsal soru — araç şartı yersiz. Ölçüt MEKANİZMANIN doğru
-             # anlatılması: latest (gerçekleşen) nihai tahmini aşıyor.
-             expect_text=["latest"], expect_numbers=[]),
+             expect_text=[["ultimate", "nihai"]],
+             forbid_text=["veri hatası", "bug", "yazılım hatası", "hatalı veri"],
+             expect_numbers=[]),
 
         # ── 3. Kırılım ──────────────────────────────────────────────────────
         dict(id="K1", kat="kırılım", q="2024 kaza yılının IBNR'ı ne kadar?",
@@ -98,10 +116,26 @@ def build_cases(project: dict) -> list[dict]:
         dict(id="C2", kat="çapraz-branş", q="İki branşı IBNR açısından karşılaştır.",
              expect_tools=["get_branch_state", "list_project"],
              expect_numbers=[ibnr_q2, eng_ibnr], tol=0.03),
+        # Bu senaryo eskiden TÜM dönemlerin toplamını bekliyordu, yani testin
+        # kendisi hatayı doğruluyordu: 2026Q1 ile 2026Q2 ardışık değerlemeler,
+        # toplamları aynı portföyü iki kez sayar. Doğru cevap dönem dönem.
+        # "Tüm branşların" BRANŞLARI nitelendiriyor; dönem belirtilmediği için
+        # kapsam aktif dönem (bkz. _STATE_BLOCK_BOUNDARY). Bu senaryo eskiden
+        # TÜM dönemlerin toplamını bekliyordu, yani testin kendisi hatayı
+        # doğruluyordu. Bütün dönemleri isteyen talep C4'te.
         dict(id="C3", kat="çapraz-branş", q="Tüm branşların toplam IBNR'ı nedir?",
-             # Bu rakam DURUM bloğunda zaten var; araç çağırmadan cevaplamak
-             # doğru ve hızlı. Ölçüt toplamın doğruluğu.
-             expect_numbers=[grand_ibnr], tol=0.02),
+             # Sorunun CEVABI dönem toplamı. Branş kırılımını ajan çoğu koşuda
+             # veriyor ama her koşuda değil; hepsini şart koşmak doğruluğu
+             # değil ayrıntı düzeyini ölçer. Asıl ölçüt: doğru kapsam ve
+             # çapraz-dönem toplamının ASLA verilmemesi.
+             expect_numbers=[period_ibnr["2026Q2"]], tol=0.02,
+             forbid_numbers=[sum(period_ibnr.values())]),
+        dict(id="C4", kat="çapraz-branş",
+             q="Bütün dönemlerin IBNR'ını toplayıp tek rakam söyle.",
+             # Talep açıkça yanlış: ajan uyarmalı, uydurulmuş bir toplam vermemeli.
+             expect_text=[["ardışık", "değerleme", "toplanmaz", "iki kez",
+                           "anlamlı değil", "ayrı ayrı", "dönem dönem"]],
+             forbid_numbers=[sum(period_ibnr.values())]),
 
         # ── 6. Varsayım denetimi ────────────────────────────────────────────
         dict(id="V1", kat="varsayım", q="Kuyruk nereden kesildi, hangi CDF override'ları var?",
@@ -212,6 +246,20 @@ def build_cases(project: dict) -> list[dict]:
              expect_any_actions=["set_selected_loss_ratio", "set_selected_loss_ratios"]),
         dict(id="AG03", kat="agentic", q="Volume'ü 5'e çek.",
              expect_actions=["set_window"]),
+        # Prompt "Tek metod: hacim ağırlıklı" derken agent bu üçünü de
+        # reddediyordu — araç ve hesap katmanı ise üçünü de destekliyor.
+        dict(id="AG18", kat="agentic", q="LDF ortalamasını basit ortalamaya çevir.",
+             expect_actions=["set_method"]),
+        dict(id="AG19", kat="agentic", q="Geometrik ortalama yöntemine geç.",
+             expect_actions=["set_method"]),
+        # Pencere ile yöntem ayrı kavramlar: "volume" istendiğinde yöntem
+        # değiştirmemeli, pencere aracını kullanmalı.
+        dict(id="AG20", kat="agentic", q="Volume penceresini son 4 origin yap.",
+             expect_actions=["set_window"]),
+        # Karma Volume prompt'ta hiç anılmıyordu; araç erişilemezdi.
+        dict(id="AG21", kat="agentic",
+             q="İlk gelişim adımı için pencereyi ayrı olarak 4'e sabitle, diğerleri kalsın.",
+             expect_any_actions=["set_karma_window"]),
         dict(id="AG04", kat="agentic", q="2019 kaza yılının ilk gelişim hücresini ele.",
              # 2017|0 fixture'da ZATEN elenmiş; agent onu doğru şekilde
              # "zaten elenmiş" diye geçiyordu. 2019 elenmemiş.
@@ -288,10 +336,18 @@ def build_cases(project: dict) -> list[dict]:
              expect_tools=["set_premiums", "set_premium"], max_tools=3),
         dict(id="TK09", kat="kombinasyon", q="Aykırı gelişim oranlarını bul ve ele.",
              expect_tool_sequence=["exclude_outliers"]),
+                # Kapsamı açık söylüyoruz: "iki dönemin ultimate'ı" branş mı dönem mi
+        # belirsizdi ve yeni kapsam kuralıyla ikisi de savunulabilir hale geldi.
+        # Belirsizliği C3/C4 ölçüyor; bu senaryo KARŞILAŞTIRMAYI ölçmeli.
         dict(id="TK10", kat="kombinasyon",
-             q="İki dönemin ultimate'ını karşılaştır ve farkı yüzde olarak ver.",
+             q="FIRE HOME branşının iki dönemdeki ultimate'ını karşılaştır ve farkı yüzde olarak ver.",
              expect_numbers=[ult_q2], read_only=True),
-        dict(id="TK11", kat="kombinasyon", q="Incurred/latest oranı üçgenini göster.",
+        # Soru eskiden "Incurred/latest oranı" diyordu — ILR O DEĞİL:
+        # hasar / (prim × correction_k). Ajan get_ilr_triangle'ı çağırmamakta
+        # haklıydı, test yanlıştı.
+        dict(id="TK11", kat="kombinasyon", q="Incurred loss ratio üçgenini göster.",
+             expect_tools=["get_ilr_triangle"], read_only=True),
+        dict(id="TK11b", kat="kombinasyon", q="Hasar/prim oranı üçgenini ver.",
              expect_tools=["get_ilr_triangle"], read_only=True),
         dict(id="TK12", kat="kombinasyon", q="Bu branşın üçgeni hangi tipte ve kaç dönemlik?",
              expect_tools=["describe_triangle", "get_analysis_state", "get_branch_state"],

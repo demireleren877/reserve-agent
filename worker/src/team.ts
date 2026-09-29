@@ -139,7 +139,7 @@ export async function createUser(
     .prepare("INSERT INTO workspace_members (workspace_id, email, uid, role, is_active, invited_at) VALUES (?, ?, NULL, ?, 1, ?)")
     .bind(ws.id, email, role, Date.now())
     .run();
-  await appendAuditEvent(db, ws, { action: "admin.user_created", details: { module: "admin", target: email, role } });
+  await appendAuditEvent(db, ws, { action: "admin.user_created", details: { module: "users", target: email, role } });
   return ok({ id: email, username: email, role, is_active: true, joined: false } satisfies UserOut, 201);
 }
 
@@ -164,7 +164,7 @@ export async function updateUser(
     .run();
   await appendAuditEvent(db, ws, {
     action: "admin.user_updated",
-    details: { module: "admin", target: email, role, is_active: !!active },
+    details: { module: "users", target: email, role, is_active: !!active },
   });
   return ok({ id: email, username: email, role, is_active: !!active, joined: !!row.uid } satisfies UserOut);
 }
@@ -183,7 +183,7 @@ export async function deleteUser(db: D1Database, ws: Workspace, userId: string):
   if (row.uid) {
     await db.prepare("DELETE FROM model_locks WHERE workspace_id = ? AND locked_by_uid = ?").bind(ws.id, row.uid).run();
   }
-  await appendAuditEvent(db, ws, { action: "admin.user_deleted", details: { module: "admin", target: email } });
+  await appendAuditEvent(db, ws, { action: "admin.user_deleted", details: { module: "users", target: email } });
   return ok(null, 204);
 }
 

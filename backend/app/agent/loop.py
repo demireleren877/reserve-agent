@@ -601,6 +601,8 @@ def run_agent_turn(
     initial_conv_len = len(conv)
     tool_invocations: list[dict[str, Any]] = []
     actions: list[dict[str, Any]] = []
+    # Bu turda başarıyla uygulanmış (name, args) çiftleri — tekrar uygulanmaz.
+    applied_writes: set[tuple[str, str]] = set()
 
     for _iteration in range(max_iterations):
         # Hesap aracı çalıştıysa ask_user'ı listeden çıkar. Sadece hata
@@ -631,7 +633,7 @@ def run_agent_turn(
             final_text = content or ""
             if not final_text.strip():
                 if tool_invocations:
-                    names = ", ".join(t["name"] for t in tool_invocations)
+                    names = ", ".join(dict.fromkeys(t["name"] for t in tool_invocations))
                     final_text = f"Uygulandı: {names}."
                 else:
                     final_text = (
@@ -654,6 +656,31 @@ def run_agent_turn(
 
         pending_form: dict[str, Any] | None = None
         for tc in tool_calls:
+            # Aynı yazma işlemini ikinci kez uygulamayı reddet. Model bir
+            # aksiyonu uyguladıktan sonra aynı çağrıyı tekrarlıyor (Haiku ile
+            # ölçüldü: set_method iki kez, çelişkili promptla altı kez) —
+            # bazı araçlarda sonuç aynı kalıyor ama exclude_cells gibi
+            # araçlarda durumu bozar ve her tekrar iterasyon bütçesinden yiyor.
+            # ask_user'da olduğu gibi reddedip ne yapacağını söylüyoruz; sessiz
+            # yok sayma modeli tekrar denemeye itiyordu.
+            _sig = (tc.name, json.dumps(tc.arguments, sort_keys=True, default=str))
+            if _sig in applied_writes:
+                output = {
+                    "error": (
+                        f"{tc.name} bu turda AYNI argümanlarla zaten uygulandı ve "
+                        "başarılı oldu. Tekrar uygulama — sonucu kullanıcıya bir "
+                        "cümleyle yaz ve turu bitir."
+                    )
+                }
+                tool_invocations.append({
+                    "id": tc.id, "name": tc.name,
+                    "module": tool_to_module.get(tc.name).name if tool_to_module.get(tc.name) else None,
+                    "arguments": tc.arguments, "output": output,
+                })
+                conv.append({"role": "tool", "tool_call_id": tc.id,
+                             "content": json.dumps(output, ensure_ascii=False)})
+                continue
+
             mod = tool_to_module.get(tc.name)
             if mod is None:
                 output: dict[str, Any] = {
@@ -690,6 +717,9 @@ def run_agent_turn(
                 if isinstance(action, dict) and mod is not None:
                     action.setdefault("module", mod.name)
                 actions.append(action)
+                applied_writes.add(
+                    (tc.name, json.dumps(tc.arguments, sort_keys=True, default=str))
+                )
 
             # ask_user → yapısal form: turu durdurup formu kullanıcıya göster.
             if isinstance(output, dict) and "_form" in output:

@@ -285,3 +285,59 @@ class TestAskUserBlockedOnQuestions:
         run_agent_turn(client, [{"role": "user", "content": "Q2'yi modelleyebilir misin?"}],
                        _payload(), max_iterations=4)
         assert "ask_user" in client.tool_lists[1]
+
+
+class TestDuplicateWriteGuard:
+    """Aynı yazma işlemini ikinci kez uygulamayı reddetme.
+
+    Haiku ile ölçüldü: "LDF ortalamasını basit ortalamaya çevir" komutunda
+    model set_method'u uyguladıktan sonra aynı çağrıyı tekrarlıyordu (çelişkili
+    prompt düzeltilmeden önce altı kez). set_method'da sonuç aynı kalıyor ama
+    exclude_cells ya da create_version'da durum bozulur — ve her tekrar tur
+    bütçesinden yiyor.
+    """
+
+    def _script(self, n):
+        call = {"content": None, "tool_calls": [
+            ToolCall("c", "set_method", {"method": "simple_average"})]}
+        return [call] * n + [{"content": "Yöntem basit ortalamaya çevrildi.",
+                              "tool_calls": []}]
+
+    def test_identical_write_applied_once(self):
+        client = ScriptedClient(self._script(3))
+        res = run_agent_turn(client, [{"role": "user", "content": "basit ortalamaya çevir"}],
+                             _payload())
+        assert len(res.actions) == 1, f"aksiyon tekrarlandı: {res.actions}"
+
+    def test_repeat_is_rejected_with_a_reason(self):
+        client = ScriptedClient(self._script(2))
+        run_agent_turn(client, [{"role": "user", "content": "basit ortalamaya çevir"}],
+                       _payload())
+        tool_msgs = [m for conv in client.seen for m in conv if m.get("role") == "tool"]
+        errors = [json.loads(m["content"]).get("error", "") for m in tool_msgs]
+        assert any("zaten uygulandı" in e for e in errors), \
+            "tekrar sessizce yutuldu; model neden durması gerektiğini görmüyor"
+
+    def test_different_arguments_still_apply(self):
+        """Fikir değiştirmek tekrar değildir."""
+        client = ScriptedClient([
+            {"content": None, "tool_calls": [
+                ToolCall("c1", "set_method", {"method": "simple_average"})]},
+            {"content": None, "tool_calls": [
+                ToolCall("c2", "set_method", {"method": "geometric_average"})]},
+            {"content": "oldu", "tool_calls": []},
+        ])
+        res = run_agent_turn(client, [{"role": "user", "content": "x"}], _payload())
+        assert len(res.actions) == 2, "farklı argümanlı ikinci yazma da engellendi"
+
+    def test_empty_answer_fallback_does_not_repeat_tool_names(self):
+        """Model boş bitirirse kullanıcı 'Uygulandı: set_method, set_method' görmemeli."""
+        client = ScriptedClient([
+            {"content": None, "tool_calls": [
+                ToolCall("c1", "set_method", {"method": "simple_average"})]},
+            {"content": None, "tool_calls": [
+                ToolCall("c2", "set_method", {"method": "geometric_average"})]},
+            {"content": "", "tool_calls": []},
+        ])
+        res = run_agent_turn(client, [{"role": "user", "content": "x"}], _payload())
+        assert res.assistant_message.count("set_method") == 1, res.assistant_message

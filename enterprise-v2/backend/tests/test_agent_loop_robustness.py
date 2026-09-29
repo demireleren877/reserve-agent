@@ -341,3 +341,12 @@ class TestDuplicateWriteGuard:
         ])
         res = run_agent_turn(client, [{"role": "user", "content": "x"}], _payload())
         assert res.assistant_message.count("set_method") == 1, res.assistant_message
+
+    def test_a_later_turn_may_repeat_the_same_write(self):
+        """Kayıt TUR başınadır. Kullanıcı sonraki mesajında aynı şeyi
+        isterse uygulanmalı — 'zaten yaptım' demek kullanıcıyı kilitler."""
+        for _ in range(2):
+            client = ScriptedClient(self._script(1))
+            res = run_agent_turn(client, [{"role": "user", "content": "basit ortalamaya çevir"}],
+                                 _payload())
+            assert len(res.actions) == 1

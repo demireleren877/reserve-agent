@@ -2,6 +2,7 @@
 
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -9,73 +10,42 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import type { FileData, LDFMethod } from "@/types/triangle";
+import { selectModelTriangle, type FileData, type LDFMethod, type ModelBasis } from "@/types/triangle";
 import {
   type Branch,
   type ChangeSource,
   type Frequency,
   type HistoryEntry,
+  type LargeModel,
+  type ModelVersion,
   type NavLevel,
   type Period,
   type Project,
   type UploadSettings,
   type Window,
+  assumptionsFromVersion,
+  ensureBranchVersions,
   makeBranch,
   makePeriod,
+  makeVersion,
   newId,
+  snapshotAssumptions,
 } from "@/types/project";
 import {
   fetchState,
   putState,
-  WorkerError,
+  ApiError as WorkerError,
 } from "@/lib/sync/worker-client";
-import {
-  CHAT_CHANGED_EVENT,
-  replaceAllSessions,
-  type ChatSession,
-} from "@/lib/chat-storage";
-
-// Strips file_data / fileData fields before syncing to the worker.
-// These are raw upload blobs kept only in-memory/localStorage for the File Analysis tab.
-function stripTriangle(t: unknown): unknown {
-  if (!t || typeof t !== "object") return t;
-  const { file_data: _fd, ...rest } = t as Record<string, unknown>;
-  void _fd;
-  return rest;
-}
-function stripFileDataForSync(project: unknown): unknown {
-  if (!project || typeof project !== "object") return project;
-  const p = project as Record<string, unknown>;
-  const periods = p.periods;
-  if (!Array.isArray(periods)) return project;
-  return {
-    ...p,
-    periods: periods.map((period) => {
-      const per = period as Record<string, unknown>;
-      const branches = per.branches;
-      if (!Array.isArray(branches)) return period;
-      return {
-        ...per,
-        branches: branches.map((branch) => {
-          const { fileData: _fileData, triangle, paidTriangle, incurredTriangle, ...rest } =
-            branch as Record<string, unknown>;
-          void _fileData;
-          return {
-            ...rest,
-            triangle: stripTriangle(triangle),
-            paidTriangle: stripTriangle(paidTriangle),
-            incurredTriangle: stripTriangle(incurredTriangle),
-          };
-        }),
-      };
-    }),
-  };
-}
+import { mergeProjects } from "@/lib/project-merge";
+import { sortByPeriodLabel } from "@/lib/period-order";
+import { CHAT_CHANGED_EVENT } from "@/lib/chat-storage";
+import { cleanBranchDisplayName, sameBranchName } from "@/lib/branch-identity";
 
 const STORAGE_KEY_PREFIX = "reserve-agent-project-v2";
 const CHAT_STORAGE_KEY_PREFIX = "reserve-agent-chat-v1";
 const MAX_HISTORY = 500;
 const SYNC_DEBOUNCE_MS = 1500;
+const PERSIST_DEBOUNCE_MS = 250;
 
 const EMPTY: Project = {
   periods: [],
@@ -83,6 +53,51 @@ const EMPTY: Project = {
   activeFrequency: null,
   activeBranchId: null,
 };
+
+/** Belirli bir branch'i (periodId+branchId) verilen dönüşümden geçirir. */
+function transformBranchById(prev: Project, periodId: string, branchId: string, fn: (b: Branch) => Branch): Project {
+  return {
+    ...prev,
+    periods: prev.periods.map((p) =>
+      p.id !== periodId
+        ? p
+        : { ...p, branches: p.branches.map((b) => (b.id === branchId ? fn(b) : b)) },
+    ),
+  };
+}
+
+/** Bir branch'te versiyon değiştirir: mevcut çalışma durumu aktif versiyona kaydedilir,
+ *  hedef versiyonun assumption'ları yaşayan alanlara yüklenir (veri korunur). */
+function applyVersionSwitch(b: Branch, versionId: string): Branch {
+  const versions = b.versions ?? [];
+  const target = versions.find((v) => v.id === versionId);
+  if (!target || versionId === b.activeVersionId) return b;
+  const now = new Date().toISOString();
+  const saved = versions.map((v) =>
+    v.id === b.activeVersionId ? { ...v, ...snapshotAssumptions(b), updatedAt: now } : v,
+  );
+  const assumptions = assumptionsFromVersion(target);
+  const basis = assumptions.modelBasis ?? b.modelBasis ?? "incurred";
+  return {
+    ...b,
+    ...assumptions,
+    triangle: selectModelTriangle(b.paidTriangle, b.incurredTriangle, basis) ?? b.triangle,
+    versions: saved,
+    activeVersionId: versionId,
+    updatedAt: now,
+  };
+}
+
+/** Her branch'in en az bir versiyonu (Base) olduğundan emin ol — eski projeleri migrate eder. */
+function migrateProject(p: Project): Project {
+  return {
+    ...p,
+    periods: p.periods.map((per) => ({
+      ...per,
+      branches: per.branches.map(ensureBranchVersions),
+    })),
+  };
+}
 
 export interface CopyAssumptionsOptions {
   excludedCells?: boolean;
@@ -107,6 +122,10 @@ interface ProjectActions {
   goToPeriod(periodId: string): void;
   goToFrequency(freq: Frequency): void;
   goToBranch(branchId: string): void;
+  /** Bir branşı dönemiyle birlikte doğrudan aç (sekme geçişi için — dönem farklı olabilir). */
+  openBranch(periodId: string, branchId: string): void;
+  /** Dönem+branş+versiyonu tek seferde aç (sidebar): gerekiyorsa versiyona geçer. */
+  openVersion(periodId: string, branchId: string, versionId: string): void;
   goUp(): void;
   updateActiveBranch(
     updater: (prev: Branch) => Partial<Branch>,
@@ -122,6 +141,12 @@ interface ProjectActions {
     source?: ChangeSource,
   ): void;
   copyAssumptions(sourceBranchId: string, targetBranchId: string, opts: CopyAssumptionsOptions): void;
+  /** Bir branşta mevcut çalışma durumunu kopyalayan yeni versiyon oluşturup ona geçer (id-tabanlı). */
+  createVersion(periodId: string, branchId: string, name: string): string;
+  /** Bir branşın versiyonunu değiştir (store aktifini DEĞİŞTİRMEZ — cashflow lokal nav için). */
+  switchBranchVersion(periodId: string, branchId: string, versionId: string): void;
+  renameVersion(periodId: string, branchId: string, versionId: string, name: string): void;
+  deleteVersion(periodId: string, branchId: string, versionId: string): void;
   clearAll(): void;
   undo(): void;
   canUndo: boolean;
@@ -132,9 +157,13 @@ interface Ctx {
   navLevel: NavLevel;
   activePeriod: Period | null;
   activeBranch: Branch | null;
+  /** Aktif branch'in aktif versiyonu (senaryo). Yaşayan branch alanları bu versiyona karşılık gelir. */
+  activeVersion: ModelVersion | null;
   branchesForActiveFrequency: Branch[];
   actions: ProjectActions;
   canUndo: boolean;
+  /** Aktif model başkasınca kilitliyken yazmayı engelle (salt okunur) */
+  setReadOnly: (v: boolean) => void;
 }
 
 const ProjectCtx = createContext<Ctx | null>(null);
@@ -145,23 +174,41 @@ interface ProjectProviderProps {
   children: ReactNode;
   /** Required — scopes localStorage cache and Worker sync to a single user. */
   userId: string;
+  /** Audit kaydında gösterilecek oturum kullanıcı adı. */
+  userName: string;
 }
 
-export function ProjectProvider({ children, userId }: ProjectProviderProps) {
+export function ProjectProvider({ children, userId, userName }: ProjectProviderProps) {
   const [project, setProject] = useState<Project>(EMPTY);
+  const projectRef = useRef<Project>(EMPTY);
+  projectRef.current = project;
   const [hydrated, setHydrated] = useState(false);
   const undoStackRef = useRef<Project[]>([]);
   const [undoDepth, setUndoDepth] = useState(0);
 
   const projectKey = `${STORAGE_KEY_PREFIX}:${userId}`;
-  const chatKey = `${CHAT_STORAGE_KEY_PREFIX}:${userId}`;
 
   // Refs for the debounced worker sync. We don't want stale closures.
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastSerializedRef = useRef<{ project: string; chat: string }>({
-    project: "",
-    chat: "",
-  });
+  const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const persistIdleRef = useRef<number | null>(null);
+  const lastSerializedRef = useRef<string>("");
+  // Çok kullanıcı senkron: son sunucu durumu (3-yollu merge tabanı) + versiyon + push kilidi
+  const baseRef = useRef<Project | null>(null);
+  const versionRef = useRef<number>(0);
+  const pushingRef = useRef<boolean>(false);
+  // Model kilidi başkasındaysa aktif branch'e yazma engellenir (salt okunur)
+  const readOnlyRef = useRef<boolean>(false);
+  const setReadOnly = useCallback((v: boolean) => { readOnlyRef.current = v; }, []);
+
+  const historyEntry = useCallback((action: string, details?: Record<string, unknown>, source: ChangeSource = "user"): HistoryEntry => ({
+    id: newId(),
+    timestamp: new Date().toISOString(),
+    action,
+    source,
+    actorName: userName,
+    details,
+  }), [userName]);
 
   // Wrap setProject to push undo snapshots for destructive ops
   function setProjectWithUndo(updater: (prev: Project) => Project) {
@@ -180,19 +227,15 @@ export function ProjectProvider({ children, userId }: ProjectProviderProps) {
 
     (async () => {
       let serverProject: Project | null = null;
-      let serverChat: ChatSession[] | null = null;
-      let workerOk = false;
 
       try {
-        const remote = await fetchState<Project, ChatSession[]>();
+        const remote = await fetchState<Project, null>();
         if (cancelled) return;
         if (remote.project && Array.isArray((remote.project as Project).periods)) {
           serverProject = remote.project as Project;
         }
-        if (Array.isArray(remote.chat)) {
-          serverChat = remote.chat;
-        }
-        workerOk = true;
+        baseRef.current = serverProject;      // 3-yollu merge tabanı
+        versionRef.current = remote.version;  // optimistic versiyon
       } catch (e) {
         if (!(e instanceof WorkerError)) console.error("worker fetch failed", e);
       }
@@ -201,32 +244,24 @@ export function ProjectProvider({ children, userId }: ProjectProviderProps) {
 
       // Project: server wins if present, else fall back to localStorage cache.
       if (serverProject) {
-        setProject(serverProject);
+        setProject(migrateProject({ ...serverProject, periods: sortByPeriodLabel(serverProject.periods) }));
       } else {
         try {
           const raw = localStorage.getItem(projectKey);
           if (raw) {
             const parsed = JSON.parse(raw) as Project;
-            if (parsed && Array.isArray(parsed.periods)) setProject(parsed);
+            if (parsed && Array.isArray(parsed.periods)) {
+              setProject(migrateProject({ ...parsed, periods: sortByPeriodLabel(parsed.periods) }));
+            }
           }
         } catch {
           /* ignore */
         }
       }
 
-      // Chat: only overwrite local cache if the server actually returned chat
-      // (or returned empty array — meaning user explicitly has no sessions).
-      if (workerOk && serverChat !== null) {
-        replaceAllSessions(userId, serverChat);
-        // ChatPanel listens for this to refresh its in-memory list.
-        window.dispatchEvent(new CustomEvent("reserve-chat-loaded"));
-      }
-
       // Seed lastSerialized so we don't immediately PUT what we just GOT.
       try {
-        const projStr = localStorage.getItem(projectKey) ?? "";
-        const chatStr = localStorage.getItem(chatKey) ?? "";
-        lastSerializedRef.current = { project: projStr, chat: chatStr };
+        lastSerializedRef.current = localStorage.getItem(projectKey) ?? "";
       } catch {
         /* ignore */
       }
@@ -237,29 +272,58 @@ export function ProjectProvider({ children, userId }: ProjectProviderProps) {
     return () => {
       cancelled = true;
     };
-  }, [userId, projectKey, chatKey]);
+  }, [userId, projectKey]);
 
-  // Persist project to localStorage cache + schedule worker sync on change.
-  useEffect(() => {
-    if (!hydrated || !userId) return;
+  function persistLatestProject() {
+    if (!userId) return;
     try {
-      localStorage.setItem(projectKey, JSON.stringify(project));
+      localStorage.setItem(projectKey, JSON.stringify(projectRef.current));
+      schedulePush();
     } catch {
       /* quota — silent */
     }
-    schedulePush();
-    // schedulePush is stable via refs; we intentionally exclude it from deps.
+  }
+
+  // Persist işlemi büyük triangle/fileData projelerinde pahalıdır. Her küçük
+  // state değişiminin render'ından hemen sonra stringify etmek yerine kısa bir
+  // debounce ve tarayıcının idle penceresinde tek kez çalıştır.
+  useEffect(() => {
+    if (!hydrated || !userId) return;
+    if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
+    if (persistIdleRef.current != null && "cancelIdleCallback" in window) {
+      window.cancelIdleCallback(persistIdleRef.current);
+      persistIdleRef.current = null;
+    }
+    persistTimerRef.current = setTimeout(() => {
+      persistTimerRef.current = null;
+      if ("requestIdleCallback" in window) {
+        persistIdleRef.current = window.requestIdleCallback(() => {
+          persistIdleRef.current = null;
+          persistLatestProject();
+        }, { timeout: 1000 });
+      } else {
+        persistLatestProject();
+      }
+    }, PERSIST_DEBOUNCE_MS);
+    return () => {
+      if (persistTimerRef.current) {
+        clearTimeout(persistTimerRef.current);
+        persistTimerRef.current = null;
+      }
+      if (persistIdleRef.current != null && "cancelIdleCallback" in window) {
+        window.cancelIdleCallback(persistIdleRef.current);
+        persistIdleRef.current = null;
+      }
+    };
+    // Helpers are stable via refs; project is the intentional trigger.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project, hydrated, userId, projectKey]);
 
-  // Listen for chat-storage writes and schedule a worker sync too.
+  // Chat değişikliklerini dinle — sadece project sync'i tetiklemek için (chat kendisi gönderilmez).
   useEffect(() => {
     if (!hydrated || !userId) return;
-    function onChatChanged() {
-      schedulePush();
-    }
-    window.addEventListener(CHAT_CHANGED_EVENT, onChatChanged);
-    return () => window.removeEventListener(CHAT_CHANGED_EVENT, onChatChanged);
+    window.addEventListener(CHAT_CHANGED_EVENT, schedulePush);
+    return () => window.removeEventListener(CHAT_CHANGED_EVENT, schedulePush);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hydrated, userId]);
 
@@ -269,45 +333,111 @@ export function ProjectProvider({ children, userId }: ProjectProviderProps) {
   }
 
   async function pushNow() {
-    if (!userId) return;
+    if (!userId || pushingRef.current) return;
     let projectStr = "";
-    let chatStr = "";
     try {
       projectStr = localStorage.getItem(projectKey) ?? "";
-      chatStr = localStorage.getItem(chatKey) ?? "";
     } catch {
       return;
     }
-    if (
-      projectStr === lastSerializedRef.current.project &&
-      chatStr === lastSerializedRef.current.chat
-    ) {
+    if (projectStr === lastSerializedRef.current) {
       return; // nothing actually changed
     }
+    if (!projectStr) return;
+    pushingRef.current = true;
     try {
-      const projectVal = projectStr ? stripFileDataForSync(JSON.parse(projectStr)) : null;
-      const chatVal = chatStr ? JSON.parse(chatStr) : null;
-      await putState({ project: projectVal, chat: chatVal });
-      lastSerializedRef.current = { project: projectStr, chat: chatStr };
-    } catch (e) {
-      // Best-effort. The next change will retry. Don't surface an error toast
-      // for transient failures — log and move on.
-      console.error("worker push failed", e);
+      const mine = JSON.parse(projectStr) as Project;
+      try {
+        const res = await putState({ project: mine, expectedVersion: versionRef.current });
+        versionRef.current = res.version;
+        baseRef.current = mine;
+        lastSerializedRef.current = projectStr;
+      } catch (e) {
+        if (e instanceof WorkerError && e.status === 409) {
+          // Başkası bu arada yazmış → sunucuyu çek, branch-düzeyi birleştir, tekrar dene
+          const remote = await fetchState<Project, null>();
+          const theirs = (remote.project as Project) ?? EMPTY;
+          const merged = mergeProjects(baseRef.current, mine, theirs);
+          baseRef.current = theirs;
+          versionRef.current = remote.version;
+          try {
+            const res2 = await putState({ project: merged, expectedVersion: versionRef.current });
+            versionRef.current = res2.version;
+            baseRef.current = merged;
+          } catch {
+            /* ikinci çakışma — bir sonraki değişiklikte tekrar denenir */
+          }
+          const mergedStr = JSON.stringify(merged);
+          lastSerializedRef.current = mergedStr;
+          setProject(migrateProject(merged)); // başkasının değişikliklerini de ekranıma getir
+        } else {
+          console.error("worker push failed", e);
+        }
+      }
+    } finally {
+      pushingRef.current = false;
     }
   }
+
+  // Sunucudan tazele + branch-düzeyi birleştir (poll ve kilit-alındı olayı kullanır).
+  const syncFromServer = useCallback(async () => {
+    if (pushingRef.current) return;
+    try {
+      const remote = await fetchState<Project, null>();
+      if (remote.version === versionRef.current) return; // değişiklik yok
+      const theirs = (remote.project as Project) ?? EMPTY;
+      let localStr = "";
+      try { localStr = localStorage.getItem(projectKey) ?? ""; } catch { return; }
+      const mine = localStr ? (JSON.parse(localStr) as Project) : EMPTY;
+      const merged = mergeProjects(baseRef.current, mine, theirs);
+      baseRef.current = theirs;
+      versionRef.current = remote.version;
+      if (JSON.stringify(merged) !== localStr) {
+        setProject(migrateProject(merged)); // yerelde değişiklik varsa persist efekti geri push'lar
+      }
+    } catch {
+      /* geçici hata — sonraki tur */
+    }
+  }, [projectKey]);
+
+  // Canlı senkron: 15 sn'de bir + kilit alındığında hemen (kilit sahibi hep en
+  // güncel veriyi düzenlesin → donmuş sekme kaynaklı aynı-branş kaybını da kapatır).
+  useEffect(() => {
+    if (!hydrated || !userId) return;
+    const id = setInterval(syncFromServer, 15_000);
+    const onLockAcquired = () => { void syncFromServer(); };
+    window.addEventListener("model-lock-acquired", onLockAcquired);
+    return () => {
+      clearInterval(id);
+      window.removeEventListener("model-lock-acquired", onLockAcquired);
+    };
+  }, [hydrated, userId, syncFromServer]);
 
   // Flush on tab close so we don't lose the last edit.
   useEffect(() => {
     if (!hydrated) return;
     function onBeforeUnload() {
+      if (persistTimerRef.current) {
+        clearTimeout(persistTimerRef.current);
+        persistTimerRef.current = null;
+      }
+      if (persistIdleRef.current != null && "cancelIdleCallback" in window) {
+        window.cancelIdleCallback(persistIdleRef.current);
+        persistIdleRef.current = null;
+      }
+      // Debounce/idle bekleyen son state kaybolmasın.
+      try {
+        localStorage.setItem(projectKey, JSON.stringify(projectRef.current));
+      } catch {
+        /* quota — silent */
+      }
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current);
         debounceTimerRef.current = null;
-        // sendBeacon would be ideal, but we can't easily attach Bearer tokens
-        // to it, so we fall back to a fire-and-forget fetch. The browser may
-        // cancel it, but in most cases the request goes through.
-        void pushNow();
       }
+      // sendBeacon would be ideal, but Bearer token ekleyemediğimiz için son
+      // state'i localStorage'dan fire-and-forget göndeririz.
+      void pushNow();
     }
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
@@ -355,6 +485,12 @@ export function ProjectProvider({ children, userId }: ProjectProviderProps) {
     [activePeriod, project.activeBranchId],
   );
 
+  const activeVersion = useMemo<ModelVersion | null>(() => {
+    if (!activeBranch) return null;
+    const vs = activeBranch.versions ?? [];
+    return vs.find((v) => v.id === activeBranch.activeVersionId) ?? vs[0] ?? null;
+  }, [activeBranch]);
+
   const navLevel: NavLevel = useMemo(() => {
     if (project.activeBranchId && activeBranch) return "branch";
     if (project.activeFrequency) return "frequency";
@@ -373,7 +509,7 @@ export function ProjectProvider({ children, userId }: ProjectProviderProps) {
         const p = makePeriod(label);
         setProject((prev) => ({
           ...prev,
-          periods: [...prev.periods, p],
+          periods: sortByPeriodLabel([...prev.periods, p]),
           activePeriodId: p.id,
           activeFrequency: null,
           activeBranchId: null,
@@ -402,18 +538,41 @@ export function ProjectProvider({ children, userId }: ProjectProviderProps) {
         }));
       },
       createBranch(periodId, frequency, name) {
-        const b = makeBranch(name, frequency);
-        setProject((prev) => ({
-          ...prev,
-          periods: prev.periods.map((p) =>
-            p.id === periodId
-              ? { ...p, branches: [...p.branches, b] }
-              : p,
-          ),
-          activePeriodId: periodId,
-          activeFrequency: frequency,
-          activeBranchId: b.id,
-        }));
+        const displayName = cleanBranchDisplayName(name);
+        const existing = projectRef.current.periods
+          .find((period) => period.id === periodId)
+          ?.branches.find(
+            (branch) => branch.frequency === frequency && sameBranchName(branch.name, displayName),
+          );
+        if (existing) {
+          setProject((prev) => ({
+            ...prev,
+            activePeriodId: periodId,
+            activeFrequency: frequency,
+            activeBranchId: existing.id,
+          }));
+          return existing.id;
+        }
+        const b = makeBranch(displayName, frequency);
+        b.history = b.history.map((entry) => ({ ...entry, actorName: userName }));
+        setProject((prev) => {
+          const duplicate = prev.periods
+            .find((period) => period.id === periodId)
+            ?.branches.find(
+              (branch) => branch.frequency === frequency && sameBranchName(branch.name, displayName),
+            );
+          return {
+            ...prev,
+            periods: duplicate
+              ? prev.periods
+              : prev.periods.map((p) =>
+                  p.id === periodId ? { ...p, branches: [...p.branches, b] } : p,
+                ),
+            activePeriodId: periodId,
+            activeFrequency: frequency,
+            activeBranchId: duplicate?.id ?? b.id,
+          };
+        });
         return b.id;
       },
       deleteBranch(branchId) {
@@ -431,19 +590,44 @@ export function ProjectProvider({ children, userId }: ProjectProviderProps) {
         });
       },
       renameBranch(branchId, name) {
+        const displayName = cleanBranchDisplayName(name);
         setProject((prev) => ({
           ...prev,
-          periods: prev.periods.map((p) => ({
-            ...p,
-            branches: p.branches.map((b) =>
-              b.id === branchId
-                ? { ...b, name, updatedAt: new Date().toISOString() }
-                : b,
-            ),
-          })),
+          periods: prev.periods.map((p) => {
+            const current = p.branches.find((branch) => branch.id === branchId);
+            if (!current) return p;
+            const duplicate = p.branches.some(
+              (branch) =>
+                branch.id !== branchId &&
+                branch.frequency === current.frequency &&
+                sameBranchName(branch.name, displayName),
+            );
+            if (duplicate) return p;
+            return {
+              ...p,
+              branches: p.branches.map((b) =>
+                b.id === branchId
+                  ? { ...b, name: displayName, updatedAt: new Date().toISOString() }
+                  : b,
+              ),
+            };
+          }),
         }));
       },
       copyBranch(branchId, targetPeriodId, newName, targetFrequency) {
+        const source = projectRef.current.periods
+          .flatMap((period) => period.branches)
+          .find((branch) => branch.id === branchId);
+        const displayName = cleanBranchDisplayName(newName);
+        const frequency = targetFrequency ?? source?.frequency;
+        const existing = frequency
+          ? projectRef.current.periods
+              .find((period) => period.id === targetPeriodId)
+              ?.branches.find(
+                (branch) => branch.frequency === frequency && sameBranchName(branch.name, displayName),
+              )
+          : undefined;
+        if (existing) return existing.id;
         const newBranchId = newId();
         const now = new Date().toISOString();
         setProjectWithUndo((prev) => {
@@ -456,17 +640,11 @@ export function ProjectProvider({ children, userId }: ProjectProviderProps) {
           const newBranch: Branch = {
             ...src,
             id: newBranchId,
-            name: newName,
+            name: displayName,
             frequency: targetFrequency ?? src.frequency,
             createdAt: now,
             updatedAt: now,
-            history: [{
-              id: newId(),
-              timestamp: now,
-              action: "branch_copied",
-              source: "user",
-              details: { from: src.name, originalId: src.id },
-            }],
+            history: [{ ...historyEntry("branch_copied", { from: src.name, originalId: src.id }), timestamp: now }],
           };
           return {
             ...prev,
@@ -495,6 +673,15 @@ export function ProjectProvider({ children, userId }: ProjectProviderProps) {
           const updated: Branch = targetFrequency
             ? { ...movingBranch, frequency: targetFrequency }
             : movingBranch;
+          const collision = prev.periods
+            .find((period) => period.id === targetPeriodId)
+            ?.branches.some(
+              (branch) =>
+                branch.id !== branchId &&
+                branch.frequency === updated.frequency &&
+                sameBranchName(branch.name, updated.name),
+            );
+          if (collision) return prev;
           const samePeriod = sourcePeriodId === targetPeriodId;
           return {
             ...prev,
@@ -555,6 +742,35 @@ export function ProjectProvider({ children, userId }: ProjectProviderProps) {
           };
         });
       },
+      openBranch(periodId, branchId) {
+        setProject((prev) => {
+          const period = prev.periods.find((p) => p.id === periodId);
+          const branch = period?.branches.find((b) => b.id === branchId);
+          if (!branch) return prev;
+          return {
+            ...prev,
+            activePeriodId: periodId,
+            activeFrequency: branch.frequency,
+            activeBranchId: branchId,
+          };
+        });
+      },
+      openVersion(periodId, branchId, versionId) {
+        setProject((prev) => {
+          const period = prev.periods.find((p) => p.id === periodId);
+          const branch = period?.branches.find((b) => b.id === branchId);
+          if (!branch) return prev;
+          const withSwitch = versionId && !readOnlyRef.current
+            ? transformBranchById(prev, periodId, branchId, (b) => applyVersionSwitch(b, versionId))
+            : prev;
+          return {
+            ...withSwitch,
+            activePeriodId: periodId,
+            activeFrequency: branch.frequency,
+            activeBranchId: branchId,
+          };
+        });
+      },
       goUp() {
         setProject((prev) => {
           if (prev.activeBranchId)
@@ -567,6 +783,8 @@ export function ProjectProvider({ children, userId }: ProjectProviderProps) {
         });
       },
       updateActiveBranch(updater, action, details, source) {
+        // Başka kullanıcı bu modeli kilitlediyse yazma yok (salt okunur)
+        if (readOnlyRef.current) return;
         setProject((prev) => {
           if (!prev.activePeriodId || !prev.activeBranchId) return prev;
           return {
@@ -578,13 +796,7 @@ export function ProjectProvider({ children, userId }: ProjectProviderProps) {
                 branches: p.branches.map((b) => {
                   if (b.id !== prev.activeBranchId) return b;
                   const patch = updater(b);
-                  const entry: HistoryEntry = {
-                    id: newId(),
-                    timestamp: new Date().toISOString(),
-                    action,
-                    source: source ?? "user",
-                    details,
-                  };
+                  const entry = historyEntry(action, details, source ?? "user");
                   const history = [...b.history, entry].slice(-MAX_HISTORY);
                   return {
                     ...b,
@@ -606,13 +818,7 @@ export function ProjectProvider({ children, userId }: ProjectProviderProps) {
             branches: p.branches.map((b) => {
               if (b.id !== branchId) return b;
               const patch = updater(b);
-              const entry: HistoryEntry = {
-                id: newId(),
-                timestamp: new Date().toISOString(),
-                action,
-                source: source ?? "user",
-                details,
-              };
+              const entry = historyEntry(action, details, source ?? "user");
               const history = [...b.history, entry].slice(-MAX_HISTORY);
               return { ...b, ...patch, history, updatedAt: entry.timestamp };
             }),
@@ -692,13 +898,7 @@ export function ProjectProvider({ children, userId }: ProjectProviderProps) {
             patch.cdfInitial = translatedInitial;
           }
           const now = new Date().toISOString();
-          const entry = {
-            id: Math.random().toString(36).slice(2),
-            timestamp: now,
-            action: "assumptions_copied",
-            source: "user" as const,
-            details: { from: sourceBranchId },
-          };
+          const entry = { ...historyEntry("assumptions_copied", { from: sourceBranchId }), timestamp: now };
           return {
             ...prev,
             periods: prev.periods.map((p) => ({
@@ -711,6 +911,85 @@ export function ProjectProvider({ children, userId }: ProjectProviderProps) {
             })),
           };
         });
+      },
+      createVersion(periodId, branchId, name) {
+        const newVerId = newId();
+        if (readOnlyRef.current) return newVerId;
+        setProject((prev) =>
+          transformBranchById(prev, periodId, branchId, (b) => {
+            const now = new Date().toISOString();
+            const versions = b.versions ?? [];
+            // Mevcut çalışma durumunu aktif versiyona kaydet (kaybolmasın)
+            const saved = versions.map((v) =>
+              v.id === b.activeVersionId ? { ...v, ...snapshotAssumptions(b), updatedAt: now } : v,
+            );
+            const nv: ModelVersion = {
+              id: newVerId,
+              name: name.trim() || "New version",
+              createdAt: now,
+              updatedAt: now,
+              ...snapshotAssumptions(b), // fork = mevcudun kopyası
+            };
+            // Yaşayan alanlar değişmez (fork mevcutla aynı başlar); sadece aktif versiyon = yeni.
+            const entry = { ...historyEntry("version_created", { versionId: newVerId, name: nv.name }), timestamp: now };
+            return {
+              ...b,
+              versions: [...saved, nv],
+              activeVersionId: newVerId,
+              updatedAt: now,
+              history: [...b.history, entry].slice(-MAX_HISTORY),
+            };
+          }),
+        );
+        return newVerId;
+      },
+      switchBranchVersion(periodId, branchId, versionId) {
+        if (readOnlyRef.current) return;
+        setProject((prev) => transformBranchById(prev, periodId, branchId, (b) => applyVersionSwitch(b, versionId)));
+      },
+      renameVersion(periodId, branchId, versionId, name) {
+        setProject((prev) =>
+          transformBranchById(prev, periodId, branchId, (b) => {
+            const current = (b.versions ?? []).find((v) => v.id === versionId);
+            if (!current) return b;
+            const now = new Date().toISOString();
+            const nextName = name.trim() || current.name;
+            const entry = { ...historyEntry("version_renamed", { versionId, from: current.name, to: nextName }), timestamp: now };
+            return {
+              ...b,
+              versions: (b.versions ?? []).map((v) => v.id === versionId ? { ...v, name: nextName, updatedAt: now } : v),
+              updatedAt: now,
+              history: [...b.history, entry].slice(-MAX_HISTORY),
+            };
+          }),
+        );
+      },
+      deleteVersion(periodId, branchId, versionId) {
+        if (readOnlyRef.current) return;
+        setProjectWithUndo((prev) =>
+          transformBranchById(prev, periodId, branchId, (b) => {
+            const versions = b.versions ?? [];
+            if (versions.length <= 1) return b; // son versiyon silinemez
+            const deleted = versions.find((v) => v.id === versionId);
+            const remaining = versions.filter((v) => v.id !== versionId);
+            if (remaining.length === versions.length) return b;
+            const now = new Date().toISOString();
+            const entry = { ...historyEntry("version_deleted", { versionId, name: deleted?.name ?? versionId }), timestamp: now };
+            if (b.activeVersionId === versionId) {
+              // Aktif versiyon silindi → ilk kalanı yükle
+              const target = remaining[0];
+              return {
+                ...b,
+                ...assumptionsFromVersion(target),
+                versions: remaining,
+                activeVersionId: target.id,
+                updatedAt: now,
+                history: [...b.history, entry].slice(-MAX_HISTORY),
+              };
+            }
+            return { ...b, versions: remaining, updatedAt: now, history: [...b.history, entry].slice(-MAX_HISTORY) };
+          }),
+        );
       },
       clearAll() {
         setProject(EMPTY);
@@ -738,9 +1017,11 @@ export function ProjectProvider({ children, userId }: ProjectProviderProps) {
         navLevel,
         activePeriod,
         activeBranch,
+        activeVersion,
         branchesForActiveFrequency,
         actions,
         canUndo,
+        setReadOnly,
       }}
     >
       {children}
@@ -756,13 +1037,31 @@ export function useProject(): Ctx {
 
 export interface BranchSetters {
   setTriangle: (t: Branch["triangle"], fileName?: string | null, fileData?: FileData) => void;
-  setBothTriangles: (paid: Branch["triangle"], incurred: Branch["triangle"], fileName?: string, fileData?: FileData | null, count?: Branch["triangle"]) => void;
+  setBothTriangles: (paid: Branch["triangle"], incurred: Branch["triangle"], fileName?: string, fileData?: FileData | null, count?: Branch["triangle"], modelBasis?: ModelBasis) => void;
+  /** Roll-forward: yeni üçgenleri yükle ama TÜM model varsayım/seçimlerini base'den
+   *  koru (elemeler, curve, CDF, premium, LR, basis, correction, window, largeModel).
+   *  Sadece VERİ değişir; formüller/seçimler aynı kalır. */
+  setRolledForward: (
+    paid: Branch["triangle"],
+    incurred: Branch["triangle"],
+    fileName: string,
+    fileData: FileData | null | undefined,
+    base: Branch,
+    modelBasis?: ModelBasis,
+  ) => void;
+  /** LARGE-LOSS üçgenlerini yükle (ödeme + gerçekleşen). */
+  setLargeTriangles: (paid: Branch["triangle"], incurred: Branch["triangle"], fileData?: FileData | null) => void;
+  setModelBasis: (basis: ModelBasis) => void;
+  clearLarge: () => void;
+  setLargeWindow: (w: Window) => void;
   setMethod: (m: LDFMethod) => void;
   setWindow: (w: Window) => void;
+  /** LDF volume presetlerini (düzenlenebilir Last-N satırları) branşa kaydet. */
+  setLdfWindowPresets: (next: number[]) => void;
   setExcludedCells: (next: Set<string>) => void;
-  addExcludedCells: (keys: string[]) => void;
-  removeExcludedCells: (keys: string[]) => void;
   toggleCell: (origin: string, step: number) => void;
+  /** LDF yumuşatma: aynı satırda (j, j+1) çiftini ortalamaya al / geri al (long-press). */
+  toggleAvgPair: (origin: string, step: number) => void;
   clearExclusions: () => void;
   setKarmaWindow: (step: string, w: Window) => void;
   initKarma: (stepCount: number, globalWindow: Window) => void;
@@ -790,15 +1089,60 @@ export interface BranchSetters {
   setUploadSettings: (s: UploadSettings) => void;
 }
 
-export function useBranchSetters(source: ChangeSource = "user"): BranchSetters {
+const LARGE_MODEL_DEFAULT: LargeModel = {
+  method: "volume_weighted",
+  window: "all",
+  excludedCells: [],
+  karmaWindowPerStep: {},
+  premiums: {},
+  lrInputPerOrigin: {},
+  basisPerOrigin: {},
+  correctionPerOrigin: {},
+  cdfInitial: {},
+  cdfChoicePerPeriod: {},
+  cdfModelPerPeriod: {},
+  curveIncludePerPeriod: {},
+};
+
+export function useBranchSetters(
+  source: ChangeSource = "user",
+  segment?: "large" | "gross",
+): BranchSetters {
   const { actions, activeBranch } = useProject();
+  // Bağımsız param seti tutan segmentler: large → largeModel, gross → grossModel.
+  // Attritional (ve tek-segment) top-level Branch alanlarına yazar (modelKey = null).
+  const modelKey: "largeModel" | "grossModel" | null =
+    segment === "large" ? "largeModel" : segment === "gross" ? "grossModel" : null;
 
   return useMemo<BranchSetters>(
-    () => ({
+    () => {
+      // Veri setter'ları (üçgen yükleme vs.) her zaman top-level yazar.
+      const updData = actions.updateActiveBranch;
+      // Model-param setter'ları large/gross segmentinde ilgili model alt-nesnesine yönlendirilir.
+      const updModel = (
+        mut: (prev: Branch) => Partial<Branch>,
+        label: string,
+        details?: Record<string, unknown>,
+        _src?: ChangeSource,
+      ) =>
+        modelKey
+          ? actions.updateActiveBranch(
+              (prev) => {
+                const m = { ...LARGE_MODEL_DEFAULT, ...(prev[modelKey] ?? {}) };
+                const patch = mut({ ...prev, ...m } as Branch);
+                return { [modelKey]: { ...m, ...patch } as LargeModel };
+              },
+              label,
+              details,
+              source,
+            )
+          : actions.updateActiveBranch(mut, label, details, source);
+      return {
       setTriangle: (t, fileName, fileData) =>
-        actions.updateActiveBranch(
-          () => ({
+        updData(
+          (prev) => ({
             triangle: t,
+            modelBasis: t?.triangle_type ?? prev.modelBasis ?? "incurred",
             triangleFileName: fileName ?? null,
             fileData: fileData ?? undefined,
             excludedCells: [],
@@ -819,10 +1163,11 @@ export function useBranchSetters(source: ChangeSource = "user"): BranchSetters {
           fileName ? { fileName } : {},
           source,
         ),
-      setBothTriangles: (paid, incurred, fileName, fileData, count) =>
-        actions.updateActiveBranch(
-          () => ({
-            triangle: incurred,
+      setBothTriangles: (paid, incurred, fileName, fileData, count, modelBasis) =>
+        updData(
+          (prev) => ({
+            triangle: selectModelTriangle(paid, incurred, modelBasis ?? prev.modelBasis ?? "incurred") ?? incurred ?? paid,
+            modelBasis: modelBasis ?? prev.modelBasis ?? "incurred",
             triangleFileName: fileName ?? null,
             fileData: fileData ?? undefined,
             excludedCells: [],
@@ -836,58 +1181,114 @@ export function useBranchSetters(source: ChangeSource = "user"): BranchSetters {
             countTriangle: count ?? null,
           }),
           "triangle_loaded",
-          fileName ? { fileName } : {},
+          { ...(fileName ? { fileName } : {}), modelBasis: modelBasis ?? activeBranch?.modelBasis ?? "incurred" },
+          source,
+        ),
+      setRolledForward: (paid, incurred, fileName, fileData, base, modelBasis) =>
+        updData(
+          () => ({
+            triangle: selectModelTriangle(paid, incurred, modelBasis ?? base.modelBasis ?? "incurred") ?? incurred ?? paid,
+            modelBasis: modelBasis ?? base.modelBasis ?? "incurred",
+            triangleFileName: fileName ?? null,
+            fileData: fileData ?? undefined,
+            paidTriangle: paid,
+            incurredTriangle: incurred,
+            // ── Model varsayımları/seçimleri KORUNUR (base'den taşınır) ──
+            method: base.method,
+            window: base.window,
+            excludedCells: [...(base.excludedCells ?? [])],
+            karmaWindowPerStep: { ...(base.karmaWindowPerStep ?? {}) },
+            premiums: { ...(base.premiums ?? {}) },
+            lrInputPerOrigin: { ...(base.lrInputPerOrigin ?? {}) },
+            basisPerOrigin: { ...(base.basisPerOrigin ?? {}) },
+            correctionPerOrigin: { ...(base.correctionPerOrigin ?? {}) },
+            cdfInitial: { ...(base.cdfInitial ?? {}) },
+            cdfChoicePerPeriod: { ...(base.cdfChoicePerPeriod ?? {}) },
+            cdfModelPerPeriod: { ...(base.cdfModelPerPeriod ?? {}) },
+            curveIncludePerPeriod: { ...(base.curveIncludePerPeriod ?? {}) },
+            largeWindow: base.largeWindow,
+            largeModel: base.largeModel ? { ...base.largeModel } : undefined,
+            grossModel: base.grossModel ? { ...base.grossModel } : undefined,
+          }),
+          "roll_forward",
+          { fileName, modelBasis: modelBasis ?? base.modelBasis ?? "incurred" },
+          source,
+        ),
+      setLargeTriangles: (paid, incurred, fileData) =>
+        updData(
+          () => ({
+            largePaidTriangle: paid,
+            largeIncurredTriangle: incurred,
+            largeFileData: fileData ?? undefined,
+          }),
+          "large_loaded",
+          {},
+          source,
+        ),
+      setModelBasis: (basis) =>
+        updData(
+          (prev) => ({
+            modelBasis: basis,
+            triangle: selectModelTriangle(prev.paidTriangle, prev.incurredTriangle, basis) ?? prev.triangle,
+          }),
+          "model_basis_set",
+          { basis },
+          source,
+        ),
+      clearLarge: () =>
+        updData(
+          () => ({
+            largePaidTriangle: null,
+            largeIncurredTriangle: null,
+            largeFileData: undefined,
+          }),
+          "large_cleared",
+          {},
+          source,
+        ),
+      setLargeWindow: (w) =>
+        updData(
+          () => ({ largeWindow: w }),
+          "large_window",
+          { window: w },
           source,
         ),
       setMethod: (m) =>
-        actions.updateActiveBranch(
+        updModel(
           () => ({ method: m }),
           "set_method",
           { method: m },
           source,
         ),
       setWindow: (w) =>
-        actions.updateActiveBranch(
+        updModel(
           () => ({ window: w }),
           "set_window",
           { window: w },
           source,
         ),
+      setLdfWindowPresets: (next) =>
+        updModel(
+          () => ({ ldfWindowPresets: next }),
+          "ldf_presets",
+          { presets: next },
+          source,
+        ),
       setExcludedCells: (next) =>
-        actions.updateActiveBranch(
+        updModel(
           () => ({ excludedCells: Array.from(next) }),
           "exclusions_replaced",
           { count: next.size },
           source,
         ),
-      addExcludedCells: (keys) =>
-        actions.updateActiveBranch(
-          (prev) => {
-            const set = new Set(prev.excludedCells);
-            for (const k of keys) set.add(k);
-            return { excludedCells: Array.from(set) };
-          },
-          "cells_excluded",
-          { count: keys.length },
-          source,
-        ),
-      removeExcludedCells: (keys) =>
-        actions.updateActiveBranch(
-          (prev) => {
-            const set = new Set(prev.excludedCells);
-            for (const k of keys) set.delete(k);
-            return { excludedCells: Array.from(set) };
-          },
-          "cells_included",
-          { count: keys.length },
-          source,
-        ),
       toggleCell: (origin, step) => {
         const key = `${origin}|${step}`;
-        const wasExcluded =
-          activeBranch?.excludedCells?.includes(key) ?? false;
+        const srcCells = modelKey
+          ? activeBranch?.[modelKey]?.excludedCells
+          : activeBranch?.excludedCells;
+        const wasExcluded = srcCells?.includes(key) ?? false;
         const actionLabel = wasExcluded ? "cell_included" : "cell_excluded";
-        actions.updateActiveBranch(
+        updModel(
           (prev) => {
             const set = new Set(prev.excludedCells);
             if (set.has(key)) set.delete(key);
@@ -900,14 +1301,28 @@ export function useBranchSetters(source: ChangeSource = "user"): BranchSetters {
         );
       },
       clearExclusions: () =>
-        actions.updateActiveBranch(
+        updModel(
           () => ({ excludedCells: [] }),
           "exclusions_cleared",
           undefined,
           source,
         ),
+      toggleAvgPair: (origin, step) => {
+        const key = `${origin}|${step}`;
+        updModel(
+          (prev) => {
+            const set = new Set(prev.ldfAvgPairs ?? []);
+            if (set.has(key)) set.delete(key);
+            else set.add(key);
+            return { ldfAvgPairs: Array.from(set) };
+          },
+          "ldf_avg_pair_toggled",
+          { origin, step },
+          source,
+        );
+      },
       setKarmaWindow: (step, w) =>
-        actions.updateActiveBranch(
+        updModel(
           (prev) => ({
             karmaWindowPerStep: { ...(prev.karmaWindowPerStep ?? {}), [step]: w },
           }),
@@ -918,7 +1333,7 @@ export function useBranchSetters(source: ChangeSource = "user"): BranchSetters {
       initKarma: (stepCount, globalWindow) => {
         const initial: Record<string, Window> = {};
         for (let j = 0; j < stepCount; j++) initial[String(j)] = globalWindow;
-        actions.updateActiveBranch(
+        updModel(
           () => ({ karmaWindowPerStep: initial }),
           "karma_initialized",
           { stepCount, globalWindow },
@@ -926,21 +1341,21 @@ export function useBranchSetters(source: ChangeSource = "user"): BranchSetters {
         );
       },
       clearKarma: () =>
-        actions.updateActiveBranch(
+        updModel(
           () => ({ karmaWindowPerStep: {} }),
           "karma_cleared",
           undefined,
           source,
         ),
       setPremiums: (fn, actionLabel, details) =>
-        actions.updateActiveBranch(
+        updModel(
           (prev) => ({ premiums: fn(prev.premiums) }),
           actionLabel ?? "premiums_updated",
           details,
           source,
         ),
       setLrInput: (origin, formula) =>
-        actions.updateActiveBranch(
+        updModel(
           (prev) => {
             const next = { ...prev.lrInputPerOrigin };
             if (!formula || !formula.trim()) delete next[origin];
@@ -952,7 +1367,7 @@ export function useBranchSetters(source: ChangeSource = "user"): BranchSetters {
           source,
         ),
       setLrInputsBulk: (items) =>
-        actions.updateActiveBranch(
+        updModel(
           (prev) => {
             const next = { ...prev.lrInputPerOrigin };
             for (const it of items) {
@@ -966,7 +1381,7 @@ export function useBranchSetters(source: ChangeSource = "user"): BranchSetters {
           source,
         ),
       setBasis: (origin, basis) =>
-        actions.updateActiveBranch(
+        updModel(
           (prev) => ({
             basisPerOrigin: { ...prev.basisPerOrigin, [origin]: basis },
           }),
@@ -975,7 +1390,7 @@ export function useBranchSetters(source: ChangeSource = "user"): BranchSetters {
           source,
         ),
       setBasisBulk: (items) =>
-        actions.updateActiveBranch(
+        updModel(
           (prev) => {
             const next = { ...prev.basisPerOrigin };
             for (const it of items) next[it.origin] = it.basis;
@@ -986,7 +1401,7 @@ export function useBranchSetters(source: ChangeSource = "user"): BranchSetters {
           source,
         ),
       setCorrection: (origin, value) =>
-        actions.updateActiveBranch(
+        updModel(
           (prev) => {
             const next = { ...(prev.correctionPerOrigin ?? {}) };
             if (value == null || !Number.isFinite(value) || value === 1)
@@ -999,7 +1414,7 @@ export function useBranchSetters(source: ChangeSource = "user"): BranchSetters {
           source,
         ),
       setCorrectionsBulk: (items) =>
-        actions.updateActiveBranch(
+        updModel(
           (prev) => {
             const next = { ...(prev.correctionPerOrigin ?? {}) };
             for (const it of items) {
@@ -1014,7 +1429,7 @@ export function useBranchSetters(source: ChangeSource = "user"): BranchSetters {
           source,
         ),
       setCdfInitial: (devPeriod, value) =>
-        actions.updateActiveBranch(
+        updModel(
           (prev) => ({
             cdfInitial: { ...(prev.cdfInitial ?? {}), [devPeriod]: value },
           }),
@@ -1023,14 +1438,14 @@ export function useBranchSetters(source: ChangeSource = "user"): BranchSetters {
           source,
         ),
       seedCdfInitial: (map) =>
-        actions.updateActiveBranch(
+        updModel(
           () => ({ cdfInitial: { ...map } }),
           "curve_seeded",
           { count: Object.keys(map).length },
           source,
         ),
       resetCdfInitial: () =>
-        actions.updateActiveBranch(
+        updModel(
           () => ({
             cdfInitial: {},
             cdfChoicePerPeriod: {},
@@ -1042,7 +1457,7 @@ export function useBranchSetters(source: ChangeSource = "user"): BranchSetters {
           source,
         ),
       setCdfChoice: (devPeriod, choice) =>
-        actions.updateActiveBranch(
+        updModel(
           (prev) => ({
             cdfChoicePerPeriod: {
               ...(prev.cdfChoicePerPeriod ?? {}),
@@ -1054,7 +1469,7 @@ export function useBranchSetters(source: ChangeSource = "user"): BranchSetters {
           source,
         ),
       setCdfChoiceBulk: (items) =>
-        actions.updateActiveBranch(
+        updModel(
           (prev) => {
             const next = { ...(prev.cdfChoicePerPeriod ?? {}) };
             for (const it of items) next[it.devPeriod] = it.choice;
@@ -1065,7 +1480,7 @@ export function useBranchSetters(source: ChangeSource = "user"): BranchSetters {
           source,
         ),
       setCdfModel: (devPeriod, model) =>
-        actions.updateActiveBranch(
+        updModel(
           (prev) => ({
             cdfModelPerPeriod: {
               ...(prev.cdfModelPerPeriod ?? {}),
@@ -1077,7 +1492,7 @@ export function useBranchSetters(source: ChangeSource = "user"): BranchSetters {
           source,
         ),
       setCurveInclude: (devPeriod, include) =>
-        actions.updateActiveBranch(
+        updModel(
           (prev) => ({
             curveIncludePerPeriod: {
               ...(prev.curveIncludePerPeriod ?? {}),
@@ -1089,13 +1504,14 @@ export function useBranchSetters(source: ChangeSource = "user"): BranchSetters {
           source,
         ),
       setUploadSettings: (s) =>
-        actions.updateActiveBranch(
+        updData(
           () => ({ uploadSettings: s }),
           "upload_settings_changed",
           s as unknown as Record<string, unknown>,
           source,
         ),
-    }),
-    [actions, source, activeBranch?.excludedCells],
+      };
+    },
+    [actions, source, modelKey, activeBranch?.excludedCells, activeBranch?.largeModel?.excludedCells, activeBranch?.grossModel?.excludedCells],
   );
 }

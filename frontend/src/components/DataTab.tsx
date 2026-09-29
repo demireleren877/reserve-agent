@@ -1,79 +1,151 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, type ReactNode } from "react";
 import type { Triangle } from "@/types/triangle";
 import { TriangleGrid } from "@/components/TriangleGrid";
 import { formatNumber } from "@/lib/api";
 import { LoadFromDataStore } from "@/components/LoadFromDataStore";
+import { useProject } from "@/lib/project-store";
+import { hasLarge } from "@/lib/large-split";
+import {
+  buildDisplayMatrix,
+  originLengthOptions,
+  devLengthOptions,
+  granMonths,
+  type ViewMode,
+} from "@/lib/triangle-view";
 
-type TriTab = "paid_cum" | "paid_inc" | "muallak" | "incurred";
+type TriType = "paid" | "muallak" | "incurred";
 
-const TRI_TABS: { id: TriTab; label: string }[] = [
-  { id: "paid_cum", label: "Kümülatif Ödeme" },
-  { id: "paid_inc", label: "Artımsal Ödeme" },
-  { id: "muallak", label: "Muallak" },
-  { id: "incurred", label: "Gerçekleşen" },
+const TYPE_TABS: { id: TriType; label: string }[] = [
+  { id: "paid", label: "Paid" },
+  { id: "muallak", label: "Outstanding" },
+  { id: "incurred", label: "Incurred" },
 ];
 
 interface Props {
   paidTriangle: Triangle | null;
   incurredTriangle: Triangle | null;
-}
-
-function toIncremental(tri: Triangle): Triangle {
-  const values = tri.values.map(row =>
-    row.map((v, j) => {
-      if (v == null) return null;
-      if (j === 0) return v;
-      const prev = row[j - 1];
-      return prev != null ? v - prev : null;
-    })
-  );
-  return { ...tri, values };
+  /** Reserve sayfasında Large segmenti mi görüntüleniyor (not metni için). */
+  viewingLarge?: boolean;
+  /** Large aktif mi (veri modülünden DİNAMİK türetilir). Verilmezse branch'e bakılır. */
+  largeActive?: boolean;
+  /** Large > Gross (negatif attritional) hücre sayısı — bilgi amaçlı uyarı. */
+  largeNegativeCount?: number;
 }
 
 function toMuallak(paid: Triangle, incurred: Triangle): Triangle | null {
   if (
     paid.origin_periods.length !== incurred.origin_periods.length ||
     paid.development_periods.length !== incurred.development_periods.length
-  ) return null;
+  )
+    return null;
   const values = incurred.values.map((row, i) =>
     row.map((inc, j) => {
       const p = paid.values[i]?.[j];
       return inc != null && p != null ? inc - p : null;
-    })
+    }),
   );
-  return { ...incurred, values };
+  return { ...incurred, values, triangle_type: "outstanding" };
 }
 
-export function DataTab({ paidTriangle, incurredTriangle }: Props) {
-  const [tab, setTab] = useState<TriTab>("paid_cum");
+function lenLabel(months: number): string {
+  if (months === 3) return "Quarterly";
+  if (months === 12) return "Yearly";
+  if (months % 12 === 0) return `${months / 12}-year`;
+  return `${months} months`;
+}
+
+function granLabel(g: "yearly" | "quarterly"): string {
+  return g === "quarterly" ? "Quarterly" : "Yearly";
+}
+
+export function DataTab({ paidTriangle, incurredTriangle, viewingLarge, largeActive, largeNegativeCount }: Props) {
+  const [type, setType] = useState<TriType>("paid");
   const [showLoadDialog, setShowLoadDialog] = useState(false);
 
-  const incrementalPaid = useMemo(
-    () => (paidTriangle ? toIncremental(paidTriangle) : null),
-    [paidTriangle],
-  );
+  const { activeBranch } = useProject();
+  // Large artık veri modülünden DİNAMİK türetilir; reserve prop olarak geçer.
+  const largeOn = largeActive ?? hasLarge(activeBranch);
+  const largeWarnings = { negative: largeNegativeCount ?? 0 };
+
+  // Görünüm seçenekleri
+  const [cumulative, setCumulative] = useState(true);
+  const [transposed, setTransposed] = useState(false);
+  const [view, setView] = useState<ViewMode>("development");
+  const [originLen, setOriginLen] = useState(12);
+  const [devLen, setDevLen] = useState(12);
+  const [decimals, setDecimals] = useState(0);
 
   const muallakTriangle = useMemo(
-    () => (paidTriangle && incurredTriangle ? toMuallak(paidTriangle, incurredTriangle) : null),
+    () =>
+      paidTriangle && incurredTriangle
+        ? toMuallak(paidTriangle, incurredTriangle)
+        : null,
     [paidTriangle, incurredTriangle],
   );
 
   const anyLoaded = paidTriangle || incurredTriangle;
+  const primaryTri = paidTriangle ?? incurredTriangle;
 
-  if (!anyLoaded) {
+  const originOpts = useMemo(
+    () => (primaryTri ? originLengthOptions(primaryTri) : [12]),
+    [primaryTri],
+  );
+  const devOpts = useMemo(
+    () => (primaryTri ? devLengthOptions(primaryTri) : [12]),
+    [primaryTri],
+  );
+
+  // Üçgen değişince (granülarite) uzunlukları min'e çek
+  useEffect(() => {
+    setOriginLen(originOpts[0]);
+    setDevLen(devOpts[0]);
+  }, [originOpts, devOpts]);
+
+  const baseByType: Record<TriType, Triangle | null> = {
+    paid: paidTriangle,
+    muallak: muallakTriangle,
+    incurred: incurredTriangle,
+  };
+  const base = baseByType[type];
+
+  const missingByType: Record<TriType, string> = {
+    paid: "Paid triangle not loaded.",
+    muallak: "Outstanding requires both Paid and Incurred triangles.",
+    incurred: "Incurred triangle not loaded.",
+  };
+
+  const safeOriginLen = originOpts.includes(originLen) ? originLen : originOpts[0];
+  const safeDevLen = devOpts.includes(devLen) ? devLen : devOpts[0];
+
+  const matrix = useMemo(
+    () =>
+      base
+        ? buildDisplayMatrix(base, {
+            cumulative,
+            transposed,
+            view,
+            originLenMonths: safeOriginLen,
+            devLenMonths: safeDevLen,
+            decimals,
+          })
+        : null,
+    [base, cumulative, transposed, view, safeOriginLen, safeDevLen, decimals],
+  );
+
+  if (!anyLoaded || !primaryTri) {
     return (
       <>
         <div className="card p-12 text-center">
           <div className="text-sm text-[color:var(--muted)] max-w-sm mx-auto space-y-4">
-            <p>Üçgen verisi henüz yüklenmedi.</p>
+            <p>No triangle data loaded yet.</p>
             <div className="flex flex-col gap-2 items-center">
               <button
                 onClick={() => setShowLoadDialog(true)}
                 className="px-5 py-2.5 text-sm font-medium rounded-md bg-[color:var(--primary)] text-white hover:opacity-90 transition"
               >
-                Veri Modülünden Yükle
+                Load from Data Module
               </button>
             </div>
           </div>
@@ -88,41 +160,33 @@ export function DataTab({ paidTriangle, incurredTriangle }: Props) {
     );
   }
 
-  const primaryTri = paidTriangle ?? incurredTriangle!;
-
-  const tabContent: Record<TriTab, { tri: Triangle | null; missing: string }> = {
-    paid_cum: { tri: paidTriangle, missing: "Ödeme üçgeni yüklenmedi." },
-    paid_inc: { tri: incrementalPaid, missing: "Ödeme üçgeni yüklenmedi." },
-    muallak: { tri: muallakTriangle, missing: "Muallak için hem Paid hem Incurred üçgeni yüklenmeli." },
-    incurred: { tri: incurredTriangle, missing: "Gerçekleşen üçgeni yüklenmedi." },
-  };
-
-  const current = tabContent[tab];
-
-  const triLabels: Record<TriTab, string> = {
-    paid_cum: "Kümülatif Ödeme",
-    paid_inc: "Artımsal Ödeme",
-    muallak: "Muallak (Incurred − Paid)",
-    incurred: "Gerçekleşen (Incurred)",
-  };
+  const originStored = granLabel(primaryTri.origin_granularity);
+  const devStored = granLabel(primaryTri.development_granularity);
+  const canAggOrigin = originOpts.length > 1;
+  const canAggDev = devOpts.length > 1;
 
   return (
     <div className="space-y-4">
-      <SummaryStrip triangle={primaryTri} hasPaid={!!paidTriangle} hasIncurred={!!incurredTriangle} />
+      <SummaryStrip
+        triangle={primaryTri}
+        hasPaid={!!paidTriangle}
+        hasIncurred={!!incurredTriangle}
+      />
 
       <div className="card p-0 overflow-hidden">
-        {/* Tab bar */}
-        <div className="flex items-center justify-between px-4 py-3 border-b bg-[color:var(--surface-alt)]">
+        {/* Tür sekmeleri */}
+        <div className="flex items-center justify-between px-3 py-2 border-b bg-[color:var(--surface-alt)]">
           <div className="flex gap-1">
-            {TRI_TABS.map(t => {
-              const available = tabContent[t.id].tri != null;
+            {TYPE_TABS.map((t) => {
+              const available = baseByType[t.id] != null;
               return (
                 <button
                   key={t.id}
-                  onClick={() => setTab(t.id)}
+                  onClick={() => available && setType(t.id)}
+                  disabled={!available}
                   className={
                     "px-3 py-1 rounded text-xs font-medium transition " +
-                    (tab === t.id
+                    (type === t.id
                       ? "bg-[color:var(--primary)] text-white"
                       : available
                       ? "bg-[color:var(--surface)] text-[color:var(--muted-strong)] hover:bg-[color:var(--border)]"
@@ -134,27 +198,294 @@ export function DataTab({ paidTriangle, incurredTriangle }: Props) {
               );
             })}
           </div>
-          <span className="text-xs text-[color:var(--muted)] tabular">
-            {current.tri
-              ? `${current.tri.origin_periods.length}×${current.tri.development_periods.length}`
-              : "—"}
-          </span>
+          <div className="flex items-center gap-2">
+            {largeOn && (
+              <span
+                className="inline-flex items-center gap-1.5 text-[11px] px-2 py-1 rounded bg-[color:var(--primary-soft)] text-[color:var(--primary)] font-medium"
+                title="Large comes dynamically from the Data module (Attritional = Gross − Large)."
+              >
+                Large (from Data module)
+              </span>
+            )}
+            <span className="text-xs text-[color:var(--muted)] tabular">
+              {matrix ? `${matrix.rows.length}×${matrix.columns.length}` : "—"}
+            </span>
+          </div>
         </div>
 
-        {/* Content */}
-        {current.tri ? (
-          <div className="p-2">
-            <div className="text-[10px] text-[color:var(--muted-strong)] px-1 pb-1 font-semibold uppercase tracking-wide">
-              {triLabels[tab]}
+        {largeOn && (
+          <div className="px-3.5 py-1.5 border-b bg-[color:var(--primary-soft)]/40 text-[11px] text-[color:var(--primary)]">
+            {viewingLarge ? (
+              <>Showing: <b>Large</b> segment (raw large triangle).</>
+            ) : (
+              <>Showing and modeling: <b>Attritional (Gross − Large)</b>. Switch to
+                Large from the segment selector · Total in Summary.</>
+            )}
+          </div>
+        )}
+        {largeOn && largeWarnings.negative > 0 && (
+          <div className="px-3.5 py-1.5 border-b bg-[color:var(--warn-soft,#fbf0e2)] text-[11px] text-[color:var(--warning)]">
+            ⓘ Large &gt; Gross in {largeWarnings.negative} cells — attritional negative
+            (value <b>not clamped</b>, kept as-is). Check that Gross and Large have the same scope.
+          </div>
+        )}
+
+        {/* Kontrol şeridi */}
+        <div className="flex flex-wrap items-start gap-x-4 gap-y-3 px-3.5 py-3 border-b bg-[color:var(--surface-alt)]/40">
+          <Field label="Value">
+            <Segmented
+              value={cumulative ? "cum" : "inc"}
+              options={[
+                { value: "cum", label: "Cumulative" },
+                { value: "inc", label: "Incremental" },
+              ]}
+              onChange={(v) => setCumulative(v === "cum")}
+            />
+          </Field>
+
+          <Field label="Decimals">
+            <Stepper
+              value={decimals}
+              options={[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]}
+              display={(v) => `${v}`}
+              onChange={setDecimals}
+              width="min-w-[34px]"
+            />
+          </Field>
+
+          <VDivider />
+
+          <Field label="Column">
+            <Segmented
+              value={view}
+              options={[
+                { value: "development", label: "Development" },
+                { value: "calendar", label: "Calendar" },
+              ]}
+              onChange={(v) => setView(v as ViewMode)}
+            />
+          </Field>
+
+          <Field label="Layout">
+            <TransposeToggle
+              active={transposed}
+              onClick={() => setTransposed((v) => !v)}
+            />
+          </Field>
+
+          <VDivider />
+
+          <Field label="Accident period" hint={`stored: ${originStored}`}>
+            <Stepper
+              value={safeOriginLen}
+              options={originOpts}
+              disabled={!canAggOrigin}
+              display={lenLabel}
+              onChange={setOriginLen}
+            />
+          </Field>
+          <Field label="Development period" hint={`stored: ${devStored}`}>
+            <Stepper
+              value={safeDevLen}
+              options={devOpts}
+              disabled={!canAggDev}
+              display={lenLabel}
+              onChange={setDevLen}
+            />
+          </Field>
+          {(canAggOrigin || canAggDev) && (
+            <div className="self-start pt-[14px]">
+              <button
+                onClick={() => {
+                  setOriginLen(originOpts[originOpts.length - 1]);
+                  setDevLen(devOpts[devOpts.length - 1]);
+                }}
+                className="h-8 px-3 rounded-lg border border-[color:var(--border)] bg-[color:var(--surface)] text-[11px] font-semibold text-[color:var(--muted-strong)] hover:border-[color:var(--border-strong)] hover:bg-[color:var(--surface-alt)] transition"
+                title="Switch to the coarsest (fully aggregated) view"
+              >
+                Max
+              </button>
             </div>
-            <TriangleGrid triangle={current.tri} />
+          )}
+        </div>
+
+        {/* İçerik */}
+        {matrix ? (
+          <div className="p-3">
+            <div className="flex items-center flex-wrap gap-x-2 gap-y-1 mb-2 px-0.5 text-[11px]">
+              <span className="font-semibold text-[color:var(--muted-strong)]">
+                {TYPE_TABS.find((t) => t.id === type)?.label}
+              </span>
+              <ViewChip>{cumulative ? "Cumulative" : "Incremental"}</ViewChip>
+              <ViewChip>
+                {view === "development" ? "Development" : "Calendar"}
+              </ViewChip>
+              <ViewChip>Accident {lenLabel(safeOriginLen)}</ViewChip>
+              <ViewChip>Development {lenLabel(safeDevLen)}</ViewChip>
+              {transposed && <ViewChip>Transpose</ViewChip>}
+            </div>
+            <TriangleGrid matrix={matrix} decimals={decimals} />
           </div>
         ) : (
           <div className="p-10 text-center text-sm text-[color:var(--muted)]">
-            {current.missing}
+            {missingByType[type]}
           </div>
         )}
       </div>
+
+    </div>
+  );
+}
+
+function VDivider() {
+  return (
+    <div className="self-start mt-[14px] w-px h-8 bg-[color:var(--border)] mx-1" />
+  );
+}
+
+function ViewChip({ children }: { children: ReactNode }) {
+  return (
+    <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-[color:var(--surface-alt)] text-[color:var(--muted-strong)] font-medium tabular">
+      {children}
+    </span>
+  );
+}
+
+/** Etiketli alan sarmalayıcı — tüm kontroller aynı dikey ritimde. */
+function Field({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="text-[10px] uppercase tracking-wide font-semibold text-[color:var(--muted)] leading-none">
+        {label}
+      </span>
+      {children}
+      {hint ? (
+        <span className="text-[9px] text-[color:var(--muted)] leading-none">
+          {hint}
+        </span>
+      ) : (
+        <span className="text-[9px] leading-none">&nbsp;</span>
+      )}
+    </div>
+  );
+}
+
+function Segmented<T extends string>({
+  value,
+  options,
+  onChange,
+}: {
+  value: T;
+  options: { value: T; label: string }[];
+  onChange: (v: T) => void;
+}) {
+  return (
+    <div className="inline-flex h-8 p-0.5 rounded-lg bg-[color:var(--surface-alt)] border border-[color:var(--border)]">
+      {options.map((o) => {
+        const active = value === o.value;
+        return (
+          <button
+            key={o.value}
+            onClick={() => onChange(o.value)}
+            className={
+              "px-3 rounded-md text-[12px] font-medium transition " +
+              (active
+                ? "bg-[color:var(--surface)] text-[color:var(--primary)] shadow-sm"
+                : "text-[color:var(--muted-strong)] hover:text-[color:var(--foreground)]")
+            }
+          >
+            {o.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function TransposeToggle({
+  active,
+  onClick,
+}: {
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      aria-pressed={active}
+      title="Eksenleri takas et"
+      className={
+        "inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] font-medium border transition " +
+        (active
+          ? "bg-[color:var(--primary-soft)] text-[color:var(--primary)] border-[color:var(--primary-border)]"
+          : "bg-[color:var(--surface)] text-[color:var(--muted-strong)] border-[color:var(--border)] hover:border-[color:var(--border-strong)] hover:bg-[color:var(--surface-alt)]")
+      }
+    >
+      <span className="text-[13px] leading-none">⇄</span>
+      Transpose
+    </button>
+  );
+}
+
+function Stepper<T extends number>({
+  value,
+  options,
+  disabled,
+  display,
+  onChange,
+  width = "min-w-[70px]",
+}: {
+  value: T;
+  options: T[];
+  disabled?: boolean;
+  display: (v: T) => string;
+  onChange: (v: T) => void;
+  width?: string;
+}) {
+  const idx = options.indexOf(value);
+  const canDown = !disabled && idx > 0;
+  const canUp = !disabled && idx >= 0 && idx < options.length - 1;
+  const chevron =
+    "flex items-center justify-center w-7 h-full text-[15px] text-[color:var(--muted-strong)] hover:bg-[color:var(--surface-alt)] hover:text-[color:var(--foreground)] disabled:opacity-25 disabled:cursor-not-allowed disabled:hover:bg-transparent transition";
+  return (
+    <div
+      className={
+        "inline-flex items-stretch h-8 rounded-lg border border-[color:var(--border)] bg-[color:var(--surface)] overflow-hidden " +
+        (disabled ? "opacity-60" : "")
+      }
+    >
+      <button
+        onClick={() => canDown && onChange(options[idx - 1])}
+        disabled={!canDown}
+        className={chevron}
+        aria-label="decrease"
+      >
+        −
+      </button>
+      <span
+        className={
+          "flex items-center justify-center px-2 text-[12px] font-semibold tabular text-center border-x border-[color:var(--border)] " +
+          width
+        }
+      >
+        {display(value)}
+      </span>
+      <button
+        onClick={() => canUp && onChange(options[idx + 1])}
+        disabled={!canUp}
+        className={chevron}
+        aria-label="increase"
+      >
+        +
+      </button>
     </div>
   );
 }
@@ -175,23 +506,57 @@ function SummaryStrip({
   }, 0);
   const lastOrigin = triangle.origin_periods[triangle.origin_periods.length - 1];
   const oldestOrigin = triangle.origin_periods[0];
-  const loaded = [hasPaid && "Paid", hasIncurred && "Incurred"].filter(Boolean).join(" + ");
+  const loaded = [hasPaid && "Paid", hasIncurred && "Incurred"]
+    .filter(Boolean)
+    .join(" + ");
   return (
-    <div className="grid grid-cols-4 gap-3">
-      <Stat label="Üçgen" value={`${triangle.origin_periods.length}×${triangle.development_periods.length}`} sub={loaded} />
-      <Stat label="Origin Aralığı" value={`${oldestOrigin} — ${lastOrigin}`} sub={`kaza ${triangle.origin_granularity === "quarterly" ? "çeyreklik" : "yıllık"}`} />
-      <Stat label="Gelişim" value={triangle.development_granularity === "quarterly" ? "Çeyreklik" : "Yıllık"} sub={`${triangle.development_periods.length} dönem`} />
-      <Stat label="Toplam Güncel" value={formatNumber(latestSum)} sub={triangle.triangle_type} />
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <Stat
+        label="Triangle"
+        value={`${triangle.origin_periods.length}×${triangle.development_periods.length}`}
+        sub={loaded}
+      />
+      <Stat
+        label="Origin Range"
+        value={`${oldestOrigin} — ${lastOrigin}`}
+        sub={`accident ${granMonths(triangle.origin_granularity) === 3 ? "quarterly" : "yearly"}`}
+      />
+      <Stat
+        label="Development"
+        value={
+          triangle.development_granularity === "quarterly"
+            ? "Quarterly"
+            : "Yearly"
+        }
+        sub={`${triangle.development_periods.length} periods`}
+      />
+      <Stat
+        label="Total Current"
+        value={formatNumber(latestSum)}
+        sub={triangle.triangle_type}
+      />
     </div>
   );
 }
 
-function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
+function Stat({
+  label,
+  value,
+  sub,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+}) {
   return (
     <div className="card p-3">
-      <div className="text-[10px] uppercase tracking-wide font-semibold text-[color:var(--muted-strong)] mb-0.5">{label}</div>
+      <div className="text-[10px] uppercase tracking-wide font-semibold text-[color:var(--muted-strong)] mb-0.5">
+        {label}
+      </div>
       <div className="text-lg font-semibold tabular">{value}</div>
-      {sub && <div className="text-[11px] text-[color:var(--muted)] mt-0.5">{sub}</div>}
+      {sub && (
+        <div className="text-[11px] text-[color:var(--muted)] mt-0.5">{sub}</div>
+      )}
     </div>
   );
 }

@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -16,8 +17,9 @@ import {
   putDataset,
   deleteDataset as remoteDelDs,
   getDataset,
-  WorkerError,
+  ApiError as WorkerError,
 } from "@/lib/sync/worker-client";
+import { sortByPeriodLabel } from "@/lib/period-order";
 
 // ─── Veri türü tanımları ──────────────────────────────────────────────────────
 
@@ -31,23 +33,41 @@ export interface DataTypeDef {
 export const DATA_TYPES: DataTypeDef[] = [
   {
     id: "hasar",
-    label: "Hasar Verisi",
-    description: "Dosya bazlı hasar kayıtları",
-    columns: ["Dosya No", "Branş", "Hasar Tarihi", "Gelişim Tarihi", "Ödeme", "Muallak"],
+    label: "Claim Data",
+    description: "File-level claim records",
+    columns: ["Claim No", "Branch", "Loss Date", "Development Date", "Paid", "Outstanding"],
+  },
+  {
+    id: "large",
+    label: "Large Loss",
+    description: "File-level large-loss records — separated out for Attritional",
+    columns: ["Claim No", "Branch", "Loss Date", "Development Date", "Paid", "Outstanding"],
   },
   {
     id: "prim",
-    label: "Prim Verisi",
-    description: "Dönemsel prim kazanım verileri",
-    columns: ["Branş", "Dönem", "Prim"],
+    label: "Premium Data",
+    description: "Periodic earned premium data",
+    columns: ["Branch", "Period", "Premium"],
   },
   {
     id: "ucgen",
-    label: "Üçgen Verisi",
-    description: "Hazır paid veya incurred gelişim üçgeni",
-    columns: ["Branş", "Üçgen Türü", "Kaza Dönemi", "Gelişim Dönemi"],
+    label: "Triangle Data",
+    description: "Prebuilt paid or incurred development triangle",
+    columns: ["Branch", "Triangle Type", "Accident Period", "Development Period"],
+  },
+  {
+    id: "large_ucgen",
+    label: "Large Triangle",
+    description: "Prebuilt large paid/incurred development triangle",
+    columns: ["Branch", "Triangle Type", "Accident Period", "Development Period"],
   },
 ];
+
+/** Üçgen tipli veri tipleri (gross + large hazır üçgen). */
+export const TRIANGLE_TYPE_IDS = ["ucgen", "large_ucgen"] as const;
+export function isTriangleType(typeId: string): boolean {
+  return typeId === "ucgen" || typeId === "large_ucgen";
+}
 
 // ─── Tipler ───────────────────────────────────────────────────────────────────
 
@@ -86,12 +106,17 @@ export interface DatasetMeta {
   hasar_tarihi_max?: string;
   gelisim_tarihi_min?: string;
   gelisim_tarihi_max?: string;
-  total_odeme?: number; // kümülatif ödeme (akış)
-  total_muallak?: number; // son dönem muallağı (stok — toplam değil)
-  total_incurred?: number;
+  total_odeme?: number;
+  total_muallak?: number;
   // prim alanları
   donem_list?: string[];
   total_ep?: number;
+  // large alanları — modele DİNAMİK uygulanır (EP gibi). Yöntem yüklemede seçilir.
+  /** "direct" → tüm large kayıtlarından kümülatif üçgen; "rollforward" → taban dönemin
+   *  üzerine bu dönemin hareketi taşınır. large_ucgen daima doğrudandır. */
+  largeMethod?: "direct" | "rollforward";
+  /** Roll-forward için taban (önceki) dönemin etiketi. */
+  largeBasePeriodLabel?: string;
 }
 
 export interface Dataset {
@@ -144,6 +169,17 @@ export function DataStoreProvider({
   const [activePeriodId, setActivePeriodIdState] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [ready, setReady] = useState(false);
+  const periodsRef = useRef<DataPeriod[]>([]);
+  periodsRef.current = periods;
+  const datasetGenerationRef = useRef(new Map<string, number>());
+  const datasetRequestsRef = useRef(new Map<string, Promise<Dataset | null>>());
+
+  const datasetKey = (periodId: string, datasetId: string) => `${periodId}\u0000${datasetId}`;
+  const invalidateDatasetRequest = (periodId: string, datasetId: string) => {
+    const key = datasetKey(periodId, datasetId);
+    datasetGenerationRef.current.set(key, (datasetGenerationRef.current.get(key) ?? 0) + 1);
+    datasetRequestsRef.current.delete(key);
+  };
 
   // İlk yüklemede D1'den dönemleri çek
   useEffect(() => {
@@ -164,8 +200,9 @@ export function DataStoreProvider({
             })
           ),
         }));
-        setPeriods(loaded);
-        if (loaded.length > 0) setActivePeriodIdState(loaded[0].id);
+        const sorted = sortByPeriodLabel(loaded);
+        setPeriods(sorted);
+        if (sorted.length > 0) setActivePeriodIdState(sorted[0].id);
       })
       .catch(() => {/* offline veya hata — boş başla */})
       .finally(() => {
@@ -182,7 +219,7 @@ export function DataStoreProvider({
       createdAt: new Date().toISOString(),
       datasets: {},
     };
-    setPeriods((prev) => [...prev, period]);
+    setPeriods((prev) => sortByPeriodLabel([...prev, period]));
     setActivePeriodIdState(period.id);
     // D1'e yaz
     await upsertPeriod({ period_id: period.id, label: period.label, created_at: period.createdAt });
@@ -206,6 +243,7 @@ export function DataStoreProvider({
 
   // Dataset kaydet (local + D1)
   const setDataset = useCallback(async (periodId: string, dataset: Dataset) => {
+    invalidateDatasetRequest(periodId, dataset.datasetId);
     setPeriods((prev) =>
       prev.map((p) =>
         p.id === periodId
@@ -218,6 +256,7 @@ export function DataStoreProvider({
 
   // Dataset sil
   const removeDataset = useCallback(async (periodId: string, datasetId: string) => {
+    invalidateDatasetRequest(periodId, datasetId);
     setPeriods((prev) =>
       prev.map((p) => {
         if (p.id !== periodId) return p;
@@ -233,53 +272,87 @@ export function DataStoreProvider({
     periodId: string,
     datasetId: string,
   ): Promise<Dataset | null> => {
-    // Zaten yüklüyse döndür
-    const period = periods.find((p) => p.id === periodId);
+    const key = datasetKey(periodId, datasetId);
+    // Zaten yüklüyse döndür. Ref kullanımı callback kimliğini periods
+    // değişimlerinden bağımsız tutar; veri hook'ları gereksiz yere yeniden çalışmaz.
+    const period = periodsRef.current.find((p) => p.id === periodId);
     if (period?.datasets[datasetId]?.records?.length) {
       return period.datasets[datasetId];
     }
-    try {
-      const data = await getDataset(periodId, datasetId);
-      const ds: Dataset = {
-        datasetId,
-        typeId: data.typeId,
-        meta: data.meta as DatasetMeta,
-        records: data.records as ClaimRecord[],
-      };
-      // State'e yaz
-      setPeriods((prev) =>
-        prev.map((p) =>
-          p.id === periodId
-            ? { ...p, datasets: { ...p.datasets, [datasetId]: ds } }
-            : p,
-        ),
-      );
-      return ds;
-    } catch (e) {
-      if (e instanceof WorkerError && e.status === 404) return null;
-      throw e;
-    }
-  }, [periods]);
+    const pending = datasetRequestsRef.current.get(key);
+    if (pending) return pending;
 
-  const activePeriod = periods.find((p) => p.id === activePeriodId) ?? null;
+    const generation = datasetGenerationRef.current.get(key) ?? 0;
+    let request!: Promise<Dataset | null>;
+    request = (async (): Promise<Dataset | null> => {
+      try {
+        const data = await getDataset(periodId, datasetId);
+        const ds: Dataset = {
+          datasetId,
+          typeId: data.typeId,
+          meta: data.meta as DatasetMeta,
+          records: data.records as ClaimRecord[],
+        };
+        // Dataset bu sırada silinmediyse/değişmediyse state'e yaz.
+        if ((datasetGenerationRef.current.get(key) ?? 0) === generation) {
+          setPeriods((prev) =>
+            prev.map((p) =>
+              p.id === periodId
+                ? { ...p, datasets: { ...p.datasets, [datasetId]: ds } }
+                : p,
+            ),
+          );
+        }
+        return ds;
+      } catch (e) {
+        if (e instanceof WorkerError && e.status === 404) return null;
+        throw e;
+      } finally {
+        if (datasetRequestsRef.current.get(key) === request) {
+          datasetRequestsRef.current.delete(key);
+        }
+      }
+    })();
+    datasetRequestsRef.current.set(key, request);
+    return request;
+  }, []);
+
+  const activePeriod = useMemo(
+    () => periods.find((p) => p.id === activePeriodId) ?? null,
+    [periods, activePeriodId],
+  );
+
+  const contextValue = useMemo<DataStoreState>(
+    () => ({
+      periods,
+      activePeriodId,
+      activePeriod,
+      syncing,
+      addPeriod,
+      deletePeriod,
+      setActivePeriod,
+      setDataset,
+      removeDataset,
+      loadDatasetRecords,
+    }),
+    [
+      periods,
+      activePeriodId,
+      activePeriod,
+      syncing,
+      addPeriod,
+      deletePeriod,
+      setActivePeriod,
+      setDataset,
+      removeDataset,
+      loadDatasetRecords,
+    ],
+  );
 
   if (!ready) return null;
 
   return (
-    <DataStoreContext.Provider
-      value={{
-        periods,
-        activePeriodId,
-        activePeriod,
-        syncing,
-        addPeriod,
-        deletePeriod,
-        setActivePeriod,
-        setDataset,
-        removeDataset,
-        loadDatasetRecords,
-      }}
-    >
+    <DataStoreContext.Provider value={contextValue}>
       {children}
     </DataStoreContext.Provider>
   );

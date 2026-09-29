@@ -6,17 +6,16 @@
  */
 
 import { useEffect, useMemo } from "react";
-import { useAgentRegistry } from "@/lib/agent-registry";
+import { useAgentRegistryWriter } from "@/lib/agent-registry";
 import { useDataStore } from "@/lib/data-store";
 
 export function DataAgentBridge() {
   const store = useDataStore();
   const { registerSnapshot, registerActionHandler, unregisterActionHandler } =
-    useAgentRegistry();
+    useAgentRegistryWriter();
 
   const snapshot = useMemo(() => {
-    // session_state sarmalı: backend payload.get("session_state") ile okur
-    const sessionState = {
+    return {
       periods: store.periods.map((p) => ({
         period_id: p.id,
         label: p.label,
@@ -32,18 +31,16 @@ export function DataAgentBridge() {
           // hasar alanları
           hasar_tarihi_min: ds.meta.hasar_tarihi_min ?? null,
           hasar_tarihi_max: ds.meta.hasar_tarihi_max ?? null,
-          total_odeme: ds.meta.total_odeme ?? null, // kümülatif ödeme (akış)
-          total_muallak: ds.meta.total_muallak ?? null, // son dönem muallağı (stok)
-          total_incurred: ds.meta.total_incurred ?? null,
+          total_odeme: ds.meta.total_odeme ?? null,
+          total_muallak: ds.meta.total_muallak ?? null,
           // prim alanları
           donem_list: ds.meta.donem_list ?? null,
           total_ep: ds.meta.total_ep ?? null,
         })),
       })),
       active_period_id: store.activePeriodId,
-      note: "Veri modülü: yüklü dönemler ve dataset meta bilgileri. Veri yükleme/silme agent tarafından yapılamaz.",
+      note: "Data module: loaded periods and dataset metadata. Data upload/deletion cannot be done by the agent.",
     };
-    return { session_state: sessionState };
   }, [store.periods, store.activePeriodId]);
 
   useEffect(() => {

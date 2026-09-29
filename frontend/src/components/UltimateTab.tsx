@@ -1,35 +1,32 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import type { Triangle } from "@/types/triangle";
+import { useEffect, useState } from "react";
 import { formatNumber } from "@/lib/api";
-import { cumulativeFactors } from "@/lib/ldf";
-
-const DEFAULT_LR = 0.7;
 
 type Basis = "cl" | "bf";
 
+/** SummaryTab ile TEK KAYNAK: reserve sayfasının runPipeline çıktısı (yapısal). */
+interface UltimateSummary {
+  rows: {
+    origin: string;
+    latest: number;
+    premium: number;
+    clUltimate: number;
+    bfUltimate: number;
+    selectedUltimate: number;
+    ibnr: number;
+    ulr: number | null;
+    basis: Basis;
+  }[];
+}
+
 interface Props {
-  triangle: Triangle | null;
-  selectedLDFs: number[];
-  premiums: Record<string, number>;
-  elrPerOrigin: Record<string, number>;
-  basisPerOrigin: Record<string, Basis>;
-  correctionPerOrigin: Record<string, number>;
+  /** Özet (SummaryTab) ile aynı summary — birebir tutması garanti. */
+  summary: UltimateSummary | null;
   onBasisChange: (origin: string, basis: Basis) => void;
 }
 
-export function UltimateTab(props: Props) {
-  const {
-    triangle,
-    selectedLDFs,
-    premiums,
-    elrPerOrigin,
-    basisPerOrigin,
-    correctionPerOrigin,
-    onBasisChange,
-  } = props;
-
+export function UltimateTab({ summary, onBasisChange }: Props) {
   const [dragBasis, setDragBasis] = useState<Basis | null>(null);
 
   useEffect(() => {
@@ -43,94 +40,37 @@ export function UltimateTab(props: Props) {
     };
   }, [dragBasis]);
 
-  const rows = useMemo(() => {
-    if (!triangle) return [];
-    const cdfs = cumulativeFactors(selectedLDFs);
-    return triangle.origin_periods.map((o, i) => {
-      let latest: number | null = null;
-      let latestIdx = -1;
-      for (let j = 0; j < triangle.values[i].length; j++) {
-        const v = triangle.values[i][j];
-        if (v != null) {
-          latest = v;
-          latestIdx = j;
-        }
-      }
-      const cdf =
-        latestIdx >= 0 && latestIdx < cdfs.length ? cdfs[latestIdx] : 1;
-      const latestVal = latest ?? 0;
-      const premium = premiums[o] ?? 0;
-      const correction =
-        correctionPerOrigin[o] && correctionPerOrigin[o] > 0
-          ? correctionPerOrigin[o]
-          : 1;
-      const premiumAnnual = premium * correction;
-      const clUlt = latestVal * cdf;
-      const patternRatio = premiumAnnual > 0 ? clUlt / premiumAnnual : null;
-      const userSelectedLR = elrPerOrigin[o];
-      const selectedLR =
-        userSelectedLR !== undefined
-          ? userSelectedLR
-          : patternRatio !== null
-          ? patternRatio
-          : DEFAULT_LR;
-      const pctDeveloped = clUlt > 0 ? latestVal / clUlt : 1;
-      // Annual BF ult → kısmi ulta bölerek indir
-      const bfUltAnnual =
-        latestVal + selectedLR * premiumAnnual * (1 - pctDeveloped);
-      const bfUlt = bfUltAnnual / correction;
-      const basis = basisPerOrigin[o] ?? "cl";
-      const selectedUlt = basis === "cl" ? clUlt : bfUlt;
-      const ibnr = selectedUlt - latestVal;
-      // ULR partial dönem bazında: hem clUlt hem bfUlt zaten partial period
-      // (bfUlt = bfUltAnnual/k). Bu yüzden ham premium ile bölmek doğru.
-      // (Eski versiyonda bfUlt/premiumAnnual k'ya iki kez bölüyordu.)
-      const ulr = premium > 0 ? selectedUlt / premium : null;
-      return {
-        origin: o,
-        latest: latestVal,
-        premium,
-        premiumAnnual,
-        correction,
-        clUlt,
-        bfUlt,
-        basis,
-        selectedUlt,
-        ibnr,
-        ulr,
-      };
-    });
-  }, [triangle, selectedLDFs, premiums, elrPerOrigin, basisPerOrigin, correctionPerOrigin]);
+  if (!summary || summary.rows.length === 0) {
+    return (
+      <div className="card p-10 text-center text-sm text-[color:var(--muted)]">
+        Load a triangle from the Data tab first.
+      </div>
+    );
+  }
 
+  // TEK KAYNAK: Özet sayfasıyla birebir aynı satırlar (runPipeline).
+  const rows = summary.rows.map((r) => ({
+    origin: r.origin,
+    latest: r.latest,
+    premium: r.premium,
+    clUlt: r.clUltimate,
+    bfUlt: r.bfUltimate,
+    selectedUlt: r.selectedUltimate,
+    basis: r.basis,
+    ibnr: r.ibnr,
+    ulr: r.ulr,
+  }));
   const totals = rows.reduce(
     (a, r) => ({
       latest: a.latest + r.latest,
       premium: a.premium + r.premium,
-      premiumAnnual: a.premiumAnnual + r.premiumAnnual,
       clUlt: a.clUlt + r.clUlt,
       bfUlt: a.bfUlt + r.bfUlt,
       selectedUlt: a.selectedUlt + r.selectedUlt,
       ibnr: a.ibnr + r.ibnr,
     }),
-    {
-      latest: 0,
-      premium: 0,
-      premiumAnnual: 0,
-      clUlt: 0,
-      bfUlt: 0,
-      selectedUlt: 0,
-      ibnr: 0,
-    },
+    { latest: 0, premium: 0, clUlt: 0, bfUlt: 0, selectedUlt: 0, ibnr: 0 },
   );
-
-  if (!triangle) {
-    return (
-      <div className="card p-10 text-center text-sm text-[color:var(--muted)]">
-        Önce Veri sekmesinden bir üçgen yükleyin.
-      </div>
-    );
-  }
-
   const totalULR =
     totals.premium > 0 ? totals.selectedUlt / totals.premium : null;
 
@@ -138,28 +78,28 @@ export function UltimateTab(props: Props) {
     <div className="space-y-4">
       <div className="grid grid-cols-3 gap-3">
         <Stat
-          label="Toplam Seçili Ultimate"
+          label="Total Selected Ultimate"
           value={formatNumber(totals.selectedUlt)}
         />
-        <Stat label="Toplam IBNR" value={formatNumber(totals.ibnr)} accent />
+        <Stat label="Total IBNR" value={formatNumber(totals.ibnr)} accent />
         <Stat
-          label="Toplam ULR"
+          label="Total ULR"
           value={totalULR != null ? `${(totalULR * 100).toFixed(1)}%` : "—"}
         />
       </div>
 
       <div className="card p-0 overflow-hidden">
         <div className="flex items-center justify-between px-4 py-3 border-b bg-[color:var(--surface-alt)]">
-          <h2 className="text-sm font-semibold">Ultimate / IBNR — Origin Bazında</h2>
+          <h2 className="text-sm font-semibold">Ultimate / IBNR — By Origin</h2>
           <span className="text-xs text-[color:var(--muted)]">
-            CL veya BF Ultimate hücresine tıkla · sürükleyerek birden fazla satır seç
+            Click a CL or BF Ultimate cell · drag to select multiple rows
           </span>
         </div>
         <div className="overflow-x-auto">
           <table className="text-sm w-full tabular">
             <thead>
               <tr className="text-[color:var(--muted-strong)] text-[11px] uppercase tracking-wide bg-[color:var(--surface-alt)]">
-                <th className="text-left px-3 py-2 font-semibold">Kaza Yılı</th>
+                <th className="text-left px-3 py-2 font-semibold">Accident Year</th>
                 <th className="text-right px-3 py-2 font-semibold">Latest</th>
                 <th className="text-right px-3 py-2 font-semibold">Exposure</th>
                 <th className="text-right px-3 py-2 font-semibold">CL Ultimate</th>
@@ -220,7 +160,7 @@ export function UltimateTab(props: Props) {
                 </tr>
               ))}
               <tr className="border-t-2 border-[color:var(--border-strong)] font-semibold bg-[color:var(--surface-alt)]">
-                <td className="px-3 py-2">Toplam</td>
+                <td className="px-3 py-2">Total</td>
                 <td className="text-right px-3 py-2">
                   {formatNumber(totals.latest)}
                 </td>
@@ -268,7 +208,7 @@ function UltimateCell({
         onMouseDown();
       }}
       onMouseEnter={onMouseEnter}
-      title={selected ? "Seçili temel" : "Tıkla / sürükleyerek seç"}
+      title={selected ? "Selected basis" : "Click / drag to select"}
       className={
         "w-full h-full text-right px-3 py-1.5 text-sm tabular transition cursor-pointer select-none " +
         (selected

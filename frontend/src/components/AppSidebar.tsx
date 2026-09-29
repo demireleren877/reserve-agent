@@ -4,20 +4,26 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth/auth-context";
+import { useMe } from "@/lib/auth/auth-gate";
 import { useUserPlan } from "@/lib/auth/user-plan-context";
+import { useProject } from "@/lib/project-store";
+import { useAgentRegistry } from "@/lib/agent-registry";
 
 interface ModuleItem {
   href: string;
   label: string;
   icon: React.ReactNode;
+  adminOnly?: boolean;
 }
 
 const MODULES: ModuleItem[] = [
-  { href: "/home", label: "Anasayfa", icon: <HomeIcon /> },
-  { href: "/data", label: "Veri", icon: <DatabaseIcon /> },
-  { href: "/reserve", label: "Rezerv", icon: <StackIcon /> },
-  { href: "/cashflow", label: "Nakit Akışı", icon: <CashflowIcon /> },
-  { href: "/discount", label: "İskonto", icon: <DiscountIcon /> },
+  { href: "/data", label: "Data", icon: <DatabaseIcon /> },
+  { href: "/reserve", label: "Reserve", icon: <StackIcon /> },
+  { href: "/development", label: "Development", icon: <TrendIcon /> },
+  { href: "/cashflow", label: "Cashflow", icon: <CashflowIcon /> },
+  { href: "/discount", label: "Discount", icon: <DiscountIcon /> },
+  { href: "/admin/users", label: "Users", icon: <UsersIcon />, adminOnly: true },
+  { href: "/admin/audit", label: "Audit Log", icon: <AuditIcon />, adminOnly: true },
 ];
 
 const STORAGE_KEY = "app-sidebar-collapsed";
@@ -25,8 +31,11 @@ const STORAGE_KEY = "app-sidebar-collapsed";
 export function AppSidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, logout } = useAuth();
+  const { logout } = useAuth();
+  const user = useMe();
   const plan = useUserPlan();
+  const { actions, canUndo } = useProject();
+  const { panelOpen, togglePanel } = useAgentRegistry();
 
   const [collapsed, setCollapsed] = useState(false);
   const [hydrated, setHydrated] = useState(false);
@@ -37,22 +46,15 @@ export function AppSidebar() {
     try {
       const v = localStorage.getItem(STORAGE_KEY);
       if (v === "true") setCollapsed(true);
-    } catch {
-      /* ignore */
-    }
+    } catch { /* ignore */ }
     setHydrated(true);
   }, []);
 
   useEffect(() => {
     if (!hydrated) return;
-    try {
-      localStorage.setItem(STORAGE_KEY, String(collapsed));
-    } catch {
-      /* ignore */
-    }
+    try { localStorage.setItem(STORAGE_KEY, String(collapsed)); } catch { /* ignore */ }
   }, [collapsed, hydrated]);
 
-  // Close dropdown on outside click
   useEffect(() => {
     if (!profileOpen) return;
     function onPointerDown(e: PointerEvent) {
@@ -64,17 +66,16 @@ export function AppSidebar() {
     return () => document.removeEventListener("pointerdown", onPointerDown);
   }, [profileOpen]);
 
-  const email = user?.email ?? "";
-  const displayName = user?.displayName ?? "";
-  const initials = displayName
-    ? displayName.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase()
-    : email.slice(0, 2).toUpperCase();
+  const username = user?.username ?? "";
+  const initials = username.slice(0, 2).toUpperCase();
+  const isAdmin = user?.role === "admin";
 
-  async function handleLogout() {
+  function handleLogout() {
     setProfileOpen(false);
-    await logout();
-    router.replace("/login");
+    void logout().then(() => router.replace("/login"));
   }
+
+  const visibleModules = MODULES.filter((m) => !m.adminOnly || isAdmin);
 
   return (
     <aside
@@ -84,18 +85,12 @@ export function AppSidebar() {
       }
     >
       {/* Logo */}
-      <div
-        className={
-          "border-b h-14 flex items-center gap-2 " +
-          (collapsed ? "justify-center" : "px-4")
-        }
-      >
-        <img src="/logo-128.png" alt="Actuarius" className="h-7 w-7 shrink-0" />
+      <div className={"border-b h-14 flex items-center gap-2 " + (collapsed ? "justify-center" : "px-4")}>
+        <img src="/favicon.png" alt="Actuarius" className="h-9 w-9 rounded-md shrink-0" />
         {!collapsed && (
           <div className="leading-tight overflow-hidden">
-            <div className="text-[13px] font-semibold whitespace-nowrap">
-              Actuarius
-            </div>
+            <div className="text-[13px] font-semibold whitespace-nowrap">Actuarius</div>
+            <div className="text-[10px] text-[color:var(--muted)]">Enterprise</div>
           </div>
         )}
       </div>
@@ -104,13 +99,12 @@ export function AppSidebar() {
       <nav className="p-2 flex-1 overflow-y-auto">
         {!collapsed && (
           <div className="text-[10px] uppercase tracking-wide text-[color:var(--muted)] font-semibold px-2 py-2">
-            Modüller
+            Modules
           </div>
         )}
         <ul className="space-y-0.5">
-          {MODULES.map((m) => {
-            const active =
-              pathname === m.href || pathname.startsWith(m.href + "/");
+          {visibleModules.map((m) => {
+            const active = pathname === m.href || pathname.startsWith(m.href + "/");
             return (
               <li key={m.href}>
                 <Link
@@ -126,110 +120,118 @@ export function AppSidebar() {
                   }
                 >
                   <span className="opacity-80 shrink-0">{m.icon}</span>
-                  {!collapsed && (
-                    <span className="flex-1 truncate">{m.label}</span>
-                  )}
+                  {!collapsed && <span className="flex-1 truncate">{m.label}</span>}
                 </Link>
               </li>
             );
           })}
         </ul>
+
+        {/* Agent — panel aç/kapa (sağ üstteki sticky buton yerine) */}
+        <div className="mt-2 pt-2 border-t border-[color:var(--border)]">
+          <button
+            onClick={togglePanel}
+            title={collapsed ? "Agent" : undefined}
+            className={
+              "w-full flex items-center gap-2 rounded-md text-[13px] transition " +
+              (collapsed ? "justify-center py-2" : "px-2.5 py-1.5") +
+              " " +
+              (panelOpen
+                ? "bg-[color:var(--primary-soft)] text-[color:var(--primary)] font-medium"
+                : "text-[color:var(--muted-strong)] hover:bg-[color:var(--surface-alt)] hover:text-[color:var(--foreground)]")
+            }
+          >
+            <span className="opacity-80 shrink-0"><AgentSparkIcon /></span>
+            {!collapsed && <span className="flex-1 truncate text-left">Agent</span>}
+          </button>
+          <Link
+            href="/guide"
+            title={collapsed ? "Guide" : undefined}
+            className={
+              "mt-0.5 flex items-center gap-2 rounded-md text-[13px] transition " +
+              (collapsed ? "justify-center py-2" : "px-2.5 py-1.5") +
+              " " +
+              (pathname === "/guide" || pathname.startsWith("/guide/")
+                ? "bg-[color:var(--primary-soft)] text-[color:var(--primary)] font-medium"
+                : "text-[color:var(--muted-strong)] hover:bg-[color:var(--surface-alt)] hover:text-[color:var(--foreground)]")
+            }
+          >
+            <span className="opacity-80 shrink-0"><GuideIcon /></span>
+            {!collapsed && <span className="flex-1 truncate text-left">Guide</span>}
+          </Link>
+        </div>
       </nav>
 
       {/* Profile section */}
       <div className="border-t p-2 space-y-1">
-        {/* Profile button + dropdown */}
+        {/* Undo — yanlışlıkla yapılan değişikliği geri al (proje geneli) */}
+        <button
+          onClick={() => actions.undo()}
+          disabled={!canUndo}
+          title={collapsed ? "Undo" : "Undo last change"}
+          className={
+            "w-full inline-flex items-center gap-2 rounded-md py-1.5 text-[11px] transition " +
+            (collapsed ? "justify-center px-0" : "px-2") +
+            " " +
+            (canUndo
+              ? "text-[color:var(--muted-strong)] hover:bg-[color:var(--surface-alt)] hover:text-[color:var(--foreground)]"
+              : "text-[color:var(--muted)] opacity-40 cursor-not-allowed")
+          }
+        >
+          <UndoIcon />
+          {!collapsed && <span>Undo</span>}
+        </button>
+
         <div ref={profileRef} className="relative">
-          {/* Dropdown — rendered above the button */}
           {profileOpen && (
             <div
-              className="absolute bottom-[calc(100%+6px)] left-0 right-0 rounded-xl border shadow-xl overflow-hidden z-50"
+              className="absolute rounded-xl border shadow-xl overflow-hidden z-50"
               style={{
                 background: "var(--surface)",
                 borderColor: "var(--border)",
-                minWidth: collapsed ? 220 : undefined,
+                minWidth: 200,
                 left: collapsed ? "calc(100% + 6px)" : 0,
                 bottom: collapsed ? 0 : "calc(100% + 6px)",
+                right: collapsed ? "auto" : 0,
               }}
             >
-              {/* User info header */}
-              <div
-                className="px-4 py-3 border-b"
-                style={{ borderColor: "var(--border)" }}
-              >
+              <div className="px-4 py-3 border-b" style={{ borderColor: "var(--border)" }}>
                 <div className="flex items-center gap-2.5">
-                  <Avatar initials={initials} size={32} />
+                  <Avatar initials={initials} size={32} active />
                   <div className="min-w-0">
-                    {displayName && (
-                      <div className="text-[12.5px] font-semibold truncate">
-                        {displayName}
-                      </div>
-                    )}
-                    <div
-                      className="text-[11.5px] truncate"
-                      style={{ color: "var(--muted-strong)" }}
-                    >
-                      {email}
+                    <div className="text-[12.5px] font-semibold truncate">{username}</div>
+                    <div className="text-[11px] truncate" style={{ color: "var(--muted-strong)" }}>
+                      {isAdmin ? "Admin" : "User"} · {plan === "pro" ? "✦ Pro" : "Free"}
                     </div>
                   </div>
                 </div>
-                {/* Plan badge */}
-                <div className="mt-2.5">
-                  <span
-                    className="inline-flex items-center gap-1 text-[10.5px] font-semibold px-2 py-0.5 rounded-full"
-                    style={
-                      plan === "pro"
-                        ? {
-                            background:
-                              "linear-gradient(135deg,#7c3aed22,#4f46e522)",
-                            color: "#6d28d9",
-                            border: "1px solid #ddd6fe",
-                          }
-                        : {
-                            background: "var(--surface-alt)",
-                            color: "var(--muted-strong)",
-                            border: "1px solid var(--border)",
-                          }
-                    }
-                  >
-                    {plan === "pro" ? "✦ Pro" : "Free"}
-                  </span>
-                </div>
               </div>
-
-              {/* Menu items */}
-              <div className="p-1.5 space-y-0.5">
-                <Link
-                  href="/onboarding/plan"
-                  onClick={() => setProfileOpen(false)}
-                  className="flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[12.5px] transition hover:bg-[color:var(--surface-alt)]"
-                  style={{ color: "var(--foreground)" }}
-                >
-                  <CreditCardIcon />
-                  {plan === "pro" ? "Üyeliği yönet" : "Pro'ya yükselt"}
-                </Link>
-
-                <div
-                  className="my-1 h-px"
-                  style={{ background: "var(--border)" }}
-                />
-
+              <div className="p-1.5">
+                {user?.isOwner && (
+                  <Link
+                    href="/onboarding/plan"
+                    onClick={() => setProfileOpen(false)}
+                    className="flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[12.5px] transition hover:bg-[color:var(--surface-alt)]"
+                    style={{ color: "var(--foreground)" }}
+                  >
+                    {plan === "pro" ? "Manage plan" : "Upgrade to Pro"}
+                  </Link>
+                )}
                 <button
                   onClick={handleLogout}
                   className="flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[12.5px] transition hover:bg-red-50"
                   style={{ color: "#dc2626" }}
                 >
                   <LogOutIcon />
-                  Çıkış yap
+                  Log out
                 </button>
               </div>
             </div>
           )}
 
-          {/* The trigger button */}
           <button
             onClick={() => setProfileOpen((v) => !v)}
-            title={collapsed ? `${displayName || email}\n${plan === "pro" ? "Pro" : "Free"}` : undefined}
+            title={collapsed ? username : undefined}
             className={
               "w-full flex items-center gap-2.5 rounded-lg py-1.5 transition hover:bg-[color:var(--surface-alt)] " +
               (collapsed ? "justify-center px-0" : "px-2")
@@ -238,68 +240,37 @@ export function AppSidebar() {
             <Avatar initials={initials} size={26} active={profileOpen} />
             {!collapsed && (
               <div className="flex-1 min-w-0 text-left">
-                <div
-                  className="text-[12px] font-medium truncate leading-tight"
-                  style={{ color: "var(--foreground)" }}
-                >
-                  {displayName || email.split("@")[0]}
+                <div className="text-[12px] font-medium truncate leading-tight" style={{ color: "var(--foreground)" }}>
+                  {username}
                 </div>
-                <div
-                  className="text-[10px] truncate leading-tight"
-                  style={{ color: "var(--muted)" }}
-                >
-                  {plan === "pro" ? "✦ Pro" : "Free"}
+                <div className="text-[10px] truncate leading-tight" style={{ color: "var(--muted)" }}>
+                  {isAdmin ? "Admin" : "User"} · {plan === "pro" ? "Pro" : "Free"}
                 </div>
               </div>
             )}
-            {!collapsed && (
-              <ChevronUpDownIcon open={profileOpen} />
-            )}
+            {!collapsed && <ChevronUpDownIcon open={profileOpen} />}
           </button>
         </div>
 
-        {/* Collapse toggle */}
         <button
           onClick={() => setCollapsed((c) => !c)}
-          className={
-            "w-full inline-flex items-center justify-center gap-2 rounded-md py-1.5 text-[11px] text-[color:var(--muted-strong)] hover:bg-[color:var(--surface-alt)] transition"
-          }
-          title={collapsed ? "Genişlet" : "Daralt"}
-          aria-label={collapsed ? "Sidebar'ı genişlet" : "Sidebar'ı daralt"}
+          className="w-full inline-flex items-center justify-center gap-2 rounded-md py-1.5 text-[11px] text-[color:var(--muted-strong)] hover:bg-[color:var(--surface-alt)] transition"
+          title={collapsed ? "Expand" : "Collapse"}
         >
-          {collapsed ? (
-            <ChevronRightIcon />
-          ) : (
-            <>
-              <ChevronLeftIcon />
-              <span>Daralt</span>
-            </>
-          )}
+          {collapsed ? <ChevronRightIcon /> : <><ChevronLeftIcon /><span>Collapse</span></>}
         </button>
       </div>
     </aside>
   );
 }
 
-function Avatar({
-  initials,
-  size,
-  active,
-}: {
-  initials: string;
-  size: number;
-  active?: boolean;
-}) {
+function Avatar({ initials, size, active }: { initials: string; size: number; active?: boolean }) {
   return (
     <div
       className="shrink-0 rounded-full grid place-items-center font-semibold transition-all"
       style={{
-        width: size,
-        height: size,
-        fontSize: size * 0.38,
-        background: active
-          ? "linear-gradient(135deg,#2563eb,#7c3aed)"
-          : "linear-gradient(135deg,#dbeafe,#ede9fe)",
+        width: size, height: size, fontSize: size * 0.38,
+        background: active ? "linear-gradient(135deg,#2563eb,#7c3aed)" : "linear-gradient(135deg,#dbeafe,#ede9fe)",
         color: active ? "#fff" : "#3730a3",
         boxShadow: active ? "0 0 0 2px #2563eb44" : undefined,
       }}
@@ -309,106 +280,49 @@ function Avatar({
   );
 }
 
-function HomeIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 9.5 12 3l9 6.5V21a1 1 0 0 1-1 1h-5v-7h-6v7H4a1 1 0 0 1-1-1z" />
-    </svg>
-  );
-}
-
 function StackIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 3 2 8l10 5 10-5z" />
-      <path d="M2 13l10 5 10-5" />
-      <path d="M2 18l10 5 10-5" />
-    </svg>
-  );
+  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3 2 8l10 5 10-5z" /><path d="M2 13l10 5 10-5" /><path d="M2 18l10 5 10-5" /></svg>;
 }
-
 function DatabaseIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <ellipse cx="12" cy="5" rx="9" ry="3" />
-      <path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5" />
-      <path d="M3 12c0 1.66 4.03 3 9 3s9-1.34 9-3" />
-    </svg>
-  );
+  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3" /><path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5" /><path d="M3 12c0 1.66 4.03 3 9 3s9-1.34 9-3" /></svg>;
 }
-
 function CashflowIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M2 7h20M2 12h20M2 17h20" />
-      <path d="M6 3v18M18 3v18" />
-    </svg>
-  );
+  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 7h20M2 12h20M2 17h20" /><path d="M6 3v18M18 3v18" /></svg>;
 }
-
+function TrendIcon() {
+  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18" /><path d="m7 15 4-4 3 3 5-7" /></svg>;
+}
 function DiscountIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M19 5 5 19" />
-      <circle cx="6.5" cy="6.5" r="2.5" />
-      <circle cx="17.5" cy="17.5" r="2.5" />
-    </svg>
-  );
+  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 5 5 19" /><circle cx="6.5" cy="6.5" r="2.5" /><circle cx="17.5" cy="17.5" r="2.5" /></svg>;
 }
-
+function UsersIcon() {
+  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>;
+}
+function GuideIcon() {
+  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" /></svg>;
+}
+function AuditIcon() {
+  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="4" width="14" height="17" rx="2" /><path d="M9 4V2h6v2M9 10h6M9 14h3" /><path d="m14 17 1.5 1.5L19 15" /></svg>;
+}
+function AgentSparkIcon() {
+  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l1.8 4.6L18 9l-4.2 1.4L12 15l-1.8-4.6L6 9l4.2-1.4z" /><path d="M19 15l1 2.4L22 18l-2 .6L19 21l-1-2.4L16 18l2-.6z" /></svg>;
+}
+function UndoIcon() {
+  return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7v6h6" /><path d="M3 13a9 9 0 1 0 3-7.7L3 8" /></svg>;
+}
 function ChevronLeftIcon() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M15 18l-6-6 6-6" />
-    </svg>
-  );
+  return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>;
 }
-
 function ChevronRightIcon() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M9 18l6-6-6-6" />
-    </svg>
-  );
+  return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6" /></svg>;
 }
-
 function ChevronUpDownIcon({ open }: { open: boolean }) {
   return (
-    <svg
-      width="12"
-      height="12"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="shrink-0 transition-transform"
-      style={{
-        color: "var(--muted)",
-        transform: open ? "rotate(180deg)" : "none",
-      }}
-    >
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 transition-transform" style={{ color: "var(--muted)", transform: open ? "rotate(180deg)" : "none" }}>
       <path d="M7 15l5 5 5-5M7 9l5-5 5 5" />
     </svg>
   );
 }
-
-function CreditCardIcon() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--muted-strong)" }}>
-      <rect x="2" y="5" width="20" height="14" rx="2" />
-      <path d="M2 10h20" />
-    </svg>
-  );
-}
-
 function LogOutIcon() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-      <polyline points="16 17 21 12 16 7" />
-      <line x1="21" y1="12" x2="9" y2="12" />
-    </svg>
-  );
+  return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></svg>;
 }

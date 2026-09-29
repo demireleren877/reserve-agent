@@ -1,14 +1,26 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { useAuth } from "./auth-context";
-import { fetchMe, type Plan } from "@/lib/sync/worker-client";
+import { fetchMe, WorkerError, type Plan, type Role } from "@/lib/sync/worker-client";
 
 export interface MeSnapshot {
   uid: string;
   email: string;
+  /** Ekranlarda gösterilen ad (masaüstündeki kullanıcı adı) — web'de e-posta. */
+  username: string;
+  role: Role;
   plan: Plan;
+  /** Çalışma alanının sahibi mi (plan yalnız sahipçe değiştirilir). */
+  isOwner: boolean;
+}
+
+const MeCtx = createContext<MeSnapshot | null>(null);
+
+/** Oturumdaki kullanıcı + ekip rolü. Yalnız AuthGate altında kullanılabilir. */
+export function useMe(): MeSnapshot | null {
+  return useContext(MeCtx);
 }
 
 interface Props {
@@ -44,9 +56,20 @@ export function AuthGate({ children }: Props) {
           router.replace("/onboarding/plan");
           return;
         }
-        setMe({ uid: m.uid, email: m.email, plan: m.plan });
+        setMe({
+          uid: m.uid,
+          email: m.email,
+          username: m.email,
+          role: m.role ?? "admin",
+          plan: m.plan,
+          isOwner: m.workspace?.is_owner ?? true,
+        });
       } catch (e) {
         if (cancelled) return;
+        if (e instanceof WorkerError && e.status === 403 && e.detail === "user_inactive") {
+          setError("Hesabınız ekip yöneticisi tarafından devre dışı bırakıldı.");
+          return;
+        }
         setError(e instanceof Error ? e.message : "Bağlantı hatası");
       }
     })();
@@ -89,5 +112,5 @@ export function AuthGate({ children }: Props) {
     );
   }
 
-  return <>{children(me)}</>;
+  return <MeCtx.Provider value={me}>{children(me)}</MeCtx.Provider>;
 }

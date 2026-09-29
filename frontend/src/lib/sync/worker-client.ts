@@ -5,11 +5,16 @@ export const WORKER_BASE =
 
 export type Plan = "free" | "pro";
 
+export type Role = "admin" | "user";
+
 export interface MeResponse {
   uid: string;
   email: string;
   plan: Plan;
   hasPlan: boolean;
+  /** Ekip çalışma alanındaki rol (masaüstündeki admin/user). */
+  role: Role;
+  workspace: { id: string; is_owner: boolean; owner_email: string };
 }
 
 export interface StateResponse<P = unknown, C = unknown> {
@@ -31,12 +36,20 @@ export interface PutStateResponse {
 }
 
 export class WorkerError extends Error {
-  constructor(public status: number, public code: string, message?: string) {
+  constructor(
+    public status: number,
+    public code: string,
+    message?: string,
+    public detail?: unknown,
+  ) {
     super(message ?? code);
   }
 }
 
-async function getToken(): Promise<string> {
+/** Masaüstü sürümündeki adıyla da erişilebilsin. */
+export { WorkerError as ApiError };
+
+export async function getToken(): Promise<string> {
   const cur = getFirebaseAuth().currentUser;
   if (!cur) throw new WorkerError(401, "no_user");
   return cur.getIdToken();
@@ -79,16 +92,21 @@ async function parse<T>(res: Response): Promise<T> {
   if (!res.ok) {
     let code = `http_${res.status}`;
     let message: string | undefined;
+    let detail: unknown;
     try {
-      const body = (await res.json()) as { error?: string; message?: string };
+      const body = (await res.json()) as { error?: string; message?: string; detail?: unknown };
       if (body.error) code = body.error;
       message = body.message;
+      detail = body.detail;
     } catch {
       /* ignore */
     }
-    throw new WorkerError(res.status, code, message);
+    throw new WorkerError(res.status, code, message, detail);
   }
-  return (await res.json()) as T;
+  // 204 / boş gövde (ör. DELETE): res.json() boş gövdede patlar.
+  if (res.status === 204) return undefined as T;
+  const text = await res.text();
+  return (text ? JSON.parse(text) : undefined) as T;
 }
 
 export async function fetchMe(): Promise<MeResponse> {
@@ -181,6 +199,82 @@ export async function deleteDataset(
     `/v1/data/periods/${encodeURIComponent(periodId)}/datasets/${encodeURIComponent(datasetId)}`,
     { method: "DELETE" },
   );
+}
+
+// ─── Denetim günlüğü (yönetici) ──────────────────────────────────────────────
+
+export interface AuditEvent {
+  id: string;
+  timestamp: string | null;
+  actor: string;
+  source: string;
+  action: string;
+  branch_id: string | null;
+  branch_name?: string | null;
+  details: Record<string, unknown> | null;
+}
+
+export async function fetchAuditEvents(limit = 200): Promise<AuditEvent[]> {
+  const res = await call<{ events: AuditEvent[] }>(`/v1/audit?limit=${limit}`, { method: "GET" });
+  return res.events;
+}
+
+// ─── Kullanıcı yönetimi (yönetici) ────────────────────────────────────────────
+// Web'de kullanıcılar e-postayla davet edilir; parolayı Firebase yönetir.
+
+export interface UserRecord {
+  /** E-posta (küçük harf) — kullanıcının kimliği. */
+  id: string;
+  username: string;
+  role: Role;
+  is_active: boolean;
+  is_owner?: boolean;
+  joined?: boolean;
+}
+
+export async function fetchUsers(): Promise<UserRecord[]> {
+  return call<UserRecord[]>("/v1/admin/users", { method: "GET" });
+}
+
+export async function createUser(data: { username: string; role?: Role }): Promise<UserRecord> {
+  return call<UserRecord>("/v1/admin/users", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateUser(
+  userId: string,
+  data: { role?: Role; is_active?: boolean },
+): Promise<UserRecord> {
+  return call<UserRecord>(`/v1/admin/users/${encodeURIComponent(userId)}`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteUser(userId: string): Promise<void> {
+  await call<unknown>(`/v1/admin/users/${encodeURIComponent(userId)}`, { method: "DELETE" });
+}
+
+// ─── Model kilitleri ──────────────────────────────────────────────────────────
+
+export interface LockInfo {
+  locked: boolean;
+  is_mine?: boolean;
+  locked_by_name?: string;
+  expires_at?: string;
+}
+
+export async function acquireLock(lockKey: string, force = false): Promise<LockInfo> {
+  return call<LockInfo>(force ? "/v1/locks/force-acquire" : "/v1/locks/acquire", {
+    method: "POST",
+    body: JSON.stringify({ lock_key: lockKey }),
+  });
+}
+
+export async function releaseLock(lockKey: string): Promise<void> {
+  await call<unknown>(`/v1/locks/${encodeURIComponent(lockKey)}`, { method: "DELETE" });
 }
 
 // ─── İletişim formu ──────────────────────────────────────────────────────────

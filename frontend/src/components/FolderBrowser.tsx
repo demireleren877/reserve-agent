@@ -11,6 +11,7 @@ import { useUserPlan } from "@/lib/auth/user-plan-context";
 const FREE_PERIOD_LIMIT = 1;
 const FREE_BRANCH_LIMIT = 1;
 
+
 // ——————————————————————— Copy / Move Modal ———————————————————————
 
 function CopyMoveModal({
@@ -46,16 +47,16 @@ function CopyMoveModal({
       <div className="card p-6 w-full max-w-sm mx-4 shadow-2xl space-y-5">
         <div>
           <div className="text-sm font-semibold">
-            {mode === "copy" ? "Branşı Kopyala" : "Branşı Taşı"}
+            {mode === "copy" ? "Copy Branch" : "Move Branch"}
           </div>
           <div className="text-xs text-[color:var(--muted)] mt-0.5">
-            {branch.name} · {branch.frequency === "yearly" ? "Yıllık" : "Çeyreklik"}
+            {branch.name} · {branch.frequency === "yearly" ? "Yearly" : "Quarterly"}
           </div>
         </div>
 
         {mode === "copy" && (
           <div className="space-y-1.5">
-            <div className="label">Yeni isim</div>
+            <div className="label">New name</div>
             <input
               autoFocus
               value={name}
@@ -70,7 +71,7 @@ function CopyMoveModal({
         )}
 
         <div className="space-y-1.5">
-          <div className="label">Model türü</div>
+          <div className="label">Model type</div>
           <div className="grid grid-cols-2 gap-2">
             {(["yearly", "quarterly"] as Frequency[]).map((f) => (
               <button
@@ -83,14 +84,14 @@ function CopyMoveModal({
                     : "border-[color:var(--border)] hover:bg-[color:var(--surface-alt)]")
                 }
               >
-                {f === "yearly" ? "Yıllık" : "Çeyreklik"}
+                {f === "yearly" ? "Yearly" : "Quarterly"}
               </button>
             ))}
           </div>
         </div>
 
         <div className="space-y-1.5">
-          <div className="label">Hedef dönem</div>
+          <div className="label">Target period</div>
           <div className="space-y-1 max-h-44 overflow-y-auto">
             {periods.map((p) => (
               <label
@@ -121,7 +122,7 @@ function CopyMoveModal({
 
         {isSameLocation && (
           <div className="text-xs text-[color:var(--warning)] bg-[color:var(--accent-cell)] border border-[color:var(--border)] rounded-md px-3 py-2">
-            Kaynak ve hedef aynı — farklı bir dönem veya model türü seçin.
+            Source and target are the same — pick a different period or model type.
           </div>
         )}
 
@@ -131,9 +132,9 @@ function CopyMoveModal({
             disabled={!canConfirm}
             className="btn btn-primary flex-1"
           >
-            {mode === "copy" ? "Kopyala" : "Taşı"}
+            {mode === "copy" ? "Copy" : "Move"}
           </button>
-          <button onClick={onCancel} className="btn flex-1">İptal</button>
+          <button onClick={onCancel} className="btn flex-1">Cancel</button>
         </div>
       </div>
     </div>
@@ -149,9 +150,9 @@ export function FolderBrowser() {
           <button
             onClick={actions.undo}
             className="inline-flex items-center gap-1.5 text-xs text-[color:var(--muted-strong)] hover:text-[color:var(--foreground)] border border-[color:var(--border)] rounded-md px-2.5 py-1 transition hover:bg-[color:var(--surface-alt)]"
-            title="Geri al (Cmd+Z)"
+            title="Undo (Cmd+Z)"
           >
-            ↩ Geri al
+            ↩ Undo
           </button>
         </div>
       )}
@@ -164,16 +165,16 @@ export function FolderBrowser() {
 
 function RootView() {
   const { project, actions } = useProject();
-  const plan = useUserPlan();
   const [adding, setAdding] = useState(false);
   const [label, setLabel] = useState("");
+  const plan = useUserPlan();
   const atLimit = plan === "free" && project.periods.length >= FREE_PERIOD_LIMIT;
 
   return (
     <div className="max-w-6xl mx-auto">
       <HeaderRow
-        title="Dönemler"
-        subtitle="Rapor dönemleri. Her dönem altında yıllık ve çeyreklik modeller yer alır."
+        title="Periods"
+        subtitle="Reporting periods. Each period contains yearly and quarterly models."
         count={project.periods.length}
       />
       <Grid>
@@ -183,7 +184,7 @@ function RootView() {
             period={p}
             onOpen={() => actions.goToPeriod(p.id)}
             onDelete={() => {
-              if (confirm(`"${p.label}" dönemi silinsin mi?`))
+              if (confirm(`Delete period "${p.label}"?`))
                 actions.deletePeriod(p.id);
             }}
           />
@@ -191,7 +192,7 @@ function RootView() {
         {adding ? (
           <InlineAdd
             placeholder="2025Q1"
-            validate={(v) => /^\d{4}Q[1-4]$/.test(v) ? null : "Format: 2025Q1 (yıl + Q + çeyrek)"}
+            validate={(v) => /^\d{4}Q[1-4]$/.test(v) ? null : "Format: 2025Q1 (year + Q + quarter)"}
             onCancel={() => {
               setAdding(false);
               setLabel("");
@@ -208,9 +209,9 @@ function RootView() {
             onChange={setLabel}
           />
         ) : atLimit ? (
-          <UpgradeTile message="Free planda 1 dönem oluşturabilirsin." />
+          <UpgradeTile message="On the Free plan you can create 1 period." />
         ) : (
-          <AddTile label="+ Yeni Dönem" onClick={() => setAdding(true)} />
+          <AddTile label="+ New Period" onClick={() => setAdding(true)} />
         )}
       </Grid>
     </div>
@@ -232,17 +233,17 @@ function PeriodView() {
     <div className="max-w-4xl mx-auto">
       <HeaderRow
         title={activePeriod.label}
-        subtitle="Model kategorisini seçin."
+        subtitle="Select a model category."
       />
       <Grid cols={2}>
         <FreqTile
-          title="Yıllık Modeller"
+          title="Yearly Models"
           count={yearlyCount}
           onClick={() => actions.goToFrequency("yearly")}
           accent="primary"
         />
         <FreqTile
-          title="Çeyreklik Modeller"
+          title="Quarterly Models"
           count={quarterlyCount}
           onClick={() => actions.goToFrequency("quarterly")}
           accent="success"
@@ -250,26 +251,26 @@ function PeriodView() {
       </Grid>
 
       <div className="mt-6 flex items-center gap-3 text-xs text-[color:var(--muted)]">
-        <span>{activePeriod.branches.length} toplam branş</span>
+        <span>{activePeriod.branches.length} branches total</span>
         <span>·</span>
         <span>
-          Oluşturma:{" "}
+          Created:{" "}
           {new Date(activePeriod.createdAt).toLocaleDateString("tr-TR")}
         </span>
         <button
           onClick={() => {
-            if (confirm(`"${activePeriod.label}" dönemi silinsin mi?`))
+            if (confirm(`Delete period "${activePeriod.label}"?`))
               actions.deletePeriod(activePeriod.id);
           }}
           className="ml-auto hover:text-[color:var(--danger)]"
         >
-          Dönemi sil
+          Delete period
         </button>
       </div>
       <div className="text-[10px] text-[color:var(--muted)] mt-2">
         {project.periods.length === 1
           ? ""
-          : "Farklı dönem için: breadcrumb'tan Dönemler'e dön."}
+          : "For a different period, go back to Periods from the breadcrumb."}
       </div>
     </div>
   );
@@ -278,13 +279,10 @@ function PeriodView() {
 function FrequencyView() {
   const { activePeriod, project, branchesForActiveFrequency, actions } =
     useProject();
-  const plan = useUserPlan();
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
-  const totalBranches = project.periods.reduce(
-    (sum, p) => sum + p.branches.length,
-    0,
-  );
+  const plan = useUserPlan();
+  const totalBranches = project.periods.reduce((sum, p) => sum + p.branches.length, 0);
   const atBranchLimit = plan === "free" && totalBranches >= FREE_BRANCH_LIMIT;
   const [modal, setModal] = useState<{
     branch: Branch;
@@ -294,13 +292,13 @@ function FrequencyView() {
 
   if (!activePeriod || !project.activeFrequency) return null;
   const freqLabel =
-    project.activeFrequency === "yearly" ? "Yıllık" : "Çeyreklik";
+    project.activeFrequency === "yearly" ? "Yearly" : "Quarterly";
 
   return (
     <div className="max-w-6xl mx-auto">
       <HeaderRow
         title={`${freqLabel} — ${activePeriod.label}`}
-        subtitle="Branş seçin veya yeni oluşturun."
+        subtitle="Select a branch or create a new one."
         count={branchesForActiveFrequency.length}
       />
       <Grid>
@@ -310,7 +308,7 @@ function FrequencyView() {
             branch={b}
             onOpen={() => actions.goToBranch(b.id)}
             onDelete={() => {
-              if (confirm(`"${b.name}" branşı silinsin mi?`))
+              if (confirm(`Delete branch "${b.name}"?`))
                 actions.deleteBranch(b.id);
             }}
             onCopy={() => setModal({ branch: b, mode: "copy" })}
@@ -320,7 +318,7 @@ function FrequencyView() {
         ))}
         {adding ? (
           <InlineAdd
-            placeholder="örn. Kasko"
+            placeholder="e.g. Motor"
             value={name}
             onChange={setName}
             onCancel={() => {
@@ -340,9 +338,9 @@ function FrequencyView() {
             }}
           />
         ) : atBranchLimit ? (
-          <UpgradeTile message="Free planda 1 model oluşturabilirsin." />
+          <UpgradeTile message="On the Free plan you can create 1 model." />
         ) : (
-          <AddTile label="+ Yeni Branş" onClick={() => setAdding(true)} />
+          <AddTile label="+ New Branch" onClick={() => setAdding(true)} />
         )}
       </Grid>
 
@@ -454,17 +452,17 @@ function PeriodTile({
           }}
           className="opacity-0 group-hover:opacity-100 text-xs text-[color:var(--muted)] hover:text-[color:var(--danger)] transition"
         >
-          Sil
+          Delete
         </button>
       </div>
       <div>
         <div className="text-base font-semibold">{period.label}</div>
         <div className="text-xs text-[color:var(--muted)] mt-1 tabular">
-          {total} branş · {yearly} yıllık · {quarterly} çeyreklik
+          {total} branches · {yearly} yearly · {quarterly} quarterly
         </div>
       </div>
       <div className="text-[11px] text-[color:var(--muted)] tabular">
-        Oluşturma: {new Date(period.createdAt).toLocaleDateString("tr-TR")}
+        Created: {new Date(period.createdAt).toLocaleDateString("en-GB")}
       </div>
     </div>
   );
@@ -498,7 +496,7 @@ function FreqTile({
       <div className="flex-1">
         <div className="text-lg font-semibold">{title}</div>
         <div className="text-xs text-[color:var(--muted)] mt-0.5">
-          {count} branş
+          {count} branches
         </div>
       </div>
       <div className="text-[color:var(--muted)] group-hover:text-[color:var(--primary)] transition">
@@ -547,34 +545,34 @@ function BranchTile({
             <button
               onClick={(e) => { e.stopPropagation(); onCopy(); }}
               className="text-xs text-[color:var(--muted)] hover:text-[color:var(--primary)] transition"
-              title="Kopyala"
+              title="Copy"
             >
-              Kopyala
+              Copy
             </button>
           )}
           {onMove && (
             <button
               onClick={(e) => { e.stopPropagation(); onMove(); }}
               className="text-xs text-[color:var(--muted)] hover:text-[color:var(--primary)] transition"
-              title="Taşı"
+              title="Move"
             >
-              Taşı
+              Move
             </button>
           )}
           {onCopyAssumptions && (
             <button
               onClick={(e) => { e.stopPropagation(); onCopyAssumptions(); }}
               className="text-xs text-[color:var(--muted)] hover:text-[color:var(--primary)] transition"
-              title="Varsayım aktar"
+              title="Copy assumptions"
             >
-              Aktar
+              Copy assumptions
             </button>
           )}
           <button
             onClick={(e) => { e.stopPropagation(); onDelete(); }}
             className="text-xs text-[color:var(--muted)] hover:text-[color:var(--danger)] transition"
           >
-            Sil
+            Delete
           </button>
         </div>
       </div>
@@ -583,16 +581,16 @@ function BranchTile({
         <div className="text-xs text-[color:var(--muted)] mt-1 flex items-center gap-2">
           {hasData ? (
             <>
-              <Pill ok>veri var</Pill>
+              <Pill ok>has data</Pill>
               <span className="tabular">{nOrigins} origin</span>
             </>
           ) : (
-            <Pill>veri yok</Pill>
+            <Pill>no data</Pill>
           )}
         </div>
       </div>
       <div className="text-[11px] text-[color:var(--muted)] tabular">
-        {branch.history.length} kayıt · {timeAgo(branch.updatedAt)}
+        {branch.history.length} records · {timeAgo(branch.updatedAt)}
       </div>
     </div>
   );
@@ -612,7 +610,7 @@ function UpgradeTile({ message }: { message: string }) {
           color: "#fff",
         }}
       >
-        ✦ Pro&apos;ya geç
+        ✦ Go Pro
       </Link>
     </div>
   );
@@ -671,10 +669,10 @@ function InlineAdd({
       </div>
       <div className="flex gap-2">
         <button onClick={onCommit} disabled={isInvalid} className="btn btn-primary text-xs flex-1 disabled:opacity-40">
-          Oluştur
+          Create
         </button>
         <button onClick={onCancel} className="btn text-xs">
-          İptal
+          Cancel
         </button>
       </div>
     </div>
@@ -724,12 +722,12 @@ function timeAgo(iso: string): string {
     const d = new Date(iso).getTime();
     const diff = Date.now() - d;
     const m = Math.floor(diff / 60000);
-    if (m < 1) return "az önce";
-    if (m < 60) return `${m} dk önce`;
+    if (m < 1) return "just now";
+    if (m < 60) return `${m} min ago`;
     const h = Math.floor(m / 60);
-    if (h < 24) return `${h} sa önce`;
+    if (h < 24) return `${h} hr ago`;
     const days = Math.floor(h / 24);
-    return `${days} gün önce`;
+    return `${days} days ago`;
   } catch {
     return "";
   }

@@ -38,7 +38,7 @@ describe("AgentRegistry", () => {
     expect(result.current.modulesPayload).toBe(before);
   });
 
-  it("dispatchActions modüle göre gruplar ve doğru handler'a iletir", () => {
+  it("dispatchActions modüle göre gruplar ve doğru handler'a iletir", async () => {
     const { result } = renderHook(() => useAgentRegistry(), { wrapper });
     const reserveHandler = vi.fn();
     const cashflowHandler = vi.fn();
@@ -50,36 +50,36 @@ describe("AgentRegistry", () => {
     const a1 = action("reserve", "set_window");
     const a2 = action("cashflow", "set_cashflow_window");
     const a3 = action("reserve", "set_basis");
-    act(() => result.current.dispatchActions([a1, a2, a3]));
+    await act(() => result.current.dispatchActions([a1, a2, a3]));
 
     expect(reserveHandler).toHaveBeenCalledWith([a1, a3]);
     expect(cashflowHandler).toHaveBeenCalledWith([a2]);
   });
 
-  it("module alanı olmayan action legacy olarak reserve'e düşer", () => {
+  it("module alanı olmayan action legacy olarak reserve'e düşer", async () => {
     const { result } = renderHook(() => useAgentRegistry(), { wrapper });
     const reserveHandler = vi.fn();
     act(() => result.current.registerActionHandler("reserve", reserveHandler));
     const a = action(undefined, "exclude_cells");
-    act(() => result.current.dispatchActions([a]));
+    await act(() => result.current.dispatchActions([a]));
     expect(reserveHandler).toHaveBeenCalledWith([a]);
   });
 
-  it("handler'ı olmayan modülün action'ı sessizce atlanır", () => {
+  it("handler'ı olmayan modülün action'ı sessizce atlanır", async () => {
     const { result } = renderHook(() => useAgentRegistry(), { wrapper });
-    expect(() =>
+    await expect(
       act(() =>
         result.current.dispatchActions([action("navigation", "navigate_to")]),
       ),
-    ).not.toThrow();
+    ).resolves.toBeUndefined();
   });
 
-  it("unregister edilen handler artık çağrılmaz", () => {
+  it("unregister edilen handler artık çağrılmaz", async () => {
     const { result } = renderHook(() => useAgentRegistry(), { wrapper });
     const handler = vi.fn();
     act(() => result.current.registerActionHandler("discount", handler));
     act(() => result.current.unregisterActionHandler("discount"));
-    act(() =>
+    await act(() =>
       result.current.dispatchActions([action("discount", "compute_discount")]),
     );
     expect(handler).not.toHaveBeenCalled();

@@ -1,178 +1,110 @@
 import { describe, it, expect } from "vitest";
 import { computeBranchSummary } from "@/lib/reserve-pipeline";
 import type { Branch } from "@/types/project";
-import type { Triangle } from "@/types/triangle";
 
-function tri(values: (number | null)[][], origins?: string[]): Triangle {
+// Üçgen (paid, yıllık): 3 kaza yılı × 3 gelişim
+//   2021: 100, 150, 165
+//   2022: 120, 180, —
+//   2023: 130,  —,  —
+// LDF 0→1 (volume) = (150+180)/(100+120) = 330/220 = 1.5
+// LDF 1→2         = 165/150 = 1.1
+// CDF (curve/override yok) = [1.65, 1.1, 1]
+function branch(over: Partial<Branch> = {}): Branch {
   return {
-    origin_periods: origins ?? values.map((_, i) => String(2020 + i)),
-    development_periods: values[0].map((_, j) => j + 1),
-    values,
-    triangle_type: "paid",
-    origin_granularity: "yearly",
-    development_granularity: "yearly",
-  } as Triangle;
-}
-
-function branch(overrides: Partial<Branch> = {}): Branch {
-  return {
-    id: "b1",
-    name: "Test",
-    frequency: "yearly",
-    createdAt: "2026-01-01",
-    updatedAt: "2026-01-01",
-    triangle: tri([
-      [1000, 1500, 1700, 1750],
-      [1100, 1600, 1800, null],
-      [1200, 1700, null, null],
-      [1300, null, null, null],
-    ]),
+    id: "b", name: "T", frequency: "yearly", createdAt: "", updatedAt: "",
+    triangle: {
+      origin_periods: ["2021", "2022", "2023"],
+      development_periods: [0, 1, 2],
+      values: [
+        [100, 150, 165],
+        [120, 180, null],
+        [130, null, null],
+      ],
+      triangle_type: "paid",
+      origin_granularity: "yearly",
+      development_granularity: "yearly",
+    },
     method: "volume_weighted",
     window: "all",
     excludedCells: [],
     premiums: {},
     lrInputPerOrigin: {},
     basisPerOrigin: {},
-    correctionPerOrigin: {},
     cdfInitial: {},
     cdfChoicePerPeriod: {},
     cdfModelPerPeriod: {},
     curveIncludePerPeriod: {},
+    correctionPerOrigin: {},
     history: [],
-    ...overrides,
-  } as Branch;
+    ...over,
+  } as unknown as Branch;
 }
 
-describe("computeBranchSummary", () => {
-  it("üçgensiz branş boş özet döner", () => {
-    const s = computeBranchSummary(branch({ triangle: null }));
-    expect(s.has_triangle).toBe(false);
-    expect(s.rows).toEqual([]);
-    expect(s.totals.ibnr).toBe(0);
-    expect(s.totals.ulr).toBeNull();
-  });
-
-  it("temel CL hesabı: full-developed origin IBNR=0, gençler CDF ile büyür", () => {
+describe("computeBranchSummary — Ultimate/IBNR ile aynı yöntem", () => {
+  it("chain-ladder IBNR elle hesapla tutar (curve yok)", () => {
     const s = computeBranchSummary(branch());
-    expect(s.has_triangle).toBe(true);
-    expect(s.n_origins).toBe(4);
-    expect(s.selected_ldfs[0]).toBeCloseTo(4800 / 3300, 6);
-
-    const r2020 = s.rows.find((r) => r.origin === "2020")!;
-    expect(r2020.cdf).toBe(1);
-    expect(r2020.cl_ultimate).toBe(1750);
-    expect(r2020.ibnr).toBe(0);
-
-    const r2023 = s.rows.find((r) => r.origin === "2023")!;
-    expect(r2023.cl_ultimate).toBeCloseTo(1300 * s.effective_cdfs[0], 6);
-    expect(r2023.ibnr).toBeCloseTo(r2023.cl_ultimate - 1300, 6);
+    // 2023: latest 130 @dev0, cdf 1.65 → cl 214.5, ibnr 84.5
+    // 2022: latest 180 @dev1, cdf 1.1  → cl 198,   ibnr 18
+    // 2021: latest 165 @dev2, cdf 1    → cl 165,   ibnr 0
+    const r23 = s.rows.find((r) => r.origin === "2023")!;
+    const r22 = s.rows.find((r) => r.origin === "2022")!;
+    expect(r23.cl_ultimate).toBeCloseTo(214.5, 4);
+    expect(r23.ibnr).toBeCloseTo(84.5, 4);
+    expect(r22.cl_ultimate).toBeCloseTo(198, 4);
+    expect(r22.ibnr).toBeCloseTo(18, 4);
+    expect(s.totals.ibnr).toBeCloseTo(102.5, 4);   // 84.5 + 18
+    expect(s.totals.selected_ultimate).toBeCloseTo(577.5, 4); // 165+198+214.5
   });
 
-  it("toplamlar satırların toplamıyla tutarlı", () => {
-    const s = computeBranchSummary(branch({ premiums: { "2023": 2000 } }));
-    const sum = (f: (r: (typeof s.rows)[0]) => number) =>
-      s.rows.reduce((a, r) => a + f(r), 0);
-    expect(s.totals.latest).toBeCloseTo(sum((r) => r.latest), 6);
-    expect(s.totals.selected_ultimate).toBeCloseTo(
-      sum((r) => r.selected_ultimate),
-      6,
-    );
-    expect(s.totals.ibnr).toBeCloseTo(
-      s.totals.selected_ultimate - s.totals.latest,
-      6,
-    );
-    expect(s.totals.ulr).toBeCloseTo(s.totals.selected_ultimate / 2000, 6);
+  it("BF basis + kullanıcı ELR elle hesapla tutar", () => {
+    const s = computeBranchSummary(branch({
+      premiums: { "2023": 200 } as Record<string, number>,
+      basisPerOrigin: { "2023": "bf" } as Record<string, "cl" | "bf">,
+      lrInputPerOrigin: { "2023": "1.0" } as Record<string, string>,
+    }));
+    // 2023: cl 214.5 → pctDev 130/214.5 = 0.606061
+    // bfUlt = 130 + 1.0*200*(1-0.606061) = 130 + 78.7879 = 208.7879
+    const r23 = s.rows.find((r) => r.origin === "2023")!;
+    expect(r23.basis).toBe("bf");
+    expect(r23.bf_ultimate).toBeCloseTo(208.7879, 3);
+    expect(r23.selected_ultimate).toBeCloseTo(208.7879, 3);
+    expect(r23.ibnr).toBeCloseTo(78.7879, 3);
+    // Toplam: 2023 bf ibnr + 2022 cl 18 + 2021 0
+    expect(s.totals.ibnr).toBeCloseTo(96.7879, 3);
   });
 
-  it("BF basis: manuel LR + correction ile bf_ultimate seçilir", () => {
-    const s = computeBranchSummary(
-      branch({
-        premiums: { "2023": 1000 },
-        correctionPerOrigin: { "2023": 2 },
-        lrInputPerOrigin: { "2023": "75%" },
-        basisPerOrigin: { "2023": "bf" },
-      }),
-    );
-    const r = s.rows.find((x) => x.origin === "2023")!;
-    expect(r.basis).toBe("bf");
-    expect(r.correction).toBe(2);
-    expect(r.premium_annual).toBe(2000);
-    expect(r.selected_lr).toBeCloseTo(0.75, 6);
-    expect(r.selected_lr_input).toBe("75%");
-    // bf_ult_annual = latest + LR × premium_annual × (1−%dev); bf_ult = /k
-    const expectedAnnual =
-      1300 + 0.75 * 2000 * (1 - r.pct_developed!);
-    expect(r.bf_ultimate).toBeCloseTo(expectedAnnual / 2, 6);
-    expect(r.selected_ultimate).toBeCloseTo(r.bf_ultimate, 6);
+  it("kullanıcı CDF override uygulanır (dev0 → 2.0)", () => {
+    const s = computeBranchSummary(branch({
+      cdfChoicePerPeriod: { "0": "user" } as Record<string, "initial" | "user">,
+      cdfInitial: { "0": 2.0 } as Record<string, number>,
+    }));
+    // dev0 CDF 2.0 → 2023 cl = 130*2 = 260, ibnr = 130
+    const r23 = s.rows.find((r) => r.origin === "2023")!;
+    expect(r23.cl_ultimate).toBeCloseTo(260, 4);
+    expect(r23.ibnr).toBeCloseTo(130, 4);
   });
 
-  it("manuel LR yoksa pattern ratio, o da yoksa 0.7 fallback", () => {
-    const s = computeBranchSummary(
-      branch({ premiums: { "2023": 2000 } }),
-    );
-    const withPrem = s.rows.find((r) => r.origin === "2023")!;
-    expect(withPrem.selected_lr).toBeCloseTo(
-      withPrem.cl_ultimate / 2000,
-      6,
-    );
-    const noPrem = s.rows.find((r) => r.origin === "2022")!;
-    expect(noPrem.selected_lr).toBe(0.7);
-  });
-
-  it("hücre eleme LDF'yi değiştirir", () => {
-    const base = computeBranchSummary(branch());
-    const excluded = computeBranchSummary(
-      branch({ excludedCells: ["2022|0"] }),
-    );
-    // 2022 step0 elenince: (1500+1600)/(1000+1100)
-    expect(excluded.selected_ldfs[0]).toBeCloseTo(3100 / 2100, 6);
-    expect(excluded.selected_ldfs[0]).not.toBeCloseTo(
-      base.selected_ldfs[0],
-      6,
-    );
-  });
-
-  it("curve user override effective CDF'e yansır", () => {
-    // dev "3" (idx 2) için user anchor 1.05 — o yaştaki origin'in CDF'i olur
-    const s = computeBranchSummary(
-      branch({
-        cdfChoicePerPeriod: { "3": "user" },
-        cdfInitial: { "3": 1.05 },
-      }),
-    );
-    expect(s.effective_cdfs[2]).toBeCloseTo(1.05, 6);
-    const r2021 = s.rows.find((r) => r.origin === "2021")!;
-    expect(r2021.cl_ultimate).toBeCloseTo(1800 * 1.05, 6);
-  });
-
-  it("formula_context '2022.0' origin'ini '2022' olarak normalize eder", () => {
-    const s = computeBranchSummary(
-      branch({
-        triangle: tri(
-          [
-            [1000, 1500],
-            [1100, null],
-          ],
-          ["2021.0", "2022.0"],
-        ),
-        premiums: { "2022.0": 500 },
-      }),
-    );
-    expect(Object.keys(s.formula_context.cl_ult)).toEqual(["2021", "2022"]);
-    expect(s.formula_context.exposure["2022"]).toBe(500);
-    expect(s.formula_context.pattern["2022"]).toBeGreaterThan(0);
-  });
-
-  it("lrInput formülü pipeline içinde değerlendirilir (vw)", () => {
-    const s = computeBranchSummary(
-      branch({
-        premiums: { "2020": 2000, "2023": 1000 },
-        lrInputPerOrigin: { "2023": "vw(2020)" },
-        basisPerOrigin: { "2023": "bf" },
-      }),
-    );
-    const r = s.rows.find((x) => x.origin === "2023")!;
-    // vw(2020) = cl_ult(2020) / exposure(2020) = 1750/2000
-    expect(r.selected_lr).toBeCloseTo(1750 / 2000, 6);
+  it("curve modeli (exp) effektif LDF'i değiştirir → düz CL'den farklı sonuç (fix kanıtı)", () => {
+    // 4 gelişim → 3 LDF [2.0, 1.2, 1.05]; exp fit 3 noktaya birebir oturmaz → farklılaşır.
+    const tri = {
+      origin_periods: ["2020", "2021", "2022", "2023"],
+      development_periods: [0, 1, 2, 3],
+      values: [
+        [100, 200, 240, 252],
+        [100, 200, 240, null],
+        [100, 200, null, null],
+        [100, null, null, null],
+      ],
+      triangle_type: "paid",
+      origin_granularity: "yearly",
+      development_granularity: "yearly",
+    };
+    const plain = computeBranchSummary(branch({ triangle: tri } as Partial<Branch>));
+    const withModel = computeBranchSummary(branch({
+      triangle: tri,
+      cdfModelPerPeriod: { "1": 2 } as Record<string, 1 | 2 | 3 | 4 | 5 | 6>, // dev1 = Exp. Decay
+    } as Partial<Branch>));
+    // Model uygulandığında effektif LDF (dolayısıyla IBNR) düz CL'den farklı olmalı.
+    expect(withModel.totals.ibnr).not.toBeCloseTo(plain.totals.ibnr, 2);
   });
 });

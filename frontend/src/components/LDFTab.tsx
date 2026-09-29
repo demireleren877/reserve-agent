@@ -1,16 +1,20 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import type { LDFMethod, Triangle } from "@/types/triangle";
-import { formatFactor } from "@/lib/api";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { LDFMethod, Triangle, FileData, FileLeaf } from "@/types/triangle";
+import { fileValueForBasis } from "@/types/triangle";
+import { formatNumber } from "@/lib/api";
+import { devDate, reconcileFileDataSnapshots } from "@/lib/roll-forward-util";
+import { periodOrder } from "@/lib/period-order";
 import {
-  WINDOWS,
   type Window,
   aggregateLDFs,
+  applyAvgPairs,
   cellKey,
   cumulativeFactors,
   developmentRatios,
 } from "@/lib/ldf";
+import type { LDFDiagnostic, LDFDiagnosticKind } from "@/lib/ldf-diagnostics";
 
 interface ColStats {
   median: number;
@@ -59,18 +63,45 @@ function heatmapStyle(
   return { backgroundColor: `rgba(37, 99, 235, ${alpha})` };
 }
 
+/** LDF hücresi hover popup'ı için önceki dönem karşılaştırma verisi. */
+export interface LDFPriorRef {
+  label: string;
+  triangle: Triangle;
+  fileData?: FileData | null;
+  /** Attritional açıklaması için prior Gross/Large bileşenleri. */
+  grossFileData?: FileData | null;
+  largeFileData?: FileData | null;
+}
+
 interface Props {
   triangle: Triangle | null;
   window: Window;
   excludedCells: Set<string>;
+  /** Güncel dönem dosya kırılımı (origin→dev→{dosya_no: kümülatif ödeme}). */
+  fileData?: FileData | null;
+  /** Önceki dönem — hover'da değişim ve sebep dosyalar için. */
+  prior?: LDFPriorRef | null;
+  /** Attritional dosya hareketini Gross ve Large üyeliğinden doğrudan çözmek için. */
+  components?: { grossFileData?: FileData | null; largeFileData?: FileData | null } | null;
+  /** Açıklanabilir inceleme sinyalleri; hiçbir öneri otomatik uygulanmaz. */
+  diagnostics?: LDFDiagnostic[];
   /** Curve cascade uygulanmış CDF zinciri. Verilirse CDF satırında
    *  bu değerler gösterilir. */
   cdfsOverride?: number[];
   /** Karma volume: her dev step için ayrı window. Key = step index string. */
   karmaWindowPerStep?: Record<string, Window>;
+  /** LDF yumuşatma çiftleri (anahtar `origin|j` = çiftin sol hücresi). */
+  avgPairs?: Set<string>;
   onWindowChange: (w: Window) => void;
+  /** Düzenlenebilir volume presetleri (branşa özel). Yoksa [4,5,6,7]. */
+  windowPresets?: number[];
+  onWindowPresetsChange?: (next: number[]) => void;
   onToggleCell: (origin: string, step: number) => void;
+  /** Long-press: aynı satırda (j, j+1) çiftini ortalamaya al / geri al. */
+  onToggleAvgPair?: (origin: string, step: number) => void;
   onClearCells: () => void;
+  /** Tüm eleme setini değiştir (kaza yılı satırının toptan elenmesi için). */
+  onSetExcluded?: (next: Set<string>) => void;
   onSetKarmaWindow?: (step: string, w: Window) => void;
   onInitKarma?: (stepCount: number, globalWindow: Window) => void;
   onClearKarma?: () => void;
@@ -78,41 +109,333 @@ interface Props {
 
 const FIXED_METHOD: LDFMethod = "volume_weighted";
 
+type FileOriginIndex = { dates: string[]; membership: Record<string, FileLeaf> };
+const fileOriginIndexCache = new WeakMap<FileData, Map<string, FileOriginIndex>>();
+
+function fileOriginIndex(source: FileData | null | undefined, origin: string): FileOriginIndex {
+  if (!source) return { dates: [], membership: {} };
+  let byOrigin = fileOriginIndexCache.get(source);
+  if (!byOrigin) {
+    byOrigin = new Map();
+    fileOriginIndexCache.set(source, byOrigin);
+  }
+  const cached = byOrigin.get(origin);
+  if (cached) return cached;
+  const byDate = source[origin] ?? {};
+  const dates = Object.keys(byDate).sort((a, b) => periodOrder(a) - periodOrder(b));
+  const membership: Record<string, FileLeaf> = {};
+  for (const date of dates) {
+    for (const [file, leaf] of Object.entries(byDate[date])) membership[file] = leaf;
+  }
+  const index = { dates, membership };
+  byOrigin.set(origin, index);
+  return index;
+}
+
 export function LDFTab(props: Props) {
   const {
     triangle,
     window,
     excludedCells,
+    avgPairs,
     cdfsOverride,
     karmaWindowPerStep,
     onWindowChange,
+    windowPresets,
+    onWindowPresetsChange,
     onToggleCell,
+    onToggleAvgPair,
     onClearCells,
+    onSetExcluded,
     onSetKarmaWindow,
     onInitKarma,
     onClearKarma,
+    fileData,
+    prior,
+    components,
+    diagnostics = [],
   } = props;
 
-  const [heatmap, setHeatmap] = useState(true);
+  const [heatmap, setHeatmap] = useState(false);
+  const [diagnosticsOpen, setDiagnosticsOpen] = useState(true);
+  const [selectedDiagnostic, setSelectedDiagnostic] = useState<string | null>(null);
+  const [decimals, setDecimals] = useState(4);
+  // Düzenlenebilir volume presetleri — BRANŞA özel (varsayılan 4,5,6,7). "All" sabit.
+  // onWindowPresetsChange verilirse branşa yazılır; yoksa yerel (oturumluk) fallback.
+  const [localPresets, setLocalPresets] = useState<number[]>([4, 5, 6, 7]);
+  const presetWindows =
+    windowPresets && windowPresets.length ? windowPresets : localPresets;
+  const updatePresets = (next: number[]) => {
+    if (onWindowPresetsChange) onWindowPresetsChange(next);
+    else setLocalPresets(next);
+  };
+  const ff = useMemo(() => {
+    const nf = new Intl.NumberFormat("tr-TR", {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals,
+    });
+    return (n: number) => nf.format(n);
+  }, [decimals]);
+  const [hover, setHover] = useState<
+    { o: string; i: number; j: number; x: number; y: number } | null
+  >(null);
+  // Sağ tıkla açılan SABİT (pinned) detay popup'ı — hover'ın aksine etkileşimli:
+  // içine girip tüm sebep dosyaları okuyabilir/kaydırabilirsin.
+  const [pinned, setPinned] = useState<
+    { o: string; i: number; j: number; x: number; y: number } | null
+  >(null);
+  const pinnedRef = useRef<HTMLDivElement>(null);
 
   const ratios = useMemo(
-    () => (triangle ? developmentRatios(triangle, excludedCells) : []),
-    [triangle, excludedCells],
+    () => (triangle ? applyAvgPairs(developmentRatios(triangle, excludedCells), avgPairs ?? new Set<string>(), triangle.origin_periods) : []),
+    [triangle, excludedCells, avgPairs],
   );
+
+  // Long-press ayrımı: kısa tık = eleme (onToggleCell); basılı tut = ortalama çifti (onToggleAvgPair).
+  const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const didLongPress = useRef(false);
+  const HOLD_MS = 350;
+  function startHold(o: string, j: number, hasNext: boolean) {
+    didLongPress.current = false;
+    if (!onToggleAvgPair || !hasNext) return;
+    holdTimer.current = setTimeout(() => {
+      didLongPress.current = true;
+      onToggleAvgPair(o, j); // (j, j+1) çiftini aç/kapat
+    }, HOLD_MS);
+  }
+  function cancelHold() {
+    if (holdTimer.current) { clearTimeout(holdTimer.current); holdTimer.current = null; }
+  }
+
+  // Kaza yılı satırındaki tüm (geçerli) hücrelerin eleme durumu.
+  function rowExclusion(o: string, i: number): { steps: number[]; allExcluded: boolean } {
+    const steps: number[] = [];
+    ratios[i]?.forEach((c, j) => { if (c && c.value != null) steps.push(j); });
+    const allExcluded = steps.length > 0 && steps.every((j) => excludedCells.has(cellKey(o, j)));
+    return { steps, allExcluded };
+  }
+  // Kaza yılına tıkla → o yılın tümünü ele / tümünü geri al (toggle).
+  function toggleOrigin(o: string, i: number) {
+    if (!onSetExcluded) return;
+    const { steps, allExcluded } = rowExclusion(o, i);
+    if (!steps.length) return;
+    const next = new Set(excludedCells);
+    steps.forEach((j) => (allExcluded ? next.delete(cellKey(o, j)) : next.add(cellKey(o, j))));
+    onSetExcluded(next);
+  }
+
+  // Önceki dönem link-ratio üçgeni (eleme flag'i önemsiz, sadece değerler).
+  const priorRatios = useMemo(
+    () => (prior?.triangle ? developmentRatios(prior.triangle, new Set<string>()) : []),
+    [prior?.triangle],
+  );
+  const priorIdxByLabel = useMemo(() => {
+    const m = new Map<string, number>();
+    prior?.triangle?.origin_periods.forEach((o, i) => m.set(o, i));
+    return m;
+  }, [prior?.triangle]);
+  // Gelişim kolonlarını indeksle değil gerçek dönem çiftiyle eşleştir. Önceki
+  // üçgenin kolon sayısı farklıysa aynı indeks başka bir development step olabilir.
+  const priorStepByPair = useMemo(() => {
+    const m = new Map<string, number>();
+    const devs = prior?.triangle?.development_periods ?? [];
+    for (let j = 0; j < devs.length - 1; j++) m.set(`${devs[j]}→${devs[j + 1]}`, j);
+    return m;
+  }, [prior?.triangle]);
+  const comparableFileData = useMemo(
+    () => triangle ? reconcileFileDataSnapshots(triangle, fileData) : {},
+    [triangle, fileData],
+  );
+  const comparablePriorFileData = useMemo(
+    () => prior?.triangle ? reconcileFileDataSnapshots(prior.triangle, prior.fileData) : {},
+    [prior],
+  );
+
+  function componentSnapshot(
+    source: FileData | null | undefined,
+    tri: Triangle,
+    origin: string,
+    rowIndex: number,
+    step: number,
+  ): Record<string, FileLeaf> {
+    const byDate = source?.[origin] ?? {};
+    const exact = byDate[devDate(origin, step, tri)];
+    if (exact) return exact;
+    const observableIndex = tri.values[rowIndex].slice(0, step + 1).filter((value) => value != null).length - 1;
+    const dates = fileOriginIndex(source, origin).dates;
+    return byDate[dates[observableIndex]] ?? {};
+  }
+
+  function componentMembershipSnapshot(
+    source: FileData | null | undefined,
+    origin: string,
+  ): Record<string, FileLeaf> {
+    return fileOriginIndex(source, origin).membership;
+  }
 
   const columnStats = useMemo(() => {
     if (!triangle) return [] as ColStats[];
     return computeColumnStats(ratios, triangle.development_periods.length - 1);
   }, [triangle, ratios]);
 
+  // Bir hücre için karşılaştırma verisi: bu dönem / önceki dönem LDF + değişime
+  // sebep dosyalar. Hem hover hem sağ-tık (pinned) popup bunu kullanır.
+  const buildCellInfo = useCallback(
+    (o: string, i: number, j: number) => {
+      if (!triangle) return null;
+      const cur = ratios[i]?.[j]?.value ?? null;
+      const median = columnStats[j]?.median ?? null;
+      const pIdx = priorIdxByLabel.get(o);
+      const pair = `${triangle.development_periods[j]}→${triangle.development_periods[j + 1]}`;
+      const pStep = priorStepByPair.get(pair);
+      // Aynı origin + aynı dev çifti önceki üçgende gözlenmişse karşılaştırılabilir.
+      // Yeni diagonal numerator'ı önceki dönemde null olduğundan buraya GİRMEZ.
+      const priorVal = pIdx != null && pStep != null
+        ? priorRatios[pIdx]?.[pStep]?.value ?? null
+        : null;
+      const hasPrior = priorVal != null;
+      const delta = cur != null && priorVal != null ? cur - priorVal : null;
+
+      type FileRow = { file: string; prev: number; cur: number; delta: number; tag: string; side: string };
+      const files: FileRow[] = [];
+      let sumPrev = 0;
+      let sumCur = 0;
+      // Dosya etkisi model üçgeniyle aynı değer bazında hesaplanır.
+      const fileVal = (leaf: FileLeaf | undefined) => fileValueForBasis(leaf, triangle.triangle_type);
+      // Oran = num/den. Değişim iki taraftan da gelebilir; bu yüzden HEM numerator
+      // (dev j+1) HEM denominator (dev j) hücresinin dosya değişimlerini tara.
+      const cfd = comparableFileData;
+      const pfd = comparablePriorFileData;
+      if (hasPrior && (fileData || prior?.fileData) && pIdx != null && pStep != null) {
+        const currentLargeMembership = components
+          ? componentMembershipSnapshot(components.largeFileData, o)
+          : {};
+        const priorLargeMembership = components && prior
+          ? componentMembershipSnapshot(prior.largeFileData, o)
+          : {};
+        const currentGrossMembership = components
+          ? componentMembershipSnapshot(components.grossFileData, o)
+          : {};
+        const priorGrossMembership = components && prior
+          ? componentMembershipSnapshot(prior.grossFileData, o)
+          : {};
+        const sides: [string, string][] = [
+          [devDate(o, j + 1, triangle), "numerator"],
+          [devDate(o, j, triangle), "denominator"],
+        ];
+        for (const [devLabel, side] of sides) {
+          const curF = cfd[o]?.[devLabel] ?? {};
+          const prevF = pfd[o]?.[devLabel] ?? {};
+          const step = side === "numerator" ? j + 1 : j;
+          const priorStep = side === "numerator" ? pStep + 1 : pStep;
+          const curGross = components
+            ? componentSnapshot(components.grossFileData, triangle, o, i, step)
+            : {};
+          const curLarge = components
+            ? componentSnapshot(components.largeFileData, triangle, o, i, step)
+            : {};
+          const priorGross = components && prior
+            ? componentSnapshot(prior.grossFileData, prior.triangle, o, pIdx, priorStep)
+            : {};
+          const priorLarge = components && prior
+            ? componentSnapshot(prior.largeFileData, prior.triangle, o, pIdx, priorStep)
+            : {};
+          // Segment üyeliği hücre snapshot'ından değil dönemin son Large
+          // snapshot'ından okunur. Dosya Q1 Large'da olup Q2'de tamamen yoksa
+          // ilgili hücrede boş olsa bile Large → Attritional geçişi yakalanır.
+          const keys = new Set([
+            ...Object.keys(curF), ...Object.keys(prevF),
+            ...Object.keys(curGross), ...Object.keys(curLarge),
+            ...Object.keys(priorGross), ...Object.keys(priorLarge),
+            ...Object.keys(currentLargeMembership), ...Object.keys(priorLargeMembership),
+          ]);
+          for (const f of keys) {
+            const componentBased = !!components;
+            let pv = componentBased
+              ? fileVal(priorGross[f]) - fileVal(priorLarge[f])
+              : fileVal(prevF[f]);
+            let cv = componentBased
+              ? fileVal(curGross[f]) - fileVal(curLarge[f])
+              : fileVal(curF[f]);
+            const wasLarge = Math.abs(fileVal(priorLarge[f])) >= 1;
+            const isLargeNow = Object.prototype.hasOwnProperty.call(currentLargeMembership, f);
+            const wasLargeInPrior = Object.prototype.hasOwnProperty.call(priorLargeMembership, f);
+            // Attritional açıklamasında yeni diagonal/gross hareketlerini gösterme;
+            // yalnız gerçek segment sınıfı değişen dosyalar kullanıcı için anlamlı.
+            if (componentBased && wasLargeInPrior === isLargeNow) continue;
+            // Segment kümesi değiştiyse dosyayı MUTLAKA göster. Seçili hücrede
+            // snapshot bulunamazsa dönemdeki son Gross/Large tutarıyla açıklayıcı
+            // fallback üret; küme geçişini hücre tutarı filtresiyle kaybetme.
+            if (componentBased && Math.abs(cv - pv) < 1) {
+              if (side !== "numerator") continue;
+              if (wasLargeInPrior && !isLargeNow) {
+                pv = 0;
+                cv = fileVal(currentGrossMembership[f]) || fileVal(priorLargeMembership[f]);
+              } else {
+                pv = fileVal(priorGrossMembership[f]) || fileVal(currentLargeMembership[f]);
+                cv = 0;
+              }
+            }
+            if (side === "numerator") {
+              sumPrev += pv;
+              sumCur += cv;
+            }
+            const d = cv - pv;
+            if (!componentBased && Math.abs(d) < 1) continue;
+            // Negatif attritional pay = dosya o dönem LARGE'da (gross−large<0). İşaret
+            // değişimi large ↔ attritional geçişini gösterir.
+            const tag =
+              wasLargeInPrior && !isLargeNow ? "from large"
+              : !wasLargeInPrior && isLargeNow ? "to large"
+              : wasLarge && !isLargeNow ? "from large"
+              : pv < 0 && cv >= 0 ? "from large"        // large'dan çıktı → att'a girdi
+              : pv >= 0 && cv < 0 ? "to large"         // att'tan çıktı → large'a girdi
+              : pv > 0 && cv === 0 ? "moved to large"
+              : pv === 0 && cv > 0 ? "new"
+              : d > 0 ? "increased" : "decreased";
+            files.push({ file: f, prev: pv, cur: cv, delta: d, tag, side });
+          }
+        }
+        files.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+      }
+      return { o, j, cur, priorVal, delta, median, files, hasPrior, sumPrev, sumCur };
+    },
+    [triangle, ratios, columnStats, prior, priorRatios, priorIdxByLabel, priorStepByPair, fileData, comparableFileData, comparablePriorFileData, components],
+  );
+
+  const hoverInfo = useMemo(
+    () => (hover ? buildCellInfo(hover.o, hover.i, hover.j) : null),
+    [hover, buildCellInfo],
+  );
+  const pinnedInfo = useMemo(
+    () => (pinned ? buildCellInfo(pinned.o, pinned.i, pinned.j) : null),
+    [pinned, buildCellInfo],
+  );
+
+  // Pinned popup: dışına tıkla veya Esc ile kapat.
+  useEffect(() => {
+    if (!pinned) return;
+    function onDown(e: MouseEvent) {
+      if (pinnedRef.current && !pinnedRef.current.contains(e.target as Node)) setPinned(null);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setPinned(null);
+    }
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [pinned]);
+
   const windowLDFs = useMemo(() => {
     if (!triangle) return {} as Record<string, number[]>;
     const map: Record<string, number[]> = {};
-    for (const w of WINDOWS) {
-      map[String(w.id)] = aggregateLDFs(triangle, ratios, w.id, FIXED_METHOD);
-    }
+    for (const w of presetWindows) map[String(w)] = aggregateLDFs(triangle, ratios, w, FIXED_METHOD);
+    map["all"] = aggregateLDFs(triangle, ratios, "all", FIXED_METHOD);
     return map;
-  }, [triangle, ratios]);
+  }, [triangle, ratios, presetWindows]);
 
   const isKarmaActive = !!karmaWindowPerStep && Object.keys(karmaWindowPerStep).length > 0;
 
@@ -130,17 +453,58 @@ export function LDFTab(props: Props) {
       ? cdfsOverride.slice(0, localCDFs.length)
       : localCDFs;
 
+  function focusDiagnostic(item: LDFDiagnostic) {
+    setSelectedDiagnostic(item.key);
+    const target = document.querySelector<HTMLElement>(`[data-key="${item.key}"]`);
+    target?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
+    target?.focus({ preventScroll: true });
+  }
+
   if (!triangle) {
     return <EmptyState />;
   }
 
   const steps = triangle.development_periods.length - 1;
+  const fileBasis = triangle.triangle_type;
 
   return (
     <div className="space-y-4">
       {/* Controls strip */}
       <div className="card p-3 flex flex-wrap items-center gap-4">
+        {prior && (
+          <span className="inline-flex items-center gap-1.5 text-[11px] text-[color:var(--muted)]">
+            <span
+              className="inline-block h-3 w-3 rounded-sm ring-1 ring-[color:var(--warning)]"
+              style={{ background: "var(--accent-cell)" }}
+            />
+            Change vs previous period ({prior.label}) · hover for a quick look, right-click for full details
+          </span>
+        )}
         <div className="flex items-center gap-3 ml-auto text-[11px] text-[color:var(--muted)]">
+          <span className="inline-flex items-center gap-1">
+            <span className="uppercase tracking-wide font-semibold text-[10px]">Decimals</span>
+            <span className="inline-flex items-center h-6 rounded-md border border-[color:var(--border)] overflow-hidden">
+              <button
+                onClick={() => setDecimals((d) => Math.max(0, d - 1))}
+                disabled={decimals <= 0}
+                className="w-6 h-full text-[13px] text-[color:var(--muted-strong)] hover:bg-[color:var(--surface-alt)] disabled:opacity-30"
+                aria-label="azalt"
+              >
+                −
+              </button>
+              <span className="px-1.5 tabular font-medium text-[color:var(--foreground)] min-w-[18px] text-center border-x border-[color:var(--border)]">
+                {decimals}
+              </span>
+              <button
+                onClick={() => setDecimals((d) => Math.min(10, d + 1))}
+                disabled={decimals >= 10}
+                className="w-6 h-full text-[13px] text-[color:var(--muted-strong)] hover:bg-[color:var(--surface-alt)] disabled:opacity-30"
+                aria-label="increase"
+              >
+                +
+              </button>
+            </span>
+          </span>
           <button
             onClick={() => setHeatmap((v) => !v)}
             className={
@@ -149,7 +513,7 @@ export function LDFTab(props: Props) {
                 ? "bg-[color:var(--primary-soft)] border-[color:var(--primary-border)] text-[color:var(--primary)]"
                 : "hover:border-[color:var(--border-strong)]")
             }
-            title="Kolon bazlı aykırı değer renklendirmesi"
+            title="Column-based outlier coloring"
           >
             <span
               className={
@@ -170,18 +534,18 @@ export function LDFTab(props: Props) {
             <>
               <span className="flex items-center gap-1.5">
                 <span className="h-3 w-3 rounded-sm" style={{ background: "rgba(37,99,235,0.35)" }} />
-                düşük
+                low
               </span>
               <span className="flex items-center gap-1.5">
                 <span className="h-3 w-3 rounded-sm" style={{ background: "rgba(220,38,38,0.35)" }} />
-                yüksek
+                high
               </span>
             </>
           )}
           {excludedCells.size > 0 && (
             <>
               <span className="border-l pl-3 ml-1">
-                {excludedCells.size} hücre hariç
+                {excludedCells.size} cells excluded
               </span>
               <button onClick={onClearCells} className="btn text-xs">
                 temizle
@@ -191,14 +555,23 @@ export function LDFTab(props: Props) {
         </div>
       </div>
 
+      <DiagnosticPanel
+        items={diagnostics}
+        open={diagnosticsOpen}
+        selectedKey={selectedDiagnostic}
+        onToggle={() => setDiagnosticsOpen((value) => !value)}
+        onFocus={focusDiagnostic}
+        onExclude={(item) => onToggleCell(item.origin, item.step)}
+      />
+
       {/* Combined horizontal-scroll panel: LDF triangle + window rows + CDFs */}
       <div className="card p-0 overflow-hidden">
         <div className="flex items-center justify-between px-4 py-3 border-b bg-[color:var(--surface-alt)]">
-          <h2 className="text-sm font-semibold">Gelişim Oranları & CDF</h2>
+          <h2 className="text-sm font-semibold">Development Ratios & CDF</h2>
           <span className="text-xs text-[color:var(--muted)]">
-            Hücreye tıklayarak eleyin · seçili volume:{" "}
+            Click a cell to exclude · selected volume:{" "}
             <strong className="text-[color:var(--foreground)]">
-              {WINDOWS.find((w) => w.id === window)?.label}
+              {window === "all" ? "All" : `Last ${window}`}
             </strong>
           </span>
         </div>
@@ -208,7 +581,7 @@ export function LDFTab(props: Props) {
             <thead>
               <tr className="text-[color:var(--muted-strong)] bg-[color:var(--surface-alt)]">
                 <th className="text-left px-2 py-1 font-semibold sticky left-0 bg-[color:var(--surface-alt)] z-[1] min-w-[88px]">
-                  Kaza / Adım
+                  Accident / Step
                 </th>
                 {Array.from({ length: steps }).map((_, j) => (
                   <th
@@ -228,15 +601,25 @@ export function LDFTab(props: Props) {
                   colSpan={steps + 1}
                   className="px-2 py-0.5 text-[9px] uppercase tracking-wide font-semibold text-[color:var(--muted-strong)] bg-[color:var(--background)]"
                 >
-                  Gelişim Oranları (Üçgen)
+                  Development Ratios (Triangle)
                 </td>
               </tr>
-              {triangle.origin_periods.map((o, i) => (
+              {triangle.origin_periods.map((o, i) => {
+                const rowEx = rowExclusion(o, i);
+                return (
                 <tr
                   key={o}
                   className="border-t border-[color:var(--border)] hover:bg-[color:var(--surface-alt)]/40"
                 >
-                  <td className="px-2 py-0.5 font-medium sticky left-0 bg-[color:var(--surface)] z-[1] leading-tight">
+                  <td
+                    onClick={() => onSetExcluded && rowEx.steps.length > 0 && toggleOrigin(o, i)}
+                    title={rowEx.allExcluded ? "Restore entire accident year" : "Exclude entire accident year"}
+                    className={
+                      "px-2 py-0.5 font-medium sticky left-0 bg-[color:var(--surface)] z-[1] leading-tight select-none " +
+                      (onSetExcluded && rowEx.steps.length > 0 ? "cursor-pointer hover:text-[color:var(--danger)] " : "") +
+                      (rowEx.allExcluded ? "text-[color:var(--danger)] line-through" : "")
+                    }
+                  >
                     {o}
                   </td>
                   {Array.from({ length: steps }).map((_, j) => {
@@ -256,30 +639,72 @@ export function LDFTab(props: Props) {
                       cell.excluded || !heatmap
                         ? {}
                         : heatmapStyle(cell.value, columnStats[j]);
+                    // Geçen döneme göre değişti mi? (uyarı vurgusu)
+                    const pIdx = priorIdxByLabel.get(o);
+                    const pair = `${triangle.development_periods[j]}→${triangle.development_periods[j + 1]}`;
+                    const pStep = priorStepByPair.get(pair);
+                    const priorVal = prior && pIdx != null && pStep != null
+                      ? priorRatios[pIdx]?.[pStep]?.value ?? null
+                      : null;
+                    const changed =
+                      priorVal != null &&
+                      cell.value != null &&
+                      Math.abs(cell.value - priorVal) >= 0.001;
+                    // Ortalama çiftinin parçası mı? (sol hücre o|j, sağ hücre o|j-1)
+                    const isAvg = !!avgPairs && (avgPairs.has(key) || avgPairs.has(cellKey(o, j - 1)));
+                    const hasNext = j + 1 < steps && ratios[i]?.[j + 1]?.value != null;
                     return (
                       <td key={j} className="px-0.5 py-0" style={cellHeat}>
                         <button
-                          onClick={() => onToggleCell(o, j)}
-                          title={
-                            cell.excluded
-                              ? "Dahil et"
-                              : `Medyan: ${formatFactor(columnStats[j]?.median ?? 0)} — tıkla eleme`
+                          onClick={() => { if (didLongPress.current) { didLongPress.current = false; return; } onToggleCell(o, j); }}
+                          onPointerDown={(e) => { if (e.button === 0) startHold(o, j, hasNext); }}
+                          onPointerUp={cancelHold}
+                          onPointerLeave={() => { cancelHold(); setHover(null); }}
+                          onMouseEnter={(e) => changed && setHover({ o, i, j, x: e.clientX, y: e.clientY })}
+                          onMouseMove={(e) =>
+                            setHover((h) =>
+                              h && h.o === o && h.j === j
+                                ? { ...h, x: e.clientX, y: e.clientY }
+                                : h,
+                            )
                           }
+                          onMouseLeave={() => setHover(null)}
+                          onContextMenu={(e) => {
+                            e.preventDefault();
+                            if (!changed) return;
+                            setHover(null);
+                            setPinned({ o, i, j, x: e.clientX, y: e.clientY });
+                          }}
+                          title={changed
+                            ? (hasNext ? "Long-press to average · right-click for change details" : "Right-click for change details")
+                            : (hasNext ? "Long-press to average" : undefined)}
                           className={
-                            "w-full text-right px-1.5 py-0.5 rounded text-[11px] transition leading-tight " +
+                            "relative w-full text-right px-1.5 py-0.5 rounded text-[11px] transition leading-tight " +
                             (cell.excluded
                               ? "bg-[color:var(--danger-soft)] text-[color:var(--danger)] line-through"
+                              : isAvg
+                              ? "font-semibold text-[color:var(--primary)] ring-1 ring-[color:var(--primary)]/50"
+                              : changed
+                              ? "font-semibold ring-1 ring-[color:var(--warning)] text-[color:var(--warning)]"
                               : "hover:ring-1 hover:ring-[color:var(--primary)]/40")
+                          }
+                          style={
+                            isAvg && !cell.excluded
+                              ? { background: "var(--primary-soft)" }
+                              : changed && !cell.excluded
+                              ? { background: "var(--accent-cell)" }
+                              : undefined
                           }
                           data-key={key}
                         >
-                          {formatFactor(cell.value)}
+                          {ff(cell.value)}
                         </button>
                       </td>
                     );
                   })}
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
 
             {/* Window summary rows */}
@@ -289,15 +714,16 @@ export function LDFTab(props: Props) {
                   colSpan={steps + 1}
                   className="px-2 py-0.5 text-[9px] uppercase tracking-wide font-semibold text-[color:var(--muted-strong)] bg-[color:var(--background)]"
                 >
-                  Seçilmiş LDF — volume'a tıkla
+                  Selected LDF — click volume
                 </td>
               </tr>
-              {WINDOWS.map((w) => {
-                const ldfs = windowLDFs[String(w.id)] ?? [];
-                const rowActive = !isKarmaActive && w.id === window;
+              {/* Düzenlenebilir presetler — her satırın N değeri kullanıcı tarafından değiştirilebilir */}
+              {presetWindows.map((wv, idx) => {
+                const ldfs = windowLDFs[String(wv)] ?? [];
+                const rowActive = !isKarmaActive && window === wv;
                 return (
                   <tr
-                    key={String(w.id)}
+                    key={idx}
                     className={
                       "border-t transition " +
                       (rowActive
@@ -308,13 +734,11 @@ export function LDFTab(props: Props) {
                     <td
                       className={
                         "px-2 py-0.5 sticky left-0 z-[1] leading-tight cursor-pointer " +
-                        (rowActive
-                          ? "bg-[color:var(--primary-soft)]"
-                          : "bg-[color:var(--surface)]")
+                        (rowActive ? "bg-[color:var(--primary-soft)]" : "bg-[color:var(--surface)]")
                       }
                       onClick={() => {
                         onClearKarma?.();
-                        onWindowChange(w.id);
+                        onWindowChange(wv);
                       }}
                     >
                       <span className="inline-flex items-center gap-1.5">
@@ -326,20 +750,32 @@ export function LDFTab(props: Props) {
                               : "border-[color:var(--border-strong)]")
                           }
                         />
-                        {w.label}
+                        Last
+                        <input
+                          type="number"
+                          min={1}
+                          value={wv}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={(e) => {
+                            const n = Math.max(1, Math.floor(Number(e.target.value) || 1));
+                            updatePresets(presetWindows.map((x, i) => (i === idx ? n : x)));
+                            if (!isKarmaActive && window === wv) onWindowChange(n); // aktif satırsa global volume'u da güncelle
+                          }}
+                          className="w-12 text-[11px] tabular border border-[color:var(--border)] rounded px-1 py-0.5 text-right"
+                          title="Editable volume — last N accident periods"
+                        />
                       </span>
                     </td>
-                    {/* Individual cells — click selects this window for just this step */}
                     {ldfs.map((v, j) => {
                       const stepWin = karmaWindowPerStep?.[String(j)] ?? window;
-                      const cellActive = stepWin === w.id;
+                      const cellActive = stepWin === wv;
                       return (
                         <td
                           key={j}
                           className="px-0.5 py-0 cursor-pointer"
                           onClick={(e) => {
                             e.stopPropagation();
-                            onSetKarmaWindow?.(String(j), w.id);
+                            onSetKarmaWindow?.(String(j), wv);
                           }}
                         >
                           <span
@@ -350,7 +786,7 @@ export function LDFTab(props: Props) {
                                 : "hover:bg-[color:var(--surface-alt)]")
                             }
                           >
-                            {formatFactor(v)}
+                            {ff(v)}
                           </span>
                         </td>
                       );
@@ -358,6 +794,70 @@ export function LDFTab(props: Props) {
                   </tr>
                 );
               })}
+
+              {/* All — sabit */}
+              {(() => {
+                const ldfs = windowLDFs["all"] ?? [];
+                const rowActive = !isKarmaActive && window === "all";
+                return (
+                  <tr
+                    className={
+                      "border-t transition " +
+                      (rowActive
+                        ? "bg-[color:var(--primary-soft)] font-semibold"
+                        : "hover:bg-[color:var(--surface-alt)]/60")
+                    }
+                  >
+                    <td
+                      className={
+                        "px-2 py-0.5 sticky left-0 z-[1] leading-tight cursor-pointer " +
+                        (rowActive ? "bg-[color:var(--primary-soft)]" : "bg-[color:var(--surface)]")
+                      }
+                      onClick={() => {
+                        onClearKarma?.();
+                        onWindowChange("all");
+                      }}
+                    >
+                      <span className="inline-flex items-center gap-1.5">
+                        <span
+                          className={
+                            "inline-block h-2 w-2 rounded-full border " +
+                            (rowActive
+                              ? "bg-[color:var(--primary)] border-[color:var(--primary)]"
+                              : "border-[color:var(--border-strong)]")
+                          }
+                        />
+                        All
+                      </span>
+                    </td>
+                    {ldfs.map((v, j) => {
+                      const stepWin = karmaWindowPerStep?.[String(j)] ?? window;
+                      const cellActive = stepWin === "all";
+                      return (
+                        <td
+                          key={j}
+                          className="px-0.5 py-0 cursor-pointer"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onSetKarmaWindow?.(String(j), "all");
+                          }}
+                        >
+                          <span
+                            className={
+                              "flex justify-end px-1.5 py-0.5 rounded transition " +
+                              (cellActive
+                                ? "bg-[color:var(--primary-soft)] text-[color:var(--primary)] font-semibold ring-1 ring-[color:var(--primary-border)]"
+                                : "hover:bg-[color:var(--surface-alt)]")
+                            }
+                          >
+                            {ff(v)}
+                          </span>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              })()}
             </tbody>
 
             {/* CDF row */}
@@ -371,7 +871,7 @@ export function LDFTab(props: Props) {
                     key={j}
                     className="text-right px-1.5 py-1 font-semibold text-[color:var(--primary)]"
                   >
-                    {formatFactor(v)}
+                    {ff(v)}
                   </td>
                 ))}
               </tr>
@@ -379,14 +879,373 @@ export function LDFTab(props: Props) {
           </table>
         </div>
       </div>
+
+      {hover && hoverInfo && !pinned && (
+        <div
+          style={{
+            position: "fixed",
+            left: Math.min(hover.x + 14, (globalThis.innerWidth || 1200) - 316),
+            top: Math.max(8, Math.min(hover.y + 14, (globalThis.innerHeight || 800) - 240)),
+            zIndex: 60,
+            pointerEvents: "none",
+            width: 300,
+          }}
+          className="card shadow-lg p-2.5 text-[11px]"
+        >
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="font-semibold">
+              {hoverInfo.o} · {hoverInfo.j + 1}→{hoverInfo.j + 2}
+            </span>
+            {hoverInfo.median != null && (
+              <span className="text-[color:var(--muted)]">
+                medyan {ff(hoverInfo.median)}
+              </span>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2.5 tabular flex-wrap">
+            <span>
+              This period:{" "}
+              <b>{hoverInfo.cur != null ? ff(hoverInfo.cur) : "—"}</b>
+            </span>
+            {hoverInfo.hasPrior ? (
+              <span className="text-[color:var(--muted)]">
+                Previous{prior?.label ? ` (${prior.label})` : ""}:{" "}
+                {hoverInfo.priorVal != null ? ff(hoverInfo.priorVal) : "—"}
+              </span>
+            ) : (
+              <span className="text-[color:var(--muted)]">no previous period</span>
+            )}
+            {hoverInfo.delta != null && Math.abs(hoverInfo.delta) >= 0.0001 && (
+              <span
+                className={
+                  "font-semibold " +
+                  (hoverInfo.delta > 0
+                    ? "text-[color:var(--danger)]"
+                    : "text-[color:var(--primary)]")
+                }
+              >
+                {hoverInfo.delta > 0 ? "+" : ""}
+                {ff(hoverInfo.delta)}
+              </span>
+            )}
+          </div>
+
+          {hoverInfo.hasPrior &&
+            (hoverInfo.files.length > 0 ? (
+              <div className="border-t border-[color:var(--border)] mt-1.5 pt-1.5">
+                <div className="text-[9px] uppercase tracking-wide text-[color:var(--muted)] mb-1">
+                  {components ? "Large ↔ Attritional transitions" : "Files causing the change"} · {fileBasis}
+                </div>
+                {hoverInfo.files.slice(0, 6).map((f) => (
+                  <div
+                    key={`${f.file}:${f.side}`}
+                    className="flex items-center justify-between gap-2 py-0.5"
+                  >
+                    <span className="font-medium truncate max-w-[96px]">{f.file}</span>
+                    <span className="tabular text-[color:var(--muted)] whitespace-nowrap">
+                      {formatNumber(f.prev)}→{formatNumber(f.cur)}
+                    </span>
+                    <span
+                      className={
+                        "shrink-0 px-1 py-px rounded text-[9px] font-semibold " +
+                        (f.tag === "moved to large" || f.tag === "to large"
+                          ? "bg-[color:var(--danger-soft)] text-[color:var(--danger)]"
+                          : f.tag === "new" || f.tag === "from large"
+                          ? "bg-[color:var(--primary-soft)] text-[color:var(--primary)]"
+                          : "bg-[color:var(--surface-alt)] text-[color:var(--muted-strong)]")
+                      }
+                    >
+                      {f.tag}
+                    </span>
+                  </div>
+                ))}
+                {hoverInfo.files.length > 6 && (
+                  <div className="text-[9px] text-[color:var(--muted)] mt-0.5">
+                    +{hoverInfo.files.length - 6} dosya daha
+                  </div>
+                )}
+              </div>
+            ) : hoverInfo.delta != null && Math.abs(hoverInfo.delta) < 0.0001 ? (
+              <div className="border-t border-[color:var(--border)] mt-1.5 pt-1.5 text-[color:var(--muted)]">
+                no change
+              </div>
+            ) : (
+              <div className="border-t border-[color:var(--border)] mt-1.5 pt-1.5 text-[color:var(--muted)]">
+                {components
+                  ? "The factor changed, but no Large ↔ Attritional segment transition was found in this cell."
+                  : "The factor changed, but no matching file movement was found across the two periods for this cell."}
+              </div>
+            ))}
+        </div>
+      )}
+
+      {pinned && pinnedInfo && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/40">
+        <div
+          ref={pinnedRef}
+          style={{ maxHeight: "min(82vh, 640px)" }}
+          className="card shadow-2xl text-[12px] flex flex-col overflow-hidden w-[440px] max-w-full"
+        >
+          {/* Başlık */}
+          <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-[color:var(--border)]">
+            <div className="min-w-0">
+              <div className="font-semibold text-[12px]">
+                {pinnedInfo.o} · {pinnedInfo.j + 1}→{pinnedInfo.j + 2}
+              </div>
+              <div className="text-[9px] uppercase tracking-wide text-[color:var(--muted)]">
+                Development factor · change vs {prior?.label ?? "prior"}
+              </div>
+            </div>
+            <button
+              onClick={() => setPinned(null)}
+              className="shrink-0 w-6 h-6 rounded grid place-items-center text-[color:var(--muted)] hover:text-[color:var(--foreground)] hover:bg-[color:var(--surface-alt)]"
+              title="Close (Esc)"
+            >
+              ✕
+            </button>
+          </div>
+
+          {/* Özet */}
+          <div className="px-3 py-2 border-b border-[color:var(--border)] space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="text-[color:var(--muted)]">This period</span>
+              <b className="tabular">{pinnedInfo.cur != null ? ff(pinnedInfo.cur) : "—"}</b>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-[color:var(--muted)]">
+                Previous{prior?.label ? ` (${prior.label})` : ""}
+              </span>
+              <span className="tabular">
+                {pinnedInfo.hasPrior && pinnedInfo.priorVal != null ? ff(pinnedInfo.priorVal) : "—"}
+              </span>
+            </div>
+            {pinnedInfo.delta != null && (
+              <div className="flex items-center justify-between">
+                <span className="text-[color:var(--muted)]">Change</span>
+                <b
+                  className={
+                    "tabular " +
+                    (pinnedInfo.delta > 0
+                      ? "text-[color:var(--danger)]"
+                      : "text-[color:var(--primary)]")
+                  }
+                >
+                  {pinnedInfo.delta > 0 ? "+" : ""}
+                  {ff(pinnedInfo.delta)}
+                </b>
+              </div>
+            )}
+            {pinnedInfo.median != null && (
+              <div className="flex items-center justify-between">
+                <span className="text-[color:var(--muted)]">Column median</span>
+                <span className="tabular text-[color:var(--muted)]">{ff(pinnedInfo.median)}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Sebep dosyalar — TAMAMI, kaydırılabilir */}
+          {!pinnedInfo.hasPrior ? (
+            <div className="px-3 py-3 text-[color:var(--muted)]">
+              No previous period to compare.
+            </div>
+          ) : pinnedInfo.files.length === 0 ? (
+            <div className="px-3 py-3 text-[color:var(--muted)]">
+              {pinnedInfo.delta != null && Math.abs(pinnedInfo.delta) < 0.0001
+                ? "Ratio unchanged — no file-level movement."
+                : "No file-level breakdown available for this cell."}
+            </div>
+          ) : (
+            <>
+              <div className="px-3 pt-2 pb-1 flex items-center justify-between text-[9px] uppercase tracking-wide text-[color:var(--muted)]">
+                <span>{components ? "Large ↔ Attritional transitions" : "Files causing the change"} · {fileBasis}</span>
+                <span>{pinnedInfo.files.length}</span>
+              </div>
+              <div className="overflow-y-auto px-2 pb-1">
+                {pinnedInfo.files.map((f) => (
+                  <div
+                    key={`${f.file}:${f.side}`}
+                    className="flex items-center gap-2 px-1 py-1 rounded hover:bg-[color:var(--surface-alt)]/60"
+                  >
+                    <span className="font-medium truncate flex-1 min-w-0" title={f.file}>
+                      {f.file}
+                    </span>
+                    <span
+                      className="shrink-0 text-[8px] uppercase tracking-wide text-[color:var(--muted)] px-1 py-px rounded bg-[color:var(--surface-alt)]"
+                      title={f.side === "numerator" ? `Numerator (dev ${pinnedInfo.j + 2})` : `Denominator (dev ${pinnedInfo.j + 1})`}
+                    >
+                      {f.side === "numerator" ? "num" : "den"}
+                    </span>
+                    <span className="tabular text-[color:var(--muted)] whitespace-nowrap text-[10px]">
+                      {formatNumber(f.prev)}→{formatNumber(f.cur)}
+                    </span>
+                    <span
+                      className={
+                        "tabular whitespace-nowrap text-[10px] font-semibold " +
+                        (f.delta > 0
+                          ? "text-[color:var(--danger)]"
+                          : "text-[color:var(--primary)]")
+                      }
+                    >
+                      {f.delta > 0 ? "+" : ""}
+                      {formatNumber(f.delta)}
+                    </span>
+                    <span
+                      className={
+                        "shrink-0 px-1 py-px rounded text-[9px] font-semibold " +
+                        (f.tag === "moved to large" || f.tag === "to large"
+                          ? "bg-[color:var(--danger-soft)] text-[color:var(--danger)]"
+                          : f.tag === "new" || f.tag === "from large"
+                          ? "bg-[color:var(--primary-soft)] text-[color:var(--primary)]"
+                          : "bg-[color:var(--surface-alt)] text-[color:var(--muted-strong)]")
+                      }
+                    >
+                      {f.tag}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <div className="px-3 py-1.5 border-t border-[color:var(--border)] flex items-center justify-between text-[10px]">
+                <span className="text-[color:var(--muted)]">{components ? "Segment-transition numerator total" : `Numerator ${fileBasis} total`}</span>
+                <span className="tabular">
+                  {formatNumber(pinnedInfo.sumPrev)}→{formatNumber(pinnedInfo.sumCur)}{" "}
+                  <span
+                    className={
+                      pinnedInfo.sumCur - pinnedInfo.sumPrev >= 0
+                        ? "text-[color:var(--danger)]"
+                        : "text-[color:var(--primary)]"
+                    }
+                  >
+                    ({pinnedInfo.sumCur - pinnedInfo.sumPrev >= 0 ? "+" : ""}
+                    {formatNumber(pinnedInfo.sumCur - pinnedInfo.sumPrev)})
+                  </span>
+                </span>
+              </div>
+            </>
+          )}
+        </div>
+        </div>
+      )}
     </div>
+  );
+}
+
+const DIAGNOSTIC_META: Record<LDFDiagnosticKind, { label: string; dot: string; tone: string }> = {
+  outlier_material: {
+    label: "Outlier and material",
+    dot: "bg-[color:var(--danger)]",
+    tone: "text-[color:var(--danger)] bg-[color:var(--danger-soft)]",
+  },
+  outlier_low_impact: {
+    label: "Outlier but immaterial",
+    dot: "bg-[color:var(--primary)]",
+    tone: "text-[color:var(--primary)] bg-[color:var(--primary-soft)]",
+  },
+};
+
+function DiagnosticPanel({
+  items,
+  open,
+  selectedKey,
+  onToggle,
+  onFocus,
+  onExclude,
+}: {
+  items: LDFDiagnostic[];
+  open: boolean;
+  selectedKey: string | null;
+  onToggle: () => void;
+  onFocus: (item: LDFDiagnostic) => void;
+  onExclude: (item: LDFDiagnostic) => void;
+}) {
+  const counts = items.reduce<Partial<Record<LDFDiagnosticKind, number>>>((acc, item) => {
+    acc[item.kind] = (acc[item.kind] ?? 0) + 1;
+    return acc;
+  }, {});
+
+  return (
+    <section className="card overflow-hidden" aria-labelledby="ldf-diagnostics-title">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-[color:var(--surface-alt)] transition-colors"
+      >
+        <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-[color:var(--primary-soft)] text-[color:var(--primary)] font-semibold" aria-hidden="true">
+          {items.length}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span id="ldf-diagnostics-title" className="block text-sm font-semibold">Outlier LDF exclusion suggestions</span>
+          <span className="block text-[11px] text-[color:var(--muted)]">
+            Only statistical outliers are listed · no automatic exclusions are applied
+          </span>
+        </span>
+        <span className="text-xs text-[color:var(--muted-strong)]">{open ? "Hide" : "Show"}</span>
+      </button>
+
+      {open && (
+        <div className="border-t border-[color:var(--border)]">
+          {items.length === 0 ? (
+            <div className="px-4 py-4 text-xs text-[color:var(--muted-strong)]">
+              No LDF cells require review at the current thresholds.
+            </div>
+          ) : (
+            <>
+              <div className="flex flex-wrap gap-x-4 gap-y-1 px-4 py-2 bg-[color:var(--surface-alt)] border-b border-[color:var(--border)]">
+                {(Object.keys(DIAGNOSTIC_META) as LDFDiagnosticKind[]).map((kind) => {
+                  const count = counts[kind] ?? 0;
+                  if (!count) return null;
+                  const meta = DIAGNOSTIC_META[kind];
+                  return (
+                    <span key={kind} className="inline-flex items-center gap-1.5 text-[11px] text-[color:var(--muted-strong)]">
+                      <span className={`h-2 w-2 rounded-full ${meta.dot}`} />
+                      {meta.label} <b className="text-[color:var(--foreground)]">{count}</b>
+                    </span>
+                  );
+                })}
+              </div>
+              <div className="divide-y divide-[color:var(--border)] max-h-[300px] overflow-y-auto">
+                {items.map((item) => {
+                  const meta = DIAGNOSTIC_META[item.kind];
+                  return (
+                    <div
+                      key={item.key}
+                      className={`flex flex-wrap items-center gap-3 px-4 py-2.5 ${selectedKey === item.key ? "bg-[color:var(--primary-soft)]" : "hover:bg-[color:var(--surface-alt)]"}`}
+                    >
+                      <button type="button" onClick={() => onFocus(item)} className="min-w-[124px] text-left">
+                        <span className="block text-xs font-semibold">{item.origin} · {item.step + 1}→{item.step + 2}</span>
+                        <span className="block text-[10px] text-[color:var(--muted)] tabular">
+                          LDF {item.ldfValue == null ? "—" : item.ldfValue.toLocaleString("tr-TR", { maximumFractionDigits: 4 })}
+                        </span>
+                      </button>
+                      <div className="min-w-[220px] flex-1">
+                        <span className={`inline-flex rounded px-1.5 py-0.5 text-[10px] font-semibold ${meta.tone}`}>{meta.label}</span>
+                        <p className="mt-1 text-[11px] text-[color:var(--muted-strong)]">{item.reason}</p>
+                      </div>
+                      <div className="min-w-[130px] text-right text-[10px] text-[color:var(--muted)] tabular">
+                        <div>IBNR Δ <b className="text-[color:var(--foreground)]">{item.ibnrImpact == null ? "—" : formatNumber(item.ibnrImpact)}</b></div>
+                        <div>Volume share {item.volumeShare == null ? "—" : `%${(item.volumeShare * 100).toFixed(1)}`}</div>
+                      </div>
+                      <div className="flex gap-1.5">
+                        <button type="button" onClick={() => onFocus(item)} className="btn px-2 py-1 text-[11px]">Go to cell</button>
+                        <button type="button" onClick={() => onExclude(item)} className="btn px-2 py-1 text-[11px] text-[color:var(--danger)]">Apply exclusion</button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </section>
   );
 }
 
 function EmptyState() {
   return (
     <div className="card p-10 text-center text-sm text-[color:var(--muted)]">
-      Önce Veri sekmesinden bir üçgen yükleyin.
+      Load a triangle from the Data tab first.
     </div>
   );
 }

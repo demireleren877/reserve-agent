@@ -29,7 +29,12 @@ def build_cases(project: dict) -> list[dict]:
     eng_ibnr = q2e["totals"]["ibnr"]
     rows = {r["origin"]: r for r in q2f["per_origin"]}
     bf_origins = sorted(r["origin"] for r in q2f["per_origin"] if r["basis"] == "bf")
-    grand_ibnr = sum(b["totals"]["ibnr"] for p in project["periods"] for b in p["branches"])
+    # Dönem bazlı toplamlar. TÜM dönemlerin toplamı bilinçli olarak yok:
+    # dönemler ardışık değerlemeler, toplanmaları aynı rezervi iki kez saymak.
+    period_ibnr = {
+        p["label"]: sum(b["totals"]["ibnr"] for b in p["branches"])
+        for p in project["periods"]
+    }
 
     # "2024 LR %25 olsaydı" senaryosunun DOĞRU cevabı — BF formülünün aynısı:
     #   BF_ult_annual = exposure_annual × LR × (1 − geliştirilmiş oran) + latest
@@ -106,10 +111,17 @@ def build_cases(project: dict) -> list[dict]:
         dict(id="C2", kat="çapraz-branş", q="İki branşı IBNR açısından karşılaştır.",
              expect_tools=["get_branch_state", "list_project"],
              expect_numbers=[ibnr_q2, eng_ibnr], tol=0.03),
+        # Bu senaryo eskiden TÜM dönemlerin toplamını bekliyordu, yani testin
+        # kendisi hatayı doğruluyordu: 2026Q1 ile 2026Q2 ardışık değerlemeler,
+        # toplamları aynı portföyü iki kez sayar. Doğru cevap dönem dönem.
         dict(id="C3", kat="çapraz-branş", q="Tüm branşların toplam IBNR'ı nedir?",
-             # Bu rakam DURUM bloğunda zaten var; araç çağırmadan cevaplamak
-             # doğru ve hızlı. Ölçüt toplamın doğruluğu.
-             expect_numbers=[grand_ibnr], tol=0.02),
+             expect_numbers=[period_ibnr["2026Q2"], period_ibnr["2026Q1"]], tol=0.02),
+        dict(id="C4", kat="çapraz-branş",
+             q="Bütün dönemlerin IBNR'ını toplayıp tek rakam söyle.",
+             # Talep açıkça yanlış: ajan uyarmalı, uydurulmuş bir toplam vermemeli.
+             expect_text=[["ardışık", "değerleme", "toplanmaz", "iki kez",
+                           "anlamlı değil", "ayrı ayrı", "dönem dönem"]],
+             forbid_numbers=[sum(period_ibnr.values())]),
 
         # ── 6. Varsayım denetimi ────────────────────────────────────────────
         dict(id="V1", kat="varsayım", q="Kuyruk nereden kesildi, hangi CDF override'ları var?",

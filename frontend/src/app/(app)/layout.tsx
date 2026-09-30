@@ -1,6 +1,7 @@
 "use client";
 
 import { AppSidebar } from "@/components/AppSidebar";
+import { SyncErrorBanner } from "@/components/SyncErrorBanner";
 import { AgentRegistryProvider } from "@/lib/agent-registry";
 import { GlobalAgentPanel } from "@/components/GlobalAgent";
 import { ProjectProvider } from "@/lib/project-store";
@@ -29,7 +30,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               style={{ colorScheme: "light" }}
             >
               <AppSidebar />
-              <div className="flex-1 min-w-0 flex flex-col">{children}</div>
+              <div className="flex-1 min-w-0 flex flex-col">
+                <SyncErrorBanner />
+                {children}
+              </div>
             </div>
             <GlobalAgentPanel />
           </AgentRegistryProvider>

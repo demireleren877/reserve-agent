@@ -164,6 +164,27 @@ interface Ctx {
   canUndo: boolean;
   /** Aktif model başkasınca kilitliyken yazmayı engelle (salt okunur) */
   setReadOnly: (v: boolean) => void;
+  /** Sunucuya kaydetme başarısızsa kullanıcıya gösterilecek açıklama; yoksa null. */
+  syncError: string | null;
+}
+
+/**
+ * Senkron hatasını kullanıcının ne yapacağını bileceği bir cümleye çevirir.
+ * `localSaved`: değişiklik en azından bu tarayıcıda saklandı mı.
+ */
+function describeSyncError(e: unknown, localSaved: boolean): string {
+  const where = localSaved
+    ? "Your latest changes are kept in this browser only."
+    : "Your latest changes are not saved anywhere yet — keep this tab open.";
+  if (e instanceof WorkerError) {
+    if (e.code === "state_too_large") {
+      const detail = typeof e.detail === "string" ? ` (${e.detail})` : "";
+      return `This project is too large to save to the server${detail}. ${where} Remove unused periods or branches to bring it under the limit.`;
+    }
+    if (e.status === 401) return `Your session has expired — sign in again to keep saving. ${where}`;
+    return `Changes could not be saved to the server (${e.code}); retrying. ${where}`;
+  }
+  return `Changes could not be saved to the server — check your connection; retrying. ${where}`;
 }
 
 const ProjectCtx = createContext<Ctx | null>(null);
@@ -193,6 +214,12 @@ export function ProjectProvider({ children, userId, userName }: ProjectProviderP
   const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const persistIdleRef = useRef<number | null>(null);
   const lastSerializedRef = useRef<string>("");
+  // Son serileştirilen proje ve tarayıcı önbelleğine yazılabildi mi. Kota
+  // dolunca push'un kaynağı localStorage değil bu olur.
+  const pendingSerializedRef = useRef<string>("");
+  const localCacheFailedRef = useRef<boolean>(false);
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
   // Çok kullanıcı senkron: son sunucu durumu (3-yollu merge tabanı) + versiyon + push kilidi
   const baseRef = useRef<Project | null>(null);
   const versionRef = useRef<number>(0);
@@ -276,12 +303,19 @@ export function ProjectProvider({ children, userId, userName }: ProjectProviderP
 
   function persistLatestProject() {
     if (!userId) return;
+    const str = JSON.stringify(projectRef.current);
+    pendingSerializedRef.current = str;
     try {
-      localStorage.setItem(projectKey, JSON.stringify(projectRef.current));
-      schedulePush();
+      localStorage.setItem(projectKey, str);
+      localCacheFailedRef.current = false;
     } catch {
-      /* quota — silent */
+      // Tarayıcı kotası doldu. Eskiden push da bu try'ın içindeydi ve
+      // atlanıyordu: değişiklik ne yerelde ne sunucuda saklanıyor, sekme
+      // kapanınca kayboluyordu — sessizce. Yerel önbellek dolsa da sunucu
+      // asıl kaynak; göndermeye devam et.
+      localCacheFailedRef.current = true;
     }
+    schedulePush();
   }
 
   // Persist işlemi büyük triangle/fileData projelerinde pahalıdır. Her küçük
@@ -336,9 +370,11 @@ export function ProjectProvider({ children, userId, userName }: ProjectProviderP
     if (!userId || pushingRef.current) return;
     let projectStr = "";
     try {
-      projectStr = localStorage.getItem(projectKey) ?? "";
+      projectStr = localCacheFailedRef.current
+        ? pendingSerializedRef.current
+        : localStorage.getItem(projectKey) ?? "";
     } catch {
-      return;
+      projectStr = pendingSerializedRef.current;
     }
     if (projectStr === lastSerializedRef.current) {
       return; // nothing actually changed
@@ -352,6 +388,7 @@ export function ProjectProvider({ children, userId, userName }: ProjectProviderP
         versionRef.current = res.version;
         baseRef.current = mine;
         lastSerializedRef.current = projectStr;
+        setSyncError(null);
       } catch (e) {
         if (e instanceof WorkerError && e.status === 409) {
           // Başkası bu arada yazmış → sunucuyu çek, branch-düzeyi birleştir, tekrar dene
@@ -371,7 +408,16 @@ export function ProjectProvider({ children, userId, userName }: ProjectProviderP
           lastSerializedRef.current = mergedStr;
           setProject(migrateProject(merged)); // başkasının değişikliklerini de ekranıma getir
         } else {
+          // Eskiden yalnız console.error: proje sunucuya gitmiyor, ekip
+          // arkadaşları görmüyor, kullanıcıya hiçbir şey söylenmiyordu.
           console.error("worker push failed", e);
+          setSyncError(describeSyncError(e, !localCacheFailedRef.current));
+          // Boyut hatası kendiliğinden düzelmez; ağ/sunucu hatası düzelebilir.
+          const permanent = e instanceof WorkerError && e.status === 413;
+          if (!permanent) {
+            if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+            retryTimerRef.current = setTimeout(() => void pushNow(), 15_000);
+          }
         }
       }
     } finally {
@@ -426,10 +472,13 @@ export function ProjectProvider({ children, userId, userName }: ProjectProviderP
         persistIdleRef.current = null;
       }
       // Debounce/idle bekleyen son state kaybolmasın.
+      const str = JSON.stringify(projectRef.current);
+      pendingSerializedRef.current = str;
       try {
-        localStorage.setItem(projectKey, JSON.stringify(projectRef.current));
+        localStorage.setItem(projectKey, str);
+        localCacheFailedRef.current = false;
       } catch {
-        /* quota — silent */
+        localCacheFailedRef.current = true; // push yine de bellekteki sürümü gönderir
       }
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current);
@@ -1022,6 +1071,7 @@ export function ProjectProvider({ children, userId, userName }: ProjectProviderP
         actions,
         canUndo,
         setReadOnly,
+        syncError,
       }}
     >
       {children}

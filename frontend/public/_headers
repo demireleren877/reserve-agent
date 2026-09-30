@@ -6,6 +6,20 @@
   Permissions-Policy: camera=(), microphone=(), geolocation=()
   Link: </.well-known/api-catalog>; rel="api-catalog", </openapi.json>; rel="service-desc"; type="application/json", </api-docs/>; rel="service-doc"; type="text/html", </llms.txt>; rel="describedby"; type="text/plain"
 
+# Guide sayfası içeriği <iframe src="/guide-content.html"> ile gömüyor; /*
+# kuralındaki DENY iframe'i engelliyor ve sayfa boş görünüyordu. Pages .html
+# isteğini uzantısız adrese 308 ile yönlendirdiği için iki yol da yazılı.
+# "!" önceki kuralın başlığını kaldırır; yalnız aynı kökten gömülebilir.
+# DİKKAT: canlıda başlığı scripts/_worker.js yazıyor ve bunu eziyor — asıl
+# düzeltme orada (SAME_ORIGIN_FRAMEABLE). Bu kural worker'sız dağıtım için.
+/guide-content.html
+  ! X-Frame-Options
+  X-Frame-Options: SAMEORIGIN
+
+/guide-content
+  ! X-Frame-Options
+  X-Frame-Options: SAMEORIGIN
+
 # RFC 9727 kataloğu uzantısız bir dosya — doğru medya tipini elle vermek gerekiyor.
 /.well-known/api-catalog
   Content-Type: application/linkset+json

@@ -29,6 +29,13 @@ const SECURITY_HEADERS = {
   "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
 };
 
+// Aynı kökten iframe ile gömülen sayfalar. /guide içeriği
+// <iframe src="/guide-content.html"> ile gösteriyor; her yanıta DENY basınca
+// guide canlıda boş görünüyordu. _headers'taki kural tek başına yetmez —
+// bu worker başlıkları kendisi yazıyor ve _headers'ı eziyor. Pages .html'i
+// uzantısız adrese 308 ile yönlendirdiği için iki yol da burada.
+const SAME_ORIGIN_FRAMEABLE = new Set(["/guide-content", "/guide-content.html"]);
+
 /** İstemci gerçekten markdown mu istiyor? text/html daha yüksek q ile geldiyse hayır. */
 function prefersMarkdown(accept) {
   if (!accept) return false;
@@ -114,6 +121,9 @@ export default {
       });
     }
 
-    return withCommonHeaders(res);
+    return withCommonHeaders(
+      res,
+      SAME_ORIGIN_FRAMEABLE.has(url.pathname) ? { "X-Frame-Options": "SAMEORIGIN" } : undefined,
+    );
   },
 };

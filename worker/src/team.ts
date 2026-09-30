@@ -10,6 +10,8 @@
  * masaüstünden taşınan ekranlar değişmeden çalışır.
  */
 
+import { readState } from "./state-store";
+
 export type Role = "admin" | "user";
 
 export interface Workspace {
@@ -375,9 +377,11 @@ export async function listAuditEvents(db: D1Database, ws: Workspace, limitRaw: s
 
   // Eski kayıtlarda yalnız branch_id olabilir: güncel proje ağacından okunur ad çöz.
   const branchNames: Record<string, string> = {};
-  const state = await db.prepare("SELECT project_json FROM user_state WHERE uid = ?").bind(ws.id).first<{ project_json: string | null }>();
   try {
-    const project = state?.project_json ? JSON.parse(state.project_json) : {};
+    // Durum parçalı saklanabiliyor; satırdaki project_json'ı doğrudan okumak
+    // büyük projelerde boş döner ve adlar sessizce ID'ye düşerdi.
+    const state = await readState(db, ws.id);
+    const project = state?.project ? JSON.parse(state.project) : {};
     for (const p of project.periods ?? []) {
       for (const b of p.branches ?? []) if (b?.id && b?.name) branchNames[String(b.id)] = String(b.name);
     }

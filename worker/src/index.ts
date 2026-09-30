@@ -1,3 +1,7 @@
+import {
+  MAX_STATE_BYTES, STATE_KINDS, StateIncompleteError, byteLength, chunkStatements, planKind, readState,
+  type KindPlan, type StateKind,
+} from "./state-store";
 import { AuthError, verifyIdToken, type VerifiedToken } from "./auth";
 import {
   TeamError,
@@ -206,27 +210,23 @@ async function handleSetPlan(
 
 async function handleGetState(env: Env, t: VerifiedToken, ws: Workspace, origin: string) {
   await ensureUser(env, t);
-  const row = await env.DB.prepare(
-    "SELECT project_json, chat_json, version, updated_at, updated_by_name FROM user_state WHERE uid = ?",
-  )
-    .bind(ws.id)
-    .first<StateRow>();
-
-  if (!row) {
-    return json(
-      { project: null, chat: null, version: 0, updated_at: 0 },
-      { status: 200 },
-      origin,
-    );
+  let st;
+  try {
+    st = await readState(env.DB, ws.id);
+  } catch (e) {
+    if (e instanceof StateIncompleteError) return err(500, "state_incomplete", origin, e.message);
+    throw e;
   }
-
+  if (!st) {
+    return json({ project: null, chat: null, version: 0, updated_at: 0 }, { status: 200 }, origin);
+  }
   return json(
     {
-      project: row.project_json ? JSON.parse(row.project_json) : null,
-      chat: row.chat_json ? JSON.parse(row.chat_json) : null,
-      version: row.version,
-      updated_at: row.updated_at,
-      updated_by_name: row.updated_by_name ?? null,
+      project: st.project ? JSON.parse(st.project) : null,
+      chat: st.chat ? JSON.parse(st.chat) : null,
+      version: st.version,
+      updated_at: st.updated_at,
+      updated_by_name: st.updated_by_name ?? null,
     },
     { status: 200 },
     origin,
@@ -239,7 +239,6 @@ interface PutStateBody {
   expectedVersion?: number;
 }
 
-const MAX_BLOB_BYTES = 900 * 1024; // D1 row practical limit ~1 MB; leave headroom
 
 async function handlePutState(
   req: Request,
@@ -262,23 +261,23 @@ async function handlePutState(
   const chatStr =
     body.chat === undefined ? undefined : JSON.stringify(body.chat);
 
-  const projectBytes = projectStr ? new TextEncoder().encode(projectStr).length : 0;
-  const chatBytes = chatStr ? new TextEncoder().encode(chatStr).length : 0;
-  if (projectBytes + chatBytes > MAX_BLOB_BYTES) {
+  const projectBytes = projectStr ? byteLength(projectStr) : 0;
+  const chatBytes = chatStr ? byteLength(chatStr) : 0;
+  if (projectBytes + chatBytes > MAX_STATE_BYTES) {
     return err(
       413,
       "state_too_large",
       origin,
-      `state exceeds ${MAX_BLOB_BYTES} bytes`,
+      `${((projectBytes + chatBytes) / 1024 / 1024).toFixed(1)} MB > ${MAX_STATE_BYTES / 1024 / 1024} MB limit`,
     );
   }
 
   const now = Date.now();
   const existing = await env.DB.prepare(
-    "SELECT project_json, chat_json, version FROM user_state WHERE uid = ?",
+    "SELECT project_json, chat_json, project_chunks, chat_chunks, version FROM user_state WHERE uid = ?",
   )
     .bind(ws.id)
-    .first<{ project_json: string | null; chat_json: string | null; version: number }>();
+    .first<{ project_json: string | null; chat_json: string | null; project_chunks: number; chat_chunks: number; version: number }>();
 
   const currentVersion = existing?.version ?? 0;
   if (
@@ -293,22 +292,35 @@ async function handlePutState(
     );
   }
 
-  const nextProject =
-    projectStr !== undefined ? projectStr : existing?.project_json ?? null;
-  const nextChat =
-    chatStr !== undefined ? chatStr : existing?.chat_json ?? null;
+  const plans: Record<StateKind, KindPlan> = {
+    project: planKind(projectStr, existing?.project_json ?? null, existing?.project_chunks ?? 0),
+    chat: planKind(chatStr, existing?.chat_json ?? null, existing?.chat_chunks ?? 0),
+  };
   const nextVersion = currentVersion + 1;
+  const writeId = crypto.randomUUID();
 
   // Ekipte iki kişi aynı anda yazabilir: güncelleme yalnız sürüm hâlâ okunduğu
-  // gibiyse uygulanır (masaüstündeki atomik WHERE version = beklenen).
+  // gibiyse uygulanır (masaüstündeki atomik WHERE version = beklenen). Parça
+  // yazımları write_id'ye bağlı olduğundan çakışmayı kaybeden yazım
+  // kazananın parçalarına dokunamaz.
   const write = existing
     ? env.DB.prepare(
-        "UPDATE user_state SET project_json = ?, chat_json = ?, version = ?, updated_at = ?, updated_by_name = ? WHERE uid = ? AND version = ?",
-      ).bind(nextProject, nextChat, nextVersion, now, ws.actorName, ws.id, currentVersion)
+        `UPDATE user_state SET project_json = ?, chat_json = ?, project_chunks = ?, chat_chunks = ?,
+           write_id = ?, version = ?, updated_at = ?, updated_by_name = ?
+         WHERE uid = ? AND version = ?`,
+      ).bind(
+        plans.project.inline, plans.chat.inline, plans.project.count, plans.chat.count,
+        writeId, nextVersion, now, ws.actorName, ws.id, currentVersion,
+      )
     : env.DB.prepare(
-        "INSERT OR IGNORE INTO user_state (uid, project_json, chat_json, version, updated_at, updated_by_name) VALUES (?, ?, ?, ?, ?, ?)",
-      ).bind(ws.id, nextProject, nextChat, nextVersion, now, ws.actorName);
-  const [res] = await env.DB.batch([write]);
+        `INSERT OR IGNORE INTO user_state
+           (uid, project_json, chat_json, project_chunks, chat_chunks, write_id, version, updated_at, updated_by_name)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ).bind(
+        ws.id, plans.project.inline, plans.chat.inline, plans.project.count, plans.chat.count,
+        writeId, nextVersion, now, ws.actorName,
+      );
+  const [res] = await env.DB.batch([write, ...chunkStatements(env.DB, ws.id, writeId, plans)]);
   if (!res?.meta.changes) {
     return err(409, "version_conflict", origin, "state changed concurrently");
   }
@@ -327,7 +339,10 @@ async function handlePutState(
 }
 
 async function handleDeleteAll(env: Env, ws: Workspace, origin: string) {
-  await env.DB.prepare("DELETE FROM user_state WHERE uid = ?").bind(ws.id).run();
+  await env.DB.batch([
+    env.DB.prepare("DELETE FROM user_state_chunks WHERE uid = ?").bind(ws.id),
+    env.DB.prepare("DELETE FROM user_state WHERE uid = ?").bind(ws.id),
+  ]);
   return json({ ok: true }, { status: 200 }, origin);
 }
 
@@ -409,30 +424,76 @@ async function handleUpsertPeriod(req: Request, env: Env, t: VerifiedToken, ws: 
 
 async function handleDeletePeriod(env: Env, t: VerifiedToken, ws: Workspace, periodId: string, origin: string) {
   await ensureUser(env, t);
-  await env.DB.prepare("DELETE FROM user_datasets WHERE uid = ? AND period_id = ?").bind(ws.id, periodId).run();
-  await env.DB.prepare("DELETE FROM user_periods WHERE uid = ? AND period_id = ?").bind(ws.id, periodId).run();
+  await env.DB.batch([
+    env.DB.prepare("DELETE FROM user_dataset_chunks WHERE uid = ? AND period_id = ?").bind(ws.id, periodId),
+    env.DB.prepare("DELETE FROM user_datasets WHERE uid = ? AND period_id = ?").bind(ws.id, periodId),
+    env.DB.prepare("DELETE FROM user_periods WHERE uid = ? AND period_id = ?").bind(ws.id, periodId),
+  ]);
   await appendAuditEvent(env.DB, ws, { action: "data.period_deleted", details: { module: "data", target: "Değerleme dönemi" } });
   return json({ ok: true }, { status: 200 }, origin);
 }
 
 // ─── Data: datasets ───────────────────────────────────────────────────────────
 
-const MAX_DATASET_BYTES = 4 * 1024 * 1024; // 4 MB per dataset
+// D1 satır başına 2.000.000 bayt kabul ediyor. Veri setini tek satıra yazmak
+// gerçek bir çeyreklik hasar dosyasında (~3 MB) SQLITE_TOOBIG ile düşüyordu;
+// kayıtlar artık bu boyutun altındaki parçalara bölünüyor.
+const CHUNK_BYTES = 1_500_000;
+// Tek istekte kabul edilen üst sınır. ~11 parça demek: D1'in ücretsiz planda
+// çağrı başına 50 sorgu sınırının rahatça altında kalır.
+const MAX_DATASET_BYTES = 16 * 1024 * 1024;
+
+/**
+ * Kayıt dizisini, her biri JSON olarak CHUNK_BYTES'ı aşmayan parçalara böler.
+ * Bayt değil KAYIT sınırından bölünür: UTF-8 bir karakterin ortasından
+ * kesilmez ve her parça kendi başına geçerli bir JSON dizisidir.
+ */
+function splitRecords(records: unknown[]): string[] | { tooLarge: number } {
+  const enc = new TextEncoder();
+  const chunks: string[] = [];
+  let parts: string[] = [];
+  let size = 2; // "[" + "]"
+  for (const r of records) {
+    const js = JSON.stringify(r);
+    const n = enc.encode(js).length + 1; // + ayraç
+    if (n + 2 > CHUNK_BYTES) return { tooLarge: n };
+    if (size + n > CHUNK_BYTES && parts.length) {
+      chunks.push(`[${parts.join(",")}]`);
+      parts = [];
+      size = 2;
+    }
+    parts.push(js);
+    size += n;
+  }
+  if (parts.length) chunks.push(`[${parts.join(",")}]`);
+  return chunks;
+}
 
 async function handleGetDataset(
   env: Env, t: VerifiedToken, ws: Workspace, periodId: string, datasetId: string, origin: string,
 ) {
   await ensureUser(env, t);
   const row = await env.DB.prepare(
-    "SELECT type_id, meta_json, records_json FROM user_datasets WHERE uid = ? AND period_id = ? AND dataset_id = ?",
-  ).bind(ws.id, periodId, datasetId).first<{ type_id: string; meta_json: string; records_json: string }>();
+    "SELECT type_id, meta_json, records_json, chunk_count FROM user_datasets WHERE uid = ? AND period_id = ? AND dataset_id = ?",
+  ).bind(ws.id, periodId, datasetId).first<{ type_id: string; meta_json: string; records_json: string; chunk_count: number }>();
 
   if (!row) return err(404, "not_found", origin);
-  return json(
-    { typeId: row.type_id, meta: JSON.parse(row.meta_json), records: JSON.parse(row.records_json) },
-    { status: 200 },
-    origin,
-  );
+
+  let records: unknown[];
+  if (row.chunk_count > 0) {
+    const parts = await env.DB.prepare(
+      "SELECT records_json FROM user_dataset_chunks WHERE uid = ? AND period_id = ? AND dataset_id = ? ORDER BY seq ASC",
+    ).bind(ws.id, periodId, datasetId).all<{ records_json: string }>();
+    // Parça sayısı tutmuyorsa yazma yarım kalmış demektir — eksik veriyi
+    // tamammış gibi döndürmek, sessizce yanlış bir üçgen kurdurur.
+    if (parts.results.length !== row.chunk_count) {
+      return err(500, "dataset_incomplete", origin, `${parts.results.length}/${row.chunk_count} chunks`);
+    }
+    records = parts.results.flatMap((p) => JSON.parse(p.records_json) as unknown[]);
+  } else {
+    records = JSON.parse(row.records_json);
+  }
+  return json({ typeId: row.type_id, meta: JSON.parse(row.meta_json), records }, { status: 200 }, origin);
 }
 
 async function handlePutDataset(
@@ -444,33 +505,64 @@ async function handlePutDataset(
 
   const typeId = body.typeId ?? datasetId;
   const metaStr = JSON.stringify(body.meta ?? {});
-  const recordsStr = JSON.stringify(body.records ?? []);
-  const totalBytes = new TextEncoder().encode(metaStr + recordsStr).length;
+  const records = Array.isArray(body.records) ? body.records : [];
+  const recordsStr = JSON.stringify(records);
+  const enc = new TextEncoder();
+  const totalBytes = enc.encode(metaStr).length + enc.encode(recordsStr).length;
   if (totalBytes > MAX_DATASET_BYTES) {
-    return err(413, "dataset_too_large", origin, `${(totalBytes / 1024 / 1024).toFixed(1)} MB > 4 MB limit`);
+    return err(
+      413, "dataset_too_large", origin,
+      `${(totalBytes / 1024 / 1024).toFixed(1)} MB > ${MAX_DATASET_BYTES / 1024 / 1024} MB limit`,
+    );
+  }
+  if (enc.encode(metaStr).length > CHUNK_BYTES) {
+    return err(413, "dataset_meta_too_large", origin);
+  }
+
+  // Satıra sığıyorsa eskisi gibi satırın içinde; sığmıyorsa parçalara.
+  const inline = enc.encode(metaStr).length + enc.encode(recordsStr).length <= CHUNK_BYTES;
+  let chunks: string[] = [];
+  if (!inline) {
+    const split = splitRecords(records);
+    if (!Array.isArray(split)) {
+      return err(413, "dataset_record_too_large", origin, `single record ${split.tooLarge} bytes`);
+    }
+    chunks = split;
   }
 
   const now = Date.now();
-  const existing = await env.DB.prepare(
-    "SELECT dataset_id FROM user_datasets WHERE uid = ? AND period_id = ? AND dataset_id = ?",
-  ).bind(ws.id, periodId, datasetId).first();
+  const key = [ws.id, periodId, datasetId] as const;
+  // Hepsi tek batch: D1 batch'i tek bir işlem olarak uygular. Yarıda kalan bir
+  // yazma, eski parçaların yenileriyle karışmış bir veri seti bırakamaz.
+  await env.DB.batch([
+    env.DB.prepare(
+      "DELETE FROM user_dataset_chunks WHERE uid = ? AND period_id = ? AND dataset_id = ?",
+    ).bind(...key),
+    ...chunks.map((c, seq) =>
+      env.DB.prepare(
+        "INSERT INTO user_dataset_chunks (uid, period_id, dataset_id, seq, records_json) VALUES (?, ?, ?, ?, ?)",
+      ).bind(...key, seq, c),
+    ),
+    // Parçalı kayıtta satırdaki records_json "[]": eski bir worker sürümüne
+    // geri dönülürse JSON.parse çökmez, boş veri seti görünür.
+    env.DB.prepare(
+      `INSERT INTO user_datasets (uid, period_id, dataset_id, type_id, meta_json, records_json, chunk_count, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT (uid, period_id, dataset_id) DO UPDATE SET
+         meta_json = excluded.meta_json,
+         records_json = excluded.records_json,
+         chunk_count = excluded.chunk_count,
+         updated_at = excluded.updated_at`,
+    ).bind(...key, typeId, metaStr, inline ? recordsStr : "[]", chunks.length, now),
+  ]);
 
-  if (existing) {
-    await env.DB.prepare(
-      "UPDATE user_datasets SET meta_json = ?, records_json = ?, updated_at = ? WHERE uid = ? AND period_id = ? AND dataset_id = ?",
-    ).bind(metaStr, recordsStr, now, ws.id, periodId, datasetId).run();
-  } else {
-    await env.DB.prepare(
-      "INSERT INTO user_datasets (uid, period_id, dataset_id, type_id, meta_json, records_json, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-    ).bind(ws.id, periodId, datasetId, typeId, metaStr, recordsStr, now).run();
-  }
   const meta = body.meta && typeof body.meta === "object" ? (body.meta as Record<string, unknown>) : {};
   await appendAuditEvent(env.DB, ws, {
     action: "data.dataset_saved",
     details: {
       module: "data",
       target: typeof meta.filename === "string" ? meta.filename : "Dataset",
-      record_count: Array.isArray(body.records) ? body.records.length : null,
+      record_count: records.length,
     },
   });
 
@@ -481,9 +573,14 @@ async function handleDeleteDataset(
   env: Env, t: VerifiedToken, ws: Workspace, periodId: string, datasetId: string, origin: string,
 ) {
   await ensureUser(env, t);
-  await env.DB.prepare(
-    "DELETE FROM user_datasets WHERE uid = ? AND period_id = ? AND dataset_id = ?",
-  ).bind(ws.id, periodId, datasetId).run();
+  await env.DB.batch([
+    env.DB.prepare(
+      "DELETE FROM user_dataset_chunks WHERE uid = ? AND period_id = ? AND dataset_id = ?",
+    ).bind(ws.id, periodId, datasetId),
+    env.DB.prepare(
+      "DELETE FROM user_datasets WHERE uid = ? AND period_id = ? AND dataset_id = ?",
+    ).bind(ws.id, periodId, datasetId),
+  ]);
   await appendAuditEvent(env.DB, ws, { action: "data.dataset_deleted", details: { module: "data", target: "Dataset" } });
   return json({ ok: true }, { status: 200 }, origin);
 }

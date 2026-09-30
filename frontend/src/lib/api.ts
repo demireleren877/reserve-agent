@@ -11,8 +11,12 @@ import type {
 import { getFirebaseAuth } from "@/lib/auth/firebase";
 import { getAgentConfig, PROVIDER_DEFAULT_BASE_URL } from "@/lib/agent/agent-config";
 
+// Varsayılan, canlı backend'in GERÇEK adresi. Eskiden actuarial-api.onrender.com
+// yazıyordu — o adreste servis yok (Render: no-server); site yalnızca Pages
+// build'i NEXT_PUBLIC_API_BASE verdiği için çalışıyordu. Değişken bir gün
+// düşerse site backend'ini sessizce kaybederdi.
 export const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE || "https://actuarial-api.onrender.com";
+  process.env.NEXT_PUBLIC_API_BASE || "https://reserve-agent.onrender.com";
 
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 MB
 

@@ -15,6 +15,8 @@ export interface MeResponse {
   /** Ekip çalışma alanındaki rol (masaüstündeki admin/user). */
   role: Role;
   workspace: { id: string; is_owner: boolean; owner_email: string };
+  /** Ekip daveti açık mı (Enterprise). Eski worker göndermez. */
+  team_enabled?: boolean;
 }
 
 export interface StateResponse<P = unknown, C = unknown> {

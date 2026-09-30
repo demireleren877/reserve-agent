@@ -14,6 +14,8 @@ export interface MeSnapshot {
   plan: Plan;
   /** Çalışma alanının sahibi mi (plan yalnız sahipçe değiştirilir). */
   isOwner: boolean;
+  /** Ekip daveti açık mı — çoklu kullanıcı Enterprise özelliği. */
+  teamEnabled: boolean;
 }
 
 const MeCtx = createContext<MeSnapshot | null>(null);
@@ -63,6 +65,9 @@ export function AuthGate({ children }: Props) {
           role: m.role ?? "admin",
           plan: m.plan,
           isOwner: m.workspace?.is_owner ?? true,
+          // Alan yoksa yanıt eski worker'dan: o davete izin veriyor, arayüz de
+          // sunucuyla aynı şeyi göstersin.
+          teamEnabled: m.team_enabled ?? true,
         });
       } catch (e) {
         if (cancelled) return;

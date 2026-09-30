@@ -123,11 +123,18 @@ export async function createUser(
   body: { username?: unknown; role?: unknown },
 ): Promise<Result> {
   requireAdmin(ws);
+  const owner = await db
+    .prepare("SELECT email, team_enabled FROM users WHERE uid = ?")
+    .bind(ws.id)
+    .first<{ email: string; team_enabled: number }>();
+  // Çoklu kullanıcı Enterprise özelliği (fiyat sayfası böyle satıyor). Koltuk
+  // başı fiyat olmadığından Pro'ya açmak ₺100'ye sınırsız kullanıcı demekti.
+  if (!owner?.team_enabled) throw new TeamError(403, "team_requires_enterprise");
+
   const email = typeof body.username === "string" ? normEmail(body.username) : "";
   if (!EMAIL_RE.test(email)) throw new TeamError(400, "invalid_email");
   const role: Role = body.role === "admin" ? "admin" : "user";
 
-  const owner = await db.prepare("SELECT email FROM users WHERE uid = ?").bind(ws.id).first<{ email: string }>();
   if (owner && normEmail(owner.email) === email) throw new TeamError(409, "username_exists");
   const existing = await db
     .prepare("SELECT workspace_id FROM workspace_members WHERE email = ?")

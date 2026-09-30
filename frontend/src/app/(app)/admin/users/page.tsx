@@ -18,6 +18,7 @@ const ERRORS: Record<string, string> = {
   username_exists: "This user is already in the team.",
   member_of_other_workspace: "This person already belongs to another team.",
   cannot_delete_self: "You cannot remove yourself.",
+  team_requires_enterprise: "Inviting teammates is part of Actuarius Enterprise.",
 };
 
 function errorText(err: unknown): string {
@@ -105,7 +106,8 @@ export default function UsersPage() {
         </div>
       )}
 
-      {/* Yeni kullanıcı */}
+      {/* Yeni kullanıcı — çoklu kullanıcı Enterprise özelliği */}
+      {me?.teamEnabled ? (
       <div className="mb-8 p-5 rounded-xl border bg-[color:var(--surface)]">
         <h2 className="text-base font-medium mb-4">Invite User</h2>
         <form onSubmit={handleCreate} className="flex flex-wrap gap-3 items-end">
@@ -140,6 +142,17 @@ export default function UsersPage() {
           </button>
         </form>
       </div>
+      ) : (
+        <div className="mb-8 p-5 rounded-xl border bg-[color:var(--surface)]">
+          <h2 className="text-base font-medium mb-1">Invite teammates</h2>
+          <p className="text-sm text-[color:var(--muted-strong)]">
+            Shared workspaces with multiple users and roles are part of Actuarius Enterprise.
+          </p>
+          <a href="/#contact" className="inline-block mt-3 text-sm font-medium text-[color:var(--brand)]">
+            Talk to us about Enterprise →
+          </a>
+        </div>
+      )}
 
       {/* Kullanıcı listesi */}
       {loading ? (

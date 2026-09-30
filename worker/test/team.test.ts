@@ -21,9 +21,19 @@ vi.mock("../src/auth", () => {
 const { default: worker } = await import("../src/index");
 
 let env: Record<string, unknown>;
-beforeEach(() => {
+beforeEach(async () => {
   env = { DB: createD1(), ALLOWED_ORIGIN: "http://localhost:3000", FIREBASE_PROJECT_ID: "x" };
+  // Bu dosyadaki senaryolar ekip davetini sınıyor: davet Enterprise özelliği,
+  // o yüzden davet eden sahipler Enterprise olarak işaretleniyor.
+  await enableTeam(OWNER);
+  await enableTeam(OTHER);
 });
+
+async function enableTeam(who: string) {
+  await call(who, "GET", "/v1/me"); // kullanıcı satırını oluşturur
+  const uid = who.split("|")[0];
+  await (env.DB as D1Database).prepare("UPDATE users SET team_enabled = 1 WHERE uid = ?").bind(uid).run();
+}
 
 async function call(who: string, method: string, path: string, body?: unknown) {
   const req = new Request(`https://w.test${path}`, {
@@ -188,5 +198,27 @@ describe("model kilidi", () => {
     await call(MEMBER, "POST", "/v1/locks/acquire", { lock_key: "k" });
     await call(OWNER, "DELETE", "/v1/admin/users/mem%40acme.com");
     expect((await call(OWNER, "GET", "/v1/locks/k")).body.locked).toBe(false);
+  });
+});
+
+
+describe("ekip daveti Enterprise'a özel", () => {
+  it("bayrağı kapalı sahip davet edemez, sebebi açık söylenir", async () => {
+    const SOLO = "u-solo|solo@firm.com";
+    const me = await call(SOLO, "GET", "/v1/me");
+    expect(me.body.team_enabled).toBe(false);
+    const r = await call(SOLO, "POST", "/v1/admin/users", { username: "x@firm.com" });
+    expect(r.status).toBe(403);
+    expect(JSON.stringify(r.body)).toContain("team_requires_enterprise");
+  });
+
+  it("bayrak açılınca davet çalışır ve /v1/me bunu bildirir", async () => {
+    expect((await call(OWNER, "GET", "/v1/me")).body.team_enabled).toBe(true);
+    expect((await call(OWNER, "POST", "/v1/admin/users", { username: "yeni@acme.com" })).status).toBe(201);
+  });
+
+  it("üye, sahibin bayrağını görür", async () => {
+    await call(OWNER, "POST", "/v1/admin/users", { username: "mem@acme.com" });
+    expect((await call(MEMBER, "GET", "/v1/me")).body.team_enabled).toBe(true);
   });
 });

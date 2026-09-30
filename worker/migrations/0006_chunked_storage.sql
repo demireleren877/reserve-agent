@@ -36,3 +36,11 @@ ALTER TABLE user_state ADD COLUMN chat_chunks INTEGER NOT NULL DEFAULT 0;
 -- Her yazımın kimliği. Parça yazımları "satır hâlâ bu yazıma mı ait" koşuluna
 -- bağlı: sürüm çakışmasını kaybeden yazım, kazananın parçalarını ezemez.
 ALTER TABLE user_state ADD COLUMN write_id TEXT;
+
+-- Ekip daveti (çoklu kullanıcı) Enterprise özelliği — fiyat sayfası da böyle
+-- satıyor. Web'de plan sütunu yalnız free/pro olduğu için ayrı bir bayrak:
+-- Enterprise anlaşmasında operatör açar.
+--   UPDATE users SET team_enabled = 1 WHERE email = 'musteri@firma.com';
+ALTER TABLE users ADD COLUMN team_enabled INTEGER NOT NULL DEFAULT 0;
+-- Bu migration'dan önce üye davet etmiş sahipler mevcut ekiplerini korur.
+UPDATE users SET team_enabled = 1 WHERE uid IN (SELECT DISTINCT workspace_id FROM workspace_members);

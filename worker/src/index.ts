@@ -44,6 +44,7 @@ interface UserRow {
   paddle_subscription_id: string | null;
   created_at: number;
   updated_at: number;
+  team_enabled: number;
 }
 
 interface StateRow {
@@ -97,7 +98,7 @@ async function authenticate(
 async function ensureUser(env: Env, t: VerifiedToken): Promise<UserRow> {
   const now = Date.now();
   const existing = await env.DB.prepare(
-    "SELECT uid, email, plan, plan_selected_at, paddle_subscription_id, created_at, updated_at FROM users WHERE uid = ?",
+    "SELECT uid, email, plan, plan_selected_at, paddle_subscription_id, created_at, updated_at, team_enabled FROM users WHERE uid = ?",
   )
     .bind(t.uid)
     .first<UserRow>();
@@ -122,6 +123,7 @@ async function ensureUser(env: Env, t: VerifiedToken): Promise<UserRow> {
     paddle_subscription_id: null,
     created_at: now,
     updated_at: now,
+    team_enabled: 0,
   };
   await env.DB.prepare(
     "INSERT INTO users (uid, email, plan, plan_selected_at, paddle_subscription_id, created_at, updated_at) VALUES (?, ?, ?, NULL, NULL, ?, ?)",
@@ -137,7 +139,7 @@ async function handleMe(env: Env, t: VerifiedToken, ws: Workspace, origin: strin
   const owner = ws.isOwner
     ? user
     : await env.DB.prepare(
-        "SELECT uid, email, plan, plan_selected_at, paddle_subscription_id, created_at, updated_at FROM users WHERE uid = ?",
+        "SELECT uid, email, plan, plan_selected_at, paddle_subscription_id, created_at, updated_at, team_enabled FROM users WHERE uid = ?",
       )
         .bind(ws.id)
         .first<UserRow>();
@@ -149,6 +151,8 @@ async function handleMe(env: Env, t: VerifiedToken, ws: Workspace, origin: strin
       hasPlan: ws.isOwner ? user.plan_selected_at !== null : true,
       role: ws.role,
       workspace: { id: ws.id, is_owner: ws.isOwner, owner_email: owner?.email ?? null },
+      // Ekip daveti açık mı (Enterprise). Arayüz kapalıyken formu değil notu gösterir.
+      team_enabled: Boolean(owner?.team_enabled),
     },
     { status: 200 },
     origin,

@@ -14,6 +14,7 @@ import { PrimImportWizard, type PrimWizardResult } from "@/components/PrimImport
 import { TriangleImportWizard, type TriangleWizardResult } from "@/components/TriangleImportWizard";
 import { TriangleGrid } from "@/components/TriangleGrid";
 import { importPrimFile } from "@/lib/api";
+import { WorkerError } from "@/lib/sync/worker-client";
 import type { PrimRecord, TriangleRecord } from "@/lib/data-store";
 import { useProvisionModels } from "@/lib/provision-models";
 
@@ -344,6 +345,23 @@ type RightView =
   | { kind: "wizard"; typeId: string }
   | { kind: "viewer"; datasetId: string; typeId: string };
 
+/** Kaydetme hatasını kullanıcının ne yapacağını bileceği bir cümleye çevirir. */
+function describeSaveError(filename: string, e: unknown): string {
+  const head = `"${filename}" could not be saved and was not added.`;
+  if (e instanceof WorkerError) {
+    if (e.code === "dataset_too_large") {
+      const detail = typeof e.detail === "string" ? ` (${e.detail})` : "";
+      return `${head} The file is too large to store${detail}. Split it by period or line of business and upload the parts.`;
+    }
+    if (e.code === "dataset_record_too_large") {
+      return `${head} A single row is too large to store; check the file for an oversized text column.`;
+    }
+    if (e.status === 401) return `${head} Your session has expired — sign in again and re-upload.`;
+    return `${head} The server returned an error (${e.code}). Try again.`;
+  }
+  return `${head} Check your connection and try again.`;
+}
+
 function PeriodDetail({ period }: { period: DataPeriod }) {
   const { setDataset, removeDataset, loadDatasetRecords, periods } = useDataStore();
   const provision = useProvisionModels();
@@ -354,6 +372,21 @@ function PeriodDetail({ period }: { period: DataPeriod }) {
     ))
     .map((p) => p.label);
   const [view, setView] = useState<RightView>({ kind: "overview" });
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  // Veri setini kaydet; başarısızsa kullanıcıya söyle. Eskiden hata
+  // `.catch(() => {})` ile yutuluyordu: veri seti ekranda duruyor ama
+  // saklanmamış oluyor, sayfa yenilenince kayboluyordu.
+  async function persist(ds: Dataset): Promise<boolean> {
+    setSaveError(null);
+    try {
+      await setDataset(period.id, ds);
+      return true;
+    } catch (e) {
+      setSaveError(describeSaveError(String(ds.meta.filename ?? "Dataset"), e));
+      return false;
+    }
+  }
   const [showPrimWizard, setShowPrimWizard] = useState(false);
   const [showTriangleWizard, setShowTriangleWizard] = useState(false);
   const [triangleWizardType, setTriangleWizardType] = useState<"ucgen" | "large_ucgen">("ucgen");
@@ -382,11 +415,12 @@ function PeriodDetail({ period }: { period: DataPeriod }) {
       },
       records: result.result.records,
     };
-    // setDataset optimistic update'i hemen uygular; remote hata verse de overview'a dön
-    setDataset(period.id, ds).catch(() => {});
+    // Kayıt bitmeden model iskeleti kurma: kaydedilemeyen veriye bağlı boş
+    // modeller rezervde kalıyordu.
+    const saved = await persist(ds);
     // Rezervde SADECE model iskeleti oluştur (dönem + branş). Veriyi bağlamayı
     // kullanıcı rezervde seçer. Large ayrı üçgen değil, aynı isimli modele bağlanır.
-    provision.provisionShells(period.label, result.result.brans_list, result.frequency);
+    if (saved) provision.provisionShells(period.label, result.result.brans_list, result.frequency);
     setView({ kind: "overview" });
   }
 
@@ -406,7 +440,7 @@ function PeriodDetail({ period }: { period: DataPeriod }) {
       },
       records: r.records,
     };
-    setDataset(period.id, ds).catch(() => {});
+    await persist(ds);
     // Prim yalnızca veri; model iskeleti oluşturmaz. Exposure'ı rezervde (BF) kullanıcı bağlar.
     setView({ kind: "overview" });
   }
@@ -425,9 +459,9 @@ function PeriodDetail({ period }: { period: DataPeriod }) {
       },
       records: recs,
     };
-    setDataset(period.id, ds).catch(() => {});
+    const saved = await persist(ds);
     // Hazır üçgen: rezervde yalnız model iskeleti (branş) oluştur; veriyi kullanıcı bağlar.
-    if (recs[0]) provision.provisionShells(period.label, [recs[0].brans], recs[0].origin_granularity);
+    if (saved && recs[0]) provision.provisionShells(period.label, [recs[0].brans], recs[0].origin_granularity);
     setShowTriangleWizard(false);
   }
 
@@ -493,6 +527,12 @@ function PeriodDetail({ period }: { period: DataPeriod }) {
   // Overview
   return (
     <div className="flex-1 overflow-auto p-6">
+      {saveError && (
+        <div role="alert" className="mb-4 flex items-start justify-between gap-4 rounded-lg px-4 py-3 text-[12.5px]" style={{ background: "#fef2f2", color: "#b91c1c", border: "1px solid #fecaca" }}>
+          <span>{saveError}</span>
+          <button onClick={() => setSaveError(null)} className="shrink-0 font-semibold" aria-label="Dismiss">✕</button>
+        </div>
+      )}
       <div className="mb-5 flex items-start justify-between gap-4"><div><h1 className="text-[18px] font-semibold">{period.label}</h1><p className="mt-1 text-[12px]" style={{ color: "var(--muted-strong)" }}>Data sources and imported datasets for this valuation period.</p></div><div className="text-right"><div className="text-[11px] font-medium" style={{ color: "var(--muted-strong)" }}>Source</div><div className="mt-0.5 text-[11px]" style={{ color: "var(--muted)" }}>Excel / CSV upload</div></div></div>
       <div className="card overflow-hidden">
         <div className="grid grid-cols-[minmax(190px,1.35fr)_minmax(120px,.75fr)_110px_104px] gap-4 border-b px-5 py-2.5 text-[10px] font-semibold uppercase tracking-wide" style={{ borderColor: "var(--border)", background: "var(--surface-alt)", color: "var(--muted-strong)" }}><span>Dataset</span><span>Source</span><span className="text-right">Records</span><span className="text-right">Action</span></div>

@@ -244,14 +244,28 @@ export function DataStoreProvider({
   // Dataset kaydet (local + D1)
   const setDataset = useCallback(async (periodId: string, dataset: Dataset) => {
     invalidateDatasetRequest(periodId, dataset.datasetId);
+    let previous: Dataset | undefined;
     setPeriods((prev) =>
-      prev.map((p) =>
-        p.id === periodId
-          ? { ...p, datasets: { ...p.datasets, [dataset.datasetId]: dataset } }
-          : p,
-      ),
+      prev.map((p) => {
+        if (p.id !== periodId) return p;
+        previous = p.datasets[dataset.datasetId];
+        return { ...p, datasets: { ...p.datasets, [dataset.datasetId]: dataset } };
+      }),
     );
-    await putDataset(periodId, dataset.datasetId, dataset.typeId, dataset.meta, dataset.records);
+    try {
+      await putDataset(periodId, dataset.datasetId, dataset.typeId, dataset.meta, dataset.records);
+    } catch (e) {
+      // Kaydedilemeyen veri seti ekranda kalırsa kullanıcı kaydedildi sanıyor,
+      // sayfayı yenileyince kayboluyordu. Ekrandaki her zaman saklananla aynı olsun.
+      setPeriods((prev) =>
+        prev.map((p) => {
+          if (p.id !== periodId) return p;
+          const { [dataset.datasetId]: _failed, ...rest } = p.datasets;
+          return { ...p, datasets: previous ? { ...rest, [dataset.datasetId]: previous } : rest };
+        }),
+      );
+      throw e;
+    }
   }, []);
 
   // Dataset sil

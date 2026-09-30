@@ -170,9 +170,19 @@ def _call_claude(system: str, user: str, timeout: float, attempts: int = 3) -> s
 
         if proc is not None and proc.returncode == 0:
             try:
-                return json.loads(proc.stdout).get("result") or ""
+                out = json.loads(proc.stdout)
             except json.JSONDecodeError:
                 return proc.stdout
+            # exit 0 her zaman başarı değil: kullanım limiti ve sağlayıcı
+            # hataları is_error=true ile, hata metni de "result" içinde
+            # dönüyor. Bunu cevap diye geçirmek, ajan "araç çağırmadı" gibi
+            # görünen sahte düşüşler üretiyordu — son tam koşu AG19'dan
+            # itibaren kategoriden bağımsız çöktü.
+            if not out.get("is_error"):
+                return out.get("result") or ""
+            last = (f"is_error | subtype={out.get('subtype')} | "
+                    f"api_error_status={out.get('api_error_status')} | "
+                    f"result={str(out.get('result'))[:300]}")
         if proc is not None:
             # Hata metni stdout'ta da olabiliyor; ikisini de taşı yoksa
             # "exit 1:" diye boş bir mesaj kalıyor ve teşhis imkânsızlaşıyor.

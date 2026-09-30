@@ -493,7 +493,7 @@ function PeriodDetail({ period }: { period: DataPeriod }) {
   // Overview
   return (
     <div className="flex-1 overflow-auto p-6">
-      <div className="mb-5 flex items-start justify-between gap-4"><div><h1 className="text-[18px] font-semibold">{period.label}</h1><p className="mt-1 text-[12px]" style={{ color: "var(--muted-strong)" }}>Data sources and imported datasets for this valuation period.</p></div><div className="text-right"><div className="text-[11px] font-medium" style={{ color: "var(--muted-strong)" }}>Oracle source</div><div className="mt-0.5 text-[11px]" style={{ color: "var(--success)" }}>● Connected</div></div></div>
+      <div className="mb-5 flex items-start justify-between gap-4"><div><h1 className="text-[18px] font-semibold">{period.label}</h1><p className="mt-1 text-[12px]" style={{ color: "var(--muted-strong)" }}>Data sources and imported datasets for this valuation period.</p></div><div className="text-right"><div className="text-[11px] font-medium" style={{ color: "var(--muted-strong)" }}>Source</div><div className="mt-0.5 text-[11px]" style={{ color: "var(--muted)" }}>Excel / CSV upload</div></div></div>
       <div className="card overflow-hidden">
         <div className="grid grid-cols-[minmax(190px,1.35fr)_minmax(120px,.75fr)_110px_104px] gap-4 border-b px-5 py-2.5 text-[10px] font-semibold uppercase tracking-wide" style={{ borderColor: "var(--border)", background: "var(--surface-alt)", color: "var(--muted-strong)" }}><span>Dataset</span><span>Source</span><span className="text-right">Records</span><span className="text-right">Action</span></div>
         {DATA_TYPES.map((def) => {

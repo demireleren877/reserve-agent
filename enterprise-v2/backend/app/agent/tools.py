@@ -1826,6 +1826,9 @@ def _get_analysis_state(
         "window": session_state.get("window"),
         # Adım başına pencere (step 0-indexli → {"0": "4"}). Boşsa global window.
         "karma_windows": session_state.get("karma_windows") or {},
+        # Nihaisi ödenmişin altında kalan kaza yılları (nihai ödenmişten az
+        # olamaz). Boş değilse nihai/IBNR/ödenmemiş cevaplarında söylenmeli.
+        "ultimate_below_paid": session_state.get("ultimate_below_paid") or [],
         "excluded_cells_count": len(excluded_cells),
         "excluded_cells": excluded_cells[:50],
         "selected_ldfs": session_state.get("selected_ldfs", []),

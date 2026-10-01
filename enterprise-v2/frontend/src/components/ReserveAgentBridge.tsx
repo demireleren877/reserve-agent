@@ -21,7 +21,8 @@ import {
 } from "@/lib/provision-models";
 import type { LargeTriangles } from "@/lib/provision-models";
 import { computeBranchSummary } from "@/lib/reserve-pipeline";
-import { computeAttritionalSummary, attritionalWorkingTriangle, hasLarge } from "@/lib/large-split";
+import { computeAttritionalSummary, attritionalWorkingTriangle, deriveAttritional, hasLarge } from "@/lib/large-split";
+import { ultimateBelowPaid, type BelowPaid } from "@/lib/unpaid";
 import { buildClaimMovement, buildFileSummary } from "@/lib/file-analysis";
 import { useDataStore } from "@/lib/data-store";
 import {
@@ -177,6 +178,7 @@ export function ReserveAgentBridge() {
       // Karma Volume (adım başına ayrı pencere). Gönderilmediğinde ajan yalnız
       // global volume'u görüyor ve karma ayarlı bir modelde yanlış söylüyordu.
       legacyFields.karma_windows = activeBranch.karmaWindowPerStep ?? {};
+      legacyFields.ultimate_below_paid = activeBranchSnap.ultimate_below_paid ?? [];
       legacyFields.excluded_cells = (activeBranch.excludedCells ?? []).map(
         (k) => {
           const [origin, step] = k.split("|");
@@ -525,6 +527,8 @@ interface BranchSnapshot {
   filled_cells: number;
   total_cells: number;
   per_origin: ReturnType<typeof computeBranchSummary>["rows"];
+  /** Nihaisi ödenmişin altında kalan kaza yılları (özetle aynı segment). */
+  ultimate_below_paid: BelowPaid[];
   formula_context: ReturnType<typeof computeBranchSummary>["formula_context"];
   selected_ldfs: number[];
   effective_cdfs: number[];
@@ -678,6 +682,13 @@ export function buildProjectSnapshot(
         totals: summary.totals,
         // Her branş için TAM detay — agent get_branch_state ile bunları okur
         per_origin: summary.rows,
+        // Özet large ayrımı varsa ATTRITIONAL üzerinden; ödenmiş de aynı segmentten.
+        ultimate_below_paid: ultimateBelowPaid(
+          summary.rows,
+          hasLarge(cb)
+            ? deriveAttritional(cb).paid
+            : cb.paidTriangle ?? (cb.triangle?.triangle_type === "paid" ? cb.triangle : null),
+        ),
         formula_context: summary.formula_context,
         selected_ldfs: summary.selected_ldfs,
         effective_cdfs: summary.effective_cdfs,

@@ -18,6 +18,7 @@ import { BranchLogsButton } from "@/components/ProjectNav";
 import { ModelTabs } from "@/components/ModelTabs";
 import { ProjectSidebar } from "@/components/ProjectSidebar";
 import { ModelLockBanner } from "@/components/ModelLockBanner";
+import { ultimateBelowPaid } from "@/lib/unpaid";
 import { useModelLock } from "@/lib/use-model-lock";
 import { useBranchSetters, useProject } from "@/lib/project-store";
 import { useDataPremiums, useDataLarge } from "@/lib/provision-models";
@@ -723,6 +724,17 @@ export default function Home() {
     () => (needsSummary ? runPipeline(excludedCells) : null),
     [needsSummary, runPipeline, excludedCells],
   );
+  // Nihaisi ödenmişin altında kalan kaza yılları — seçili segmentin ödenmişiyle.
+  const belowPaid = useMemo(
+    () =>
+      summary
+        ? ultimateBelowPaid(
+            summary.rows.map((r) => ({ origin: r.origin, selected_ultimate: r.selectedUltimate })),
+            effPaid,
+          )
+        : [],
+    [summary, effPaid],
+  );
 
   // First identify outliers with the cheap median/MAD pass. The expensive
   // leave-one-out reserve pipeline is only needed for those candidates.
@@ -910,6 +922,17 @@ export default function Home() {
       dataSourceDisabled={isReadOnly}
     >
       <ModelLockBanner state={lockState} onForceAcquire={forceAcquire} />
+      {belowPaid.length > 0 && (
+        <div role="status" className="border-b px-4 py-2 text-[12px]" style={{ background: "#fffbeb", color: "#92400e", borderColor: "#fde68a" }}>
+          <span className="font-semibold">
+            Selected ultimate is below paid to date in {belowPaid.length} origin{belowPaid.length > 1 ? "s" : ""}
+          </span>{" "}
+          (total {formatNumber(belowPaid.reduce((s, b) => s + b.gap, 0))}; largest:{" "}
+          {[...belowPaid].sort((a, b) => a.gap - b.gap).slice(0, 3).map((b) => `${b.origin} ${formatNumber(b.gap)}`).join(", ")}).
+          {" "}An ultimate cannot be less than what has already been paid — usually negative incurred development
+          at mature ages (CDF below 1) or a low BF loss ratio.
+        </div>
+      )}
       {largeOn && (
         <div className="border-b bg-[color:var(--surface-alt)]/50 px-4 py-2 flex items-center gap-2">
           <span className="text-[10px] uppercase tracking-wide font-semibold text-[color:var(--muted)]">

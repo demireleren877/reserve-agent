@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { unpaidByOrigin } from "@/lib/unpaid";
+import { ultimateBelowPaid, unpaidByOrigin } from "@/lib/unpaid";
 import type { BranchOriginRow } from "@/lib/reserve-pipeline";
 import type { Branch } from "@/types/project";
 import type { Triangle } from "@/types/triangle";
@@ -42,5 +42,22 @@ describe("unpaidByOrigin", () => {
     const r = unpaidByOrigin(b, [row("2022", 150, 170)]);
     expect(r.paidMissing).toBe(true);
     expect(r.rows[0].unpaid).toBe(170);
+  });
+});
+
+describe("ultimateBelowPaid", () => {
+  it("nihaisi ödenmişin altındaki kaza yıllarını işaretler", () => {
+    // 2022: nihai 95 < ödenmiş 100 → işaretli. 2023: nihai 140 > 40 → temiz.
+    const r = ultimateBelowPaid(
+      [{ origin: "2022", selected_ultimate: 95 }, { origin: "2023", selected_ultimate: 140 }],
+      PAID,
+    );
+    expect(r).toEqual([{ origin: "2022", ultimate: 95, paid: 100, gap: -5 }]);
+  });
+
+  it("yuvarlama gürültüsünü işaretlemez, ödenmişi olmayan yılı atlar", () => {
+    expect(ultimateBelowPaid([{ origin: "2022", selected_ultimate: 99.7 }], PAID)).toEqual([]);
+    expect(ultimateBelowPaid([{ origin: "2030", selected_ultimate: 1 }], PAID)).toEqual([]);
+    expect(ultimateBelowPaid([{ origin: "2022", selected_ultimate: 1 }], null)).toEqual([]);
   });
 });

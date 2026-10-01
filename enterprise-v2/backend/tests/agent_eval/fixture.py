@@ -281,6 +281,8 @@ def session_state_for(project: dict[str, Any]) -> dict[str, Any]:
         ],
         "totals_all_branches": project["totals_all_branches"],
         "method": active["method"], "window": active["window"],
+        # Bridge'in gönderdiği uyarı: nihaisi ödenmişin altındaki kaza yılları.
+        "ultimate_below_paid": _below_paid(active),
         "excluded_cells": active["excluded_cells"],
         "selected_ldfs": active["selected_ldfs"], "cdfs": active["effective_cdfs"],
         "per_origin": active["per_origin"],
@@ -354,6 +356,18 @@ def _last_diagonal(tri: Triangle) -> dict[str, float]:
         vals = [v for v in row if v is not None]
         if vals:
             out[str(origin)] = float(vals[-1])
+    return out
+
+
+def _below_paid(b: dict[str, Any]) -> list[dict[str, Any]]:
+    """lib/unpaid.ultimateBelowPaid karşılığı."""
+    paid = _last_diagonal(b["_paid"])
+    out = []
+    for r in b["per_origin"]:
+        p = paid.get(r["origin"])
+        if p is not None and r["selected_ultimate"] - p < -0.5:
+            out.append(dict(origin=r["origin"], ultimate=r["selected_ultimate"], paid=p,
+                            gap=r["selected_ultimate"] - p))
     return out
 
 

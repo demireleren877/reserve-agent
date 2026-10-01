@@ -149,6 +149,12 @@ def build_cases(project: dict) -> list[dict]:
              expect_tools=READ, expect_numbers=[2], tol=0.01),
         # Volume artık durum bloğunda (aktif branş ayarları); bloktan okumak
         # meşru, araç şartı yersiz. Ölçüt doğru değer.
+        # Nihaisi ödenmişin altında kalan yıllar (fixture'da 18): ajan nihai
+        # sorulduğunda bunu söylemeli — eskiden hiçbir yerde görünmüyordu.
+        dict(id="V6", kat="varsayım",
+             q="Nihai hasar tahminlerimizde dikkat etmem gereken bir tutarsızlık var mı?",
+             expect_text=[["ödenmiş", "ödenen", "paid"], ["altında", "düşük", "az", "below"]],
+             read_only=True),
         dict(id="V4", kat="varsayım", q="LDF hesabında hangi volume seçili?",
              expect_text=["all"], read_only=True),
         dict(id="V5", kat="varsayım", q="BF kullanılan yerlerde hangi loss ratio kullanılıyor?",

@@ -85,3 +85,18 @@ def test_active_period_total_is_used_when_supplied():
 def test_boundary_forbids_summing_periods():
     assert "TOPLAMA" in _STATE_BLOCK_BOUNDARY
     assert "AKTİF DÖNEMİ" in _STATE_BLOCK_BOUNDARY
+
+
+def test_below_paid_warning_is_shown_for_the_active_branch():
+    state = dict(STATE, method="volume_weighted", window="all",
+                 ultimate_below_paid=[
+                     {"origin": "2025", "ultimate": 54.0, "paid": 202.0, "gap": -148.0},
+                     {"origin": "2020", "ultimate": 28.0, "paid": 29.0, "gap": -1.0},
+                 ])
+    out = _reserve_context(state)
+    assert "UYARI" in out and "2 kaza yılında" in out
+    assert "2025" in out  # en büyük fark adıyla
+
+
+def test_no_warning_when_every_ultimate_covers_paid():
+    assert "UYARI" not in _reserve_context(dict(STATE, method="volume_weighted", window="all"))

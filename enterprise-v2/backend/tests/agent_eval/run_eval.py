@@ -27,6 +27,34 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from app.agent.client import AgentClient
+
+
+class RetryingClient:
+    """Geçici sağlayıcı hatalarında (429, 5xx) geri çekilerek yeniden dener.
+
+    Pilotta bir senaryo DeepInfra'nın "temporarily rate-limited upstream"
+    429'uyla çöktü ve rapor bunu ajan hatası gibi gösterdi. Sağlayıcının
+    anlık kapasitesi ajanın davranışı değil; ama gizlenmesin diye yeniden
+    deneme sayısı rapora yazılır.
+    """
+
+    TRANSIENT = ("LLM 429", "LLM 500", "LLM 502", "LLM 503", "LLM 504", "timed out", "ReadTimeout")
+
+    def __init__(self, inner: AgentClient, attempts: int = 6) -> None:
+        self.inner = inner
+        self.attempts = attempts
+        self.retries = 0
+
+    def chat(self, messages, tools):
+        for i in range(self.attempts):
+            try:
+                return self.inner.chat(messages=messages, tools=tools)
+            except Exception as e:  # noqa: BLE001
+                msg = f"{type(e).__name__}: {e}"
+                if i == self.attempts - 1 or not any(t in msg for t in self.TRANSIENT):
+                    raise
+                self.retries += 1
+                time.sleep(min(60, 5 * 2 ** i))
 from app.agent.loop import run_agent_turn
 from tests.agent_eval.cases import build_cases
 from tests.agent_eval.checks import evaluate
@@ -81,6 +109,12 @@ def main() -> int:
     ap.add_argument("--model", default=os.getenv("AGENT_MODEL", "qwen/qwen3.5-9b"))
     ap.add_argument("--api-key", default=os.getenv("AGENT_API_KEY"),
                     help="uzak sağlayıcı için anahtar; lokal sunucularda gereksiz")
+    ap.add_argument("--no-reasoning", action="store_true",
+                    help="OpenRouter: düşünme kipini kapat (LM Studio koşularıyla karşılaştırılabilir olsun)")
+    ap.add_argument("--provider",
+                    help="OpenRouter: yalnız bu sağlayıcı(lar), virgülle; yedeğe düşme kapalı. "
+                         "Sağlayıcılar farklı sayısallaştırma kullanıyor — sabitlenmezse ölçüm "
+                         "modeli değil sağlayıcı karışımını ölçer.")
     ap.add_argument("--max-iterations", type=int, default=6)
     ap.add_argument("--only", help="yalnız bu kategori")
     ap.add_argument("--ids", help="yalnız bu soru id'leri (virgülle)")
@@ -103,9 +137,14 @@ def main() -> int:
     # Anthropic'in OpenAI-uyumlu ucu aynı istemciyle çalışır (Bearer +
     # /chat/completions), o yüzden ayrı sağlayıcı koduna gerek yok. Anahtar
     # bayrakla ya da ANTHROPIC_API_KEY/AGENT_API_KEY ile gelir.
-    key = a.api_key or os.getenv("ANTHROPIC_API_KEY") or "local"
-    client = AgentClient(model=a.model, base_url=a.base_url, api_key=key,
-                         timeout=a.timeout)
+    key = a.api_key or os.getenv("OPENROUTER_API_KEY") or os.getenv("ANTHROPIC_API_KEY") or "local"
+    extra: dict = {}
+    if a.no_reasoning:
+        extra["reasoning"] = {"enabled": False}
+    if a.provider:
+        extra["provider"] = {"order": [p.strip() for p in a.provider.split(",")], "allow_fallbacks": False}
+    client = RetryingClient(AgentClient(model=a.model, base_url=a.base_url, api_key=key,
+                                        timeout=a.timeout, extra_body=extra))
 
     cases = build_cases(project)
     if a.only:
@@ -135,7 +174,8 @@ def main() -> int:
             print(f"          « {answer[:200].replace(chr(10),' ')}")
 
     print("=" * 92)
-    print(f"SONUÇ: {passed}/{len(cases)} geçti  ·  {time.time()-t_all:.0f} sn")
+    print(f"SONUÇ: {passed}/{len(cases)} geçti  ·  {time.time()-t_all:.0f} sn"
+          f"  ·  geçici sağlayıcı hatası nedeniyle yeniden deneme: {client.retries}")
     by: dict[str, list[int]] = {}
     for c, ok, *_ in results:
         by.setdefault(c["kat"], [0, 0])

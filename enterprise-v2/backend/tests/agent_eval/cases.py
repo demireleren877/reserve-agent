@@ -22,6 +22,9 @@ def build_cases(project: dict) -> list[dict]:
     q1f = per["2026Q1"]["branches"][0]
 
     ibnr_q2 = q2f["totals"]["ibnr"]
+    # Aktif branşın %30 sabit oranlı iskontosu — fixture'daki bağımsız referans.
+    from tests.agent_eval.fixture import flat_discount
+    disc30 = flat_discount(q2f, 0.30)
     # Aktif DÖNEMİN toplamı — kapsamsız "toplam IBNR" bunu kastediyor.
     ibnr_period_q2 = sum(b["totals"]["ibnr"] for b in per["2026Q2"]["branches"])
     ibnr_q1 = q1f["totals"]["ibnr"]
@@ -207,9 +210,11 @@ def build_cases(project: dict) -> list[dict]:
              # dökmesi şart değil (biri yeterli).
              expect_any_numbers=[ibnr_q2, eng_ibnr], tol=0.03,
              expect_text=["fire"], read_only=True),
+        # Birim dönüşümü. Kapsamsız "toplam" = aktif DÖNEM (T1 ile aynı kural);
+        # ajan aktif branşı da söyleyebilir — ikisi de doğru. Eskiden yalnız
+        # branş rakamını bekliyordu ve kurala uyan cevabı düşürüyordu.
         dict(id="SEM07", kat="semantik", q="Toplam IBNR'ı milyon cinsinden söyle.",
-             # birim dönüşümü — tolerans gevşek, "183,2 milyon" da kabul
-             expect_numbers=[ibnr_q2], tol=0.03, read_only=True),
+             expect_any_numbers=[ibnr_period_q2, ibnr_q2], tol=0.03, read_only=True),
         dict(id="SEM08", kat="semantik", q="2024 kaza yılnın ibnrı ne kdar",
              # yazım hatalı girdi
              expect_numbers=[rows["2024"]["ibnr"]], tol=0.03, read_only=True),
@@ -319,12 +324,20 @@ def build_cases(project: dict) -> list[dict]:
              # paid üçgeni — rezerv aracıyla cevaplanmamalı
              expect_tools=["get_cashflow_ldf_state", "get_cashflow_state"],
              forbid_tools=["get_analysis_state"], read_only=True),
+        # Ölçüt RAKAM: aracın çağrılması değil. Eskiden yalnız compute_discount
+        # çağrısını sayıyordu — araç üretimde HER çağrıda hata dönüyordu (bridge
+        # per_origin göndermiyordu) ve bu test yine geçiyordu. Hazır %30 özeti de
+        # (get_discount_state) aynı rakamı veriyor; ikisi de meşru yol.
         dict(id="TK04", kat="kombinasyon", q="İskontolu yükümlülüğü %30 sabit oranla hesapla.",
-             expect_tools=["compute_discount"], read_only=True),
+             expect_tools=["compute_discount", "get_discount_state"],
+             expect_numbers=[disc30["discounted_unpaid"]], tol=0.005, read_only=True),
+        # Bu fixture'da adet üçgeni YOK: doğru cevap yapılamayacağını ve nedenini
+        # söylemek. Eskiden aracın çağrılmasını şart koşuyordu — zaten hata
+        # dönecek bir çağrıyı ödüllendirip, gerekçeyi doğru açıklayan cevabı
+        # düşürüyordu.
         dict(id="TK05", kat="kombinasyon", q="Frekans-şiddet yöntemiyle ultimate hesapla.",
-             # adet üçgeni yok — net hata vermeli, uydurmamalı
-             expect_tools=["simulate_frequency_severity"],
-             forbid_text=["ultimate hesaplandı"]),
+             expect_text=[["adet", "dosya bazlı", "dosya_no", "claim count"]],
+             forbid_text=["ultimate hesaplandı"], read_only=True),
         dict(id="TK06", kat="kombinasyon", q="Dosya bazlı en büyük hasarları göster.",
              expect_tools=["get_file_summary"],
              forbid_text=["dosya kırılımı yok"]),

@@ -35,6 +35,7 @@ class AgentClient:
         base_url: str | None = None,
         temperature: float | None = None,
         timeout: float = 300.0,
+        extra_body: dict[str, Any] | None = None,
     ) -> None:
         self.model = model or os.getenv("AGENT_MODEL", DEFAULT_MODEL)
         self.api_key = api_key or os.getenv("AGENT_API_KEY", "local")
@@ -42,6 +43,9 @@ class AgentClient:
         self.base_url = base
         self.temperature = temperature if temperature is not None else 0.2
         self.timeout = timeout
+        # Sağlayıcıya özgü alanlar (ör. OpenRouter'da sağlayıcı sabitleme,
+        # reasoning kapatma). Varsayılan boş: üretim isteği değişmez.
+        self.extra_body = dict(extra_body or {})
 
     def chat(
         self,
@@ -59,6 +63,8 @@ class AgentClient:
         if tools:
             payload["tools"] = tools
             payload["tool_choice"] = "auto"
+        if self.extra_body:
+            payload.update(self.extra_body)
 
         headers = {
             "Content-Type": "application/json",

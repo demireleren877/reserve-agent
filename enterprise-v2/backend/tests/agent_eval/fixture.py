@@ -337,7 +337,35 @@ def cashflow_session_state(project: dict[str, Any]) -> dict[str, Any]:
     )
 
 
+# Belirlenimci aylık ödeme deseni (her kaza yılı için aynı): ödemenin yarısı
+# 6. ayda, %30'u 18., %20'si 30. ayda.
+DISCOUNT_PATTERN: list[list[float]] = [[6, 0.5], [18, 0.3], [30, 0.2]]
+
+
+def _discount_rows(b: dict[str, Any]) -> list[dict[str, Any]]:
+    """DiscountAgentBridge'in gönderdiği per_origin satırlarının karşılığı."""
+    wsum = sum(w for _, w in DISCOUNT_PATTERN)
+    avg = sum(m * w for m, w in DISCOUNT_PATTERN) / wsum
+    return [dict(origin=r["origin"], unpaid=r["latest"] + r["ibnr"], avg_month=avg,
+                 months=[list(x) for x in DISCOUNT_PATTERN]) for r in b["per_origin"]]
+
+
+def flat_discount(b: dict[str, Any], rate: float) -> dict[str, Any]:
+    """Arayüzün discountBranch'ının sabit oranlı karşılığı (bağımsız referans)."""
+    unpaid = bel = 0.0
+    for row in _discount_rows(b):
+        unpaid += row["unpaid"]
+        bel += sum(row["unpaid"] * w / (1 + rate) ** (m / 12) for m, w in row["months"])
+    return dict(unpaid_liability=round(unpaid), discounted_unpaid=round(bel),
+                discount_amount=round(unpaid - bel),
+                discount_pct=round((unpaid - bel) / unpaid * 10000) / 100 if unpaid else 0,
+                duration_months=max(m for m, _ in DISCOUNT_PATTERN))
+
+
 def discount_session_state(project: dict[str, Any]) -> dict[str, Any]:
+    # Eskiden quick_discount uydurma bir "unpaid × 0,88" sayısıydı ve per_origin
+    # hiç yoktu — gerçek bridge gibi. compute_discount bu yüzden her çağrıda
+    # hata veriyordu ve eval bunu görmüyordu (yalnız çağrıyı sayıyordu).
     branches = []
     for p in project["periods"]:
         for b in p["branches"]:
@@ -348,9 +376,10 @@ def discount_session_state(project: dict[str, Any]) -> dict[str, Any]:
                 period_id=p["id"], period_label=p["label"],
                 frequency=b["frequency"], is_active=b["is_active"],
                 has_cashflow_pattern=has_pattern,
+                per_origin=_discount_rows(b) if has_pattern else [],
                 origin_count=b["n_origins"],
                 total_unpaid_liability=round(unpaid),
-                quick_discount_at_30pct=round(unpaid * 0.88) if has_pattern else None,
+                quick_discount_at_30pct=flat_discount(b, 0.30) if has_pattern else None,
                 note=("compute_discount ile özel oran/eğri kullanabilirsiniz."
                       if has_pattern else "Nakit akışı deseni yok."),
             ))

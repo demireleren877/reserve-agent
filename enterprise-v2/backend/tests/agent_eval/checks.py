@@ -15,11 +15,18 @@ _MULT = {
     "mn": 1e6, "mio": 1e6, "m": 1e6, "k": 1e3, "b": 1e9,
 }
 
+# Eksi işareti yalnız önünde harf/rakam yoksa işarettir: "2021-2023" bir
+# aralıktır, -2023 değil.
+_SIGN = r"(?:(?<![\w.,])-)?"
 _NUM = re.compile(
-    r"(-?\d{1,3}(?:[.,]\d{3})+(?:[.,]\d+)?|-?\d+(?:[.,]\d+)?)"
+    rf"({_SIGN}\d{{1,3}}(?:[.,]\d{{3}})+(?:[.,]\d+)?|{_SIGN}\d+(?:[.,]\d+)?)"
     r"\s*(bin|milyon|milyar|mn|mio|m|k|b)?\b",
     re.IGNORECASE,
 )
+# Muhasebe gösterimi: (1.234.567) = -1.234.567. Yalnız binlik ayraçlı sayılar —
+# "(2025)" gibi parantez içi yıllar eksiye dönmesin.
+_PAREN_NEG = re.compile(r"\(\s*(\d{1,3}(?:[.,]\d{3})+(?:[.,]\d+)?)\s*\)")
+_NEG_WORDS = ("negatif", "eksi", "negative", "minus")
 
 
 def _to_float(raw: str) -> float | None:
@@ -52,9 +59,15 @@ def _to_float(raw: str) -> float | None:
 
 
 def numbers_in(text: str) -> list[float]:
-    """Metindeki tüm sayıları mutlak değere çevirir ('183,2 milyon' dahil)."""
+    """Metindeki tüm sayıları işaretleriyle okur ('183,2 milyon' dahil).
+
+    Modeller eksi için sık sık unicode '−' (U+2212) ya da '–' kullanıyor;
+    eskiden bunlar düşüyor ve -190,6 milyon pozitif okunuyordu.
+    """
     out: list[float] = []
-    for raw, suffix in _NUM.findall(text or ""):
+    text = (text or "").replace("\u2212", "-").replace("\u2013", "-")
+    text = _PAREN_NEG.sub(r"-\1", text)
+    for raw, suffix in _NUM.findall(text):
         val = _to_float(raw)
         if val is None:
             continue
@@ -63,11 +76,25 @@ def numbers_in(text: str) -> list[float]:
 
 
 def has_number(text: str, target: float, tol: float = 0.02) -> bool:
-    """Hedef sayı metinde geçiyor mu (yüzde tolerans, işaret duyarsız)."""
+    """Hedef sayı metinde DOĞRU İŞARETLE geçiyor mu (yüzde tolerans).
+
+    Eskiden işaret duyarsızdı. SEM01'de bu, -183.221.236'lık IBNR'ı işaretsiz
+    yazıp "Selected Ultimate" diye sunan bir cevabı geçirdi — negatif IBNR
+    aktüeryal olarak anlamlı bir işaret ve düşürülmesi yanıltıcı. Negatif hedef
+    için sayı ya eksiyle yazılmış olmalı ya da metin bunu söze dökmüş olmalı
+    ("negatif IBNR 183 milyon").
+    """
+    nums = numbers_in(text)
     if target == 0:
-        return any(abs(v) < 1 for v in numbers_in(text))
+        return any(abs(v) < 1 for v in nums)
     t = abs(target)
-    return any(abs(abs(v) - t) <= tol * t for v in numbers_in(text))
+    close = [v for v in nums if abs(abs(v) - t) <= tol * t]
+    if not close:
+        return False
+    if target > 0:
+        return any(v > 0 for v in close)
+    low = (text or "").lower()
+    return any(v < 0 for v in close) or any(w in low for w in _NEG_WORDS)
 
 
 def _subsequence(needle: list[str], haystack: list[str]) -> bool:

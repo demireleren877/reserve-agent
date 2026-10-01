@@ -41,7 +41,10 @@ def test_number_formats(text, expected):
 
 def test_tolerance_matching():
     assert has_number("Toplam IBNR -183.221.236 TL", -183221236.47)
-    assert has_number("yaklaşık 183,2 milyon", -183221236.47)   # işaret duyarsız
+    # Eskiden işaret duyarsızdı ve bu satır geçiyordu; SEM01'de işaretsiz
+    # yazılıp başka kavram gibi sunulan IBNR'ı geçirdi. İşaret ya da söz şart.
+    assert not has_number("yaklaşık 183,2 milyon", -183221236.47)
+    assert has_number("yaklaşık 183,2 milyon negatif", -183221236.47)
     assert not has_number("IBNR 5 milyon", -183221236.47)
 
 
@@ -106,3 +109,29 @@ def test_expect_text_accepts_synonym_group():
     ok, _ = evaluate({"expect_text": [["yıllık", "annual"]]},
                      {"answer": "annual bazda", "tools": [], "actions": [], "stop": "final"})
     assert ok
+
+
+@pytest.mark.parametrize("text,expected", [
+    ("toplam IBNR **−190.6 milyon** TL", -190_600_000),   # unicode eksi
+    ("IBNR –7.355.063", -7_355_063),                      # uzun tire
+    ("IBNR: (183.221.236)", -183_221_236),                # muhasebe parantezi
+])
+def test_negative_sign_variants(text, expected):
+    assert numbers_in(text) == [expected]
+
+
+def test_ranges_and_bracketed_years_stay_positive():
+    assert numbers_in("2021-2023 arası") == [2021, 2023]
+    assert numbers_in("origin (2025)") == [2025]
+
+
+def test_negative_target_requires_the_sign_or_the_word():
+    # SEM01 regresyonu: IBNR işaretsiz yazılıp "ultimate" diye sunuldu.
+    assert not has_number("Selected Ultimate: 183.221.236 TL", -183_221_236)
+    assert has_number("IBNR -183.221.236 TL", -183_221_236)
+    assert has_number("IBNR −183,2 milyon", -183_221_236, tol=0.01)
+    assert has_number("negatif IBNR 183,2 milyon", -183_221_236, tol=0.01)
+
+
+def test_positive_target_rejects_a_negative_match():
+    assert not has_number("ultimate -617.969.275", 617_969_275)

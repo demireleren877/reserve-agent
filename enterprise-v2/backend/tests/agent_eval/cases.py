@@ -25,6 +25,8 @@ def build_cases(project: dict) -> list[dict]:
     # Aktif branşın %30 sabit oranlı iskontosu — fixture'daki bağımsız referans.
     from tests.agent_eval.fixture import flat_discount
     disc30 = flat_discount(q2f, 0.30)
+    from tests.agent_eval.fixture import _below_paid
+    below25 = next(b for b in _below_paid(q2f) if b["origin"] == "2025")
     # Aktif DÖNEMİN toplamı — kapsamsız "toplam IBNR" bunu kastediyor.
     ibnr_period_q2 = sum(b["totals"]["ibnr"] for b in per["2026Q2"]["branches"])
     ibnr_q1 = q1f["totals"]["ibnr"]
@@ -153,7 +155,11 @@ def build_cases(project: dict) -> list[dict]:
         # sorulduğunda bunu söylemeli — eskiden hiçbir yerde görünmüyordu.
         dict(id="V6", kat="varsayım",
              q="Nihai hasar tahminlerimizde dikkat etmem gereken bir tutarsızlık var mı?",
-             expect_text=[["ödenmiş", "ödenen", "paid"], ["altında", "düşük", "az", "below"]],
+             # Bu fixture'da negatif IBNR'lı yıllar ile nihai<ödenmiş yıllar aynı
+             # 18 yıl; yalnız kelimeye bakmak, negatif IBNR'dan genelleyen cevabı
+             # da geçirir. Ödenmiş tutar YALNIZ ultimate_below_paid'de var.
+             expect_text=[["ödenmiş", "ödenen", "paid"]],
+             expect_any_numbers=[below25["paid"], below25["gap"]], tol=0.01,
              read_only=True),
         dict(id="V4", kat="varsayım", q="LDF hesabında hangi volume seçili?",
              expect_text=["all"], read_only=True),
@@ -179,7 +185,9 @@ def build_cases(project: dict) -> list[dict]:
              expect_text=["fire"]),
         dict(id="M2", kat="modül", q="İskonto modülünde aktif branşın unpaid liability'si ne kadar?",
              expect_tools=["get_discount_state", "compute_discount"],
-             expect_numbers=[q2f["totals"]["latest"] + q2f["totals"]["ibnr"]], tol=0.03),
+             # Ödenmemiş = nihai − ödenmiş (muallak + IBNR). Eskiden latest + ibnr,
+             # yani nihainin kendisi bekleniyordu — iskonto modülünün eski hatası.
+             expect_numbers=[disc30["unpaid_liability"]], tol=0.03),
 
         # ── 9. Tuzak: uydurmamalı ───────────────────────────────────────────
         dict(id="X1", kat="tuzak", q="Kasko branşının IBNR'ı ne kadar?",

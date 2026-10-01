@@ -87,16 +87,26 @@ def test_boundary_forbids_summing_periods():
     assert "AKTİF DÖNEMİ" in _STATE_BLOCK_BOUNDARY
 
 
-def test_below_paid_warning_is_shown_for_the_active_branch():
+
+def test_below_paid_stays_out_of_the_block():
+    """Uyarı blokta değil, get_analysis_state'te.
+
+    Blokta tutarla yazıldığında Qwen 3.5 9B toplam farkı "Selected Ultimate"
+    diye sundu (SEM01, SEM02, T3). Tutarsız yazıldığında bile T1 6'da 5'ten
+    6'da 2'ye düştü (uyarılı/uyarısız A/B, 6'şar koşu).
+    """
     state = dict(STATE, method="volume_weighted", window="all",
-                 ultimate_below_paid=[
-                     {"origin": "2025", "ultimate": 54.0, "paid": 202.0, "gap": -148.0},
-                     {"origin": "2020", "ultimate": 28.0, "paid": 29.0, "gap": -1.0},
-                 ])
-    out = _reserve_context(state)
-    assert "UYARI" in out and "2 kaza yılında" in out
-    assert "2025" in out  # en büyük fark adıyla
+                 ultimate_below_paid=[{"origin": "2025", "ultimate": 54.0, "paid": 202.0, "gap": -148.0}])
+    assert "UYARI" not in _reserve_context(state)
 
 
-def test_no_warning_when_every_ultimate_covers_paid():
-    assert "UYARI" not in _reserve_context(dict(STATE, method="volume_weighted", window="all"))
+def test_get_analysis_state_reports_ultimate_below_paid():
+    from app.agent.tools import dispatch_tool
+    from app.core.triangle import Triangle, TriangleType
+    tri = Triangle(origin_periods=["2024", "2025"], development_periods=[0, 1],
+                   values=[[100.0, 150.0], [120.0, None]], triangle_type=TriangleType.INCURRED)
+    rows = [{"origin": "2025", "ultimate": 54.0, "paid": 202.0, "gap": -148.0}]
+    ss = {"active": {"branch_id": "b1", "branch_name": "FIRE", "period_label": "2026Q2"},
+          "ultimate_below_paid": rows}
+    out = dispatch_tool("get_analysis_state", {}, triangle=tri, session_state=ss)
+    assert out.get("ultimate_below_paid") == rows, out

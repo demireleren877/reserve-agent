@@ -143,8 +143,8 @@ ILR: get_ilr_triangle — aktif branşın ILR üçgenini döner (prim girilmemi�
 Dosya: get_file_summary — son diagonal özeti; get_claim_movement(origin, step) — LDF geçişinin dosya bazlı paid/muallak hareketi
 
 KURALLAR
-* Nihai < ödenmiş: get_analysis_state.ultimate_below_paid boş değilse (ya da
-  durum bloğunda UYARI varsa) nihai, IBNR ya da ödenmemiş yükümlülük sorulduğunda
+* Nihai < ödenmiş: get_analysis_state.ultimate_below_paid boş değilse nihai,
+  IBNR ya da ödenmemiş yükümlülük sorulduğunda
   bunu söyle — nihai ödenmişten az olamaz. Olası nedenler: olgun yaşlarda negatif
   incurred gelişimi (CDF < 1) ya da düşük BF oranı. Rakamları DÜZELTME; işaretle.
 * exclude_cells step 0-INDEXLI: step=0 → "1→2", step=1 → "2→3". Kullanıcı
@@ -277,16 +277,10 @@ def _reserve_context(state: dict[str, Any] | None) -> str:
             )
             setting += f" · karma volume: {steps} (diğer adımlar global volume)"
         summary += f"\n  Aktif branş ayarları: {setting}"
-    below = state.get("ultimate_below_paid") or []
-    if below and active.get("branch_name"):
-        gap = sum(float(b.get("gap") or 0) for b in below)
-        worst = sorted(below, key=lambda b: float(b.get("gap") or 0))[:3]
-        summary += (
-            f"\n  UYARI: aktif branşta {len(below)} kaza yılında seçilmiş nihai ödenmişin "
-            f"ALTINDA (toplam {_fmt(gap)}; en büyük: "
-            + ", ".join(f"{b.get('origin')} {_fmt(b.get('gap'))}" for b in worst)
-            + ") — nihai/IBNR/ödenmemiş sorularında bunu söyle."
-        )
+    # "Nihai < ödenmiş" uyarısı BİLEREK blokta yok, get_analysis_state'te.
+    # Blokta tutarla yazıldığında Qwen 3.5 9B o sayıyı "Selected Ultimate" diye
+    # sundu; tutarsız yazıldığında bile T1 6'da 5'ten 6'da 2'ye düştü — fazladan
+    # bir satır, küçük modelin "toplam IBNR" cevabını branş rakamına kaydırıyor.
     if blocks:
         summary += "\n  Dönemler ve branşlar:\n" + "\n".join(blocks)
     return summary

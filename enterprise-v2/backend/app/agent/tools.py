@@ -2803,13 +2803,33 @@ def _compute_discount(
     for row in per_origin:
         origin = str(row.get("origin", ""))
         unpaid = float(row.get("unpaid", 0) or 0)
-        if unpaid <= 0:
+        # "months" anahtarı varsa satır arayüzün İskonto ekranıyla aynı kurallarla
+        # hesaplanır (discountOrigin): negatif tutar atlanmaz, deseni boş kaza yılı
+        # 0'a iskontolanır. Amaç ajan ile ekranın aynı rakamı söylemesi.
+        has_months = "months" in row
+        if unpaid == 0 or (unpaid < 0 and not has_months):
             continue
-        # avg_month = ağırlıklı ortalama ödeme ayı (gerçek aylık pattern'den, frontend hesaplar)
-        month = float(row.get("avg_month", 0) or 0)
-        r = rate_at(month)
-        v = 1 / ((1 + r) ** (month / 12)) if month > 0 else 1.0
-        discounted = unpaid * v
+        months = row.get("months") or []
+        if has_months:
+            # Aylık desen geldiyse her ödemeyi kendi ayında iskontola — arayüzdeki
+            # İskonto modülünün (discountOrigin) birebir aynısı. Tek bir ortalama
+            # ayda iskontolamak dışbükeylik yüzünden farklı bir BEL veriyordu:
+            # ajan bir rakam, ekran başka bir rakam söylerdi.
+            discounted = 0.0
+            wsum = 0.0
+            for m, w in months:
+                m, w = float(m), float(w)
+                vm = 1 / ((1 + rate_at(m)) ** (m / 12)) if m > 0 else 1.0
+                discounted += unpaid * w * vm
+                wsum += w
+            month = sum(float(m) * float(w) for m, w in months) / wsum if wsum else 0.0
+            v = discounted / unpaid if unpaid else 1.0
+        else:
+            # Eski yol: tek bir ağırlıklı ortalama ödeme ayı.
+            month = float(row.get("avg_month", 0) or 0)
+            r = rate_at(month)
+            v = 1 / ((1 + r) ** (month / 12)) if month > 0 else 1.0
+            discounted = unpaid * v
         discount_amt = unpaid - discounted
         ra_amt = risk_adjustment_for(discounted, month)
 

@@ -49,7 +49,7 @@ export function DiscountAgentBridge() {
 
 // ─── Snapshot builder ─────────────────────────────────────────────────────────
 
-function buildDiscountSnapshot(periods: Period[], activeBranch: Branch | null) {
+export function buildDiscountSnapshot(periods: Period[], activeBranch: Branch | null) {
   const branches = periods.flatMap((p) =>
     p.branches
       .filter((b) => b.paidTriangle != null || b.triangle != null)
@@ -90,6 +90,23 @@ function buildDiscountSnapshot(periods: Period[], activeBranch: Branch | null) {
           }
         }
 
+        // compute_discount'un hesapladığı satırlar: İskonto ekranıyla aynı unpaid
+        // (latest + ibnr) ve aynı aylık desen. Eskiden hiç gönderilmiyordu; araç
+        // her çağrıda "iskonto edilecek ödeme satırı yok" diyordu — ajanın özel
+        // oran ve IFRS 17 eğrisiyle iskonto hesabı hiç çalışmadı.
+        const perOrigin = hasPattern
+          ? summary.rows.map((r) => {
+              const months = pattern[r.origin] ?? [];
+              const wsum = months.reduce((acc, x) => acc + x.weight, 0);
+              return {
+                origin: r.origin,
+                unpaid: r.latest + r.ibnr,
+                avg_month: wsum ? months.reduce((acc, x) => acc + x.month * x.weight, 0) / wsum : 0,
+                months: months.map((x) => [x.month, x.weight] as [number, number]),
+              };
+            })
+          : [];
+
         return {
           branch_id: b.id,
           branch_name: b.name,
@@ -98,6 +115,7 @@ function buildDiscountSnapshot(periods: Period[], activeBranch: Branch | null) {
           frequency: b.frequency,
           is_active: activeBranch?.id === b.id,
           has_cashflow_pattern: hasPattern,
+          per_origin: perOrigin,
           origin_count: summary.rows.length,
           total_unpaid_liability: Math.round(summary.totals.latest + summary.totals.ibnr),
           quick_discount_at_30pct: quickDiscount,

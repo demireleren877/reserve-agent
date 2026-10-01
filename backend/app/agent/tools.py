@@ -2455,11 +2455,10 @@ def _get_file_summary(session_state: dict[str, Any] | None) -> dict[str, Any]:
     if not summary:
         return {
             "error": (
-                "Dosya bazlı özet bu oturumda agent'a aktarılmıyor (masaüstü "
-                "sürümünde snapshot 'file_data_summary' alanını henüz "
-                "doldurmuyor) — branşta DOSYA_NO verisi OLSA BİLE bu araç boş "
-                "döner. Kullanıcıya 'bu branşta dosya kırılımı yok' DEME; "
-                "dosya analizini arayüzdeki Dosya sekmesinden görebileceğini söyle."
+                "Bu branşta dosya bazlı (DOSYA_NO) veri yok: branş hazır bir üçgenle "
+                "yüklenmiş ya da hasar verisinde dosya numarası sütunu eşlenmemiş. "
+                "Dosya bazlı analiz ve Frekans-Şiddet için hasar verisini Veri "
+                "modülünden DOSYA_NO sütunuyla yeniden yükleyin."
             )
         }
     return summary

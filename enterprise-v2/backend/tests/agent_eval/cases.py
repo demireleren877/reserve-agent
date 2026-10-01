@@ -147,8 +147,10 @@ def build_cases(project: dict) -> list[dict]:
              expect_tools=READ, expect_text=["2025"]),
         dict(id="V3", kat="varsayım", q="Kaç hücre elendi, hangileri?",
              expect_tools=READ, expect_numbers=[2], tol=0.01),
+        # Volume artık durum bloğunda (aktif branş ayarları); bloktan okumak
+        # meşru, araç şartı yersiz. Ölçüt doğru değer.
         dict(id="V4", kat="varsayım", q="LDF hesabında hangi volume seçili?",
-             expect_tools=READ, expect_text=["all"]),
+             expect_text=["all"], read_only=True),
         dict(id="V5", kat="varsayım", q="BF kullanılan yerlerde hangi loss ratio kullanılıyor?",
              expect_tools=READ, expect_text=bf_origins[:1]),
 

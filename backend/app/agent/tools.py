@@ -1824,6 +1824,8 @@ def _get_analysis_state(
     return {
         "scope": _scope,
         "window": session_state.get("window"),
+        # Adım başına pencere (step 0-indexli → {"0": "4"}). Boşsa global window.
+        "karma_windows": session_state.get("karma_windows") or {},
         "excluded_cells_count": len(excluded_cells),
         "excluded_cells": excluded_cells[:50],
         "selected_ldfs": session_state.get("selected_ldfs", []),

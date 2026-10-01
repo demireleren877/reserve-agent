@@ -423,9 +423,10 @@ benzersizdir; çağırırsan doğru yere yönlendirilir.
 # yazmak, toplam sorularındaki hız kazancını bozmadan bunu düzeltiyor.
 _STATE_BLOCK_BOUNDARY = """
 
-Bu blok YALNIZ üst düzey özettir: branş listesi ve toplam IBNR. Kaza yılı
-kırılımı, LDF/CDF, volume, correction, elenmiş hücreler, BF oranı, kuyruk
-kesimi, nakit akışı deseni ve iskonto BU BLOKTA YOKTUR. Bunlardan biri
+Bu blok YALNIZ üst düzey özettir: branş listesi, toplam IBNR ve aktif
+branşın LDF yöntemi / volume'u (karma dahil). Kaza yılı kırılımı, prim, LDF/CDF
+değerleri, correction, elenmiş hücreler, BF oranı, kuyruk kesimi, nakit akışı
+deseni ve iskonto BU BLOKTA YOKTUR — blokta olmayan bir sayıyı ASLA tahmin etme. Bunlardan biri
 sorulduğunda MUTLAKA araç çağır:
   * aktif branşın detayı        -> get_analysis_state
   * BAŞKA branş/dönem detayı    -> get_branch_state(branch_id)

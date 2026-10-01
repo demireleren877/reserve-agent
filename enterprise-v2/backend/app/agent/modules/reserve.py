@@ -234,9 +234,18 @@ def _reserve_context(state: dict[str, Any] | None) -> str:
         if not rows:
             continue
         is_active_period = p.get("id") == active_period_id
-        head = f"{p.get('label', '?')}" + (" [AKTİF DÖNEM]" if is_active_period else "")
+        # Aktif olmayan dönem "önceki değerleme" diye etiketli: Qwen 3.5 9B
+        # "tüm branşlar"ı dört satır olarak okuyup aynı branşın iki değerlemesini
+        # ayrı branş sanıyordu (C3, 3/3).
+        head = f"{p.get('label', '?')}" + (
+            " [AKTİF DÖNEM]" if is_active_period else " [ÖNCEKİ DEĞERLEME — aynı branşların eski hali]"
+        )
         if have:
             head += f" — dönem toplamı IBNR {_fmt(subtotal)}"
+            # Uyarı sayının HEMEN yanında: kural ayrı paragrafta dururken küçük
+            # modeller (Qwen 3.5 9B) alt toplamları yine topluyordu (C3/C4, 3/3).
+            if len(periods) > 1:
+                head += " (ayrı değerleme — diğer dönemle TOPLANMAZ)"
         blocks.append("  " + head + "\n      " + "\n      ".join(rows))
 
     bits = [f"{len(periods)} dönem, {n_branches} branş ({n_with_data} veri ile)"]
@@ -251,6 +260,19 @@ def _reserve_context(state: dict[str, Any] | None) -> str:
     else:
         bits.append("AKTİF BRANŞ YOK")
     summary = " | ".join(bits)
+    # Aktif branşın LDF ayarları blokta hazır: Qwen 3.5 9B "kaç dönemlik ortalama"
+    # sorusuna durumu okumadan prompt'taki varsayılandan cevap veriyor, bir
+    # koşuda "7" diye uyduruyordu (doğrusu all).
+    if active.get("branch_name") and (state.get("method") or state.get("window")):
+        setting = f"LDF yöntemi {state.get('method') or '?'} · volume {state.get('window') or '?'}"
+        karma = state.get("karma_windows") or {}
+        if karma:
+            steps = ", ".join(
+                f"step {k} ({int(k) + 1}→{int(k) + 2}) {v}"
+                for k, v in sorted(karma.items(), key=lambda kv: int(kv[0]))
+            )
+            setting += f" · karma volume: {steps} (diğer adımlar global volume)"
+        summary += f"\n  Aktif branş ayarları: {setting}"
     if blocks:
         summary += "\n  Dönemler ve branşlar:\n" + "\n".join(blocks)
     return summary

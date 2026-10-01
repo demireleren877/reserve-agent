@@ -174,6 +174,9 @@ export function ReserveAgentBridge() {
     if (activeBranchSnap && activeBranch) {
       legacyFields.method = activeBranchSnap.method;
       legacyFields.window = activeBranchSnap.window;
+      // Karma Volume (adım başına ayrı pencere). Gönderilmediğinde ajan yalnız
+      // global volume'u görüyor ve karma ayarlı bir modelde yanlış söylüyordu.
+      legacyFields.karma_windows = activeBranch.karmaWindowPerStep ?? {};
       legacyFields.excluded_cells = (activeBranch.excludedCells ?? []).map(
         (k) => {
           const [origin, step] = k.split("|");

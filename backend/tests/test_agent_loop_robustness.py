@@ -396,3 +396,73 @@ class TestNavigationGuardIsPreventive:
         run_agent_turn(client, [{"role": "user", "content": "ENGINEERING branşına geçer misin?"}],
                        _payload())
         assert "select_branch" in self._names(client)
+
+
+class TestCompletionGuard:
+    """Yapılmamış değişikliği "yaptım" deme ve formu düz metin yazma koruması.
+
+    Qwen 3.5 9B ile ölçüldü: "2021 için LR'ı %30 yap" → "ayarladım", hiçbir
+    araç çağrısı yok (AG02, 6 koşuda 2 kez). "Modelle" → seçenekleri düz metin
+    yazdı, ask_user çağırmadı (AG13, 6 koşuda 4 kez).
+    """
+
+    def test_false_claim_is_sent_back_once(self):
+        client = ScriptedClient([
+            {"content": "2021 için loss ratio %30 olarak ayarlandı.", "tool_calls": []},
+            {"content": "Uygulayamadım: 2021 BF bazında değil.", "tool_calls": []},
+        ])
+        res = run_agent_turn(client, [{"role": "user", "content": "2021 için LR'ı %30 yap"}], _payload())
+        assert len(client.seen) == 2, "iddia geri çevrilmedi"
+        assert "HİÇBİR değişiklik" in client.seen[1][-1]["content"]
+        assert res.assistant_message.startswith("Uygulayamadım")
+
+    def test_claim_backed_by_an_action_passes(self):
+        client = ScriptedClient([
+            {"content": None, "tool_calls": [ToolCall("c1", "set_window", {"window": "5"})]},
+            {"content": "Volume 5 olarak ayarlandı.", "tool_calls": []},
+        ])
+        run_agent_turn(client, [{"role": "user", "content": "volume'ü 5 yap"}], _payload())
+        assert len(client.seen) == 2  # araç turu + son cevap; geri çevirme yok
+
+    def test_questions_are_never_sent_back(self):
+        client = ScriptedClient([{"content": "Volume all olarak ayarlandı.", "tool_calls": []}])
+        run_agent_turn(client, [{"role": "user", "content": "Volume ne olarak ayarlı?"}], _payload())
+        assert len(client.seen) == 1
+
+    def test_already_set_is_a_legitimate_no_op(self):
+        client = ScriptedClient([{"content": "2023 zaten BF bazında, değişiklik gerekmedi; BF olarak ayarlı.", "tool_calls": []}])
+        run_agent_turn(client, [{"role": "user", "content": "2023'ü BF yap"}], _payload())
+        assert len(client.seen) == 1
+
+    def test_greeting_is_untouched(self):
+        client = ScriptedClient([{"content": "Merhaba! Nasıl yardımcı olabilirim?", "tool_calls": []}])
+        run_agent_turn(client, [{"role": "user", "content": "Merhaba, günaydın."}], _payload())
+        assert len(client.seen) == 1
+
+    def test_guard_fires_at_most_once(self):
+        client = ScriptedClient([
+            {"content": "Ayarladım.", "tool_calls": []},
+            {"content": "Ayarladım.", "tool_calls": []},
+            {"content": "Ayarladım.", "tool_calls": []},
+        ])
+        run_agent_turn(client, [{"role": "user", "content": "2021 LR %30 yap"}], _payload())
+        assert len(client.seen) == 2
+
+    def test_modelling_command_without_tools_is_sent_to_ask_user(self):
+        client = ScriptedClient([
+            {"content": "Şu seçimleri yapın: branş, yöntem…", "tool_calls": []},
+            {"content": "tamam", "tool_calls": []},
+        ])
+        run_agent_turn(client, [{"role": "user", "content": "Modelle"}], _payload())
+        assert len(client.seen) == 2
+        assert "ask_user" in client.seen[1][-1]["content"]
+
+    def test_guard_messages_stay_out_of_history(self):
+        client = ScriptedClient([
+            {"content": "Ayarladım.", "tool_calls": []},
+            {"content": "Uygulayamadım.", "tool_calls": []},
+        ])
+        res = run_agent_turn(client, [{"role": "user", "content": "2021 LR %30 yap"}], _payload())
+        joined = " ".join(str(m.get("content")) for m in res.raw_additions)
+        assert "SİSTEM KONTROLÜ" not in joined
+        assert "Ayarladım." not in joined  # geri çevrilen cevap da geçmişe yazılmaz

@@ -497,6 +497,59 @@ _NAV_INTENT_RE = re.compile(
 )
 
 
+# Model bir değişikliğin YAPILDIĞINI söylüyor mu. Qwen 3.5 9B "2021 için LR'ı
+# %30 yap" komutuna "ayarladım" deyip hiçbir araç çağırmıyordu (AG02, 2/6):
+# kullanıcı değişiklik yapıldı sanıyor, model hiçbir şeyi değiştirmemiş.
+# "hesapladım" bilerek yok — hesap salt okunur, aksiyon üretmez.
+_COMPLETION_CLAIM_RE = re.compile(
+    r"\b(ayarla(dım|ndı|nmıştır)|güncelle(dim|ndi|nmiştir)|uygula(dım|ndı|nmıştır)"
+    r"|değiştir(dim|ildi|ilmiştir)|ele(dim|ndi|nmiştir)|kaldır(dım|ıldı)"
+    r"|temizle(dim|ndi)|çevir(dim|ildi)|aldım|alındı|set edildi"
+    r"|olarak (ayarlandı|güncellendi|değiştirildi|kaydedildi))\b",
+    re.IGNORECASE,
+)
+_ALREADY_RE = re.compile(r"\bzaten\b", re.IGNORECASE)
+# "Modelle", "modeli kur", "bu branşı modelle" — otonom modelleme komutu.
+_MODEL_INTENT_RE = re.compile(r"\bmodel(le|i kur|i oluştur|lemeye başla)", re.IGNORECASE)
+
+_NUDGE_FALSE_CLAIM = (
+    "[SİSTEM KONTROLÜ] Cevabın bir değişikliğin yapıldığını söylüyor ama bu turda "
+    "HİÇBİR değişiklik uygulanmadı — hiçbir yazma aracı çağrılmadı. İstenen "
+    "değişikliği ilgili araçla şimdi uygula; uygulayamıyorsan nedenini açıkça söyle. "
+    "Yapılmamış bir şeyi yapıldı diye yazma."
+)
+_NUDGE_MODEL_FORM = (
+    "[SİSTEM KONTROLÜ] Modelleme komutuna araç çağırmadan cevap verdin. Seçenekleri "
+    "düz metin olarak YAZMA — ask_user aracını çağır (gerekirse önce durumu oku)."
+)
+
+
+def _guard_nudge(
+    messages: list[dict[str, Any]],
+    content: str,
+    tool_invocations: list[dict[str, Any]],
+    actions: list[dict[str, Any]],
+) -> str | None:
+    """Son cevap kabul edilmeden önce bir kez geri çevrilmeli mi.
+
+    Yalnız KOMUTLARDA: soruya verilen cevapta değişiklik beklenmez.
+    """
+    if _is_question(messages):
+        return None
+    last = next((m for m in reversed(messages) if m.get("role") == "user"), None)
+    text = str((last or {}).get("content") or "")
+    if _MODEL_INTENT_RE.search(text) and not tool_invocations:
+        return _NUDGE_MODEL_FORM
+    if (
+        not actions
+        and content
+        and _COMPLETION_CLAIM_RE.search(content)
+        and not _ALREADY_RE.search(content)  # "zaten BF bazında" meşru
+    ):
+        return _NUDGE_FALSE_CLAIM
+    return None
+
+
 def _wants_navigation(messages: list[dict[str, Any]]) -> bool:
     last = next((m for m in reversed(messages) if m.get("role") == "user"), None)
     return bool(_NAV_INTENT_RE.search(str((last or {}).get("content") or "")))
@@ -649,6 +702,13 @@ def run_agent_turn(
     actions: list[dict[str, Any]] = []
     # Bu turda başarıyla uygulanmış (name, args) çiftleri — tekrar uygulanmaz.
     applied_writes: set[tuple[str, str]] = set()
+    # Koruma turda en fazla bir kez geri çevirir; geri çevirme mesajları
+    # konuşma geçmişine (raw_additions) yazılmaz.
+    guard_used = False
+    guard_msgs: list[dict[str, Any]] = []
+
+    def _additions() -> list[dict[str, Any]]:
+        return [m for m in conv[initial_conv_len:] if not any(m is g for g in guard_msgs)]
 
     for _iteration in range(max_iterations):
         # Hesap aracı çalıştıysa ask_user'ı listeden çıkar. Sadece hata
@@ -679,6 +739,16 @@ def run_agent_turn(
         tool_calls: list[ToolCall] = response.get("tool_calls", [])
 
         if not tool_calls:
+            nudge = None if guard_used else _guard_nudge(
+                messages, content or "", tool_invocations, actions
+            )
+            if nudge and _iteration < max_iterations - 1:
+                guard_used = True
+                a_msg: dict[str, Any] = {"role": "assistant", "content": content or ""}
+                u_msg: dict[str, Any] = {"role": "user", "content": nudge}
+                conv += [a_msg, u_msg]
+                guard_msgs += [a_msg, u_msg]
+                continue
             # Boş final ama bu turda tool çalıştıysa, ne yapıldığını özetle
             # ("(empty response)" yerine kullanıcıya faydalı bir şey dönsün).
             final_text = content or ""
@@ -698,7 +768,7 @@ def run_agent_turn(
                     )
             # Final assistant mesajını raw_additions'a ekle
             final_msg: dict[str, Any] = {"role": "assistant", "content": final_text}
-            raw_additions = conv[initial_conv_len:] + [final_msg]
+            raw_additions = _additions() + [final_msg]
             return AgentTurnResult(
                 assistant_message=final_text,
                 tool_invocations=tool_invocations,
@@ -801,7 +871,7 @@ def run_agent_turn(
         # ask_user çağrıldıysa turu burada durdur — form kullanıcıya döner, cevap
         # sonraki turda (yeni user mesajı) gelir.
         if pending_form is not None:
-            raw_additions = conv[initial_conv_len:]
+            raw_additions = _additions()
             return AgentTurnResult(
                 assistant_message=_form_intro(content),
                 tool_invocations=tool_invocations,
@@ -811,7 +881,7 @@ def run_agent_turn(
                 form=pending_form,
             )
 
-    raw_additions = conv[initial_conv_len:]
+    raw_additions = _additions()
     applied = ", ".join(t["name"] for t in tool_invocations[-10:]) if tool_invocations else ""
     return AgentTurnResult(
         assistant_message=(

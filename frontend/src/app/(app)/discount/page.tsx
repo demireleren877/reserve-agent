@@ -8,6 +8,7 @@ import {
 } from "recharts";
 import { useProject } from "@/lib/project-store";
 import { computeBranchSummary } from "@/lib/reserve-pipeline";
+import { unpaidByOrigin } from "@/lib/unpaid";
 import {
   defaultDiscountConfig,
   discountWithStandard,
@@ -681,13 +682,13 @@ export default function DiscountPage() {
     return () => setReadOnly(false);
   }, [lockKey, lockState.status, setReadOnly]);
 
-  const reserveRows = useMemo<{ origin: string; unpaid: number }[]>(() => {
-    if (!activeBranch) return [];
-    return computeBranchSummary(activeBranch).rows.map((r) => ({
-      origin: r.origin,
-      unpaid: r.latest + r.ibnr,
-    }));
-  }, [activeBranch]);
+  // Ödenmemiş = nihai − ödenmiş (incurred bazında muallak + IBNR). Eskiden
+  // latest + ibnr, yani nihainin kendisi iskontolanıyordu.
+  const unpaid = useMemo(
+    () => (activeBranch ? unpaidByOrigin(activeBranch, computeBranchSummary(activeBranch).rows) : null),
+    [activeBranch],
+  );
+  const reserveRows = useMemo<{ origin: string; unpaid: number }[]>(() => unpaid?.rows ?? [], [unpaid]);
 
   const monthlyPattern = (activeBranch?.cashflowMonthlyPattern ?? {}) as Record<string, { month: number; weight: number }[]>;
   const hasPattern = Object.keys(monthlyPattern).length > 0;
@@ -710,6 +711,11 @@ export default function DiscountPage() {
   return (
     <div className="flex flex-col h-screen overflow-hidden">
       <ModelLockBanner state={lockState} onForceAcquire={forceAcquire} />
+      {unpaid?.paidMissing && (
+        <div role="status" className="border-b px-5 py-2 text-[12px]" style={{ background: "#fffbeb", color: "#92400e", borderColor: "#fde68a" }}>
+          This branch has no paid triangle, so outstanding cannot be separated: the unpaid liability below is based on the ultimate and includes amounts already paid. Load the paid triangle to discount outstanding + IBNR only.
+        </div>
+      )}
       <div className="flex flex-1 overflow-hidden">
       {/* Left panel */}
       <div

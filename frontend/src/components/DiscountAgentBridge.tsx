@@ -11,6 +11,7 @@ import { useEffect, useMemo } from "react";
 import { useAgentRegistryWriter } from "@/lib/agent-registry";
 import { useProject } from "@/lib/project-store";
 import { computeBranchSummary } from "@/lib/reserve-pipeline";
+import { unpaidByOrigin } from "@/lib/unpaid";
 import {
   buildFlatRateFn,
   buildCurveFn,
@@ -55,6 +56,7 @@ export function buildDiscountSnapshot(periods: Period[], activeBranch: Branch | 
       .filter((b) => b.paidTriangle != null || b.triangle != null)
       .map((b) => {
         const summary = computeBranchSummary(b);
+        const unpaid = unpaidByOrigin(b, summary.rows);
         const pattern = (b.cashflowMonthlyPattern ?? {}) as Record<
           string,
           { month: number; weight: number }[]
@@ -71,10 +73,7 @@ export function buildDiscountSnapshot(periods: Period[], activeBranch: Branch | 
         } = null;
 
         if (hasPattern && summary.rows.length > 0) {
-          const rows = summary.rows.map((r) => ({
-            origin: r.origin,
-            unpaid: r.latest + r.ibnr,
-          }));
+          const rows = unpaid.rows;
           const getRateFn = buildFlatRateFn(0.3);
           try {
             const res = discountBranch(rows, pattern, getRateFn);
@@ -91,16 +90,16 @@ export function buildDiscountSnapshot(periods: Period[], activeBranch: Branch | 
         }
 
         // compute_discount'un hesapladığı satırlar: İskonto ekranıyla aynı unpaid
-        // (latest + ibnr) ve aynı aylık desen. Eskiden hiç gönderilmiyordu; araç
+        // (nihai − ödenmiş, bkz. lib/unpaid) ve aynı aylık desen. Eskiden hiç gönderilmiyordu; araç
         // her çağrıda "iskonto edilecek ödeme satırı yok" diyordu — ajanın özel
         // oran ve IFRS 17 eğrisiyle iskonto hesabı hiç çalışmadı.
         const perOrigin = hasPattern
-          ? summary.rows.map((r) => {
+          ? unpaid.rows.map((r) => {
               const months = pattern[r.origin] ?? [];
               const wsum = months.reduce((acc, x) => acc + x.weight, 0);
               return {
                 origin: r.origin,
-                unpaid: r.latest + r.ibnr,
+                unpaid: r.unpaid,
                 avg_month: wsum ? months.reduce((acc, x) => acc + x.month * x.weight, 0) / wsum : 0,
                 months: months.map((x) => [x.month, x.weight] as [number, number]),
               };
@@ -117,7 +116,10 @@ export function buildDiscountSnapshot(periods: Period[], activeBranch: Branch | 
           has_cashflow_pattern: hasPattern,
           per_origin: perOrigin,
           origin_count: summary.rows.length,
-          total_unpaid_liability: Math.round(summary.totals.latest + summary.totals.ibnr),
+          total_unpaid_liability: Math.round(unpaid.rows.reduce((acc, r) => acc + r.unpaid, 0)),
+          // Incurred model, ödenmiş üçgen yok: muallak ayrılamadı, unpaid nihai
+          // üzerinden — ajan bunu kullanıcıya söylemeli.
+          ...(unpaid.paidMissing ? { unpaid_warning: "No paid triangle: outstanding could not be separated; unpaid is based on ultimate." } : {}),
           quick_discount_at_30pct: quickDiscount,
           note: hasPattern
             ? "You can use a custom interest rate or curve with compute_discount."
@@ -154,10 +156,7 @@ export function computeDiscountForBranch(
     };
   }
 
-  const rows = summary.rows.map((r) => ({
-    origin: r.origin,
-    unpaid: r.latest + r.ibnr,
-  }));
+  const rows = unpaidByOrigin(branch, summary.rows).rows;
 
   const getRateFn =
     rateMode === "flat"

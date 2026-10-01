@@ -205,13 +205,17 @@ def build_project() -> dict[str, Any]:
     """İki dönem × iki branş. Aktif: 2026Q2 / FIRE."""
     q2 = _incurred()
     q1 = _rolled_back(q2)
+    # Ödenmiş üçgen modelle aynı kesimde: iskontolanan ödenmemiş tutar
+    # nihai − ödenmiş (muallak + IBNR) olarak hesaplansın diye.
+    p2 = _load("paid.xlsx")
+    p1 = _rolled_back(p2)
 
     spec = [
-        ("2026Q2", "p2", q2),
-        ("2026Q1", "p1", q1),
+        ("2026Q2", "p2", q2, p2),
+        ("2026Q1", "p1", q1, p1),
     ]
     periods = []
-    for label, pid, tri in spec:
+    for label, pid, tri, paid in spec:
         prem = real_premiums(PREMIUM_FILES[label])
         fire = build_branch(
             f"{pid}-fire", BRANCHES[0], tri,
@@ -226,6 +230,8 @@ def build_project() -> dict[str, Any]:
             premiums={k: v * 0.35 for k, v in prem.items()},
             bf_origins={"2024", "2025"},
         )
+        fire["_paid"] = paid
+        eng["_paid"] = _scaled(paid, 0.35)
         periods.append(dict(id=pid, label=label, branches=[fire, eng]))
 
     active_branch = periods[0]["branches"][0]
@@ -342,11 +348,21 @@ def cashflow_session_state(project: dict[str, Any]) -> dict[str, Any]:
 DISCOUNT_PATTERN: list[list[float]] = [[6, 0.5], [18, 0.3], [30, 0.2]]
 
 
+def _last_diagonal(tri: Triangle) -> dict[str, float]:
+    out: dict[str, float] = {}
+    for origin, row in zip(tri.origin_periods, tri.values):
+        vals = [v for v in row if v is not None]
+        if vals:
+            out[str(origin)] = float(vals[-1])
+    return out
+
+
 def _discount_rows(b: dict[str, Any]) -> list[dict[str, Any]]:
     """DiscountAgentBridge'in gönderdiği per_origin satırlarının karşılığı."""
     wsum = sum(w for _, w in DISCOUNT_PATTERN)
     avg = sum(m * w for m, w in DISCOUNT_PATTERN) / wsum
-    return [dict(origin=r["origin"], unpaid=r["latest"] + r["ibnr"], avg_month=avg,
+    paid = _last_diagonal(b["_paid"])
+    return [dict(origin=r["origin"], unpaid=r["selected_ultimate"] - paid.get(r["origin"], 0.0), avg_month=avg,
                  months=[list(x) for x in DISCOUNT_PATTERN]) for r in b["per_origin"]]
 
 
@@ -369,7 +385,8 @@ def discount_session_state(project: dict[str, Any]) -> dict[str, Any]:
     branches = []
     for p in project["periods"]:
         for b in p["branches"]:
-            unpaid = b["totals"]["latest"] + b["totals"]["ibnr"]
+            # Ödenmemiş = nihai − ödenmiş (incurred bazında muallak + IBNR).
+            unpaid = sum(r["unpaid"] for r in _discount_rows(b))
             has_pattern = b["is_active"]
             branches.append(dict(
                 branch_id=b["id"], branch_name=b["name"],

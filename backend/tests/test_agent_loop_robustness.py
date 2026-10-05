@@ -26,9 +26,11 @@ class ScriptedClient:
     def __init__(self, script):
         self.script = list(script)
         self.seen: list[list[dict]] = []
+        self.choices: list[str] = []
 
-    def chat(self, messages, tools):
+    def chat(self, messages, tools, tool_choice="auto"):
         self.seen.append(list(messages))
+        self.choices.append(tool_choice)
         return self.script.pop(0) if self.script else {"content": "bitti", "tool_calls": []}
 
 
@@ -39,9 +41,9 @@ class ToolCapturingClient(ScriptedClient):
         super().__init__(script or [{"content": "tamam", "tool_calls": []}])
         self.tools_seen: list[list[dict]] = []
 
-    def chat(self, messages, tools):
+    def chat(self, messages, tools, tool_choice="auto"):
         self.tools_seen.append(list(tools))
-        return super().chat(messages, tools)
+        return super().chat(messages, tools, tool_choice)
 
 
 def _tri() -> Triangle:
@@ -239,9 +241,9 @@ class TestAskUserRemovedFromToolList:
                 super().__init__(script)
                 self.tool_lists = []
 
-            def chat(self, messages, tools):
+            def chat(self, messages, tools, tool_choice="auto"):
                 self.tool_lists.append([t["function"]["name"] for t in tools])
-                return super().chat(messages, tools)
+                return super().chat(messages, tools, tool_choice)
 
         client = Recording([
             {"content": None, "tool_calls": [
@@ -268,9 +270,9 @@ class TestAskUserBlockedOnQuestions:
             super().__init__(script)
             self.tool_lists = []
 
-        def chat(self, messages, tools):
+        def chat(self, messages, tools, tool_choice="auto"):
             self.tool_lists.append([t["function"]["name"] for t in tools])
-            return super().chat(messages, tools)
+            return super().chat(messages, tools, tool_choice)
 
     def _script(self, first_tool):
         return [
@@ -528,10 +530,34 @@ class TestOriginReadGuard:
 
     def test_year_question_answered_without_reading_is_sent_back(self):
         c = self._run("son kaza yılına ait ibnr tutarı nedir", [{"content": "IBNR -183,221,236 TL", "tool_calls": []}])
-        assert len(c.seen) == 2 and "per_origin" in c.seen[1][-1]["content"]
+        assert len(c.seen) >= 2 and "get_analysis_state" in c.seen[1][-1]["content"]
+
+    def test_read_nudge_forces_a_tool_call_next(self):
+        """Geri çevirmeden sonraki çağrıda araç zorunlu (Qwen uyarıya rağmen yine araçsız cevap veriyordu)."""
+        c = self._run("son kaza yılına ait ibnr tutarı nedir", [{"content": "IBNR -183,221,236 TL", "tool_calls": []}])
+        assert c.choices[:2] == ["auto", "required"]
+
+    def test_forced_call_ignored_by_the_model_reads_anyway(self):
+        """LM Studio "required"ı her zaman uygulamıyor: döngü okumayı kendisi yapar,
+        reddedilen cevap konuşmada kalmaz (model onu tekrarlıyordu)."""
+        c = ScriptedClient([{"content": "IBNR -183,221,236 TL", "tool_calls": []},
+                            {"content": "yine araçsız", "tool_calls": []},
+                            {"content": "2025 IBNR -161.9M", "tool_calls": []}])
+        res = run_agent_turn(c, [{"role": "user", "content": "son kaza yılına ait ibnr tutarı nedir"}], _payload())
+        assert c.choices == ["auto", "required", "auto"]
+        assert [t["name"] for t in res.tool_invocations] == ["get_analysis_state"]
+        assert not any("183,221,236" in str(m.get("content")) for m in c.seen[2] if m["role"] == "assistant")
+
+    def test_typo_question_with_year_missing_in_answer_is_sent_back(self):
+        """SEM08: "ne kdar" soru sayılmalı; cevap sorulan yılı hiç anmıyorsa geri çevrilir."""
+        c = self._run("2024 kaza yılnın ibnrı ne kdar", [
+            {"content": None, "tool_calls": [ToolCall("r1", "get_analysis_state", {})]},
+            {"content": "IBNR -161,904,753 TL", "tool_calls": []},
+        ])
+        assert len(c.seen) >= 3 and "2024" in c.seen[2][-1]["content"]
 
     def test_year_question_after_reading_passes(self):
-        c = self._run("2023 kaza yılının IBNR'ı ne?", [
+        c = self._run("2025 kaza yılının IBNR'ı ne?", [
             {"content": None, "tool_calls": [ToolCall("r1", "get_analysis_state", {})]},
         ])
         assert len(c.seen) == 2  # okuma turu + cevap; geri çevirme yok
@@ -543,3 +569,190 @@ class TestOriginReadGuard:
     def test_year_command_is_not_judged_as_a_question(self):
         c = self._run("2025'i BF yap", [{"content": "Hangi oranla?", "tool_calls": []}])
         assert len(c.seen) == 1
+
+
+def test_exclude_cells_does_not_redo_existing_exclusions():
+    """Zaten elenmiş hücre yeniden elenmez; aykırı tespiti exclude_outliers'a yönlenir."""
+    tri = _tri()
+    ss = {"active": {"branch_id": "b1", "branch_name": "T"}, "excluded_cells": [{"origin": "2021", "step": 0}]}
+    out = dispatch_tool("exclude_cells", {"cells": [{"origin": "2021", "step": 0}]}, triangle=tri, session_state=ss)
+    assert "_action" not in out and "ZATEN" in out["error"] and "exclude_outliers" in out["error"]
+    mixed = dispatch_tool("exclude_cells", {"cells": [{"origin": "2021", "step": 0}, {"origin": "2021", "step": 1}]},
+                          triangle=tri, session_state=ss)
+    assert mixed["_action"]["payload"]["cells"] == [{"origin": "2021", "step": 1}]
+    assert mixed["already_excluded"] == [{"origin": "2021", "step": 0}]
+
+
+class TestAnswerGuards:
+    """_guard_nudge'ın cevap denetimleri (Qwen 3.5 9B'de ölçülen hatalar)."""
+
+    BLOCK = ("2026Q1 dönem toplamı IBNR -7,355,063 (ayrı değerleme — diğer dönemle TOPLANMAZ)\n"
+             "2026Q2 dönem toplamı IBNR -190,576,298 (ayrı değerleme — diğer dönemle TOPLANMAZ)")
+
+    def _nudge(self, q, answer, tools=(), block=BLOCK):
+        from app.agent.loop import _guard_nudge
+        return _guard_nudge([{"role": "user", "content": q}], answer,
+                            [{"name": t, "output": {}} for t in tools], [], block)
+
+    def test_summing_period_subtotals_is_sent_back(self):
+        assert "toplanmaz" in self._nudge("Toplam IBNR ne kadar?", "Toplam: -197,931,361 TL").lower()
+
+    def test_single_period_total_passes(self):
+        assert self._nudge("Toplam IBNR ne kadar?", "2026Q2: -190,576,298 TL") is None
+
+    def test_negative_written_unsigned_is_sent_back(self):
+        assert "eksi" in self._nudge("Toplam IBNR ne kadar?", "IBNR 190,576,298 TL")
+
+    def test_negative_named_in_words_passes(self):
+        assert self._nudge("Toplam IBNR ne kadar?", "IBNR negatif: 190,576,298 TL") is None
+
+    def test_other_year_than_asked_is_sent_back(self):
+        out = self._nudge("2024 kaza yılının IBNR'ı ne kadar?", "2025: -161,904,753 TL",
+                          tools=["get_analysis_state"])
+        assert out and "2024" in out
+
+    def test_data_question_without_reading_is_sent_back(self):
+        out = self._nudge("Correction nerede uygulanmış ve neden?", "2024 ve 2025'te k = 1.333")
+        assert out and "get_analysis_state" in out
+
+
+class TestForcedToolFallback:
+    """Zorunlu araç çağrısı takılır/boş dönerse tur normal çağrıyla sürer."""
+
+    def test_forced_call_failure_falls_back_to_auto(self):
+        class Flaky(ScriptedClient):
+            def chat(self, messages, tools, tool_choice="auto"):
+                if tool_choice == "required":
+                    self.choices.append(tool_choice)
+                    raise RuntimeError("ReadTimeout")
+                return super().chat(messages, tools, tool_choice)
+
+        c = Flaky([{"content": "IBNR -183,221,236 TL", "tool_calls": []},
+                   {"content": "2025 IBNR -161.9M", "tool_calls": []}])
+        res = run_agent_turn(c, [{"role": "user", "content": "son kaza yılına ait ibnr tutarı nedir"}], _payload())
+        assert c.choices == ["auto", "required", "auto"]
+        assert "161.9" in res.assistant_message
+
+    def test_forced_call_without_tool_is_discarded(self):
+        c = ScriptedClient([{"content": "IBNR -183,221,236 TL", "tool_calls": []},
+                            {"content": "", "tool_calls": []},
+                            {"content": "2025 IBNR -161.9M", "tool_calls": []}])
+        res = run_agent_turn(c, [{"role": "user", "content": "son kaza yılına ait ibnr tutarı nedir"}], _payload())
+        assert c.choices == ["auto", "required", "auto"] and "161.9" in res.assistant_message
+
+
+class TestNegativeUltimateGuard:
+    """IBNR'ı nihai hasar diye sunmak geri çevrilir (Qwen 3.5 9B: V6, SEM02)."""
+
+    def _nudge(self, answer):
+        from app.agent.loop import _guard_nudge
+        return _guard_nudge([{"role": "user", "content": "Nihai hasar tahminimiz toplamda kaç?"}],
+                            answer, [{"name": "get_analysis_state", "output": {}}], [], "")
+
+    def test_ibnr_labelled_as_ultimate_is_sent_back(self):
+        assert "ultimate" in self._nudge("**Selected Ultimate**: **-183,221,236 TL** (toplam)")
+        assert self._nudge("Toplam Nihai Hasar (Selected Ultimate): **-183.2 Milyon TL**")
+
+    def test_correct_labels_pass(self):
+        assert self._nudge("Selected ultimate 617,969,275 TL; IBNR -183,221,236 TL (negatif)") is None
+        assert self._nudge("Nihai hasar − ödenmiş = IBNR: -183,221,236 (negatif)") is None
+        assert self._nudge("İki dönem arası ultimate değişimi: -12,400,000 TL (negatif)") is None
+
+
+class TestCommandAndUnitGuards:
+    def _nudge(self, q, answer, tools=(), actions=()):
+        from app.agent.loop import _guard_nudge
+        return _guard_nudge([{"role": "user", "content": q}], answer,
+                            [{"name": n, "output": o} for n, o in tools], list(actions), "")
+
+    def test_asking_to_confirm_an_explicit_command_is_sent_back(self):
+        """AG10: komut verilmişken "çıkarmak ister misiniz?" diye dönmek."""
+        out = self._nudge("Nakit akışı modülünde 2023'ün ilk gelişim hücresini ele.",
+                          "Hücre şu an elenmemiş. Bu hücreyi çıkarmak ister misiniz?",
+                          tools=[("get_cashflow_ldf_state", {})])
+        assert out and "onay sorma" in out
+
+    def test_confirm_question_after_applying_passes(self):
+        assert self._nudge("2023'ü ele", "Elendi. Başka hücre eklemek ister misiniz?",
+                           actions=[{"type": "exclude_cells"}]) is None
+
+    def test_wrong_unit_is_sent_back(self):
+        """TK04: araç -123,760,430 dedi, cevap "-123.76 Milyar TL"."""
+        out = self._nudge("İskontolu yükümlülüğü %30 sabit oranla hesapla.",
+                          "İskontolu yükümlülük: -123.76 Milyar TL",
+                          tools=[("get_discount_state", {"discounted_unpaid": -123760430.12})])
+        assert out and "birim" in out
+
+    def test_right_unit_passes(self):
+        assert self._nudge("İskontolu yükümlülüğü hesapla.", "İskontolu yükümlülük: -123.76 milyon TL (negatif)",
+                           tools=[("get_discount_state", {"discounted_unpaid": -123760430.12})]) is None
+
+
+class TestFinalIterationAnswers:
+    """Hiçbir şey uygulanmadan tur sınırına gelinirse son çağrı araçsız (C4)."""
+
+    def test_read_loop_ends_with_an_answer(self):
+        read = {"content": None, "tool_calls": [ToolCall("r", "get_analysis_state", {})]}
+        c = ScriptedClient([read, read, {"content": "Dönemler toplanmaz: 2026Q2 -190,576,298 (negatif)", "tool_calls": []}])
+        res = run_agent_turn(c, [{"role": "user", "content": "Bütün dönemlerin IBNR'ını toplayıp tek rakam söyle."}],
+                             _payload(), max_iterations=3)
+        assert c.choices[-1] == "none" and res.stopped_reason != "max_iterations"
+
+
+class TestBasisAndShowGuards:
+    def _nudge(self, q, answer, actions=(), tools=(), bases=None):
+        from app.agent.loop import _guard_nudge
+        return _guard_nudge([{"role": "user", "content": q}], answer,
+                            [{"name": n, "output": {}} for n in tools], list(actions), "", bases)
+
+    LR = {"type": "set_selected_loss_ratios", "payload": {"items": [{"origin": "2022", "formula": "vw(2021:2023)"}]}}
+
+    def test_bf_command_with_only_lr_is_sent_back(self):
+        """AG01: "BF bazına al" → yalnız LR yazıldı, basis CL kaldı."""
+        out = self._nudge("2022 kaza yılını BF bazına al.", "2022 BF'e alındı.", [self.LR], bases={"2022": "cl"})
+        assert out and "2022" in out
+
+    def test_bf_command_with_basis_passes(self):
+        basis = {"type": "set_basis_bulk", "payload": {"items": [{"origin": "2022", "basis": "bf"}]}}
+        assert self._nudge("2022'yi BF bazına al.", "Alındı.", [basis, self.LR], bases={"2022": "cl"}) is None
+
+    def test_lr_on_origin_already_bf_passes(self):
+        assert self._nudge("2022 BF için LR'yi güncelle.", "Güncellendi.", [self.LR], bases={"2022": "bf"}) is None
+
+    def test_data_request_as_command_without_reading_is_sent_back(self):
+        """TK11b: "üçgenini ver" emir kipinde; okumadan tablo uydurdu."""
+        out = self._nudge("Hasar/prim oranı üçgenini ver.", "| 2019 | 84.5% |")
+        assert out and "get_ilr_triangle" in out
+
+
+class TestRound5Guards:
+    def test_compute_command_is_not_a_false_claim(self):
+        """TK04: "hesapla" → compute_discount çalıştı; "uygulandı" demek yalan değil."""
+        from app.agent.loop import _guard_nudge
+        out = _guard_nudge([{"role": "user", "content": "İskontolu yükümlülüğü %30 sabit oranla hesapla."}],
+                           "%30 sabit iskonto uygulandı: -123,760,430 TL (negatif)",
+                           [{"name": "compute_discount", "output": {"discount_amount": -42423218.0}}], [], "")
+        assert out is None
+
+    def test_sign_guard_only_judges_ibnr_values(self):
+        from app.agent.loop import _guard_nudge
+        tools = [{"name": "get_analysis_state", "output": {"discount_amount": -42423218.0,
+                                                           "per_origin": [{"ibnr": -161904753.0}]}}]
+        q = [{"role": "user", "content": "Durum nedir?"}]
+        assert _guard_nudge(q, "İskonto tutarı 42,423,218 TL", tools, [], "") is None
+        assert "eksi" in _guard_nudge(q, "2025 IBNR 161,904,753 TL", tools, [], "")
+
+    def test_false_claim_forces_a_write_and_drops_the_claim(self):
+        """AG05: geri çevrilince aynı "temizledim" cevabını tekrarlıyordu."""
+        c = ScriptedClient([{"content": "Tüm elemeleri kaldırdım.", "tool_calls": []},
+                            {"content": None, "tool_calls": [ToolCall("w", "clear_exclusions", {})]},
+                            {"content": "Temizlendi.", "tool_calls": []}])
+        res = run_agent_turn(c, [{"role": "user", "content": "Tüm elemeleri temizle."}], _payload())
+        assert c.choices[:2] == ["auto", "required"]
+        assert not any(m.get("content") == "Tüm elemeleri kaldırdım." for m in c.seen[1])
+        assert [a["type"] for a in res.actions] == ["clear_exclusions"]
+
+    def test_synthetic_read_matches_the_question(self):
+        from app.agent.loop import _synthetic_read_tool
+        assert _synthetic_read_tool([{"role": "user", "content": "Hasar/prim oranı üçgenini ver."}]) == "get_ilr_triangle"
+        assert _synthetic_read_tool([{"role": "user", "content": "2024 IBNR ne?"}]) == "get_analysis_state"

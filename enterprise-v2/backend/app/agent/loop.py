@@ -4,6 +4,7 @@ prompt fragment alır, tool çağrılarını isimden modül dispatch'ine yönlen
 from __future__ import annotations
 
 import json
+import logging
 import re
 from dataclasses import dataclass, field
 from typing import Any
@@ -12,6 +13,8 @@ from app.agent.client import AgentClient, ToolCall
 from app.agent.modules import REGISTRY, get_modules
 from app.agent.modules.base import ModuleSpec
 from app.agent.modules.reserve import triangle_from_payload
+
+logger = logging.getLogger(__name__)
 
 GLOBAL_PROMPT = """Sen Actuarius'un tek aktüeryal asistanısın.
 Kullanıcının mental modeli: tek bir akıllı yardımcı, tüm aktüeryal süreçlerine
@@ -431,7 +434,8 @@ sorulduğunda MUTLAKA araç çağır:
   * aktif branşın detayı        -> get_analysis_state
   * BAŞKA branş/dönem detayı    -> get_branch_state(branch_id)
   * nakit akışı                 -> get_cashflow_state / get_cashflow_pattern_state
-  * iskonto                     -> get_discount_state
+  * iskonto                     -> get_discount_state (IBNR için DEĞİL)
+  * tüm branşların / dönemin IBNR toplamı -> blokta yazan dönem alt toplamı
 Yalnızca yukarıda YAZAN bir toplamı tekrar edeceksen araç çağırma.
 
 KAPSAM — dönemleri TOPLAMA. Dönemler (2026Q1, 2026Q2 ...) aynı portföyün
@@ -481,7 +485,9 @@ _STATE_READ_TOOLS = {
 _VIEW_MOVING_TOOLS = {"navigate_to", "select_branch"}
 
 _QUESTION_RE = re.compile(
-    r"\?|\b(ne kadar|nedir|neler|hangi|neden|niçin|nasıl|kaç|mı|mi|mu|mü)\b",
+    # "ne kdar", "nekadar" gibi yazım hataları da soru (SEM08: "2024 kaza yılnın
+    # ibnrı ne kdar" soru sayılmadığı için korumalar hiç çalışmadı).
+    r"\?|\b(ne kadar|ne kdar|nekadar|ne|nedir|neler|hangi|neden|niçin|nasıl|kaç|mı|mi|mu|mü)\b",
     re.IGNORECASE,
 )
 
@@ -536,9 +542,14 @@ _NUDGE_DATA_READ = (
 # Blokta karşılığı olmayan veri: kaza yılı, ultimate, üçgenler, oranlar, gelişim.
 _DATA_Q_RE = re.compile(
     r"\b(19|20)\d{2}\b|kaza yıl|origin|kohort|ultimate|nihai|üçgen|triangle|\bilr\b"
-    r"|loss ratio|hasar/prim|hasar prim|\bldf|\bcdf|gelişim|faktör|pattern|desen|muallak|ödenmiş",
+    r"|loss ratio|hasar/prim|hasar prim|\bldf|\bcdf|gelişim|faktör|pattern|desen|muallak|ödenmiş"
+    # V2: "Correction nerede uygulanmış?" → okumadan k=1,333 uydurdu.
+    r"|correction|düzeltme|yıllıklaştır|elen|hücre|kuyruk|\btail|curve|override|basis|\bprim|exposure",
     re.IGNORECASE,
 )
+# Emir kipinde veri isteği: "Hasar/prim oranı üçgenini ver" (TK11b: soru
+# sayılmadığı için okuma koruması çalışmadı, model üçgeni uydurdu).
+_SHOW_RE = re.compile(r"\b(ver|göster|listele|getir|söyle|yaz|özetle|paylaş|raporla)\b", re.IGNORECASE)
 _NUDGE_WRONG_YEAR = (
     "[SİSTEM KONTROLÜ] Soru şu kaza yıllarını soruyor: {asked}. Cevabın bunların hiçbirini "
     "içermiyor ({answered} yazdın). Doğru yılın satırını oku ve onu ver." + _HIDDEN
@@ -552,7 +563,90 @@ _NUDGE_SIGN = (
     "[SİSTEM KONTROLÜ] {value} negatif bir değer ama cevabında işaretsiz yazılmış. Negatif "
     "IBNR aktüeryal olarak önemli bir sinyaldir: eksi işaretiyle yaz." + _HIDDEN
 )
+_NUDGE_NEG_ULTIMATE = (
+    "[SİSTEM KONTROLÜ] Cevabın nihai hasara (ultimate) negatif bir tutar ({value}) "
+    "yazıyor. Seçilmiş ultimate negatif olmaz; negatif olan IBNR'dır (ultimate − "
+    "ödenmiş). Ultimate'i selected_ultimate'ten, IBNR'ı ayrı etiketle ver. Nihaisi "
+    "ödenmişin altında kalan yıllar get_analysis_state.ultimate_below_paid'de." + _HIDDEN
+)
+# "Nihai Hasar (Selected Ultimate): **-183.2 Milyon TL**" — etiket ile negatif
+# rakam arasında başka rakam/IBNR/fark sözü yok.
+_NEG_ULTIMATE_RE = re.compile(
+    r"(?:ultimate|nihai)(?:(?!ibnr|fark|ödenmiş|paid|değiş|artış|azal|düşüş|delta|change)[^\n\d\-−]){0,40}([-−]\s?\d[\d.,]*\s*(?:milyon|mn|m\b)?)",
+    re.IGNORECASE,
+)
+_NUDGE_NEEDLESS_CONFIRM = (
+    "[SİSTEM KONTROLÜ] Kullanıcı bu değişikliği açıkça istedi; onay sorma. İlgili "
+    "aracı çağırıp uygula. Gerçekten eksik bir bilgi (oran, yıl, hücre) yoksa "
+    "soru sorma." + _HIDDEN
+)
+# AG10: "Bu hücreyi çıkarmak ister misiniz?" — komut zaten verilmişken.
+_CONFIRM_ASK_RE = re.compile(
+    r"ister mi(?:sin|siniz)|onaylıyor mu(?:sun|sunuz)|onaylar mı(?:sın|sınız)"
+    r"|(?:yapayım|uygulayayım|eleyeyim|çıkarayım|değiştireyim|ayarlayayım) mı"
+    r"|emin mi(?:sin|siniz)",
+    re.IGNORECASE,
+)
+_NUDGE_BASIS_MISSING = (
+    "[SİSTEM KONTROLÜ] Kullanıcı BF istedi ama yalnız loss ratio yazdın; {origins} hâlâ CL "
+    "bazında, LR bu haliyle ultimate'i değiştirmez. set_basis_bulk (ya da set_bf_origins) "
+    "ile basis'i BF yap." + _HIDDEN
+)
+
+
+def _ibnr_values(obj: Any, under_ibnr: bool = False) -> list[float]:
+    """Araç çıktısında anahtarı 'ibnr' içeren sayısal değerler."""
+    out: list[float] = []
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            out += _ibnr_values(v, under_ibnr or "ibnr" in str(k).lower())
+    elif isinstance(obj, list):
+        for v in obj:
+            out += _ibnr_values(v, under_ibnr)
+    elif under_ibnr and isinstance(obj, (int, float)) and not isinstance(obj, bool):
+        out.append(float(obj))
+    return out
+
+
+def _synthetic_read_tool(messages: list[dict[str, Any]]) -> str:
+    """Model zorunlu okumayı yok saydığında döngünün yapacağı okuma."""
+    last = next((m for m in reversed(messages) if m.get("role") == "user"), None)
+    text = str((last or {}).get("content") or "")
+    if re.search(r"hasar/prim|hasar prim|\bilr\b|loss ratio üçgen", text, re.IGNORECASE):
+        return "get_ilr_triangle"
+    return "get_analysis_state"
+
+
+def _lr_origins(actions: list[dict[str, Any]]) -> set[str]:
+    out: set[str] = set()
+    for a in actions:
+        pl = a.get("payload") or {}
+        if a.get("type") == "set_selected_loss_ratio":
+            out.add(str(pl.get("origin", "")))
+        elif a.get("type") == "set_selected_loss_ratios":
+            out |= {str(i.get("origin", "")) for i in pl.get("items", [])}
+    return out - {""}
+
+
+def _basis_origins(actions: list[dict[str, Any]]) -> set[str]:
+    out: set[str] = set()
+    for a in actions:
+        pl = a.get("payload") or {}
+        if a.get("type") == "set_basis":
+            out.add(str(pl.get("origin", "")))
+        elif a.get("type") == "set_basis_bulk":
+            out |= {str(i.get("origin", "")) for i in pl.get("items", [])}
+    return out - {""}
+
+
+_NUDGE_UNIT = (
+    "[SİSTEM KONTROLÜ] Cevabındaki {written} araç çıktısında {actual} olarak geçiyor: "
+    "birim yanlış (milyon/milyar). Rakamı araç çıktısındaki birimiyle yaz." + _HIDDEN
+)
 _YEAR_RE = re.compile(r"\b((?:19|20)\d{2})\b")
+# Bu uyarılardan sonra model bir OKUMA yapmalı: bir sonraki çağrıda araç zorunlu.
+# Qwen 3.5 9B uyarıyı okuyup yine araçsız cevap veriyordu (D3, V2, V6).
+_NUDGES_NEEDING_A_READ = (_NUDGE_DATA_READ,)
 
 # Arayüzün işlem uygulanan turdan sonra gönderdiği görünmez "devam" mesajı.
 # Bu turda model önceki turun değişikliğini özetlerken ("ayarlandı") yeni bir
@@ -567,8 +661,9 @@ def _guard_nudge(
     tool_invocations: list[dict[str, Any]],
     actions: list[dict[str, Any]],
     block: str = "",
+    bases: dict[str, str] | None = None,
 ) -> str | None:
-    """Son cevap kabul edilmeden önce geri çevrilmeli mi (tur başına en fazla iki kez).
+    """Son cevap kabul edilmeden önce geri çevrilmeli mi (tur başına en fazla bir kez).
 
     Komutlarda: yapılmamış değişikliği "yaptım" demek, formu düz metin yazmak.
     Sorularda: blokta olmayan veriyi okumadan vermek, sorulan yılı vermemek.
@@ -594,19 +689,54 @@ def _guard_nudge(
         and answer
         and _COMPLETION_CLAIM_RE.search(answer)
         and not _ALREADY_RE.search(answer)  # "zaten BF bazında" meşru
+        # "İskontoyu hesapla" → compute_discount çalıştı: iş yapıldı, yazma
+        # gerekmiyordu (TK04: geri çevirme "Haklısınız" diye özür ürettirdi).
+        and not (ran & _ANSWER_PRODUCING_TOOLS)
     ):
         return _NUDGE_FALSE_CLAIM
+    if not asked and not actions and _CONFIRM_ASK_RE.search(answer):
+        return _NUDGE_NEEDLESS_CONFIRM
+    # "BF'e al" komutunda yalnız LR yazıp basis'i değiştirmemek (AG01): CL
+    # bazındaki origin'de LR ultimate'i hiç etkilemez.
+    if not asked and re.search(r"\bbf\b", text, re.IGNORECASE):
+        lr_origins = _lr_origins(actions)
+        if lr_origins and not _basis_origins(actions):
+            still_cl = sorted(o for o in lr_origins if (bases or {}).get(o, "cl") != "bf")
+            if still_cl:
+                return _NUDGE_BASIS_MISSING.format(origins=", ".join(still_cl))
     # Blokta olmayan veriyi hiç okumadan rakamla vermek (uydurma üçgen, IBNR'ı
     # ultimate diye vermek, kaza yılı yerine branş toplamı).
-    if asked and _DATA_Q_RE.search(text) and not ran and re.search(r"\d", answer):
+    wants_data = asked or bool(_SHOW_RE.search(text))
+    if wants_data and _DATA_Q_RE.search(text) and not ran and re.search(r"\d", answer):
         return _NUDGE_DATA_READ
     # Sorulan kaza yılı cevapta hiç yok, başka yıllar var ("2024 kaza yılnın
     # ibnrı" → 2025'in rakamı).
     q_years = set(_YEAR_RE.findall(text))
     a_years = set(_YEAR_RE.findall(answer))
-    if asked and q_years and a_years and not (q_years & a_years):
+    # Sorulan yıl cevapta hiç yoksa (başka yıl ya da hiç yıl) — SEM08'de cevap
+    # yıl söylemeden 2025'in satırını verdi.
+    if asked and q_years and re.search(r"\d", answer) and not (q_years & a_years):
         return _NUDGE_WRONG_YEAR.format(asked=", ".join(sorted(q_years)),
-                                        answered=", ".join(sorted(a_years)))
+                                        answered=", ".join(sorted(a_years)) or "hiç yıl")
+    # IBNR'ı nihai hasar diye sunmak (V6, SEM02).
+    for m in _NEG_ULTIMATE_RE.finditer(answer):
+        vals = numbers_in(m.group(1))
+        if vals and vals[0] <= -100_000:
+            return _NUDGE_NEG_ULTIMATE.format(value=m.group(1).strip())
+    # Birim kayması: araç -123,760,430 dedi, cevap "-123.76 Milyar" (TK04).
+    sources = block + " " + " ".join(str(t.get("output")) for t in tool_invocations)
+    src_vals = [v for v in numbers_in(sources) if abs(v) >= 1_000]
+    for m in re.finditer(r"[-−]?\s?\d[\d.,]*\s*(?:milyar|milyon|mlr|mn)\b", answer, re.IGNORECASE):
+        vals = numbers_in(m.group(0))
+        if not vals:
+            continue
+        v = vals[0]
+        near = lambda x: any(abs(abs(s) - abs(x)) <= 0.01 * abs(x) for s in src_vals)  # noqa: E731
+        if near(v):
+            continue
+        for k in (1_000, 0.001):
+            if near(v / k):
+                return _NUDGE_UNIT.format(written=m.group(0).strip(), actual=f"{v / k:,.0f}")
     # Dönem alt toplamlarının toplamı: aynı portföyü iki kez saymak.
     subtotals = [numbers_in(m.group(1))[0] for m in re.finditer(r"dönem toplamı IBNR (-?[\d,.]+)", block)
                  if numbers_in(m.group(1))]
@@ -616,8 +746,9 @@ def _guard_nudge(
             return _NUDGE_PERIOD_SUM.format(total=f"{total:,.0f}")
     # Negatif değeri işaretsiz yazmak (bloktan ya da bu turun araç çıktılarından).
     if not re.search(r"negatif|eksi|negative", answer, re.IGNORECASE):
-        sources = block + " " + " ".join(str(t.get("output")) for t in tool_invocations)
-        negatives = {v for v in numbers_in(sources) if v <= -100_000}
+        # Yalnız IBNR değerleri: iskonto tutarı gibi kalemleri işaretsiz yazmak doğal.
+        ibnr_vals = [v for t in tool_invocations for v in _ibnr_values(t.get("output"))]
+        negatives = {v for v in numbers_in(block) + ibnr_vals if v <= -100_000}
         got = numbers_in(answer)
         for v in sorted(negatives):
             if any(abs(g - abs(v)) <= 0.005 * abs(v) for g in got if g > 0) and \
@@ -811,7 +942,15 @@ def run_agent_turn(
     applied_writes: set[tuple[str, str]] = set()
     # Koruma turda en fazla bir kez geri çevirir; geri çevirme mesajları
     # konuşma geçmişine (raw_additions) yazılmaz.
-    guard_used = 0
+    # Geri çevirme: tur başına en çok iki, aynı tür uyarı bir kez. (V6: okuma
+    # uyarısından sonra gelen "Selected Ultimate −183M" etiket hatası tek
+    # bütçeyle yakalanamıyordu.)
+    nudges_given: set[str] = set()
+    _res_ss = (module_ctx.get("reserve") or {}).get("session_state") or {}
+    bases = {str(r.get("origin")): str(r.get("basis") or "cl")
+             for r in (_res_ss.get("per_origin") or []) if isinstance(r, dict)}
+    force_tool = False  # bir sonraki çağrıda araç zorunlu mu
+    synthetic_read_ok = True  # zorunlu çağrı yok sayılırsa döngü okuyabilir mi
     guard_msgs: list[dict[str, Any]] = []
 
     def _additions() -> list[dict[str, Any]]:
@@ -841,20 +980,66 @@ def run_agent_turn(
             turn_tools = [
                 t for t in all_tools if t["function"]["name"] not in _drop
             ]
-        response = client.chat(messages=conv, tools=turn_tools)
+        response = None
+        # Son iterasyon ve bu turda hiçbir şey uygulanmadı: model okuma
+        # döngüsünde (C4: aynı durumu üst üste okuyup "Tur limiti doldu").
+        # Araçları kapat, okuduklarıyla cevap versin. Yazma yapılmış çok adımlı
+        # turlar sınırda durmaya devam eder (arayüz 'devam' ile sürdürür).
+        if _iteration == max_iterations - 1 and not actions and tool_invocations:
+            try:
+                response = client.chat(messages=conv, tools=turn_tools, tool_choice="none")
+                if response.get("tool_calls"):
+                    response = None
+            except Exception as e:  # noqa: BLE001
+                logger.warning("araçsız son çağrı başarısız: %s", e)
+            if response is not None:
+                force_tool = False
+        if response is None and force_tool:
+            force_tool = False
+            try:
+                response = client.chat(messages=conv, tools=turn_tools, tool_choice="required")
+                if not response.get("tool_calls"):
+                    # LM Studio "required"ı her zaman uygulamıyor (SEM11: yine
+                    # araçsız metin). Okumayı döngü yapar; model sonucu görüp
+                    # yeniden cevaplar.
+                    names = {t["function"]["name"] for t in turn_tools}
+                    read = _synthetic_read_tool(messages)
+                    if synthetic_read_ok and read in names:
+                        response = {"content": None, "tool_calls": [ToolCall("guard_read", read, {})]}
+                    elif not (response.get("content") or "").strip():
+                        response = None  # boş/kesilmiş → normal çağrı
+                    # Yazma uyarısından sonra araçsız ama dolu cevap meşru bir
+                    # ret olabilir ("Uygulayamadım: 2021 BF değil") — kabul.
+            except Exception as e:  # noqa: BLE001 — zaman aşımı/400: normal çağrıya düş
+                logger.warning("zorunlu araç çağrısı başarısız, normal çağrıya düşülüyor: %s", e)
+        if response is None:
+            response = client.chat(messages=conv, tools=turn_tools)
         content = response.get("content")
         tool_calls: list[ToolCall] = response.get("tool_calls", [])
 
         if not tool_calls:
-            nudge = None if guard_used >= 1 else _guard_nudge(
-                messages, content or "", tool_invocations, actions, summary_block
+            nudge = None if len(nudges_given) >= 2 else _guard_nudge(
+                messages, content or "", tool_invocations, actions, summary_block, bases
             )
+            if nudge and nudge[:60] in nudges_given:
+                nudge = None
             if nudge and _iteration < max_iterations - 1:
-                guard_used += 1
-                a_msg: dict[str, Any] = {"role": "assistant", "content": content or ""}
+                nudges_given.add(nudge[:60])
+                force_tool = (
+                    nudge in _NUDGES_NEEDING_A_READ
+                    or nudge == _NUDGE_FALSE_CLAIM
+                    or nudge.startswith(_NUDGE_WRONG_YEAR[:40])
+                )
+                synthetic_read_ok = nudge != _NUDGE_FALSE_CLAIM
                 u_msg: dict[str, Any] = {"role": "user", "content": nudge}
-                conv += [a_msg, u_msg]
-                guard_msgs += [a_msg, u_msg]
+                if force_tool:
+                    # Reddedilen cevabı konuşmada bırakma: model onu kelimesi
+                    # kelimesine tekrarlıyordu (V6, SEM11 okumada; AG05 yazmada).
+                    new_msgs = [u_msg]
+                else:
+                    new_msgs = [{"role": "assistant", "content": content or ""}, u_msg]
+                conv += new_msgs
+                guard_msgs += new_msgs
                 continue
             # Boş final ama bu turda tool çalıştıysa, ne yapıldığını özetle
             # ("(empty response)" yerine kullanıcıya faydalı bir şey dönsün).

@@ -45,13 +45,16 @@ class RetryingClient:
         self.attempts = attempts
         self.retries = 0
 
-    def chat(self, messages, tools):
-        for i in range(self.attempts):
+    def chat(self, messages, tools, tool_choice="auto"):
+        # Zorunlu çağrı başarısızsa döngü zaten normal çağrıya düşüyor; burada
+        # tekrar denemek takılan bir çağrıyı katlar (D3: 1360 sn).
+        attempts = 1 if tool_choice == "required" else self.attempts
+        for i in range(attempts):
             try:
-                return self.inner.chat(messages=messages, tools=tools)
+                return self.inner.chat(messages=messages, tools=tools, tool_choice=tool_choice)
             except Exception as e:  # noqa: BLE001
                 msg = f"{type(e).__name__}: {e}"
-                if i == self.attempts - 1 or not any(t in msg for t in self.TRANSIENT):
+                if i == attempts - 1 or not any(t in msg for t in self.TRANSIENT):
                     raise
                 self.retries += 1
                 time.sleep(min(60, 5 * 2 ** i))

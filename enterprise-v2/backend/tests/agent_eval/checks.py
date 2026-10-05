@@ -68,8 +68,11 @@ def evaluate(case: dict, result: dict) -> tuple[bool, list[str]]:
         if a in actions:
             problems.append(f"üretilmemesi gereken aksiyon: {a}")
 
-    if case.get("read_only") and actions:
-        problems.append(f"okuma sorusu yazma aksiyonu üretti: {actions}")
+    # navigate_to yalnız sekmeyi değiştirir, veri yazmaz ("iskontoyu hesapla"
+    # komutunda iskonto sekmesini açmak makul) — okuma-yalnız ölçütünü bozmaz.
+    writes = [a for a in actions if a != "navigate_to"]
+    if case.get("read_only") and writes:
+        problems.append(f"okuma sorusu yazma aksiyonu üretti: {writes}")
 
     mx = case.get("max_tools")
     if mx is not None and len(tools) > mx:

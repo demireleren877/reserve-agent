@@ -45,6 +45,7 @@ class AgentClient:
         self,
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]],
+        tool_choice: str = "auto",
     ) -> dict[str, Any]:
         """Bir LLM turu çalıştır. Normalize edilmiş yanıt döndürür:
 
@@ -52,12 +53,21 @@ class AgentClient:
             "content": str | None,
             "tool_calls": [ToolCall, ...],
         }
+
+        tool_choice="required": model bir araç çağırmak ZORUNDA.
         """
+        extra: dict[str, Any] = {"tool_choice": tool_choice} if tools else {}
+        if tools and tool_choice == "required":
+            # Bazı sağlayıcılarda (LM Studio) zorunlu araç çağrısı bitmeyen üretime
+            # girebiliyor: üretimi ve süreyi sınırla; döngü hata alırsa normal
+            # çağrıya düşer.
+            extra.update(max_tokens=1024, timeout=90.0)
         resp = self._client.chat.completions.create(
             model=self.model,
             messages=messages,  # type: ignore[arg-type]
             tools=tools,  # type: ignore[arg-type]
             temperature=self.temperature,
+            **extra,
         )
         msg = resp.choices[0].message
         tool_calls: list[ToolCall] = []

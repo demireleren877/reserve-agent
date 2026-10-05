@@ -34,7 +34,8 @@ TEMEL KAVRAMLAR
   - rate_mode='none' IFRS 17'de GEÇERSİZ (BEL tanımı gereği iskontolu).
 
 ARAÇLAR
-* get_discount_state: Tüm branşların özet iskonto sonuçları (IFRS 4 %30 hızlı özet)
+* get_discount_state: İskonto sonuçları, branş başına (IFRS 4 %30 hızlı özet). IBNR
+  sorularında KULLANMA — branş/dönem IBNR toplamları durum bloğunda.
 * compute_discount: Standart + parametrelerle detaylı hesap. Tüm parametreler
   opsiyonel — verilmeyenler standardın varsayılanına düşer (kullanıcıya esneklik).
 

@@ -112,6 +112,10 @@ class OAuthClientCredentials:
 _TOKEN_CACHE: dict[tuple[str, str], tuple[str, float]] = {}
 
 
+# tool_choice="required" çağrısının süre sınırı (sn)
+FORCED_TOOL_TIMEOUT = 90.0
+
+
 class AgentClient:
     def __init__(
         self,
@@ -185,8 +189,8 @@ class AgentClient:
             headers["Authorization"] = f"Bearer {self.api_key}"
         return headers
 
-    def _post(self, url: str, payload: dict[str, Any]) -> dict[str, Any]:
-        with httpx.Client(timeout=self.timeout, verify=self._verify()) as client:
+    def _post(self, url: str, payload: dict[str, Any], timeout: float | None = None) -> dict[str, Any]:
+        with httpx.Client(timeout=timeout or self.timeout, verify=self._verify()) as client:
             resp = client.post(url, json=payload, headers=self._headers())
             # Token gateway tarafında erken düşebilir: bir kez yenile, tekrar dene.
             if resp.status_code == 401 and self.oauth is not None:
@@ -216,30 +220,44 @@ class AgentClient:
         self,
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]],
+        tool_choice: str = "auto",
     ) -> dict[str, Any]:
         """Bir LLM turu çalıştır. Normalize edilmiş yanıt döndürür:
         {"content": str | None, "tool_calls": [ToolCall, ...]}
+
+        tool_choice="required": model bir araç çağırmak ZORUNDA (OpenAI biçimi;
+        LM Studio destekliyor). Ollama biçimlerinde karşılığı yok, yok sayılır.
         """
         if self.api_format == "ollama_chat":
             return self._chat_ollama(messages, tools)
         if self.api_format == "ollama_generate":
             return self._chat_ollama_generate(messages, tools)
-        return self._chat_openai(messages, tools)
+        return self._chat_openai(messages, tools, tool_choice)
 
     # ── OpenAI uyumlu ─────────────────────────────────────────────────────────
 
-    def _chat_openai(self, messages: list[dict[str, Any]], tools: list[dict[str, Any]]) -> dict[str, Any]:
+    def _chat_openai(
+        self, messages: list[dict[str, Any]], tools: list[dict[str, Any]], tool_choice: str = "auto"
+    ) -> dict[str, Any]:
         payload: dict[str, Any] = {
             "model": self.model,
             "messages": messages,
             "temperature": self.temperature,
         }
+        timeout = None
         if tools:
             payload["tools"] = tools
-            payload["tool_choice"] = "auto"
+            payload["tool_choice"] = tool_choice
+            if tool_choice == "required":
+                # LM Studio'da zorunlu araç çağrısı ara sıra bitmeyen üretime
+                # giriyor (ölçüldü: 240 sn zaman aşımı, üst üste). Araç çağrısı
+                # kısadır: üretimi ve süreyi sınırla; çağıran hata alırsa normal
+                # çağrıya düşer.
+                payload["max_tokens"] = 1024
+                timeout = min(self.timeout, FORCED_TOOL_TIMEOUT)
         if self.extra_body:
             payload.update(self.extra_body)
-        data = self._post(f"{self.base_url}/chat/completions", payload)
+        data = self._post(f"{self.base_url}/chat/completions", payload, timeout)
 
         choices = data.get("choices") or []
         if not choices:

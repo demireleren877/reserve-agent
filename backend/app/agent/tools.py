@@ -170,8 +170,10 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
         "function": {
             "name": "exclude_outliers",
             "description": (
-                "Kolon bazlı aykırı LDF'leri toplu eler. threshold_pct baseline'dan "
-                "sapma yüzdesi, direction high/low/both, baseline mean/median."
+                "Kolon bazlı aykırı LDF'leri BULUR ve toplu eler. \"Aykırıları bul ve ele\", "
+                "\"outlier'ları temizle\" gibi komutlarda bunu kullan — hücreleri tek tek "
+                "seçip exclude_cells'e yazma. threshold_pct baseline'dan sapma yüzdesi, "
+                "direction high/low/both, baseline mean/median."
             ),
             "parameters": {
                 "type": "object",
@@ -987,9 +989,10 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
         "function": {
             "name": "get_discount_state",
             "description": (
-                "Tüm branşların iskonto özetini döner: Unpaid Liability, "
-                "SEDDK %30 faiz ile İskontolu Unpaid, iskonto tutarı ve duration. "
-                "Cashflow pattern hesaplanmamış branşlarda null döner."
+                "İSKONTO modülü: branş başına Unpaid Liability, SEDDK %30 faiz ile "
+                "İskontolu Unpaid, iskonto tutarı ve duration. IBNR/ultimate soruları "
+                "için DEĞİL — branş/dönem IBNR toplamları durum bloğunda, ayrıntısı "
+                "get_branch_state'te. Cashflow pattern hesaplanmamış branşlarda null döner."
             ),
             "parameters": {"type": "object", "properties": {}, "required": []},
         },
@@ -1390,7 +1393,7 @@ def dispatch_tool(
     if name == "get_analysis_state":
         return _get_analysis_state(triangle, session_state)
     if name == "exclude_cells":
-        return _exclude_cells(triangle, args, additive=True)  # type: ignore[arg-type]
+        return _exclude_cells(triangle, args, additive=True, session_state=session_state)  # type: ignore[arg-type]
     if name == "include_cells":
         return _exclude_cells(triangle, args, additive=False)  # type: ignore[arg-type]
     if name == "clear_exclusions":
@@ -2429,7 +2432,8 @@ def _simulate_bf_formula(
 
 
 def _exclude_cells(
-    triangle: Triangle, args: dict[str, Any], *, additive: bool
+    triangle: Triangle, args: dict[str, Any], *, additive: bool,
+    session_state: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     raw_cells = args.get("cells", []) or []
     origins_idx = {o: i for i, o in enumerate(triangle.origin_periods)}
@@ -2455,11 +2459,29 @@ def _exclude_cells(
             )
             continue
         valid.append({"origin": origin, "step": step})
+    # Zaten elenmiş hücreyi yeniden elemek "yaptım" dedirtip hiçbir şeyi
+    # değiştirmiyordu (Qwen 3.5 9B "aykırıları bul ve ele" komutunda fixture'da
+    # zaten elenmiş 2017/2018 hücrelerini tekrar eledi).
+    already: list[dict[str, Any]] = []
+    if additive and session_state:
+        done = {(str(c.get("origin")), int(c.get("step", -1)))
+                for c in (session_state.get("excluded_cells") or []) if isinstance(c, dict)}
+        already = [c for c in valid if (c["origin"], c["step"]) in done]
+        valid = [c for c in valid if (c["origin"], c["step"]) not in done]
+    if already and not valid:
+        return {
+            "applied": [], "count": 0, "already_excluded": already,
+            "error": (
+                "Bu hücreler ZATEN elenmiş — değişiklik yok. Aykırı oranları bulup elemek "
+                "için exclude_outliers kullan; kullanıcıya yeni bir eleme yapmadığını söyle."
+            ),
+        }
     action_type = "exclude_cells" if additive else "include_cells"
     result: dict[str, Any] = {
         "applied": valid,
         "count": len(valid),
         "invalid": invalid,
+        **({"already_excluded": already} if already else {}),
     }
     if not valid:
         # Boş action göndermek frontend'de spurious history yaratıyordu.

@@ -53,6 +53,7 @@ export const AGENT_TOOLS: ToolDef[] = [
   { id: "set_premiums", module: "reserve", kind: "action", impl: "ready", title: "Set premiums (bulk)", description: "Sets exposure for multiple years." },
   { id: "set_basis", module: "reserve", kind: "action", impl: "ready", title: "Set basis", description: "Selects the CL/BF basis for an accident year." },
   { id: "set_basis_bulk", module: "reserve", kind: "action", impl: "ready", title: "Set basis (bulk)", description: "Selects bases for multiple years." },
+  { id: "set_bf_origins", module: "reserve", kind: "action", impl: "ready", title: "Set BF years", description: "Puts given years on BF, the rest back to CL, and sets their loss ratio — one step." },
   { id: "set_correction", module: "reserve", kind: "action", impl: "ready", title: "Set correction", description: "Sets the quarterly annualization correction factor." },
   { id: "set_corrections", module: "reserve", kind: "action", impl: "ready", title: "Set corrections (bulk)", description: "Sets multiple correction factors." },
   { id: "set_cdf_user_value", module: "reserve", kind: "action", impl: "ready", title: "Set CDF user value", description: "Sets a user CDF for a development step in Curve." },

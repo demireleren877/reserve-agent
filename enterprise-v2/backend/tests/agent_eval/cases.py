@@ -159,7 +159,7 @@ def build_cases(project: dict) -> list[dict]:
              # 18 yıl; yalnız kelimeye bakmak, negatif IBNR'dan genelleyen cevabı
              # da geçirir. Ödenmiş tutar YALNIZ ultimate_below_paid'de var.
              expect_text=[["ödenmiş", "ödenen", "paid"]],
-             expect_any_numbers=[below25["paid"], below25["gap"]], tol=0.01,
+             expect_any_numbers=[below25["paid"]], tol=0.01,
              read_only=True),
         dict(id="V4", kat="varsayım", q="LDF hesabında hangi volume seçili?",
              expect_text=["all"], read_only=True),

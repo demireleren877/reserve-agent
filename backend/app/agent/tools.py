@@ -401,8 +401,43 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "set_bf_origins",
+            "description": (
+                "BF ayarını TEK çağrıda yap: verilen kaza yıllarını BF'ye al, istenirse "
+                "DİĞER yılları CL'ye (DFM) döndür ve BF yıllarına loss ratio yaz. "
+                "\"Sadece 2025 BF olsun, gerisi DFM/CL\", \"son yıl BF, son 4 yılın ağırlıklı "
+                "ortalamasıyla\" gibi komutlar için bunu kullan. Yıl aralığını SEN hesaplama: "
+                "\"son N yılın ortalaması\" için lr_last_n=N ver, araç her BF yılı için önceki N "
+                "yılı kendisi bulur. Kullanıcı oran söylemediyse lr_* verme."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "origins": {"type": "array", "items": {"type": "string"},
+                                "description": "BF yapılacak kaza yılları, ör. [\"2025\"]"},
+                    "others_to_cl": {"type": "boolean",
+                                     "description": "Diğer BF yıllarını CL'ye döndür (varsayılan true)"},
+                    "lr_last_n": {"type": "integer",
+                                  "description": "LR = her BF yılından ÖNCEKİ son N kaza yılının ortalaması"},
+                    "lr_method": {"type": "string", "enum": ["vw", "avg"],
+                                  "description": "vw = ağırlıklı (varsayılan), avg = basit ortalama"},
+                    "lr_formula": {"type": "string",
+                                   "description": "Doğrudan formül/oran (lr_last_n yerine), ör. \"0.65\""},
+                },
+                "required": ["origins"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "set_basis_bulk",
-            "description": "Birden fazla origin için basis değiştir.",
+            "description": (
+                "Birden fazla origin için basis değiştir. YALNIZ DEĞİŞEN origin'leri gönder: "
+                "zaten istenen basis'te olanları yazma. \"Sadece 2025 BF olsun\" → 2025 bf + "
+                "şu an BF olup CL'ye dönecekler; 26 yılın hepsini listeleme (yerel modelde "
+                "dakikalar sürüyor)."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -1297,6 +1332,7 @@ _ACTIVE_BRANCH_WRITE = {
     "set_premiums",
     "set_basis",
     "set_basis_bulk",
+    "set_bf_origins",
     "set_correction",
     "set_corrections",
     "set_cdf_user_value",
@@ -1480,6 +1516,8 @@ def dispatch_tool(
                 "payload": {"origin": origin, "basis": basis},
             },
         }
+    if name == "set_bf_origins":
+        return _set_bf_origins(args, session_state)
     if name == "set_basis_bulk":
         items = args.get("items", []) or []
         clean: list[dict[str, Any]] = []
@@ -1696,6 +1734,20 @@ def dispatch_tool(
 
 _BRANCH_VERBOSE_FIELDS = {"per_origin", "formula_context", "selected_ldfs", "effective_cdfs"}
 
+# list_project branş başına YALNIZ bu özet alanlarını döndürür (izin listesi).
+# Yasak listesi yetmiyordu: sonradan eklenen her alan (curve_state,
+# ultimate_below_paid, …) özete sızıyordu. Qwen 3.5 9B ile ölçüldü: tek bir
+# list_project sonucu ~100 bin token olunca sonraki çağrının prompt'u 124 bin
+# tokena çıktı, LM Studio'da 67 sn sürdü ve model veriler arasında kayboldu.
+# Ayrıntı get_branch_state(branch_id) ile.
+_LIST_PROJECT_FIELDS = {
+    "id", "name", "frequency", "is_active", "has_triangle", "triangle_file",
+    "triangle_type", "method", "window", "n_origins", "n_developments",
+    "origin_first", "origin_last", "origin_granularity", "development_granularity",
+    "excluded_count", "curve_overrides_count", "correction_count", "manual_lr_count",
+    "bf_basis_count", "history_count", "totals",
+}
+
 
 def _list_project(session_state: dict[str, Any] | None) -> dict[str, Any]:
     if not session_state:
@@ -1707,7 +1759,12 @@ def _list_project(session_state: dict[str, Any] | None) -> dict[str, Any]:
         {
             **{k: v for k, v in p.items() if k != "branches"},
             "branches": [
-                {k: v for k, v in b.items() if k not in _BRANCH_VERBOSE_FIELDS}
+                {
+                    **{k: v for k, v in b.items() if k in _LIST_PROJECT_FIELDS},
+                    # Listenin kendisi değil sayısı: ayrıntı get_branch_state'te.
+                    **({"ultimate_below_paid_count": len(b["ultimate_below_paid"])}
+                       if b.get("ultimate_below_paid") else {}),
+                }
                 for b in p.get("branches", [])
             ],
         }
@@ -1827,8 +1884,18 @@ def _get_analysis_state(
         # Adım başına pencere (step 0-indexli → {"0": "4"}). Boşsa global window.
         "karma_windows": session_state.get("karma_windows") or {},
         # Nihaisi ödenmişin altında kalan kaza yılları (nihai ödenmişten az
-        # olamaz). Boş değilse nihai/IBNR/ödenmemiş cevaplarında söylenmeli.
-        "ultimate_below_paid": session_state.get("ultimate_below_paid") or [],
+        # olamaz). Fark rakamı BİLEREK yok: "gap" alanı varken Qwen 3.5 9B onu
+        # kaza yılının IBNR'ı diye verdi (2024: -5,25M; doğrusu -6,38M). Açık adlı
+        # iki tutar ve "IBNR değildir" notu.
+        "ultimate_below_paid": {
+            "note": "UYARI listesi — bu tutarlar IBNR DEĞİLDİR. IBNR per_origin[].ibnr'dadır "
+                    "(nihai − incurred). Burada nihai < ödenmiş olan yıllar listelenir.",
+            "origins": [
+                {"origin": b.get("origin"), "selected_ultimate": b.get("ultimate"),
+                 "paid_to_date": b.get("paid")}
+                for b in (session_state.get("ultimate_below_paid") or [])
+            ],
+        } if session_state.get("ultimate_below_paid") else {},
         "excluded_cells_count": len(excluded_cells),
         "excluded_cells": excluded_cells[:50],
         "selected_ldfs": session_state.get("selected_ldfs", []),
@@ -1945,6 +2012,61 @@ def _simulate_bf(
             "ibnr": new_bf_ibnr - current_ibnr,
         },
     }
+
+
+def _set_bf_origins(args: dict[str, Any], session_state: dict[str, Any] | None) -> dict[str, Any]:
+    """BF yıllarını, CL'ye dönüşü ve LR'ı tek seferde kurar.
+
+    Qwen 3.5 9B "sadece son kaza yılına son 4 yılın ağırlıklı ortalamasını kullanan
+    BF, gerisi DFM" komutunu üç ayrı araca bölerken yıl aralığını yanlış hesapladı
+    (vw(2024:2025)), CL dönüşünü unuttu ya da hiçbir şey yapmadı. Burada model
+    yalnız NİYETİ verir (hangi yıllar, son kaç yıl); aralık ve geçişler hesaplanır.
+    """
+    per = (session_state or {}).get("per_origin") or []
+    order = [_norm_origin(str(r.get("origin", ""))) for r in per]
+    if not order:
+        return {"error": "Aktif branşta kaza yılı yok; önce üçgen yüklenmeli."}
+    current = {_norm_origin(str(r.get("origin", ""))): str(r.get("basis") or "cl") for r in per}
+    targets = [_norm_origin(str(o)) for o in (args.get("origins") or [])]
+    unknown = [o for o in targets if o not in current]
+    if unknown or not targets:
+        return {"error": f"Bilinmeyen kaza yılı: {unknown or targets}. Mevcut: {order[0]}–{order[-1]}."}
+
+    items = [{"origin": o, "basis": "bf"} for o in targets if current[o] != "bf"]
+    to_cl: list[str] = []
+    if args.get("others_to_cl", True):
+        to_cl = [o for o in order if o not in targets and current[o] == "bf"]
+        items += [{"origin": o, "basis": "cl"} for o in to_cl]
+
+    lr_items: list[dict[str, str]] = []
+    n = args.get("lr_last_n")
+    if n:
+        n = int(n)
+        method = args.get("lr_method") or "vw"
+        for o in targets:
+            prev = order[:order.index(o)][-n:]
+            if len(prev) < n:
+                return {"error": f"{o} için öncesinde {n} kaza yılı yok (var: {len(prev)})."}
+            lr_items.append({"origin": o, "formula": f"{method}({prev[0]}:{prev[-1]})"})
+    elif args.get("lr_formula"):
+        lr_items = [{"origin": o, "formula": str(args["lr_formula"])} for o in targets]
+
+    actions: list[dict[str, Any]] = []
+    if items:
+        actions.append({"type": "set_basis_bulk", "payload": {"items": items}})
+    if lr_items:
+        actions.append({"type": "set_selected_loss_ratios", "payload": {"items": lr_items}})
+    out: dict[str, Any] = {
+        "bf_origins": targets,
+        "switched_to_cl": to_cl,
+        "already_bf": [o for o in targets if current[o] == "bf"],
+        "loss_ratio": lr_items,
+    }
+    if not actions:
+        out["note"] = "Değişiklik gerekmedi: istenen ayar zaten uygulanmış."
+    else:
+        out["_actions"] = actions
+    return out
 
 
 def _norm_origin(o: str) -> str:

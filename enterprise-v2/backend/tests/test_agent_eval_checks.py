@@ -135,3 +135,9 @@ def test_negative_target_requires_the_sign_or_the_word():
 
 def test_positive_target_rejects_a_negative_match():
     assert not has_number("ultimate -617.969.275", 617_969_275)
+
+
+def test_unit_suffix_allows_the_decimal_reading():
+    # Qwen 9B "-1.212 milyon TL" yazdı (doğru: -1.211.981); 1,2 milyar okunuyordu.
+    assert has_number("IBNR: -1.212 milyon TL", -1_211_981, tol=0.01)
+    assert has_number("1.500 milyon", 1_500_000_000)  # binlik okuma da hâlâ geçerli

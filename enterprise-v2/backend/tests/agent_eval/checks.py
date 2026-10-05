@@ -72,6 +72,15 @@ def numbers_in(text: str) -> list[float]:
         if val is None:
             continue
         out.append(val * _MULT[suffix.lower()] if suffix else val)
+        # "-1.212 milyon": tek ayraç + 3 haneli kuyruk binlik sayıldığı için
+        # 1,2 milyar okunuyordu. Birim takısı varken ondalık okuma da geçerli —
+        # ikisini de ekle (has_number herhangi birini arar).
+        body = raw.lstrip("-")
+        if suffix and body.count(".") + body.count(",") == 1:
+            head, _, tail = body.replace(",", ".").partition(".")
+            if len(tail) == 3:
+                alt = float(f"{head}.{tail}") * _MULT[suffix.lower()]
+                out.append(-alt if raw.startswith("-") else alt)
     return out
 
 

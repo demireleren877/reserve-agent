@@ -109,4 +109,26 @@ def test_get_analysis_state_reports_ultimate_below_paid():
     ss = {"active": {"branch_id": "b1", "branch_name": "FIRE", "period_label": "2026Q2"},
           "ultimate_below_paid": rows}
     out = dispatch_tool("get_analysis_state", {}, triangle=tri, session_state=ss)
-    assert out.get("ultimate_below_paid") == rows, out
+    ubp = out["ultimate_below_paid"]
+    assert ubp["origins"] == [{"origin": "2025", "selected_ultimate": 54.0, "paid_to_date": 202.0}]
+    assert "IBNR DEĞİLDİR" in ubp["note"]
+    assert "gap" not in str(ubp)  # model farkı IBNR sanıyordu
+
+
+def test_list_project_is_a_summary_whatever_the_snapshot_carries():
+    """list_project izin listesiyle döner: bridge'e yeni ağır alan eklense de sızmaz."""
+    import json
+    from app.agent.tools import dispatch_tool
+    heavy = {"per_origin": [{"origin": str(y), "ibnr": 1.0} for y in range(2000, 2026)],
+             "curve_state": {"rows": list(range(500))},
+             "ultimate_below_paid": [{"origin": "2025", "gap": -1.0}] * 18,
+             "some_future_field": "x" * 5000}
+    ss = {"active": STATE["active"], "periods": [
+        dict(p, branches=[dict(b, **heavy) for b in p["branches"]]) for p in STATE["periods"]]}
+    out = dispatch_tool("list_project", {}, session_state=ss)
+    b = out["periods"][0]["branches"][0]
+    for k in heavy:
+        assert k not in b, k
+    assert b["ultimate_below_paid_count"] == 18
+    assert b["totals"]["ibnr"] == -100.0
+    assert len(json.dumps(out)) < 3000

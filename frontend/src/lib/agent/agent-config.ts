@@ -54,7 +54,7 @@ export const DEFAULT_SYSTEM_PROMPT = "";
 const STORAGE_KEY = "reserve-agent-config-v1";
 
 // Sonradan eklenen "ready" araçlar — geriye dönük configlerde otomatik AÇILIR.
-const NEW_TOOL_IDS = ["roll_forward", "ask_user", "load_triangle_from_data"];
+const NEW_TOOL_IDS = ["roll_forward", "ask_user", "load_triangle_from_data", "set_bf_origins"];
 
 // Hazır entegre varsayılan: OpenRouter + gemini flash-lite. Kullanıcı yalnız API key girer.
 export const DEFAULT_MODEL = "google/gemini-3.1-flash-lite-preview";

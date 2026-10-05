@@ -516,12 +516,31 @@ _NUDGE_FALSE_CLAIM = (
     "[SİSTEM KONTROLÜ] Cevabın bir değişikliğin yapıldığını söylüyor ama bu turda "
     "HİÇBİR değişiklik uygulanmadı — hiçbir yazma aracı çağrılmadı. İstenen "
     "değişikliği ilgili araçla şimdi uygula; uygulayamıyorsan nedenini açıkça söyle. "
-    "Yapılmamış bir şeyi yapıldı diye yazma."
+    "Yapılmamış bir şeyi yapıldı diye yazma. Bu kontrolü kullanıcı görmüyor: ondan "
+    "bahsetme, özür dileme, \"haklısınız\" deme."
 )
 _NUDGE_MODEL_FORM = (
     "[SİSTEM KONTROLÜ] Modelleme komutuna araç çağırmadan cevap verdin. Seçenekleri "
-    "düz metin olarak YAZMA — ask_user aracını çağır (gerekirse önce durumu oku)."
+    "düz metin olarak YAZMA — ask_user aracını çağır (gerekirse önce durumu oku). "
+    "Bu kontrolü kullanıcı görmüyor: ondan bahsetme."
 )
+
+_NUDGE_ORIGIN_READ = (
+    "[SİSTEM KONTROLÜ] Soru belirli bir kaza yılını soruyor; kaza yılı bazındaki "
+    "rakamlar durum bloğunda YOK (bloktaki IBNR branş TOPLAMIDIR). get_analysis_state "
+    "çağır ve cevabı per_origin'den ver. Bu kontrolü kullanıcı görmüyor: ondan bahsetme."
+)
+# "2025 kaza yılı", "son kaza yılı", "2024'ün" … — kaza yılı düzeyinde soru.
+_ORIGIN_Q_RE = re.compile(r"\b(19|20)\d{2}\b|kaza yıl|origin|kohort", re.IGNORECASE)
+# Bu araçlardan biri okunduysa kaza yılı verisi elde.
+_ORIGIN_READ_TOOLS = {"get_analysis_state", "get_branch_state", "describe_triangle",
+                      "get_ilr_triangle", "get_cashflow_state", "get_cashflow_pattern_state"}
+
+# Arayüzün işlem uygulanan turdan sonra gönderdiği görünmez "devam" mesajı.
+# Bu turda model önceki turun değişikliğini özetlerken ("ayarlandı") yeni bir
+# aksiyon yoktur — koruma bunu yalan sanıp geri çeviriyor, model de kullanıcıya
+# "haklısınız, hiçbir değişiklik uygulanmadı" diyordu (oysa uygulanmıştı).
+_AUTO_CONTINUE_PREFIX = "(System) Previous actions have been applied"
 
 
 def _guard_nudge(
@@ -532,21 +551,66 @@ def _guard_nudge(
 ) -> str | None:
     """Son cevap kabul edilmeden önce bir kez geri çevrilmeli mi.
 
-    Yalnız KOMUTLARDA: soruya verilen cevapta değişiklik beklenmez.
+    Komutlarda: yapılmamış değişikliği "yaptım" demek, formu düz metin yazmak.
+    Sorularda: kaza yılı rakamını durumu okumadan vermek (blok yalnız toplam taşır).
+    Arayüzün gizli devam/doğrulama turları hiç denetlenmez.
     """
-    if _is_question(messages):
-        return None
     last = next((m for m in reversed(messages) if m.get("role") == "user"), None)
     text = str((last or {}).get("content") or "")
-    if _MODEL_INTENT_RE.search(text) and not tool_invocations:
+    if text.startswith(_AUTO_CONTINUE_PREFIX):
+        return None
+    asked = _is_question(messages)
+    if not asked and _MODEL_INTENT_RE.search(text) and not tool_invocations:
         return _NUDGE_MODEL_FORM
+    # Kaza yılı sorusuna durumu okumadan rakamla cevap: Qwen 3.5 9B "son kaza
+    # yılının IBNR'ı" sorusuna bloktaki branş toplamını verdi.
     if (
-        not actions
+        asked
+        and _ORIGIN_Q_RE.search(text)
+        and not ({t["name"] for t in tool_invocations} & _ORIGIN_READ_TOOLS)
+        and re.search(r"\d", content or "")
+    ):
+        return _NUDGE_ORIGIN_READ
+    if (
+        not asked
+        and not actions
         and content
         and _COMPLETION_CLAIM_RE.search(content)
         and not _ALREADY_RE.search(content)  # "zaten BF bazında" meşru
     ):
         return _NUDGE_FALSE_CLAIM
+    return None
+
+
+_LR_TOOLS = {"set_selected_loss_ratio", "set_selected_loss_ratios"}
+_NUM_RE = re.compile(r"\d+(?:[.,]\d+)?")
+
+
+def _invented_rate(name: str, args: dict[str, Any], messages: list[dict[str, Any]]) -> str | None:
+    """Kullanıcının vermediği SABİT bir loss ratio yazılıyor mu.
+
+    Qwen 3.5 9B (LM Studio) "son dönem için bf ayarlasana" komutuna kendiliğinden
+    %100, başka bir koşuda %400 LR yazdı. Formüller (vw(2021:2024) gibi) serbest:
+    kullanıcı "son 4 yılın ağırlıklı ortalaması" diyebilir. Sabit sayı ise
+    kullanıcının mesajında (oran ya da yüzde olarak) geçmeli.
+    """
+    if name not in _LR_TOOLS:
+        return None
+    items = args.get("items") if name == "set_selected_loss_ratios" else [args]
+    last = next((m for m in reversed(messages) if m.get("role") == "user"), None)
+    said = {float(x.replace(",", ".")) for x in _NUM_RE.findall(str((last or {}).get("content") or ""))}
+    for it in items or []:
+        raw = str((it or {}).get("formula", (it or {}).get("value", ""))).strip().rstrip("%").replace(",", ".")
+        try:
+            v = float(raw)
+        except ValueError:
+            continue  # formül — serbest
+        if not any(abs(v - s) < 1e-9 or abs(v * 100 - s) < 1e-6 or abs(v - s * 100) < 1e-6 for s in said):
+            return (
+                f"{name} reddedildi: kullanıcı {raw} oranını vermedi. Oran UYDURMA. "
+                "Yalnız BF/CL geçişi istendiyse set_bf_origins ya da set_basis_bulk kullan; "
+                "oran gerekiyorsa kullanıcıya hangi oranı istediğini sor."
+            )
     return None
 
 
@@ -790,6 +854,17 @@ def run_agent_turn(
             # yapacağını söylüyoruz; sessiz yok sayma modeli tekrar
             # denemeye itiyordu.
             _sig = (tc.name, json.dumps(tc.arguments, sort_keys=True, default=str))
+            _invented = _invented_rate(tc.name, tc.arguments, messages)
+            if _invented:
+                output = {"error": _invented}
+                tool_invocations.append({
+                    "id": tc.id, "name": tc.name,
+                    "module": tool_to_module.get(tc.name).name if tool_to_module.get(tc.name) else None,
+                    "arguments": tc.arguments, "output": output,
+                })
+                conv.append({"role": "tool", "tool_call_id": tc.id,
+                             "content": json.dumps(output, ensure_ascii=False)})
+                continue
             if _sig in applied_writes:
                 output = {
                     "error": (
@@ -837,6 +912,13 @@ def run_agent_turn(
                         "error": f"Tool çalıştırma hatası ({tc.name}): {type(e).__name__}: {e}"
                     }
 
+            # Birden çok aksiyon üreten araçlar (set_bf_origins) "_actions" döndürür.
+            if isinstance(output, dict) and "_actions" in output:
+                for action in output.pop("_actions") or []:
+                    if isinstance(action, dict) and mod is not None:
+                        action.setdefault("module", mod.name)
+                    actions.append(action)
+                applied_writes.add((tc.name, json.dumps(tc.arguments, sort_keys=True, default=str)))
             if isinstance(output, dict) and "_action" in output:
                 action = output.pop("_action")
                 # Modül adını action'a yapıştır — frontend modüle göre yönlendirsin

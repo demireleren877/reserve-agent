@@ -466,3 +466,80 @@ class TestCompletionGuard:
         joined = " ".join(str(m.get("content")) for m in res.raw_additions)
         assert "SİSTEM KONTROLÜ" not in joined
         assert "Ayarladım." not in joined  # geri çevrilen cevap da geçmişe yazılmaz
+
+    def test_auto_continue_turn_is_not_sent_back(self):
+        """Arayüzün gizli "devam" turunda önceki değişikliği özetlemek yalan değil.
+
+        Kullanıcı ekranı: BF gerçekten uygulandı, sonra devam turunda koruma
+        "hiçbir değişiklik uygulanmadı" dedi ve model "haklısınız" diye özür diledi.
+        """
+        cont = ("(System) Previous actions have been applied and the latest snapshot is ready. "
+                "CONTINUE from where you left off.")
+        client = ScriptedClient([{"content": "2025 BF olarak ayarlandı; toplam IBNR …", "tool_calls": []}])
+        res = run_agent_turn(client, [{"role": "user", "content": cont}], _payload())
+        assert len(client.seen) == 1, "otomatik devam turu geri çevrildi"
+        assert res.assistant_message.startswith("2025 BF")
+
+    def test_nudge_tells_the_model_not_to_apologise_to_the_user(self):
+        client = ScriptedClient([
+            {"content": "Ayarladım.", "tool_calls": []},
+            {"content": "Uygulayamadım.", "tool_calls": []},
+        ])
+        run_agent_turn(client, [{"role": "user", "content": "2021 LR %30 yap"}], _payload())
+        nudge = client.seen[1][-1]["content"]
+        assert "kullanıcı görmüyor" in nudge and "haklısınız" in nudge
+
+
+class TestInventedRateGuard:
+    """Kullanıcının vermediği sabit LR yazılmaz (Qwen 9B: kendiliğinden %100, %400)."""
+
+    def _run(self, user, formula):
+        client = ScriptedClient([
+            {"content": None, "tool_calls": [ToolCall("c1", "set_selected_loss_ratio", {"origin": "2023", "formula": formula})]},
+            {"content": "tamam", "tool_calls": []},
+        ])
+        res = run_agent_turn(client, [{"role": "user", "content": user}], _payload())
+        return res
+
+    def test_invented_constant_is_rejected(self):
+        res = self._run("son dönem için bf ayarlasana", "4.0")
+        assert res.actions == []
+        assert "UYDURMA" in res.tool_invocations[0]["output"]["error"]
+
+    def test_rate_the_user_gave_passes_in_any_notation(self):
+        for f in ("0.3", "30", "%30", "0,30"):
+            assert self._run("2023 için loss ratio'yu %30 olarak ayarla", f).actions, f
+
+    def test_formulas_are_not_judged(self):
+        assert self._run("2023'e son 4 yılın ağırlıklı ortalamasını uygula", "vw(2019:2022)").actions
+
+
+class TestOriginReadGuard:
+    """Kaza yılı sorusuna durumu okumadan rakamla cevap verilmez.
+
+    Qwen 3.5 9B "son kaza yılına ait ibnr tutarı nedir" sorusuna bloktaki branş
+    TOPLAMINI verdi.
+    """
+
+    def _run(self, user, script):
+        client = ScriptedClient(script + [{"content": "2025 IBNR -161.9M", "tool_calls": []}])
+        run_agent_turn(client, [{"role": "user", "content": user}], _payload())
+        return client
+
+    def test_year_question_answered_without_reading_is_sent_back(self):
+        c = self._run("son kaza yılına ait ibnr tutarı nedir", [{"content": "IBNR -183,221,236 TL", "tool_calls": []}])
+        assert len(c.seen) == 2 and "per_origin" in c.seen[1][-1]["content"]
+
+    def test_year_question_after_reading_passes(self):
+        c = self._run("2023 kaza yılının IBNR'ı ne?", [
+            {"content": None, "tool_calls": [ToolCall("r1", "get_analysis_state", {})]},
+        ])
+        assert len(c.seen) == 2  # okuma turu + cevap; geri çevirme yok
+
+    def test_total_question_is_not_judged(self):
+        c = self._run("Toplam IBNR ne kadar?", [{"content": "-190,576,298", "tool_calls": []}])
+        assert len(c.seen) == 1
+
+    def test_year_command_is_not_judged_as_a_question(self):
+        c = self._run("2025'i BF yap", [{"content": "Hangi oranla?", "tool_calls": []}])
+        assert len(c.seen) == 1

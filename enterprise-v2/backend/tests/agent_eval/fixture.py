@@ -275,7 +275,9 @@ def session_state_for(project: dict[str, Any]) -> dict[str, Any]:
                        frequency=active["frequency"]),
         "periods": [
             dict(id=p["id"], label=p["label"],
-                 branches=[{k: v for k, v in b.items() if k != "_triangle"}
+                 # "_" önekli alanlar fixture'ın iç verisi (üçgenler) — bridge
+                 # bunları göndermez; sızınca list_project 100 bin tokena çıkıyordu.
+                 branches=[{k: v for k, v in b.items() if not k.startswith("_")}
                            for b in p["branches"]])
             for p in project["periods"]
         ],

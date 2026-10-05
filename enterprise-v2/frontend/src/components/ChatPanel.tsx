@@ -45,6 +45,24 @@ const AUTO_CONTINUE_TEXT =
   "make no new changes; READ get_analysis_state and provide final Total Ultimate / IBNR / ULR with a brief rationale. Do not ask the user a question or request confirmation.";
 const MAX_AUTO_CONTINUE = 6;
 
+// Otomatik devam yalnız ÇOK ADIMLI modelleme akışında: "Modelle" komutu ya da
+// ask_user formunun cevapları. Tek adımlık bir komuttan ("2021 LR %30") sonra da
+// gizli bir tur atılıyordu: yerel modelde her tur 10-90 sn, mesaj da modele
+// "sonraki modelleme adımlarını yap" diyor — istenmemiş değişikliklere kapı.
+const MODELLING_RE = /\bmodel(le|i kur|i oluştur|lemeye başla)/i;
+// Tek adımlık bir komut uygulandıktan sonra BİR KEZ gönderilir: değişiklik
+// arayüzde uygulanmadan model yeni rakamı bilemez ve küçük modeller uyduruyordu
+// ("Yeni IBNR: 0", "~+137.8M"). Bu tur taze durumdan okuyup doğrular; kullanıcıya
+// yalnız bu cevap gösterilir. Önek, backend korumasının tanıdığı önekle aynı.
+const CONFIRM_TEXT =
+  "(System) Previous actions have been applied and the latest snapshot is ready. Make NO further changes. " +
+  "In 1-2 sentences confirm what changed. If you cite any total (IBNR / ultimate / ULR), READ it with " +
+  "get_analysis_state first — never estimate it. Do not ask the user a question.";
+
+export function isMultiStepTurn(prompt: string): boolean {
+  return prompt.startsWith("Form responses:") || MODELLING_RE.test(prompt);
+}
+
 interface Props {
   modulesPayload: ModulesPayload;
   onActions?: (actions: AgentAction[]) => void | Promise<void>;
@@ -186,6 +204,9 @@ export function ChatPanel({
     let turnUserContent = prompt; // bu turda history'e yazılacak "user" içeriği
     let extraUserMsg: ChatMessage | null = null; // otomatik turda backend'e ek (görünmez) user mesajı
     let auto = 0;
+    const multiStep = isMultiStepTurn(prompt);
+    let confirmed = false; // tek adımlık komutta doğrulama turu atıldı mı
+    let heldText = ""; // doğrulama gelirse gösterilmeyecek ilk cevap
 
     try {
       // Otomatik-devam döngüsü: agent YAZMA yaptıysa (actions), aksiyonlar uygulanıp
@@ -210,14 +231,23 @@ export function ChatPanel({
         }
 
         const shouldContinue =
-          !!resp.actions?.length && !resp.form && auto < MAX_AUTO_CONTINUE;
+          multiStep && !!resp.actions?.length && !resp.form && auto < MAX_AUTO_CONTINUE;
+        // Tek adımlık komut: yazma olduysa bir kez taze durumla doğrula.
+        const shouldConfirm = !multiStep && !confirmed && !!resp.actions?.length && !resp.form;
 
         // 2) Görünür assistant mesajı (boş+ara turlarda "…" ile kirletme)
-        const text = resp.assistant_message?.trim() ?? "";
+        let text = resp.assistant_message?.trim() ?? "";
+        if (shouldConfirm) {
+          // İlk cevap tahmini rakam içerebilir: doğrulama gelene kadar tut.
+          heldText = text;
+          text = "";
+        } else if (confirmed && !text) {
+          text = heldText; // doğrulama boş döndüyse ilk cevaba düş
+        }
         if (text) {
           msgs = [...msgs, { role: "assistant", content: text }];
           setMessages(msgs);
-        } else if (!shouldContinue) {
+        } else if (!shouldContinue && !shouldConfirm) {
           msgs = [
             ...msgs,
             { role: "assistant", content: resp.actions?.length ? "Applied." : "(empty response)" },
@@ -236,6 +266,12 @@ export function ChatPanel({
           setFullHistory(hist);
         }
 
+        if (shouldConfirm) {
+          confirmed = true;
+          extraUserMsg = { role: "user", content: CONFIRM_TEXT };
+          turnUserContent = CONFIRM_TEXT;
+          continue;
+        }
         if (!shouldContinue) break;
         // 4) Gizli otomatik "devam" turu hazırla
         auto++;

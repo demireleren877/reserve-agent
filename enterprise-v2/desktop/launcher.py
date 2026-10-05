@@ -1,7 +1,7 @@
 """Actuarius Enterprise — masaüstü başlatıcı (offline).
 
 Çift tıklandığında:
-  1. Gömülü FastAPI backend'i 127.0.0.1'de boş bir portta başlatır (arka planda).
+  1. Gömülü FastAPI backend'i 127.0.0.1'de sabit portta (47821, doluysa yakını) başlatır.
   2. Statik frontend'i (Next export) aynı sunucudan servis eder — aynı origin, CORS yok.
   3. /health yanıt verene kadar bekler, sonra native pencereyi açar (pywebview).
   4. Pencere kapanınca sunucuyu durdurur.
@@ -116,6 +116,35 @@ def _free_port() -> int:
     return port
 
 
+# Sabit port: WebView deposu (localStorage — agent ayarları, sohbet, açık
+# sekmeler) ORIGIN'e, yani porta bağlı. Her açılışta rastgele port almak her
+# açılışta yeni ve boş bir depo demekti: agent ayarları kapatıp açınca
+# kayboluyordu (private_mode düzeltmesi bu yüzden yetmedi — Mac'te aynı uygulama
+# için altı ayrı depo birikmişti).
+PREFERRED_PORT = 47821
+PORT_SPAN = 10
+
+
+def _port_is_free(port: int) -> bool:
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        s.bind(("127.0.0.1", port))
+        return True
+    except OSError:
+        return False
+    finally:
+        s.close()
+
+
+def _app_port() -> int:
+    """Önce sabit port; doluysa yakın aralık; o da doluysa rastgele."""
+    base = int(os.environ.get("ACTUARIUS_PORT") or PREFERRED_PORT)
+    for port in range(base, base + PORT_SPAN):
+        if _port_is_free(port):
+            return port
+    return _free_port()
+
+
 def _wait_health(base_url: str, timeout: float = 30.0) -> bool:
     deadline = time.time() + timeout
     while time.time() < deadline:
@@ -163,7 +192,7 @@ def main() -> None:
         _fatal(f"Backend yüklenemedi: {e}")
         return
 
-    port = _free_port()
+    port = _app_port()
     base_url = f"http://127.0.0.1:{port}"
 
     # log_config=None: uvicorn'un renkli formatter'ını kurma (windowed build'de stdout yok).

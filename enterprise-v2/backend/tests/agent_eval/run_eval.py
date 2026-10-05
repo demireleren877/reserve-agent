@@ -109,6 +109,8 @@ def main() -> int:
     ap.add_argument("--model", default=os.getenv("AGENT_MODEL", "qwen/qwen3.5-9b"))
     ap.add_argument("--api-key", default=os.getenv("AGENT_API_KEY"),
                     help="uzak sağlayıcı için anahtar; lokal sunucularda gereksiz")
+    ap.add_argument("--api-format", default="openai", choices=["openai", "ollama_chat", "ollama_generate"],
+                    help="Ollama biçimlerinde --base-url TAM uç adresidir (…/api/chat, …/api/generate)")
     ap.add_argument("--no-reasoning", action="store_true",
                     help="OpenRouter: düşünme kipini kapat (LM Studio koşularıyla karşılaştırılabilir olsun)")
     ap.add_argument("--provider",
@@ -144,7 +146,7 @@ def main() -> int:
     if a.provider:
         extra["provider"] = {"order": [p.strip() for p in a.provider.split(",")], "allow_fallbacks": False}
     client = RetryingClient(AgentClient(model=a.model, base_url=a.base_url, api_key=key,
-                                        timeout=a.timeout, extra_body=extra))
+                                        timeout=a.timeout, extra_body=extra, api_format=a.api_format))
 
     cases = build_cases(project)
     if a.only:

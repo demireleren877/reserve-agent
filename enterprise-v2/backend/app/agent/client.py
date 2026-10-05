@@ -17,6 +17,8 @@ from typing import Any
 
 import httpx
 
+from app.agent.prompted_tools import extract_json, render
+
 
 @dataclass
 class ToolCall:
@@ -84,6 +86,32 @@ DEFAULT_MODEL = "llama3.1"
 DEFAULT_BASE_URL = "http://localhost:11434/v1"  # Ollama
 
 
+# API biçimleri (Agent Ayarları → Custom):
+#   openai          → {base}/chat/completions, yerel tool calling
+#   ollama_chat     → Ollama /api/chat (tam URL), yerel tool calling
+#   ollama_generate → Ollama /api/generate (tam URL), tool calling YOK: araçlar
+#                     prompt'a yazılır, cevap JSON zarfıyla alınır
+API_FORMATS = ("openai", "ollama_chat", "ollama_generate")
+
+
+@dataclass
+class OAuthClientCredentials:
+    """OAuth2 client credentials — kurumsal LLM gateway'leri.
+
+    Kullanıcının çalışan script'iyle birebir: Basic auth (client id + secret) ve
+    JSON gövde {"grant_type": "client_credentials"}.
+    """
+
+    token_url: str
+    client_id: str
+    client_secret: str
+
+
+# Token önbelleği: her LLM çağrısında yeni token almak hem yavaş hem de
+# gateway'in hız sınırına takılır. Anahtar (token_url, client_id).
+_TOKEN_CACHE: dict[tuple[str, str], tuple[str, float]] = {}
+
+
 class AgentClient:
     def __init__(
         self,
@@ -94,6 +122,8 @@ class AgentClient:
         timeout: float = 300.0,
         extra_body: dict[str, Any] | None = None,
         verify_tls: bool = True,
+        api_format: str = "openai",
+        oauth: OAuthClientCredentials | None = None,
     ) -> None:
         self.model = model or os.getenv("AGENT_MODEL", DEFAULT_MODEL)
         self.api_key = api_key or os.getenv("AGENT_API_KEY", "local")
@@ -106,40 +136,61 @@ class AgentClient:
         self.extra_body = dict(extra_body or {})
         # False yalnız kullanıcı Agent Ayarları'nda açıkça seçerse (kurumsal ağ).
         self.verify_tls = verify_tls
+        if api_format not in API_FORMATS:
+            raise ValueError(f"api_format {api_format!r} — beklenen: {', '.join(API_FORMATS)}")
+        self.api_format = api_format
+        self.oauth = oauth
 
-    def chat(
-        self,
-        messages: list[dict[str, Any]],
-        tools: list[dict[str, Any]],
-    ) -> dict[str, Any]:
-        """Bir LLM turu çalıştır. Normalize edilmiş yanıt döndürür:
-        {"content": str | None, "tool_calls": [ToolCall, ...]}
-        """
-        payload: dict[str, Any] = {
-            "model": self.model,
-            "messages": messages,
-            "temperature": self.temperature,
-        }
-        if tools:
-            payload["tools"] = tools
-            payload["tool_choice"] = "auto"
-        if self.extra_body:
-            payload.update(self.extra_body)
+    # ── İstek ─────────────────────────────────────────────────────────────────
 
+    def _verify(self) -> ssl.SSLContext | bool:
+        return tls_verify() if self.verify_tls else False
+
+    def _token(self, force: bool = False) -> str:
+        """OAuth erişim token'ı; önbellekte geçerliyse onu döndürür."""
+        assert self.oauth is not None
+        import time
+
+        key = (self.oauth.token_url, self.oauth.client_id)
+        hit = _TOKEN_CACHE.get(key)
+        if hit and not force and hit[1] > time.time():
+            return hit[0]
+        with httpx.Client(timeout=self.timeout, verify=self._verify()) as c:
+            r = c.post(
+                self.oauth.token_url,
+                auth=(self.oauth.client_id, self.oauth.client_secret),
+                json={"grant_type": "client_credentials"},
+            )
+        if r.status_code >= 400:
+            raise RuntimeError(f"OAuth token {r.status_code}: {r.text[:400]}")
+        body = r.json()
+        token = body.get("access_token")
+        if not token:
+            raise RuntimeError(f"OAuth token yanıtında access_token yok: {str(body)[:300]}")
+        # Süre bildirilmezse 5 dk; bitmeden 30 sn önce yenile.
+        ttl = float(body.get("expires_in") or 300)
+        _TOKEN_CACHE[key] = (token, time.time() + max(ttl - 30, 10))
+        return token
+
+    def _headers(self, force_token: bool = False) -> dict[str, str]:
         headers = {
             "Content-Type": "application/json",
             # OpenRouter opsiyonel metadata (zararsız; diğer sunucular yok sayar)
             "HTTP-Referer": "http://localhost",
             "X-Title": "Actuarius Enterprise",
         }
-        if self.api_key:
+        if self.oauth is not None:
+            headers["Authorization"] = f"Bearer {self._token(force=force_token)}"
+        elif self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
+        return headers
 
-        verify = tls_verify() if self.verify_tls else False
-        with httpx.Client(timeout=self.timeout, verify=verify) as client:
-            resp = client.post(
-                f"{self.base_url}/chat/completions", json=payload, headers=headers
-            )
+    def _post(self, url: str, payload: dict[str, Any]) -> dict[str, Any]:
+        with httpx.Client(timeout=self.timeout, verify=self._verify()) as client:
+            resp = client.post(url, json=payload, headers=self._headers())
+            # Token gateway tarafında erken düşebilir: bir kez yenile, tekrar dene.
+            if resp.status_code == 401 and self.oauth is not None:
+                resp = client.post(url, json=payload, headers=self._headers(force_token=True))
             if resp.status_code >= 400:
                 # Gerçek sebep yanıt gövdesindedir. OpenRouter alttaki sağlayıcı
                 # hatasını error.metadata.raw içinde saklar ("Provider returned error").
@@ -159,7 +210,36 @@ class AgentClient:
                 except Exception:
                     pass
                 raise RuntimeError(f"LLM {resp.status_code}: {str(detail)[:800]}")
-            data = resp.json()
+            return resp.json()
+
+    def chat(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Bir LLM turu çalıştır. Normalize edilmiş yanıt döndürür:
+        {"content": str | None, "tool_calls": [ToolCall, ...]}
+        """
+        if self.api_format == "ollama_chat":
+            return self._chat_ollama(messages, tools)
+        if self.api_format == "ollama_generate":
+            return self._chat_ollama_generate(messages, tools)
+        return self._chat_openai(messages, tools)
+
+    # ── OpenAI uyumlu ─────────────────────────────────────────────────────────
+
+    def _chat_openai(self, messages: list[dict[str, Any]], tools: list[dict[str, Any]]) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "model": self.model,
+            "messages": messages,
+            "temperature": self.temperature,
+        }
+        if tools:
+            payload["tools"] = tools
+            payload["tool_choice"] = "auto"
+        if self.extra_body:
+            payload.update(self.extra_body)
+        data = self._post(f"{self.base_url}/chat/completions", payload)
 
         choices = data.get("choices") or []
         if not choices:
@@ -178,24 +258,97 @@ class AgentClient:
                 or msg.get("reasoning")
                 or choices[0].get("reasoning")
             )
+        return {"content": content, "tool_calls": _to_tool_calls(msg.get("tool_calls") or [])}
 
-        tool_calls: list[ToolCall] = []
-        for tc in msg.get("tool_calls") or []:
-            fn = tc.get("function") or {}
-            raw_args = fn.get("arguments")
-            args: dict[str, Any] = {}
-            if isinstance(raw_args, dict):
-                args = raw_args
-            elif isinstance(raw_args, str) and raw_args.strip():
+    # ── Ollama /api/chat ──────────────────────────────────────────────────────
+
+    def _chat_ollama(self, messages: list[dict[str, Any]], tools: list[dict[str, Any]]) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "model": self.model,
+            "messages": [_ollama_message(m) for m in messages],
+            "stream": False,
+            # Qwen 3.5 düşünme kipini kapat — kullanıcının çalışan script'iyle aynı;
+            # açıkken cevap gecikiyor ve ajan ayarları düşünmesiz ölçüldü.
+            "think": False,
+            "options": {"temperature": self.temperature},
+        }
+        if tools:
+            payload["tools"] = tools
+        if self.extra_body:
+            payload.update(self.extra_body)
+        data = self._post(self.base_url, payload)
+        msg = data.get("message") or {}
+        return {"content": msg.get("content") or None, "tool_calls": _to_tool_calls(msg.get("tool_calls") or [])}
+
+    # ── Ollama /api/generate (araçlar prompt'ta) ──────────────────────────────
+
+    def _chat_ollama_generate(self, messages: list[dict[str, Any]], tools: list[dict[str, Any]]) -> dict[str, Any]:
+        system, prompt = render(messages, tools)
+        payload: dict[str, Any] = {
+            "model": self.model,
+            "system": system,
+            "prompt": prompt,
+            "stream": False,
+            "think": False,
+            "options": {"temperature": self.temperature},
+        }
+        if self.extra_body:
+            payload.update(self.extra_body)
+        data = self._post(self.base_url, payload)
+        env = extract_json(str(data.get("response") or ""))
+        calls = [
+            {"function": {"name": c.get("name"), "arguments": c.get("arguments") or {}}}
+            for c in (env.get("tool_calls") or [])
+            if isinstance(c, dict) and c.get("name")
+        ]
+        return {"content": env.get("content"), "tool_calls": _to_tool_calls(calls)}
+
+
+def _ollama_message(m: dict[str, Any]) -> dict[str, Any]:
+    """OpenAI biçimli konuşma mesajını Ollama /api/chat biçimine çevirir.
+
+    Ollama araç argümanlarını JSON string değil NESNE olarak bekliyor.
+    """
+    out: dict[str, Any] = {"role": m.get("role"), "content": m.get("content") or ""}
+    calls = m.get("tool_calls") or []
+    if calls:
+        conv = []
+        for c in calls:
+            fn = c.get("function") or {}
+            args = fn.get("arguments")
+            if isinstance(args, str):
                 try:
-                    args = json.loads(raw_args)
+                    args = json.loads(args) if args.strip() else {}
                 except json.JSONDecodeError:
-                    # Küçük/lokal modeller bozuk JSON üretebiliyor. Sessizce {}
-                    # bırakmak tool'u varsayılanlarla çalıştırır (prim 0'a düşer,
-                    # CDF 1.0 olur) — hatayı taşı ki dispatch reddedip modele
-                    # düzeltme şansı versin.
-                    args = {"__malformed_arguments__": raw_args[:400]}
-            tool_calls.append(
-                ToolCall(id=tc.get("id") or "", name=fn.get("name") or "", arguments=args)
-            )
-        return {"content": content, "tool_calls": tool_calls}
+                    args = {}
+            conv.append({"function": {"name": fn.get("name"), "arguments": args or {}}})
+        out["tool_calls"] = conv
+    if m.get("role") == "tool" and m.get("name"):
+        out["tool_name"] = m["name"]
+    return out
+
+
+def _to_tool_calls(raw: list[dict[str, Any]]) -> list[ToolCall]:
+    import uuid
+
+    tool_calls: list[ToolCall] = []
+    for tc in raw:
+        fn = tc.get("function") or {}
+        raw_args = fn.get("arguments")
+        args: dict[str, Any] = {}
+        if isinstance(raw_args, dict):
+            args = raw_args
+        elif isinstance(raw_args, str) and raw_args.strip():
+            try:
+                args = json.loads(raw_args)
+            except json.JSONDecodeError:
+                # Küçük/lokal modeller bozuk JSON üretebiliyor. Sessizce {}
+                # bırakmak tool'u varsayılanlarla çalıştırır (prim 0'a düşer,
+                # CDF 1.0 olur) — hatayı taşı ki dispatch reddedip modele
+                # düzeltme şansı versin.
+                args = {"__malformed_arguments__": raw_args[:400]}
+        tool_calls.append(
+            # Ollama çağrı kimliği vermiyor; döngü tool mesajını kimlikle eşliyor.
+            ToolCall(id=tc.get("id") or f"call_{uuid.uuid4().hex[:8]}", name=fn.get("name") or "", arguments=args)
+        )
+    return tool_calls

@@ -9,6 +9,9 @@ import {
   PROVIDER_DEFAULT_BASE_URL,
   CLOUD_PROVIDERS,
   DEFAULT_MODEL,
+  usesOAuth,
+  type ApiFormat,
+  type AuthType,
   type LLMProvider,
 } from "@/lib/agent/agent-config";
 import {
@@ -23,6 +26,16 @@ const PROVIDERS: { id: LLMProvider; label: string; hint: string }[] = [
   { id: "custom", label: "Custom endpoint", hint: "model-id" },
   { id: "openrouter", label: "OpenRouter (bulut)", hint: "anthropic/claude-sonnet-4.6" },
   { id: "openai", label: "OpenAI (bulut)", hint: "gpt-4.1" },
+];
+
+const API_FORMATS: { id: ApiFormat; label: string; hint: string }[] = [
+  { id: "openai", label: "OpenAI-compatible", hint: "Base URL; /chat/completions is appended" },
+  { id: "ollama_chat", label: "Ollama chat", hint: "Full URL, e.g. https://gateway/api/chat — native tool calling" },
+  { id: "ollama_generate", label: "Ollama generate", hint: "Full URL, e.g. https://gateway/api/generate — tools via prompt (use chat if available)" },
+];
+const AUTH_TYPES: { id: AuthType; label: string }[] = [
+  { id: "api_key", label: "API key (Bearer)" },
+  { id: "oauth_client_credentials", label: "OAuth2 client credentials" },
 ];
 
 type Section = "api" | "prompt" | "tools";
@@ -54,6 +67,9 @@ export function AgentSettings({ onClose }: { onClose: () => void }) {
   const providerHint = PROVIDERS.find((p) => p.id === cfg.provider)?.hint ?? "";
   const configured = isAgentConfigured(cfg);
   const isCloud = CLOUD_PROVIDERS.includes(cfg.provider);
+  const isCustom = cfg.provider === "custom";
+  const oauth = usesOAuth(cfg);
+  const fullUrl = isCustom && cfg.apiFormat !== "openai";
 
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
@@ -94,7 +110,12 @@ export function AgentSettings({ onClose }: { onClose: () => void }) {
                 )}
               </div>
 
-              {/* Ana alan: API key */}
+              {/* Ana alan: API key (OAuth'ta kullanılmaz) */}
+              {oauth ? (
+                <div className="text-[11px] text-[color:var(--muted-strong)]">
+                  Authentication: <b>OAuth2 client credentials</b> — token URL, client ID and secret are under Advanced.
+                </div>
+              ) : (
               <Field label={isCloud ? "API key" : "API key (optional)"} hint="Stored on this device.">
                 <div className="flex gap-2">
                   <input type={showKey ? "text" : "password"} value={cfg.apiKey} onChange={(e) => update({ apiKey: e.target.value })}
@@ -103,6 +124,7 @@ export function AgentSettings({ onClose }: { onClose: () => void }) {
                   <button onClick={() => setShowKey((v) => !v)} className="btn text-xs px-3">{showKey ? "Hide" : "Show"}</button>
                 </div>
               </Field>
+              )}
 
               <div className="text-[11px] text-[color:var(--muted-strong)]">
                 Model: <span className="font-mono text-[color:var(--foreground)]">{cfg.model || "—"}</span>
@@ -123,6 +145,52 @@ export function AgentSettings({ onClose }: { onClose: () => void }) {
                       ))}
                     </div>
                   </Field>
+                  {isCustom && (
+                    <div className="space-y-3 rounded-md border border-[color:var(--border)] p-3">
+                      <Field label="API format" hint={API_FORMATS.find((f) => f.id === cfg.apiFormat)?.hint}>
+                        <div className="grid grid-cols-3 gap-2">
+                          {API_FORMATS.map((f) => (
+                            <button key={f.id} onClick={() => update({ apiFormat: f.id })}
+                              className={`py-2 rounded-md border text-xs font-medium transition ${cfg.apiFormat === f.id ? "border-[color:var(--primary)] bg-[color:var(--primary-soft)] text-[color:var(--primary)]" : "border-[color:var(--border)] hover:bg-[color:var(--surface-alt)]"}`}>
+                              {f.label}
+                            </button>
+                          ))}
+                        </div>
+                      </Field>
+                      <Field label="Authentication">
+                        <div className="grid grid-cols-2 gap-2">
+                          {AUTH_TYPES.map((a) => (
+                            <button key={a.id} onClick={() => update({ authType: a.id })}
+                              className={`py-2 rounded-md border text-xs font-medium transition ${cfg.authType === a.id ? "border-[color:var(--primary)] bg-[color:var(--primary-soft)] text-[color:var(--primary)]" : "border-[color:var(--border)] hover:bg-[color:var(--surface-alt)]"}`}>
+                              {a.label}
+                            </button>
+                          ))}
+                        </div>
+                      </Field>
+                      {oauth && (
+                        <>
+                          <Field label="Token URL" hint="POST with Basic auth (client ID + secret) and grant_type=client_credentials.">
+                            <input value={cfg.tokenUrl} onChange={(e) => update({ tokenUrl: e.target.value })}
+                              placeholder="https://gateway/oauth/token" className="input-base w-full font-mono text-xs" />
+                          </Field>
+                          <div className="grid grid-cols-2 gap-3">
+                            <Field label="Client ID">
+                              <input value={cfg.clientId} onChange={(e) => update({ clientId: e.target.value })}
+                                autoComplete="off" className="input-base w-full font-mono text-xs" />
+                            </Field>
+                            <Field label="Client secret" hint="Stored on this device.">
+                              <div className="flex gap-2">
+                                <input type={showKey ? "text" : "password"} value={cfg.clientSecret}
+                                  onChange={(e) => update({ clientSecret: e.target.value })}
+                                  autoComplete="off" className="input-base flex-1 font-mono text-xs" />
+                                <button onClick={() => setShowKey((v) => !v)} className="btn text-xs px-3">{showKey ? "Hide" : "Show"}</button>
+                              </div>
+                            </Field>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
                   <div className="grid grid-cols-2 gap-3">
                     <Field label="Model" hint={`e.g. ${providerHint}`}>
                       <input value={cfg.model} onChange={(e) => update({ model: e.target.value })}
@@ -145,9 +213,10 @@ export function AgentSettings({ onClose }: { onClose: () => void }) {
                       </span>
                     </span>
                   </label>
-                  <Field label="Base URL" hint={`Empty = ${PROVIDER_DEFAULT_BASE_URL[cfg.provider] || "enter endpoint"}`}>
+                  <Field label={fullUrl ? "Endpoint URL" : "Base URL"}
+                    hint={fullUrl ? "Full URL as given by your gateway (it is called as-is)." : `Empty = ${PROVIDER_DEFAULT_BASE_URL[cfg.provider] || "enter endpoint"}`}>
                     <input value={cfg.baseUrl} onChange={(e) => update({ baseUrl: e.target.value })}
-                      placeholder={PROVIDER_DEFAULT_BASE_URL[cfg.provider] || "http://localhost:1234/v1"}
+                      placeholder={fullUrl ? (cfg.apiFormat === "ollama_chat" ? "https://gateway/api/chat" : "https://gateway/api/generate") : PROVIDER_DEFAULT_BASE_URL[cfg.provider] || "http://localhost:1234/v1"}
                       className="input-base w-full font-mono text-xs" />
                   </Field>
                 </div>

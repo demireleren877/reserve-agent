@@ -16,6 +16,10 @@ import { defaultEnabledToolIds } from "./tools-manifest";
 // Ayrıca test/geliştirme için bulut OpenAI-uyumlu sağlayıcılar da seçilebilir
 // (OpenRouter/OpenAI) — hepsi aynı httpx client'ıyla /chat/completions'a gider.
 export type LLMProvider = "local" | "custom" | "openrouter" | "openai";
+/** Custom uç biçimi: OpenAI uyumlu ya da Ollama'nın kendi /api/chat · /api/generate'i. */
+export type ApiFormat = "openai" | "ollama_chat" | "ollama_generate";
+/** Custom uç kimlik doğrulaması: Bearer anahtar ya da OAuth2 client credentials (kurumsal gateway). */
+export type AuthType = "api_key" | "oauth_client_credentials";
 
 /** Bulut (internet gerektiren) sağlayıcılar — API anahtarı zorunlu. */
 export const CLOUD_PROVIDERS: LLMProvider[] = ["openrouter", "openai"];
@@ -40,6 +44,14 @@ export interface AgentConfig {
    * açıkken araya giren herkes API anahtarını okuyabilir.
    */
   skipTlsVerify: boolean;
+  /** Custom sağlayıcı: uç biçimi. */
+  apiFormat: ApiFormat;
+  /** Custom sağlayıcı: kimlik doğrulama. */
+  authType: AuthType;
+  /** OAuth2 client credentials (authType = oauth_client_credentials). */
+  tokenUrl: string;
+  clientId: string;
+  clientSecret: string;
 }
 
 export const PROVIDER_DEFAULT_BASE_URL: Record<LLMProvider, string> = {
@@ -72,6 +84,11 @@ function defaults(): AgentConfig {
     enabledToolIds: defaultEnabledToolIds(),
     temperature: 0.2,
     skipTlsVerify: false,
+    apiFormat: "openai",
+    authType: "api_key",
+    tokenUrl: "",
+    clientId: "",
+    clientSecret: "",
   };
 }
 
@@ -123,10 +140,16 @@ export function resetSystemPrompt(): void {
 
 /** Config'in tam/geçerli (agent çalışabilir) olup olmadığı. Bulut sağlayıcıda API
  *  anahtarı zorunlu; lokal endpoint'te opsiyonel (base URL + model yeterli). */
+/** OAuth yalnız Custom sağlayıcıda geçerli. */
+export function usesOAuth(cfg: AgentConfig): boolean {
+  return cfg.provider === "custom" && cfg.authType === "oauth_client_credentials";
+}
+
 export function isAgentConfigured(cfg: AgentConfig = read()): boolean {
   const base = cfg.baseUrl.trim() || PROVIDER_DEFAULT_BASE_URL[cfg.provider];
   if (!base || !cfg.model.trim()) return false;
   if (CLOUD_PROVIDERS.includes(cfg.provider) && !cfg.apiKey.trim()) return false;
+  if (usesOAuth(cfg) && !(cfg.tokenUrl.trim() && cfg.clientId.trim() && cfg.clientSecret)) return false;
   return true;
 }
 

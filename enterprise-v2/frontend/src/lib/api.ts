@@ -9,7 +9,7 @@ import type {
   UploadOptions,
 } from "@/types/triangle";
 import { getToken } from "@/lib/auth/jwt";
-import { getAgentConfig, PROVIDER_DEFAULT_BASE_URL } from "@/lib/agent/agent-config";
+import { usesOAuth, getAgentConfig, PROVIDER_DEFAULT_BASE_URL } from "@/lib/agent/agent-config";
 
 // Boş string ("") = aynı origin (masaüstü: frontend+API tek sunucudan).
 export const API_BASE =
@@ -151,6 +151,12 @@ export async function chatWithAgent(
     enabled_tools: cfg.enabledToolIds,
     temperature: cfg.temperature,
     skip_tls_verify: cfg.skipTlsVerify,
+    // Custom dışında her zaman OpenAI biçimi + anahtar: eski ayarlar aynen çalışır.
+    api_format: cfg.provider === "custom" ? cfg.apiFormat : "openai",
+    auth_type: usesOAuth(cfg) ? "oauth_client_credentials" : "api_key",
+    ...(usesOAuth(cfg)
+      ? { token_url: cfg.tokenUrl.trim(), client_id: cfg.clientId.trim(), client_secret: cfg.clientSecret }
+      : {}),
   };
 
   const authHeaders = await getAuthHeaders();

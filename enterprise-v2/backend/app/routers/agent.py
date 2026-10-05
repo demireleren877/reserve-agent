@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from app.auth import get_current_user
-from app.agent.client import AgentClient, is_cert_verify_error
+from app.agent.client import API_FORMATS, AgentClient, OAuthClientCredentials, is_cert_verify_error
 from app.agent.loop import run_agent_turn, GLOBAL_PROMPT
 from app.agent.tools import TOOL_SCHEMAS
 
@@ -32,6 +32,12 @@ class AgentConfigIn(BaseModel):
     temperature: float | None = None
     # Kurumsal ağ HTTPS'i yeniden imzalıyorsa son çare (Agent Ayarları'ndaki kutu).
     skip_tls_verify: bool = False
+    # Custom sağlayıcı: API biçimi ve kimlik doğrulama (kurumsal gateway).
+    api_format: str = "openai"  # openai | ollama_chat | ollama_generate
+    auth_type: str = "api_key"  # api_key | oauth_client_credentials
+    token_url: str = ""
+    client_id: str = ""
+    client_secret: str = ""
 
 
 class ChatRequest(BaseModel):
@@ -63,6 +69,14 @@ def agent_chat(body: ChatRequest, _user: CurrentUser) -> ChatResponse:
     if not cfg.model.strip():
         raise HTTPException(status_code=400, detail="agent_not_configured")
 
+    if cfg.api_format not in API_FORMATS:
+        raise HTTPException(status_code=400, detail=f"unknown api_format: {cfg.api_format}")
+    oauth = None
+    if cfg.auth_type == "oauth_client_credentials":
+        if not (cfg.token_url.strip() and cfg.client_id.strip() and cfg.client_secret):
+            raise HTTPException(status_code=400, detail="oauth_incomplete: token URL, client ID and client secret are required")
+        oauth = OAuthClientCredentials(cfg.token_url.strip(), cfg.client_id.strip(), cfg.client_secret)
+
     # Lokal sunucular anahtar istemez; OpenAI SDK boş anahtar kabul etmez → dummy.
     client = AgentClient(
         api_key=cfg.api_key.strip() or "local",
@@ -70,6 +84,8 @@ def agent_chat(body: ChatRequest, _user: CurrentUser) -> ChatResponse:
         base_url=cfg.base_url.strip() or None,
         temperature=cfg.temperature,
         verify_tls=not cfg.skip_tls_verify,
+        api_format=cfg.api_format,
+        oauth=oauth,
     )
 
     try:

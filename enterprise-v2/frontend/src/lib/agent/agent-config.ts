@@ -44,6 +44,13 @@ export interface AgentConfig {
    * açıkken araya giren herkes API anahtarını okuyabilir.
    */
   skipTlsVerify: boolean;
+  /**
+   * Modelin düşünme kipini kapat (OpenAI biçiminde reasoning_effort: "none").
+   * LM Studio'da Qwen 3.5 9B ile ölçüldü: 3,5 sn → 0,2 sn, 202 → 2 token; açıkken
+   * cevaba İngilizce düşünme metni de sızabiliyor. Ajan ayarları düşünmesiz
+   * ölçüldü. Parametreyi tanımayan bir sunucu için kapatılabilir.
+   */
+  disableThinking: boolean;
   /** Custom sağlayıcı: uç biçimi. */
   apiFormat: ApiFormat;
   /** Custom sağlayıcı: kimlik doğrulama. */
@@ -84,6 +91,7 @@ function defaults(): AgentConfig {
     enabledToolIds: defaultEnabledToolIds(),
     temperature: 0.2,
     skipTlsVerify: false,
+    disableThinking: true,
     apiFormat: "openai",
     authType: "api_key",
     tokenUrl: "",

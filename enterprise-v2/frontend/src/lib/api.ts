@@ -151,6 +151,9 @@ export async function chatWithAgent(
     enabled_tools: cfg.enabledToolIds,
     temperature: cfg.temperature,
     skip_tls_verify: cfg.skipTlsVerify,
+    // Bulut sağlayıcılarda (OpenRouter/OpenAI) model seçimi kullanıcıda; düşünmeyi
+    // yalnız yerel ve özel uçlarda kapatıyoruz.
+    disable_thinking: cfg.disableThinking && (cfg.provider === "local" || cfg.provider === "custom"),
     // Custom dışında her zaman OpenAI biçimi + anahtar: eski ayarlar aynen çalışır.
     api_format: cfg.provider === "custom" ? cfg.apiFormat : "openai",
     auth_type: usesOAuth(cfg) ? "oauth_client_credentials" : "api_key",

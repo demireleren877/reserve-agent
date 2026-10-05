@@ -111,6 +111,8 @@ def main() -> int:
                     help="uzak sağlayıcı için anahtar; lokal sunucularda gereksiz")
     ap.add_argument("--api-format", default="openai", choices=["openai", "ollama_chat", "ollama_generate"],
                     help="Ollama biçimlerinde --base-url TAM uç adresidir (…/api/chat, …/api/generate)")
+    ap.add_argument("--reasoning-effort",
+                    help="OpenAI biçimli reasoning_effort (LM Studio: 'none' düşünmeyi kapatır, ~17x hızlı)")
     ap.add_argument("--no-reasoning", action="store_true",
                     help="OpenRouter: düşünme kipini kapat (LM Studio koşularıyla karşılaştırılabilir olsun)")
     ap.add_argument("--provider",
@@ -143,6 +145,8 @@ def main() -> int:
     extra: dict = {}
     if a.no_reasoning:
         extra["reasoning"] = {"enabled": False}
+    if a.reasoning_effort:
+        extra["reasoning_effort"] = a.reasoning_effort
     if a.provider:
         extra["provider"] = {"order": [p.strip() for p in a.provider.split(",")], "allow_fallbacks": False}
     client = RetryingClient(AgentClient(model=a.model, base_url=a.base_url, api_key=key,

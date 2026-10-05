@@ -150,3 +150,36 @@ def test_router_honours_the_settings_toggle(corporate_endpoint):
     r = _post(url, skip_tls_verify=True)
     assert r.status_code == 200, r.text
     assert r.json()["assistant_message"] == "merhaba"
+
+
+def test_disable_thinking_reaches_an_openai_style_server():
+    """LM Studio: reasoning_effort "none" düşünmeyi kapatır (~17x hızlı)."""
+    seen: list[dict] = []
+
+    class H(BaseHTTPRequestHandler):
+        def log_message(self, *a):
+            pass
+
+        def do_POST(self):  # noqa: N802
+            seen.append(json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0))))
+            b = json.dumps({"choices": [{"message": {"content": "tamam"}}]}).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(b)))
+            self.end_headers()
+            self.wfile.write(b)
+
+    httpd = HTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    try:
+        url = f"http://127.0.0.1:{httpd.server_address[1]}/v1"
+        for flag in (True, False):
+            r = _router_client().post("/v1/agent/chat", json={
+                "messages": [{"role": "user", "content": "selam"}],
+                "config": {"base_url": url, "model": "qwen/qwen3.5-9b", "disable_thinking": flag},
+            })
+            assert r.status_code == 200, r.text
+        assert seen[0].get("reasoning_effort") == "none"
+        assert "reasoning_effort" not in seen[1]
+    finally:
+        httpd.shutdown()

@@ -202,6 +202,19 @@ export function AgentSettings({ onClose }: { onClose: () => void }) {
                         className="input-base w-full text-xs" />
                     </Field>
                   </div>
+                  {(cfg.provider === "local" || cfg.provider === "custom") && (
+                    <label className="flex items-start gap-2 text-xs">
+                      <input type="checkbox" checked={cfg.disableThinking}
+                        onChange={(e) => update({ disableThinking: e.target.checked })}
+                        className="mt-0.5 accent-[color:var(--primary)]" />
+                      <span>
+                        <span className="font-medium">Disable model thinking</span>
+                        <span className="block text-[color:var(--muted)]">
+                          Much faster replies with reasoning models such as Qwen 3.5 (about 17× on LM Studio). Turn off only if your server rejects it.
+                        </span>
+                      </span>
+                    </label>
+                  )}
                   <label className="flex items-start gap-2 text-xs">
                     <input type="checkbox" checked={cfg.skipTlsVerify}
                       onChange={(e) => update({ skipTlsVerify: e.target.checked })}

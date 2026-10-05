@@ -64,3 +64,24 @@ describe("Agent Settings — kurumsal gateway", () => {
     fetchMock.mockRestore();
   });
 });
+
+describe("Disable model thinking", () => {
+  const send = async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ assistant_message: "ok", actions: [], tool_invocations: [] }), { status: 200 }));
+    await chatWithAgent([{ role: "user", content: "selam" }], {} as never);
+    const cfg = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body)).config;
+    fetchMock.mockRestore();
+    return cfg;
+  };
+
+  it("yerel sağlayıcıda varsayılan olarak düşünmeyi kapatır", async () => {
+    setAgentConfig({ provider: "local", baseUrl: "http://192.168.1.174:8080/v1", model: "qwen/qwen3.5-9b", disableThinking: true });
+    expect((await send()).disable_thinking).toBe(true);
+  });
+
+  it("bulut sağlayıcıya göndermez", async () => {
+    setAgentConfig({ provider: "openrouter", apiKey: "k", disableThinking: true });
+    expect((await send()).disable_thinking).toBe(false);
+  });
+});

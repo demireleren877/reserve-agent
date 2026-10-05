@@ -32,6 +32,9 @@ class AgentConfigIn(BaseModel):
     temperature: float | None = None
     # Kurumsal ağ HTTPS'i yeniden imzalıyorsa son çare (Agent Ayarları'ndaki kutu).
     skip_tls_verify: bool = False
+    # Düşünme kipini kapat: OpenAI biçiminde reasoning_effort "none" (LM Studio'da
+    # ~17x hızlı). Ollama biçimleri zaten think:false gönderiyor.
+    disable_thinking: bool = False
     # Custom sağlayıcı: API biçimi ve kimlik doğrulama (kurumsal gateway).
     api_format: str = "openai"  # openai | ollama_chat | ollama_generate
     auth_type: str = "api_key"  # api_key | oauth_client_credentials
@@ -86,6 +89,7 @@ def agent_chat(body: ChatRequest, _user: CurrentUser) -> ChatResponse:
         verify_tls=not cfg.skip_tls_verify,
         api_format=cfg.api_format,
         oauth=oauth,
+        extra_body={"reasoning_effort": "none"} if cfg.disable_thinking and cfg.api_format == "openai" else None,
     )
 
     try:

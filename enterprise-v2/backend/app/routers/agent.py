@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from app.auth import get_current_user
-from app.agent.client import AgentClient
+from app.agent.client import AgentClient, is_cert_verify_error
 from app.agent.loop import run_agent_turn, GLOBAL_PROMPT
 from app.agent.tools import TOOL_SCHEMAS
 
@@ -30,6 +30,8 @@ class AgentConfigIn(BaseModel):
     system_prompt: str | None = None
     enabled_tools: list[str] | None = None
     temperature: float | None = None
+    # Kurumsal ağ HTTPS'i yeniden imzalıyorsa son çare (Agent Ayarları'ndaki kutu).
+    skip_tls_verify: bool = False
 
 
 class ChatRequest(BaseModel):
@@ -67,6 +69,7 @@ def agent_chat(body: ChatRequest, _user: CurrentUser) -> ChatResponse:
         model=cfg.model.strip(),
         base_url=cfg.base_url.strip() or None,
         temperature=cfg.temperature,
+        verify_tls=not cfg.skip_tls_verify,
     )
 
     try:
@@ -81,6 +84,20 @@ def agent_chat(body: ChatRequest, _user: CurrentUser) -> ChatResponse:
             enabled_tools=set(cfg.enabled_tools) if cfg.enabled_tools is not None else None,
         )
     except Exception as e:  # LLM/endpoint hatasını istemciye taşı
+        if is_cert_verify_error(e):
+            # Ham OpenSSL metni kullanıcıya ne yapacağını söylemiyordu.
+            raise HTTPException(
+                status_code=502,
+                detail=(
+                    "agent_error: The LLM endpoint's TLS certificate is not trusted on this "
+                    "computer. Corporate networks often re-sign HTTPS with their own root "
+                    "certificate; the app uses the Windows certificate store, so this means "
+                    "that root is not installed there. Either tick \"Skip TLS certificate "
+                    "verification\" in Agent Settings, or ask IT for the corporate root CA "
+                    "(.pem/.cer) and set the AGENT_CA_BUNDLE environment variable to its path. "
+                    f"Details: {e}"
+                ),
+            ) from e
         raise HTTPException(status_code=502, detail=f"agent_error: {e}") from e
 
     return ChatResponse(

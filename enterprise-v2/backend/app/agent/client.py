@@ -10,7 +10,9 @@ from __future__ import annotations
 
 import json
 import os
+import ssl
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Any
 
 import httpx
@@ -21,6 +23,61 @@ class ToolCall:
     id: str
     name: str
     arguments: dict[str, Any]
+
+
+@lru_cache(maxsize=1)
+def tls_verify() -> ssl.SSLContext | bool:
+    """Uzak LLM uçları için TLS doğrulama bağlamı.
+
+    Kurumsal ağlar HTTPS'i kendi kök sertifikalarıyla yeniden imzalıyor
+    (Zscaler, Forcepoint …). Windows o köke güveniyor — tarayıcı bu yüzden
+    çalışıyor — ama paketli Python yalnız certifi listesine bakıyordu ve
+    "CERTIFICATE_VERIFY_FAILED: self-signed certificate in certificate chain"
+    ile düşüyordu. truststore işletim sisteminin deposunu kullanır (Windows
+    sertifika deposu, macOS Keychain): IT'nin dağıttığı kök otomatik geçerli.
+
+    Öncelik:
+      1. AGENT_CA_BUNDLE (ya da SSL_CERT_FILE / REQUESTS_CA_BUNDLE): IT'nin
+         verdiği .pem — depoya yüklenmemiş bir kök için kaçış yolu.
+      2. İşletim sistemi deposu (truststore).
+      3. httpx varsayılanı (certifi).
+    Doğrulamayı KAPATMA seçeneği bilerek yok: anahtar araya giren herkese gider.
+    """
+    bundle = (
+        os.getenv("AGENT_CA_BUNDLE") or os.getenv("SSL_CERT_FILE") or os.getenv("REQUESTS_CA_BUNDLE")
+    )
+    if bundle:
+        ctx = ssl.create_default_context(cafile=bundle)
+        # Python 3.13 katı X.509 kontrolünü varsayılan açıyor; eski kurumsal
+        # kök sertifikalarında sık eksik olan Authority Key Identifier yüzünden
+        # "Missing Authority Key Identifier" ile düşüyordu. Doğrulama sürüyor —
+        # yalnız RFC 5280 katılığı gevşiyor.
+        if hasattr(ssl, "VERIFY_X509_STRICT"):
+            ctx.verify_flags &= ~ssl.VERIFY_X509_STRICT
+        return ctx
+    try:
+        import truststore
+
+        return truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    except Exception:  # truststore yoksa ya da platform desteklemiyorsa
+        return True
+
+
+def is_cert_verify_error(exc: BaseException) -> bool:
+    """Hata zincirinde bir sertifika doğrulama hatası var mı.
+
+    Metne bakmak yetmiyor: işletim sistemi deposu doğrularken mesaj OpenSSL'in
+    "CERTIFICATE_VERIFY_FAILED"i değil, yerelleştirilmiş OS metni oluyor
+    ("… sertifikası güvenilir değil").
+    """
+    seen: set[int] = set()
+    e: BaseException | None = exc
+    while e is not None and id(e) not in seen:
+        seen.add(id(e))
+        if isinstance(e, ssl.SSLCertVerificationError) or "CERTIFICATE_VERIFY_FAILED" in str(e):
+            return True
+        e = e.__cause__ or e.__context__
+    return False
 
 
 DEFAULT_MODEL = "llama3.1"
@@ -36,6 +93,7 @@ class AgentClient:
         temperature: float | None = None,
         timeout: float = 300.0,
         extra_body: dict[str, Any] | None = None,
+        verify_tls: bool = True,
     ) -> None:
         self.model = model or os.getenv("AGENT_MODEL", DEFAULT_MODEL)
         self.api_key = api_key or os.getenv("AGENT_API_KEY", "local")
@@ -46,6 +104,8 @@ class AgentClient:
         # Sağlayıcıya özgü alanlar (ör. OpenRouter'da sağlayıcı sabitleme,
         # reasoning kapatma). Varsayılan boş: üretim isteği değişmez.
         self.extra_body = dict(extra_body or {})
+        # False yalnız kullanıcı Agent Ayarları'nda açıkça seçerse (kurumsal ağ).
+        self.verify_tls = verify_tls
 
     def chat(
         self,
@@ -75,7 +135,8 @@ class AgentClient:
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
 
-        with httpx.Client(timeout=self.timeout) as client:
+        verify = tls_verify() if self.verify_tls else False
+        with httpx.Client(timeout=self.timeout, verify=verify) as client:
             resp = client.post(
                 f"{self.base_url}/chat/completions", json=payload, headers=headers
             )

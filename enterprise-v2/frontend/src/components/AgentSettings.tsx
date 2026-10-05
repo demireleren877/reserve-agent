@@ -134,6 +134,17 @@ export function AgentSettings({ onClose }: { onClose: () => void }) {
                         className="input-base w-full text-xs" />
                     </Field>
                   </div>
+                  <label className="flex items-start gap-2 text-xs">
+                    <input type="checkbox" checked={cfg.skipTlsVerify}
+                      onChange={(e) => update({ skipTlsVerify: e.target.checked })}
+                      className="mt-0.5 accent-[color:var(--primary)]" />
+                    <span>
+                      <span className="font-medium">Skip TLS certificate verification</span>
+                      <span className="block text-[color:var(--muted)]">
+                        Only for corporate networks that re-sign HTTPS and show a certificate error. While on, anyone between you and the endpoint can read your API key.
+                      </span>
+                    </span>
+                  </label>
                   <Field label="Base URL" hint={`Empty = ${PROVIDER_DEFAULT_BASE_URL[cfg.provider] || "enter endpoint"}`}>
                     <input value={cfg.baseUrl} onChange={(e) => update({ baseUrl: e.target.value })}
                       placeholder={PROVIDER_DEFAULT_BASE_URL[cfg.provider] || "http://localhost:1234/v1"}

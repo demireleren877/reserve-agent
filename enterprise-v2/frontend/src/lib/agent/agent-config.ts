@@ -34,6 +34,12 @@ export interface AgentConfig {
   enabledToolIds: string[];
   /** Örnekleme sıcaklığı. */
   temperature: number;
+  /**
+   * TLS sertifika doğrulamasını atla. Kurumsal ağ HTTPS'i kendi kök sertifikasıyla
+   * yeniden imzalıyor ve o kök Windows deposunda yoksa son çare. Varsayılan KAPALI:
+   * açıkken araya giren herkes API anahtarını okuyabilir.
+   */
+  skipTlsVerify: boolean;
 }
 
 export const PROVIDER_DEFAULT_BASE_URL: Record<LLMProvider, string> = {
@@ -65,6 +71,7 @@ function defaults(): AgentConfig {
     systemPrompt: DEFAULT_SYSTEM_PROMPT,
     enabledToolIds: defaultEnabledToolIds(),
     temperature: 0.2,
+    skipTlsVerify: false,
   };
 }
 

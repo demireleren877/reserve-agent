@@ -150,6 +150,7 @@ export async function chatWithAgent(
     system_prompt: cfg.systemPrompt.trim() ? cfg.systemPrompt : null,
     enabled_tools: cfg.enabledToolIds,
     temperature: cfg.temperature,
+    skip_tls_verify: cfg.skipTlsVerify,
   };
 
   const authHeaders = await getAuthHeaders();

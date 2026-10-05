@@ -31,10 +31,12 @@ hiddenimports = [
     "bcrypt",
     "jwt",
 ]
+# truststore platforma göre modül seçiyor (_windows / _macos / _openssl); tembel
+# import edildiği için hepsini açıkça topla — yoksa paketli exe certifi'ye düşer.
 
 # Dinamik import'ları olan paketleri tam topla.
 # cryptography: oracledb thin mode bağlantı için zorunlu (yoksa DPY-3016).
-for pkg in ("uvicorn", "oracledb", "cryptography", "cffi", "keyring", "chainladder", "fastapi", "starlette", "webview"):
+for pkg in ("uvicorn", "oracledb", "cryptography", "cffi", "keyring", "chainladder", "fastapi", "starlette", "webview", "truststore"):
     d, b, h = collect_all(pkg)
     datas += d
     binaries += b

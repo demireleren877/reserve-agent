@@ -67,12 +67,28 @@ def _to_openai(messages: list) -> list:
 
 class H(BaseHTTPRequestHandler):
     model = "qwen/qwen3.5-9b"
+    # --oauth: kurumsal gateway'in tam taklidi. /oauth/token Basic auth + JSON
+    # {"grant_type":"client_credentials"} ister; /api/* Bearer token ister.
+    oauth: tuple[str, str] | None = None
+    tokens: set[str] = set()
 
     def log_message(self, *a):
         pass
 
     def do_POST(self):  # noqa: N802
         body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
+        if self.oauth is not None:
+            import base64
+            if self.path.endswith("/oauth/token"):
+                want = "Basic " + base64.b64encode(f"{self.oauth[0]}:{self.oauth[1]}".encode()).decode()
+                if self.headers.get("Authorization") != want or body.get("grant_type") != "client_credentials":
+                    return self._reply(401, {"error": "invalid_client"})
+                tok = uuid.uuid4().hex
+                H.tokens.add(tok)
+                return self._reply(200, {"access_token": tok, "token_type": "Bearer", "expires_in": 3600})
+            auth = self.headers.get("Authorization", "")
+            if not auth.startswith("Bearer ") or auth[7:] not in H.tokens:
+                return self._reply(401, {"error": "invalid token"})
         temp = float((body.get("options") or {}).get("temperature", 0.2))
         try:
             if self.path.endswith("/api/generate"):
@@ -89,6 +105,9 @@ class H(BaseHTTPRequestHandler):
             code = 200
         except Exception as e:  # noqa: BLE001
             out, code = {"error": str(e)[:300]}, 502
+        self._reply(code, out)
+
+    def _reply(self, code: int, out: dict) -> None:
         data = json.dumps(out).encode()
         self.send_response(code)
         self.send_header("Content-Type", "application/json")
@@ -100,6 +119,10 @@ class H(BaseHTTPRequestHandler):
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--port", type=int, default=8777)
+    ap.add_argument("--oauth", metavar="CLIENT_ID:SECRET",
+                    help="gateway gibi OAuth2 client credentials iste")
     a = ap.parse_args()
+    if a.oauth:
+        H.oauth = tuple(a.oauth.split(":", 1))  # type: ignore[assignment]
     print(f"ollama bridge :{a.port} → OpenRouter {H.model}", file=sys.stderr, flush=True)
     ThreadingHTTPServer(("127.0.0.1", a.port), H).serve_forever()

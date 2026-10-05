@@ -536,10 +536,10 @@ class TestOriginReadGuard:
 
     def test_year_question_answered_without_reading_is_sent_back(self):
         c = self._run("son kaza yılına ait ibnr tutarı nedir", [{"content": "IBNR -183,221,236 TL", "tool_calls": []}])
-        assert len(c.seen) == 2 and "per_origin" in c.seen[1][-1]["content"]
+        assert len(c.seen) == 2 and "get_analysis_state" in c.seen[1][-1]["content"]
 
     def test_year_question_after_reading_passes(self):
-        c = self._run("2023 kaza yılının IBNR'ı ne?", [
+        c = self._run("2025 kaza yılının IBNR'ı ne?", [
             {"content": None, "tool_calls": [ToolCall("r1", "get_analysis_state", {})]},
         ])
         assert len(c.seen) == 2  # okuma turu + cevap; geri çevirme yok

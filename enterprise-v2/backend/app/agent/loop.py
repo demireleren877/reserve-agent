@@ -525,16 +525,34 @@ _NUDGE_MODEL_FORM = (
     "Bu kontrolü kullanıcı görmüyor: ondan bahsetme."
 )
 
-_NUDGE_ORIGIN_READ = (
-    "[SİSTEM KONTROLÜ] Soru belirli bir kaza yılını soruyor; kaza yılı bazındaki "
-    "rakamlar durum bloğunda YOK (bloktaki IBNR branş TOPLAMIDIR). get_analysis_state "
-    "çağır ve cevabı per_origin'den ver. Bu kontrolü kullanıcı görmüyor: ondan bahsetme."
+_HIDDEN = " Bu kontrolü kullanıcı görmüyor: ondan bahsetme, özür dileme."
+_NUDGE_DATA_READ = (
+    "[SİSTEM KONTROLÜ] Soru durum bloğunda OLMAYAN veri istiyor (blok yalnız branş/dönem "
+    "IBNR toplamlarını ve aktif branşın yöntem/volume'unu taşır). Hiç araç çağırmadan "
+    "rakam verdin. İlgili okuma aracını çağır — get_analysis_state (kaza yılı, ultimate, "
+    "LR, LDF/CDF), get_ilr_triangle (hasar/prim üçgeni), get_branch_state (başka branş/"
+    "dönem) — ve cevabı oradan ver; rakam UYDURMA." + _HIDDEN
 )
-# "2025 kaza yılı", "son kaza yılı", "2024'ün" … — kaza yılı düzeyinde soru.
-_ORIGIN_Q_RE = re.compile(r"\b(19|20)\d{2}\b|kaza yıl|origin|kohort", re.IGNORECASE)
-# Bu araçlardan biri okunduysa kaza yılı verisi elde.
-_ORIGIN_READ_TOOLS = {"get_analysis_state", "get_branch_state", "describe_triangle",
-                      "get_ilr_triangle", "get_cashflow_state", "get_cashflow_pattern_state"}
+# Blokta karşılığı olmayan veri: kaza yılı, ultimate, üçgenler, oranlar, gelişim.
+_DATA_Q_RE = re.compile(
+    r"\b(19|20)\d{2}\b|kaza yıl|origin|kohort|ultimate|nihai|üçgen|triangle|\bilr\b"
+    r"|loss ratio|hasar/prim|hasar prim|\bldf|\bcdf|gelişim|faktör|pattern|desen|muallak|ödenmiş",
+    re.IGNORECASE,
+)
+_NUDGE_WRONG_YEAR = (
+    "[SİSTEM KONTROLÜ] Soru şu kaza yıllarını soruyor: {asked}. Cevabın bunların hiçbirini "
+    "içermiyor ({answered} yazdın). Doğru yılın satırını oku ve onu ver." + _HIDDEN
+)
+_NUDGE_PERIOD_SUM = (
+    "[SİSTEM KONTROLÜ] Cevabın dönem toplamlarının TOPLAMINI ({total}) içeriyor. Dönemler "
+    "aynı portföyün ardışık değerlemeleridir, toplanmaz. Kapsam belirtilmediyse aktif "
+    "dönemin toplamını ver; birden çok dönem gerekiyorsa dönem dönem yaz." + _HIDDEN
+)
+_NUDGE_SIGN = (
+    "[SİSTEM KONTROLÜ] {value} negatif bir değer ama cevabında işaretsiz yazılmış. Negatif "
+    "IBNR aktüeryal olarak önemli bir sinyaldir: eksi işaretiyle yaz." + _HIDDEN
+)
+_YEAR_RE = re.compile(r"\b((?:19|20)\d{2})\b")
 
 # Arayüzün işlem uygulanan turdan sonra gönderdiği görünmez "devam" mesajı.
 # Bu turda model önceki turun değişikliğini özetlerken ("ayarlandı") yeni bir
@@ -548,39 +566,64 @@ def _guard_nudge(
     content: str,
     tool_invocations: list[dict[str, Any]],
     actions: list[dict[str, Any]],
+    block: str = "",
 ) -> str | None:
-    """Son cevap kabul edilmeden önce bir kez geri çevrilmeli mi.
+    """Son cevap kabul edilmeden önce geri çevrilmeli mi (tur başına en fazla iki kez).
 
     Komutlarda: yapılmamış değişikliği "yaptım" demek, formu düz metin yazmak.
-    Sorularda: kaza yılı rakamını durumu okumadan vermek (blok yalnız toplam taşır).
+    Sorularda: blokta olmayan veriyi okumadan vermek, sorulan yılı vermemek.
+    Her cevapta: dönemleri toplamak, negatif rakamı işaretsiz yazmak.
     Arayüzün gizli devam/doğrulama turları hiç denetlenmez.
+    Hepsi Qwen 3.5 9B'de (LM Studio) ölçülmüş hatalardan.
     """
+    from app.agent.numbers import has_number, numbers_in
+
     last = next((m for m in reversed(messages) if m.get("role") == "user"), None)
     text = str((last or {}).get("content") or "")
     if text.startswith(_AUTO_CONTINUE_PREFIX):
         return None
     asked = _is_question(messages)
+    ran = {t["name"] for t in tool_invocations}
+    answer = content or ""
+
     if not asked and _MODEL_INTENT_RE.search(text) and not tool_invocations:
         return _NUDGE_MODEL_FORM
-    # Kaza yılı sorusuna durumu okumadan rakamla cevap: Qwen 3.5 9B "son kaza
-    # yılının IBNR'ı" sorusuna bloktaki branş toplamını verdi.
-    if (
-        asked
-        and _ORIGIN_Q_RE.search(text)
-        and not ({t["name"] for t in tool_invocations} & _ORIGIN_READ_TOOLS)
-        and re.search(r"\d", content or "")
-    ):
-        return _NUDGE_ORIGIN_READ
     if (
         not asked
         and not actions
-        and content
-        and _COMPLETION_CLAIM_RE.search(content)
-        and not _ALREADY_RE.search(content)  # "zaten BF bazında" meşru
+        and answer
+        and _COMPLETION_CLAIM_RE.search(answer)
+        and not _ALREADY_RE.search(answer)  # "zaten BF bazında" meşru
     ):
         return _NUDGE_FALSE_CLAIM
+    # Blokta olmayan veriyi hiç okumadan rakamla vermek (uydurma üçgen, IBNR'ı
+    # ultimate diye vermek, kaza yılı yerine branş toplamı).
+    if asked and _DATA_Q_RE.search(text) and not ran and re.search(r"\d", answer):
+        return _NUDGE_DATA_READ
+    # Sorulan kaza yılı cevapta hiç yok, başka yıllar var ("2024 kaza yılnın
+    # ibnrı" → 2025'in rakamı).
+    q_years = set(_YEAR_RE.findall(text))
+    a_years = set(_YEAR_RE.findall(answer))
+    if asked and q_years and a_years and not (q_years & a_years):
+        return _NUDGE_WRONG_YEAR.format(asked=", ".join(sorted(q_years)),
+                                        answered=", ".join(sorted(a_years)))
+    # Dönem alt toplamlarının toplamı: aynı portföyü iki kez saymak.
+    subtotals = [numbers_in(m.group(1))[0] for m in re.finditer(r"dönem toplamı IBNR (-?[\d,.]+)", block)
+                 if numbers_in(m.group(1))]
+    if len(subtotals) > 1:
+        total = sum(subtotals)
+        if total and has_number(answer, total, 0.005):
+            return _NUDGE_PERIOD_SUM.format(total=f"{total:,.0f}")
+    # Negatif değeri işaretsiz yazmak (bloktan ya da bu turun araç çıktılarından).
+    if not re.search(r"negatif|eksi|negative", answer, re.IGNORECASE):
+        sources = block + " " + " ".join(str(t.get("output")) for t in tool_invocations)
+        negatives = {v for v in numbers_in(sources) if v <= -100_000}
+        got = numbers_in(answer)
+        for v in sorted(negatives):
+            if any(abs(g - abs(v)) <= 0.005 * abs(v) for g in got if g > 0) and \
+               not any(abs(g - v) <= 0.005 * abs(v) for g in got if g < 0):
+                return _NUDGE_SIGN.format(value=f"{v:,.0f}")
     return None
-
 
 _LR_TOOLS = {"set_selected_loss_ratio", "set_selected_loss_ratios"}
 _NUM_RE = re.compile(r"\d+(?:[.,]\d+)?")
@@ -768,7 +811,7 @@ def run_agent_turn(
     applied_writes: set[tuple[str, str]] = set()
     # Koruma turda en fazla bir kez geri çevirir; geri çevirme mesajları
     # konuşma geçmişine (raw_additions) yazılmaz.
-    guard_used = False
+    guard_used = 0
     guard_msgs: list[dict[str, Any]] = []
 
     def _additions() -> list[dict[str, Any]]:
@@ -803,11 +846,11 @@ def run_agent_turn(
         tool_calls: list[ToolCall] = response.get("tool_calls", [])
 
         if not tool_calls:
-            nudge = None if guard_used else _guard_nudge(
-                messages, content or "", tool_invocations, actions
+            nudge = None if guard_used >= 1 else _guard_nudge(
+                messages, content or "", tool_invocations, actions, summary_block
             )
             if nudge and _iteration < max_iterations - 1:
-                guard_used = True
+                guard_used += 1
                 a_msg: dict[str, Any] = {"role": "assistant", "content": content or ""}
                 u_msg: dict[str, Any] = {"role": "user", "content": nudge}
                 conv += [a_msg, u_msg]

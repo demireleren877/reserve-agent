@@ -645,13 +645,16 @@ export function LandingPage({ c }: { c: LandingContent }) {
             <a href="#main-content" className={styles.backTop} aria-label={c.locale === "tr" ? "Sayfa başına dön" : "Back to top"}>↑</a>
           </div>
           <div className={styles.footerBottom}>
-            <span>© {new Date().getFullYear()} Actuarius. {c.footer.rights}</span>
+            <span>© {new Date().getFullYear()} Actuarius™. {c.footer.rights}</span>
             <div>
               <Link href="/privacy">{c.footer.privacy}</Link>
               <Link href="/terms">{c.footer.terms}</Link>
               <a href="#contact">{c.footer.contact}</a>
             </div>
           </div>
+          <p className={styles.footerLegal}>
+            {c.footer.trademark} · <a href="mailto:info@actuarius.com.tr">info@actuarius.com.tr</a>
+          </p>
         </div>
       </footer>
 

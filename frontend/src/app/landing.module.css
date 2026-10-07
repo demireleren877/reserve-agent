@@ -542,6 +542,8 @@
 .footerBottom div { display: flex; gap: 22px; }
 .footerBottom a { color: var(--muted); text-decoration: none; }
 .footerBottom a:hover { color: var(--blue); }
+.footerLegal { margin: -14px 0 0; padding-bottom: 30px; font-size: 12px; color: var(--muted); }
+.footerLegal a { color: inherit; }
 
 /* ── Film ────────────────────────────────────────────────────────── */
 .film { width: min(1200px, 94vw); max-width: none; max-height: none; padding: 0; border: 0; background: transparent; overflow: visible; }

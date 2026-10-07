@@ -14,7 +14,7 @@ export interface LandingContent {
   pricing: { label: string; h2: string; p: string; recommended: string; plans: { n: string; p: string; s: string; d: string; f: string[]; h: string; a: string; on?: boolean }[] };
   faq: { h2: string; p: string; items: { q: string; a: string }[] };
   contact: { label: string; h2: string; p: string; name: string; email: string; company: string; optional: string; message: string; placeholder: string; submit: string; sending: string; okTitle: string; okBody: string; again: string; note: string; genericError: string };
-  footer: { tagline: string; privacy: string; terms: string; contact: string; rights: string };
+  footer: { tagline: string; privacy: string; terms: string; contact: string; rights: string; trademark: string };
 }
 
 export const TR: LandingContent = {
@@ -44,7 +44,7 @@ export const TR: LandingContent = {
   ] },
   faq: { h2: "Aklınızdaki\nsorular.", p: "Daha fazlasını konuşmak için bize ulaşın.", items: FAQ_TR },
   contact: { label: "Birlikte bakalım", h2: "Bir sonraki modeliniz,\nyeni bir başlangıç olsun.", p: "Mevcut sürecinizi anlatın. Ekibinize uygun çalışma alanını birlikte değerlendirelim.", name: "Ad soyad", email: "İş e-postası", company: "Şirket", optional: "isteğe bağlı", message: "Size nasıl yardımcı olabiliriz?", placeholder: "Ekibinizi ve üzerinde çalıştığınız süreci kısaca anlatın…", submit: "Görüşme talebi gönder", sending: "Gönderiliyor…", okTitle: "Mesajınız bize ulaştı.", okBody: "{to} adresinden sizinle iletişime geçeceğiz.", again: "Yeni mesaj gönder", note: "Doğrudan yazmak isterseniz", genericError: "Mesaj gönderilemedi. Lütfen tekrar deneyin." },
-  footer: { tagline: "Aktüeryal işin bağlantılı hali.", privacy: "Gizlilik", terms: "Kullanım şartları", contact: "İletişim", rights: "Tüm hakları saklıdır." },
+  footer: { tagline: "Aktüeryal işin bağlantılı hali.", privacy: "Gizlilik", terms: "Kullanım şartları", contact: "İletişim", rights: "Tüm hakları saklıdır.", trademark: "Actuarius™ TÜRKPATENT marka başvurusu 2026/064239 · Marka sahibi: Eren Demirel" },
 };
 
 export const EN: LandingContent = {
@@ -69,5 +69,5 @@ export const EN: LandingContent = {
   ] },
   faq: { h2: "Good\nquestions.", p: "Get in touch if you would like to know more.", items: FAQ_EN },
   contact: { label: "Let’s take a look", h2: "Your next model.\nA new way forward.", p: "Tell us about your process. Let’s explore the right workspace for your team.", name: "Full name", email: "Work email", company: "Company", optional: "optional", message: "How can we help?", placeholder: "Tell us a little about your team and workflow…", submit: "Request a conversation", sending: "Sending…", okTitle: "Your message is in.", okBody: "We will be in touch at {to}.", again: "Send another message", note: "Prefer to email us?", genericError: "Your message could not be sent. Please try again." },
-  footer: { tagline: "Actuarial work, connected.", privacy: "Privacy", terms: "Terms of use", contact: "Contact", rights: "All rights reserved." },
+  footer: { tagline: "Actuarial work, connected.", privacy: "Privacy", terms: "Terms of use", contact: "Contact", rights: "All rights reserved.", trademark: "Actuarius™ Turkish Patent and Trademark Office application 2026/064239 · Trademark owner: Eren Demirel" },
 };

@@ -764,3 +764,89 @@ class TestRound5Guards:
         from app.agent.loop import _synthetic_read_tool
         assert _synthetic_read_tool([{"role": "user", "content": "Hasar/prim oranı üçgenini ver."}]) == "get_ilr_triangle"
         assert _synthetic_read_tool([{"role": "user", "content": "2024 IBNR ne?"}]) == "get_analysis_state"
+
+
+class TestCompactContext:
+    """Kompakt bağlam: çağrı başına sabit yükü küçültür, davranışı korur."""
+
+    def _sizes(self, compact, text="2023 için loss ratio'yu %30 yap", active=None, history=None):
+        c = ToolCapturingClient()
+        payload = {**_payload(), "cashflow": {"session_state": None}, "discount": {"session_state": None},
+                   "data": {"session_state": None}}
+        run_agent_turn(c, [{"role": "user", "content": text}], payload, compact=compact,
+                       active_module=active, full_history=history)
+        system = c.seen[0][0]["content"]
+        names = [t["function"]["name"] for t in c.tools_seen[0]]
+        return len(system), names, c
+
+    def test_compact_prompt_is_much_smaller(self):
+        full, full_tools, _ = self._sizes(False)
+        small, small_tools, _ = self._sizes(True)
+        assert small < full * 0.6
+        assert "get_app_guide" in small_tools and "get_app_guide" not in full_tools
+
+    def test_mentioned_module_tools_are_offered(self):
+        _, names, _ = self._sizes(True, "İskontolu yükümlülüğü %30 ile hesapla")
+        assert "compute_discount" in names
+
+    def test_active_tab_decides_the_module(self):
+        _, names, _ = self._sizes(True, "durum nedir", active="cashflow")
+        assert "get_cashflow_ldf_state" in names
+
+    def test_old_tool_outputs_are_trimmed(self):
+        big = "x" * 5000
+        hist = [{"role": "user", "content": "oku"},
+                {"role": "assistant", "content": None, "tool_calls": [
+                    {"id": "t1", "type": "function", "function": {"name": "get_analysis_state", "arguments": "{}"}}]},
+                {"role": "tool", "tool_call_id": "t1", "content": big}]
+        _, _, c = self._sizes(True, "2023 IBNR ne?", history=hist)
+        tool_msgs = [m for m in c.seen[0] if m.get("role") == "tool"]
+        assert tool_msgs and len(tool_msgs[0]["content"]) < 600
+
+    def test_guide_tool_returns_the_guide(self):
+        c = ScriptedClient([{"content": None, "tool_calls": [ToolCall("g", "get_app_guide", {})]},
+                            {"content": "Pro plan ₺100/ay.", "tool_calls": []}])
+        res = run_agent_turn(c, [{"role": "user", "content": "Pro plan ne kadar?"}], _payload(), compact=True)
+        assert "Pro plan" in json.dumps(res.tool_invocations[0]["output"], ensure_ascii=False)
+
+
+def test_command_answered_with_a_simulation_is_sent_back():
+    """"BF oranını %40 yap" → yalnız simulate_bf; uygulanmadı."""
+    from app.agent.loop import _guard_nudge
+    out = _guard_nudge([{"role": "user", "content": "2023 kaza yılının BF oranını %40 yap"}],
+                       "%40 olarak ayarlandıysa IBNR -8,2M olur.",
+                       [{"name": "simulate_bf", "output": {}}], [], "")
+    assert out and "set_selected_loss_ratio" in out
+    q = _guard_nudge([{"role": "user", "content": "2023'ün BF oranını %40 yapsak ne olur?"}],
+                     "2023 IBNR -8,2M olur.", [{"name": "simulate_bf", "output": {}}], [], "")
+    assert q is None
+
+
+def test_apply_command_does_not_offer_simulation_tools():
+    c = ToolCapturingClient()
+    run_agent_turn(c, [{"role": "user", "content": "2023 kaza yılının BF oranını %40 yap"}], _payload())
+    names = {t["function"]["name"] for t in c.tools_seen[0]}
+    assert "simulate_bf" not in names and "set_selected_loss_ratio" in names
+    c = ToolCapturingClient()
+    run_agent_turn(c, [{"role": "user", "content": "2023 için %40 BF senaryosunu simüle et"}], _payload())
+    assert "simulate_bf" in {t["function"]["name"] for t in c.tools_seen[0]}
+
+
+def test_formula_scenario_requires_reading_the_state_first():
+    """TK01: okumadan origin tahmin edip simulate_bf_formula çağırmak reddedilir."""
+    c = ScriptedClient([
+        {"content": None, "tool_calls": [ToolCall("s1", "simulate_bf_formula", {"formula": "vw(2021:2023)"})]},
+        {"content": None, "tool_calls": [ToolCall("r1", "get_analysis_state", {})]},
+        {"content": None, "tool_calls": [ToolCall("s2", "simulate_bf_formula", {"formula": "vw(2021:2023)"})]},
+        {"content": "2023 IBNR değişimi …", "tool_calls": []},
+    ])
+    res = run_agent_turn(c, [{"role": "user", "content": "vw(2021:2023) uygularsak 2023 IBNR nasıl değişir?"}], _payload())
+    outs = [t["output"] for t in res.tool_invocations]
+    assert "get_analysis_state" in outs[0]["error"]
+    assert "error" not in outs[2] or "get_analysis_state" not in str(outs[2].get("error"))
+
+
+def test_unknown_branch_id_lists_the_valid_ones():
+    ss = {"periods": [{"id": "p2", "label": "2026Q2", "branches": [{"id": "p2-eng", "name": "ENGINEERING"}]}]}
+    out = dispatch_tool("get_branch_state", {"branch_id": "ENGINEERING#yanlış"}, session_state=ss)
+    assert out["valid_branches"] == [{"branch_id": "p2-eng", "name": "ENGINEERING", "period": "2026Q2"}]

@@ -10,6 +10,13 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from app.agent.client import AgentClient, ToolCall
+from app.agent.compact import (
+    APP_GUIDE_TOOL,
+    COMPACT_GLOBAL_PROMPT,
+    app_guide,
+    select_modules,
+    trim_history,
+)
 from app.agent.modules import REGISTRY, get_modules
 from app.agent.modules.base import ModuleSpec
 from app.agent.modules.reserve import triangle_from_payload
@@ -483,6 +490,8 @@ _STATE_READ_TOOLS = {
 # okunduysa (state aracı çalıştı) ve soru sorulduysa listeden çıkarılırlar.
 # Açıklamaya yazmak yetmedi: izole denemede tutuyor, tam koşuda sızıyordu.
 _VIEW_MOVING_TOOLS = {"navigate_to", "select_branch"}
+# Kompakt modda modül seçiminden bağımsız hep sunulan araçlar (gezinme + proje haritası).
+_ALWAYS_OFFERED = {"navigate_to", "list_project"}
 
 _QUESTION_RE = re.compile(
     # "ne kdar", "nekadar" gibi yazım hataları da soru (SEM08: "2024 kaza yılnın
@@ -587,6 +596,17 @@ _CONFIRM_ASK_RE = re.compile(
     r"|emin mi(?:sin|siniz)",
     re.IGNORECASE,
 )
+_SIMULATE_TOOLS = {"simulate_bf", "simulate_bf_formula", "simulate_frequency_severity"}
+_APPLY_CMD_RE = re.compile(
+    r"\b(yap|ayarla|değiştir|uygula|güncelle|çevir|gir|set et|kaydet)\b", re.IGNORECASE
+)
+# "simüle et", "senaryo", "olsa" → kullanıcı gerçekten simülasyon istiyor.
+_SCENARIO_RE = re.compile(r"simül|senaryo|\bolsa|olursa|what if", re.IGNORECASE)
+_NUDGE_SIMULATED_ONLY = (
+    "[SİSTEM KONTROLÜ] Kullanıcı değişikliğin UYGULANMASINI istedi ama yalnız simülasyon "
+    "yaptın; hiçbir şey değişmedi. İlgili yazma aracını çağır (BF oranı → "
+    "set_selected_loss_ratio(s), basis → set_basis_bulk) ve uygula." + _HIDDEN
+)
 _NUDGE_BASIS_MISSING = (
     "[SİSTEM KONTROLÜ] Kullanıcı BF istedi ama yalnız loss ratio yazdın; {origins} hâlâ CL "
     "bazında, LR bu haliyle ultimate'i değiştirmez. set_basis_bulk (ya da set_bf_origins) "
@@ -615,6 +635,20 @@ def _synthetic_read_tool(messages: list[dict[str, Any]]) -> str:
     if re.search(r"hasar/prim|hasar prim|\bilr\b|loss ratio üçgen", text, re.IGNORECASE):
         return "get_ilr_triangle"
     return "get_analysis_state"
+
+
+# Önce okunması gereken durum: formül senaryosu MEVCUT BF origin'lerine ve
+# formüllerine uygulanır. Kompakt prompt'ta Qwen 3.5 9B okumadan origin'leri
+# tahmin edip ("2024, 2025, 2026") doğrudan simüle ediyordu (TK01, 3/3).
+_PREREQ_READS = {"simulate_bf_formula": "get_analysis_state"}
+
+
+def _missing_prereq(name: str, tool_invocations: list[dict[str, Any]]) -> str | None:
+    need = _PREREQ_READS.get(name)
+    if need and not any(t["name"] == need for t in tool_invocations):
+        return (f"Önce {need} çağır: senaryo MEVCUT BF origin'lerine (basis='bf') ve "
+                "current_lr_input formüllerine uygulanır; origin'leri tahmin etme.")
+    return None
 
 
 def _lr_origins(actions: list[dict[str, Any]]) -> set[str]:
@@ -696,6 +730,10 @@ def _guard_nudge(
         return _NUDGE_FALSE_CLAIM
     if not asked and not actions and _CONFIRM_ASK_RE.search(answer):
         return _NUDGE_NEEDLESS_CONFIRM
+    # "BF oranını %40 yap" → yalnız simulate_bf çalıştı, hiçbir şey uygulanmadı;
+    # cevap "ayarlandıysa…" diye senaryo anlatıyordu (Qwen 3.5 9B).
+    if not asked and not actions and (ran & _SIMULATE_TOOLS) and _APPLY_CMD_RE.search(text):
+        return _NUDGE_SIMULATED_ONLY
     # "BF'e al" komutunda yalnız LR yazıp basis'i değiştirmemek (AG01): CL
     # bazındaki origin'de LR ultimate'i hiç etkilemez.
     if not asked and re.search(r"\bbf\b", text, re.IGNORECASE):
@@ -835,6 +873,12 @@ def run_agent_turn(
     # araçlar gönderilir (Ayarlar > Tools aç/kapa).
     global_prompt: str | None = None,
     enabled_tools: set[str] | None = None,
+    # Kompakt bağlam (Agent Ayarları): kısa genel prompt, yalnız ilgili modüllerin
+    # prompt'u/araçları, kırpılmış geçmiş — token kotası olan uçlar için. Bkz. compact.py.
+    compact: bool = False,
+    # Kullanıcının açık sekmesi (reserve/cashflow/discount/data); kompakt modda
+    # hangi modülün yükleneceğini belirler.
+    active_module: str | None = None,
 ) -> AgentTurnResult:
     # Legacy: triangle_payload geldiyse rezerv tek-modül olarak sar
     if modules_payload is None:
@@ -872,6 +916,14 @@ def run_agent_turn(
         # Hiç modül yoksa default = tüm REGISTRY (boş context)
         active_modules = get_modules(None)
 
+    # Kompakt modda prompt'a/araç listesine girecek modüller
+    _last_user = next((m for m in reversed(messages) if m.get("role") == "user"), None)
+    _last_text = str((_last_user or {}).get("content") or "")
+    prompt_modules = (
+        select_modules([m.name for m in active_modules], active_module, _last_text)
+        if compact else {m.name for m in active_modules}
+    )
+
     # System prompt komposit
     summaries: list[str] = []
     for m in active_modules:
@@ -879,10 +931,15 @@ def run_agent_turn(
         summaries.append(f"- **{m.label}** ({m.name}): {m.context_provider(ctx_state)}")
     sections: list[str] = []
     for m in active_modules:
+        if m.name not in prompt_modules:
+            continue
         sections.append(
             f"\n\n# {m.label.upper()} MODÜLÜ ({m.name})\n{m.system_prompt}"
         )
-    base_prompt = global_prompt if global_prompt is not None else GLOBAL_PROMPT
+    if global_prompt is not None:
+        base_prompt = global_prompt
+    else:
+        base_prompt = COMPACT_GLOBAL_PROMPT if compact else GLOBAL_PROMPT
     summary_block = "\n".join(summaries)
     # Her turda DEĞİŞEN tek parça durum özeti. Prompt'un ortasında durursa
     # ondan sonraki ~16k karakterlik modül prompt'ları da her turda yeniden
@@ -914,8 +971,14 @@ def run_agent_turn(
                 # Aynı isim iki modülde olsa modül-prefiksli ekleyebiliriz;
                 # şimdilik registry öncelik kuralı: ilk gelen kazanır.
                 continue
-            all_tools.append(s)
             tool_to_module[tname] = m
+            # Kompakt modda yalnız seçili modüllerin araçları modele SUNULUR;
+            # eşleme tam kalır — model geçmişte gördüğü başka modül aracını
+            # çağırırsa yine çalışır.
+            if m.name in prompt_modules or tname in _ALWAYS_OFFERED:
+                all_tools.append(s)
+    if compact and (enabled_tools is None or "get_app_guide" in enabled_tools):
+        all_tools.append(APP_GUIDE_TOOL)
 
     # full_history varsa kullan: önceki turların tool çağrısı/sonuç zincirleri +
     # mevcut kullanıcı mesajı (messages'ın son elemanı) sona eklenir.
@@ -926,7 +989,8 @@ def run_agent_turn(
         last_user = next(
             (m for m in reversed(messages) if m.get("role") == "user"), None
         )
-        history_with_current = list(full_history) + (
+        past = trim_history(full_history) if compact else list(full_history)
+        history_with_current = past + (
             [last_user] if last_user else []
         )
         conv: list[dict[str, Any]] = [
@@ -976,6 +1040,11 @@ def run_agent_turn(
         # engellenmiyor.
         if _asked and not _wants_navigation(messages):
             _drop |= _VIEW_MOVING_TOOLS
+        # Açık uygulama komutunda simülasyon araçları masada olmasın: "BF oranını
+        # %40 yap" → model simulate_bf'i seçip hiçbir şey uygulamadan senaryo
+        # anlatıyordu (geri çevirme + yeniden deneme = komut başına 2 fazla çağrı).
+        if not _asked and _APPLY_CMD_RE.search(_last_text) and not _SCENARIO_RE.search(_last_text):
+            _drop |= _SIMULATE_TOOLS
         if _drop:
             turn_tools = [
                 t for t in all_tools if t["function"]["name"] not in _drop
@@ -1028,9 +1097,10 @@ def run_agent_turn(
                 force_tool = (
                     nudge in _NUDGES_NEEDING_A_READ
                     or nudge == _NUDGE_FALSE_CLAIM
+                    or nudge == _NUDGE_SIMULATED_ONLY
                     or nudge.startswith(_NUDGE_WRONG_YEAR[:40])
                 )
-                synthetic_read_ok = nudge != _NUDGE_FALSE_CLAIM
+                synthetic_read_ok = nudge not in (_NUDGE_FALSE_CLAIM, _NUDGE_SIMULATED_ONLY)
                 u_msg: dict[str, Any] = {"role": "user", "content": nudge}
                 if force_tool:
                     # Reddedilen cevabı konuşmada bırakma: model onu kelimesi
@@ -1082,7 +1152,9 @@ def run_agent_turn(
             # yapacağını söylüyoruz; sessiz yok sayma modeli tekrar
             # denemeye itiyordu.
             _sig = (tc.name, json.dumps(tc.arguments, sort_keys=True, default=str))
-            _invented = _invented_rate(tc.name, tc.arguments, messages)
+            _invented = _invented_rate(tc.name, tc.arguments, messages) or _missing_prereq(
+                tc.name, tool_invocations
+            )
             if _invented:
                 output = {"error": _invented}
                 tool_invocations.append({
@@ -1111,7 +1183,9 @@ def run_agent_turn(
                 continue
 
             mod = tool_to_module.get(tc.name)
-            if mod is None:
+            if tc.name == "get_app_guide":
+                output = {"guide": app_guide(GLOBAL_PROMPT)}
+            elif mod is None:
                 output: dict[str, Any] = {
                     "error": f"Tool bulunamadı: {tc.name} (aktif modüllerden hiçbiri sahiplenmiyor)"
                 }

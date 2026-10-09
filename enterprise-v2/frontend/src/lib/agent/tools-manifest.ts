@@ -100,6 +100,7 @@ export const AGENT_TOOLS: ToolDef[] = [
   { id: "navigate_to", module: "global", kind: "action", impl: "ready", title: "Navigate", description: "Navigates to a module (reserve/cashflow/discount/data)." },
   { id: "roll_forward", module: "reserve", kind: "action", impl: "ready", title: "Roll-forward", description: "Carries model assumptions (exclusions/curve/BF/LR/basis/correction) from the prior same-name branch into the current branch." },
   { id: "load_triangle_from_data", module: "reserve", kind: "action", impl: "ready", title: "Load triangle from data", description: "Builds the active branch triangle from claim records (from scratch or by rolling forward the prior period)." },
+  { id: "get_app_guide", module: "global", kind: "read", impl: "ready", title: "App guide", description: "Reads the app's user guide (plans, tabs, how-tos) when asked how to use the app. Used in compact context." },
   { id: "ask_user", module: "global", kind: "action", impl: "ready", title: "Ask user", description: "Presents a selectable in-chat form to collect modelling settings." },
 ];
 

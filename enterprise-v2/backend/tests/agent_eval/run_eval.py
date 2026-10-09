@@ -74,7 +74,7 @@ def _label(case: dict) -> str:
     return " ⟶ ".join(turns) if turns else case["q"]
 
 
-def run_case(client, case: dict, payload: dict, max_iterations: int) -> dict:
+def run_case(client, case: dict, payload: dict, max_iterations: int, compact: bool = False) -> dict:
     """Bir senaryoyu koştur; çok turluysa geçmişi taşı.
 
     Dönen sözlük TÜM turların birleşimidir (araçlar, aksiyonlar) ama cevap
@@ -94,6 +94,7 @@ def run_case(client, case: dict, payload: dict, max_iterations: int) -> dict:
             client, convo, payload,
             max_iterations=max_iterations,
             full_history=history or None,
+            compact=compact,
         )
         tools += [t["name"] for t in res.tool_invocations]
         actions += [a.get("type") for a in res.actions]
@@ -123,6 +124,8 @@ def main() -> int:
                          "Sağlayıcılar farklı sayısallaştırma kullanıyor — sabitlenmezse ölçüm "
                          "modeli değil sağlayıcı karışımını ölçer.")
     ap.add_argument("--max-iterations", type=int, default=6)
+    ap.add_argument("--compact", action="store_true",
+                    help="kompakt bağlam (kısa prompt, ilgili modüller, kırpılmış geçmiş)")
     ap.add_argument("--only", help="yalnız bu kategori")
     ap.add_argument("--ids", help="yalnız bu soru id'leri (virgülle)")
     ap.add_argument("--timeout", type=float, default=120.0,
@@ -167,7 +170,7 @@ def main() -> int:
     for c in cases:
         t0 = time.time()
         try:
-            out = run_case(client, c, payload, a.max_iterations)
+            out = run_case(client, c, payload, a.max_iterations, a.compact)
         except Exception as e:
             out = {"answer": "", "tools": [], "actions": [], "stop": "error"}
             print(f"  {c['id']} ÇÖKTÜ: {type(e).__name__}: {str(e)[:120]}", flush=True)

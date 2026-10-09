@@ -9,7 +9,7 @@ import type {
   UploadOptions,
 } from "@/types/triangle";
 import { getToken } from "@/lib/auth/jwt";
-import { usesOAuth, getAgentConfig, PROVIDER_DEFAULT_BASE_URL } from "@/lib/agent/agent-config";
+import { usesOAuth, usesCompactContext, getAgentConfig, PROVIDER_DEFAULT_BASE_URL } from "@/lib/agent/agent-config";
 
 // Boş string ("") = aynı origin (masaüstü: frontend+API tek sunucudan).
 export const API_BASE =
@@ -140,6 +140,9 @@ export async function chatWithAgent(
   if (fullHistory && fullHistory.length > 0) {
     body.full_history = fullHistory;
   }
+  // Açık sekme: kompakt bağlamda hangi modülün prompt'u/araçları yükleneceğini belirler.
+  const tab = typeof window !== "undefined" ? window.location.pathname.split("/")[1] : "";
+  if (["reserve", "cashflow", "discount", "data"].includes(tab)) body.active_module = tab;
   // Agent Ayarları config'i (lokal LLM endpoint + system prompt + açık araçlar).
   const cfg = getAgentConfig();
   body.config = {
@@ -149,6 +152,7 @@ export async function chatWithAgent(
     // Boş → backend'in yerleşik GLOBAL_PROMPT'u (web ile birebir). Doluysa override.
     system_prompt: cfg.systemPrompt.trim() ? cfg.systemPrompt : null,
     enabled_tools: cfg.enabledToolIds,
+    compact_context: usesCompactContext(cfg),
     temperature: cfg.temperature,
     skip_tls_verify: cfg.skipTlsVerify,
     // Bulut sağlayıcılarda (OpenRouter/OpenAI) model seçimi kullanıcıda; düşünmeyi

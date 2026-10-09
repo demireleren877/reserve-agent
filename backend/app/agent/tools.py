@@ -303,7 +303,8 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
         "function": {
             "name": "set_selected_loss_ratio",
             "description": (
-                "BF sekmesinde bir origin için Selected Loss Ratio ayarla. "
+                "Bir origin'in BF oranını (BF Loss Ratio / a priori) AYARLAR — "
+                "\"2023'ün BF oranını %40 yap\" gibi komutlarda BUNU kullan. "
                 "formula: sayı (0.75, 75%) veya formül — avg(2020:2022), "
                 "vw(2020:2024), sum_cl(2020:2022)/sum_exp(2020:2022), "
                 "avg(2020:2022)*1.1 gibi. Boş string = varsayılana dön. "
@@ -587,7 +588,8 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
         "function": {
             "name": "simulate_bf",
             "description": (
-                "HİPOTETİK BF senaryosu — durumu DEĞİŞTİRMEZ. Belirli origin ve "
+                "HİPOTETİK BF senaryosu — durumu DEĞİŞTİRMEZ; \"yap/ayarla\" "
+                "komutlarında KULLANMA (uygulamak: set_selected_loss_ratio). Belirli origin ve "
                 "loss_ratio için BF Ultimate, IBNR, ve mevcut seçili Ultimate'tan "
                 "farkı hesaplar. 'Eğer 2024 BF oranı %400 olsa ne olur' gibi "
                 "sorularda KULLAN. loss_ratio: 0.7 = %70, 4.0 = %400. "
@@ -1795,6 +1797,25 @@ def _select_branch(args: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _branch_not_found(session_state: dict[str, Any] | None, branch_id: str) -> dict[str, Any]:
+    """Bilinmeyen branch_id hatası + geçerli kimlikler.
+
+    Model yanlış id'den sonra ayrıca list_project çağırıyordu; her biri tam
+    bağlamla bir çağrı daha demek (kurumsal uçlarda saatlik token kotası).
+    """
+    ss = session_state or {}
+    valid: list[dict[str, Any]] = []
+    for p in ss.get("periods", []) or []:
+        for b in p.get("branches", []) or []:
+            valid.append({"branch_id": b.get("id"), "name": b.get("name"), "period": p.get("label")})
+    for b in ss.get("branches", []) or []:
+        if isinstance(b, dict):
+            valid.append({"branch_id": b.get("id") or b.get("branch_id"),
+                          "name": b.get("name") or b.get("branch_name")})
+    return {"error": f"branch_id bulunamadı: {branch_id}. Aşağıdaki geçerli branch_id'lerden birini kullan.",
+            "valid_branches": valid[:40]}
+
+
 def _get_branch_state(
     session_state: dict[str, Any] | None, args: dict[str, Any]
 ) -> dict[str, Any]:
@@ -1811,7 +1832,7 @@ def _get_branch_state(
                     "period_label": p.get("label"),
                     "branch": b,
                 }
-    return {"error": f"branch_id bulunamadı: {branch_id}"}
+    return _branch_not_found(session_state, branch_id)
 
 
 def _degeneracy_warning(triangle: Triangle | None) -> str | None:
@@ -1950,7 +1971,7 @@ def _simulate_bf(
     if branch_id:
         per = _find_branch_per_origin(session_state, str(branch_id))
         if per is None:
-            return {"error": f"branch_id bulunamadı: {branch_id}"}
+            return _branch_not_found(session_state, branch_id)
     else:
         per = session_state.get("per_origin", []) or []
 
@@ -2352,7 +2373,7 @@ def _simulate_bf_formula(
             if branch_snap:
                 break
         if branch_snap is None:
-            return {"error": f"branch_id bulunamadı: {branch_id}"}
+            return _branch_not_found(session_state, branch_id)
         per = branch_snap.get("per_origin") or []
         fctx = branch_snap.get("formula_context") or None
     else:
@@ -2714,7 +2735,7 @@ def _get_cashflow_ldf_state(
             break
     if target is None:
         if branch_id:
-            return {"error": f"branch_id bulunamadı: {branch_id}"}
+            return _branch_not_found(session_state, branch_id)
         return {"error": "Aktif branş yok. branch_id belirtin veya önce select_branch kullanın."}
     return {
         "branch_id": target.get("id"),
@@ -2752,7 +2773,7 @@ def _get_cashflow_pattern_state(
             break
     if target is None:
         if branch_id:
-            return {"error": f"branch_id bulunamadı: {branch_id}"}
+            return _branch_not_found(session_state, branch_id)
         return {"error": "Aktif branş yok. branch_id belirtin."}
 
     quarterly_pattern: dict[str, Any] = target.get("quarterly_pattern") or {}
@@ -2876,7 +2897,7 @@ def _compute_discount(
 
     if target_branch is None:
         if branch_id:
-            return {"error": f"branch_id bulunamadı: {branch_id}"}
+            return _branch_not_found(session_state, branch_id)
         return {"error": "Aktif branş yok. branch_id belirtin."}
 
     if not target_branch.get("has_cashflow_pattern"):

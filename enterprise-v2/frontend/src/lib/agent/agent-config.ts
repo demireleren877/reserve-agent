@@ -59,6 +59,13 @@ export interface AgentConfig {
   tokenUrl: string;
   clientId: string;
   clientSecret: string;
+  /**
+   * Kompakt bağlam: kısa genel prompt, yalnız açık sekmenin (ve mesajda geçen)
+   * modüllerin prompt'u/araçları, kırpılmış geçmiş. Çağrı başına ~25k → ~13k token
+   * (Qwen 3.5 9B, LM Studio ölçümü) — saatlik token kotası olan kurumsal uçlar için.
+   * null = otomatik: yerel/özel uçlarda açık, bulut sağlayıcılarda kapalı.
+   */
+  compactContext: boolean | null;
 }
 
 export const PROVIDER_DEFAULT_BASE_URL: Record<LLMProvider, string> = {
@@ -76,7 +83,7 @@ export const DEFAULT_SYSTEM_PROMPT = "";
 const STORAGE_KEY = "reserve-agent-config-v1";
 
 // Sonradan eklenen "ready" araçlar — geriye dönük configlerde otomatik AÇILIR.
-const NEW_TOOL_IDS = ["roll_forward", "ask_user", "load_triangle_from_data", "set_bf_origins"];
+const NEW_TOOL_IDS = ["roll_forward", "ask_user", "load_triangle_from_data", "set_bf_origins", "get_app_guide"];
 
 // Hazır entegre varsayılan: OpenRouter + gemini flash-lite. Kullanıcı yalnız API key girer.
 export const DEFAULT_MODEL = "google/gemini-3.1-flash-lite-preview";
@@ -97,6 +104,7 @@ function defaults(): AgentConfig {
     tokenUrl: "",
     clientId: "",
     clientSecret: "",
+    compactContext: null,
   };
 }
 
@@ -140,6 +148,11 @@ export function setAgentConfig(patch: Partial<AgentConfig>): void {
     /* kota — sessiz */
   }
   listeners.forEach((l) => l());
+}
+
+/** Kompakt bağlamın etkin değeri (null → yerel/özel uçlarda açık). */
+export function usesCompactContext(cfg: AgentConfig): boolean {
+  return cfg.compactContext ?? (cfg.provider === "local" || cfg.provider === "custom");
 }
 
 export function resetSystemPrompt(): void {

@@ -41,6 +41,8 @@ class AgentConfigIn(BaseModel):
     token_url: str = ""
     client_id: str = ""
     client_secret: str = ""
+    # Kompakt bağlam: çağrı başına ~25k → ~13k token (token kotası olan uçlar).
+    compact_context: bool = False
 
 
 class ChatRequest(BaseModel):
@@ -52,6 +54,9 @@ class ChatRequest(BaseModel):
     session_state: dict[str, Any] | None = None
     full_history: list[dict[str, Any]] | None = None
     config: AgentConfigIn | None = None
+    # Kullanıcının açık sekmesi (reserve/cashflow/discount/data) — kompakt bağlamda
+    # hangi modülün prompt'u ve araçlarının yükleneceğini belirler.
+    active_module: str | None = None
 
 
 class ChatResponse(BaseModel):
@@ -102,6 +107,8 @@ def agent_chat(body: ChatRequest, _user: CurrentUser) -> ChatResponse:
             full_history=body.full_history,
             global_prompt=cfg.system_prompt,
             enabled_tools=set(cfg.enabled_tools) if cfg.enabled_tools is not None else None,
+            compact=cfg.compact_context,
+            active_module=body.active_module,
         )
     except Exception as e:  # LLM/endpoint hatasını istemciye taşı
         if is_cert_verify_error(e):

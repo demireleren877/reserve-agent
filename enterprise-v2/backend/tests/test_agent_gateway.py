@@ -191,3 +191,23 @@ def test_router_rejects_incomplete_oauth():
                    "auth_type": "oauth_client_credentials", "token_url": "https://x/t"},
     })
     assert r.status_code == 400 and "oauth_incomplete" in r.text
+
+
+def test_router_passes_compact_context_and_active_tab(monkeypatch):
+    """Ayarlar'daki kompakt bağlam ve açık sekme döngüye ulaşır."""
+    from tests.test_agent_tls import _router_client
+    import app.routers.agent as agent_router
+    from app.agent.loop import AgentTurnResult
+    seen = {}
+
+    def fake_turn(client, messages, modules, **kw):
+        seen.update(kw)
+        return AgentTurnResult(assistant_message="ok")
+
+    monkeypatch.setattr(agent_router, "run_agent_turn", fake_turn)
+    r = _router_client().post("/v1/agent/chat", json={
+        "messages": [{"role": "user", "content": "selam"}], "active_module": "cashflow",
+        "config": {"base_url": "http://x/v1", "model": "m", "compact_context": True},
+    })
+    assert r.status_code == 200, r.text
+    assert seen["compact"] is True and seen["active_module"] == "cashflow"

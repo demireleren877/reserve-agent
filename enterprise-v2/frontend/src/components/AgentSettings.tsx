@@ -10,6 +10,7 @@ import {
   CLOUD_PROVIDERS,
   DEFAULT_MODEL,
   usesOAuth,
+  usesCompactContext,
   type ApiFormat,
   type AuthType,
   type LLMProvider,
@@ -215,6 +216,17 @@ export function AgentSettings({ onClose }: { onClose: () => void }) {
                       </span>
                     </label>
                   )}
+                  <label className="flex items-start gap-2 text-xs">
+                    <input type="checkbox" checked={usesCompactContext(cfg)}
+                      onChange={(e) => update({ compactContext: e.target.checked })}
+                      className="mt-0.5 accent-[color:var(--primary)]" />
+                    <span>
+                      <span className="font-medium">Compact context</span>
+                      <span className="block text-[color:var(--muted)]">
+                        Sends a shorter prompt and only the open module&apos;s tools: about half the tokens per call. Use it when your endpoint has a token or context limit.
+                      </span>
+                    </span>
+                  </label>
                   <label className="flex items-start gap-2 text-xs">
                     <input type="checkbox" checked={cfg.skipTlsVerify}
                       onChange={(e) => update({ skipTlsVerify: e.target.checked })}

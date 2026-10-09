@@ -553,7 +553,9 @@ _DATA_Q_RE = re.compile(
     r"\b(19|20)\d{2}\b|kaza yıl|origin|kohort|ultimate|nihai|üçgen|triangle|\bilr\b"
     r"|loss ratio|hasar/prim|hasar prim|\bldf|\bcdf|gelişim|faktör|pattern|desen|muallak|ödenmiş"
     # V2: "Correction nerede uygulanmış?" → okumadan k=1,333 uydurdu.
-    r"|correction|düzeltme|yıllıklaştır|elen|hücre|kuyruk|\btail|curve|override|basis|\bprim|exposure",
+    r"|correction|düzeltme|yıllıklaştır|elen|hücre|kuyruk|\btail|curve|override|basis|\bprim|exposure"
+    # "BF'de hangi formülü kullanıyoruz?" → okumadan ezberden yanlış formül yazdı.
+    r"|\bbf\b|formül",
     re.IGNORECASE,
 )
 # Emir kipinde veri isteği: "Hasar/prim oranı üçgenini ver" (TK11b: soru

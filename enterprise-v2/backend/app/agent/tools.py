@@ -1878,6 +1878,48 @@ def _describe_triangle(triangle: Triangle) -> dict[str, Any]:
     }
 
 
+_BF_FORMULA = (
+    "BF ultimate = (latest + BF Loss Ratio × yıllık exposure × (1 − 1/CDF)) / k; "
+    "yıllık exposure = prim × k (k = correction, tam yılda 1); BF IBNR = BF ultimate − latest."
+)
+
+
+def _bf_summary(per_origin: list[dict[str, Any]]) -> dict[str, Any]:
+    """BF'de kullanılan formül ve oranların hazır özeti — yalnız basis='bf' origin'ler.
+
+    "BF için kullanılan formül ne?" sorusunda Qwen 3.5 9B 26 satırlık per_origin'i
+    yorumlayamıyordu: formülü yanlış yazdı (latest × CDF × LR), BF olmayan
+    yılları da döktü, boş girdiyi "manuel ayarlanmış" dedi.
+    """
+    rows = []
+    for r in per_origin:
+        if not isinstance(r, dict) or r.get("basis") != "bf":
+            continue
+        raw = r.get("selected_lr_input")
+        text = str(raw).strip() if raw not in (None, "") else ""
+        try:
+            float(text.rstrip("%").replace(",", "."))
+            source = "manuel sabit oran"
+        except ValueError:
+            source = "manuel formül" if text else (
+                "girilmemiş — varsayılan: o yılın kendi pattern ratio'su (CL_ult / yıllık "
+                "exposure); bu durumda BF sonucu CL ile aynı çıkar"
+            )
+        lr = r.get("selected_lr")
+        rows.append({
+            "origin": r.get("origin"),
+            "lr_formula": text or None,
+            "lr_used_pct": round(float(lr) * 100, 2) if isinstance(lr, (int, float)) else None,
+            "source": source,
+        })
+    return {
+        "formula": _BF_FORMULA,
+        "lr_syntax": "vw(a:b) = Σ CL_ult / Σ yıllık exposure (a..b yılları); avg(a:b) = pattern "
+                     "ratio'ların aritmetik ortalaması; sayı = sabit oran.",
+        "bf_origins": rows,
+    } if rows else {"bf_origins": [], "note": "Hiçbir kaza yılı BF bazında değil (hepsi CL)."}
+
+
 def _get_analysis_state(
     triangle: Triangle | None, session_state: dict[str, Any] | None
 ) -> dict[str, Any]:
@@ -1904,6 +1946,7 @@ def _get_analysis_state(
     )
     return {
         "scope": _scope,
+        "bf_summary": _bf_summary(session_state.get("per_origin") or []),
         "window": session_state.get("window"),
         # Adım başına pencere (step 0-indexli → {"0": "4"}). Boşsa global window.
         "karma_windows": session_state.get("karma_windows") or {},

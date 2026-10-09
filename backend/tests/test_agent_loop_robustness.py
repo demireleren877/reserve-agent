@@ -842,3 +842,25 @@ def test_unknown_branch_id_lists_the_valid_ones():
     ss = {"periods": [{"id": "p2", "label": "2026Q2", "branches": [{"id": "p2-eng", "name": "ENGINEERING"}]}]}
     out = dispatch_tool("get_branch_state", {"branch_id": "ENGINEERING#yanlış"}, session_state=ss)
     assert out["valid_branches"] == [{"branch_id": "p2-eng", "name": "ENGINEERING", "period": "2026Q2"}]
+
+
+def test_bf_formula_question_without_reading_is_sent_back():
+    from app.agent.loop import _guard_nudge
+    out = _guard_nudge([{"role": "user", "content": "BF'de hangi formülü kullanıyoruz, nasıl hesaplanıyor?"}],
+                       "bf_ultimate = latest × CDF + selected_lr × exposure × (1 − %dev) / k", [], [], "")
+    assert out and "get_analysis_state" in out
+
+
+def test_bf_summary_lists_only_bf_origins_with_their_source():
+    from app.agent.tools import _bf_summary
+    s = _bf_summary([
+        {"origin": "2020", "basis": "cl", "selected_lr": 0.3},
+        {"origin": "2024", "basis": "bf", "selected_lr": 0.25, "selected_lr_input": "vw(2018:2022)"},
+        {"origin": "2025", "basis": "bf", "selected_lr": 0.4, "selected_lr_input": "40%"},
+        {"origin": "2023", "basis": "bf", "selected_lr": 0.2, "selected_lr_input": None},
+    ])
+    rows = {r["origin"]: r for r in s["bf_origins"]}
+    assert set(rows) == {"2023", "2024", "2025"}
+    assert rows["2024"]["source"] == "manuel formül" and rows["2024"]["lr_used_pct"] == 25.0
+    assert rows["2025"]["source"] == "manuel sabit oran"
+    assert rows["2023"]["source"].startswith("girilmemiş") and "(1 − 1/CDF)" in s["formula"]

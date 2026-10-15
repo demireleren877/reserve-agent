@@ -8,10 +8,14 @@ import {
   INC_CLEAN,
   LARGE,
   LARGE_FILE,
+  LR_BASIS,
   MAX_CELL,
   MAX_DEV,
   NEW_EXPOSURE,
+  OUT_AY,
+  OUT_DEV,
   OVERSTATEMENT,
+  PRIOR_LR,
   Q2_IBNR,
   Q3_IBNR,
   SUMMARY,
@@ -269,128 +273,243 @@ export const Card: React.FC<{
   );
 };
 
-// ─── 1. Üçgen (roll-forward) ──────────────────────────────────────────────────
-const blue = (m: number) => {
-  // olgunluk → açık maviden koyu laciverte
-  const a = [234, 240, 255];
-  const b = [29, 78, 216];
-  const k = Math.pow(m, 1.6);
-  return `rgb(${a.map((v, i) => Math.round(v + (b[i] - v) * k)).join(",")})`;
-};
+// ─── 1. Incurred üçgeni (roll-forward) — sayılar, yatay kaydırma ──────────────
+const tint = (k: number) => `rgba(29,78,216,${(0.03 + 0.2 * k).toFixed(3)})`;
+
+/** Kaydırma eğrisi (sn → px) ve bir x konumunun görünür alana girdiği an. */
+function panAt(t: number, a: number, b: number, max: number) {
+  return ease(t, a, b, 0, max);
+}
+function enterTime(x: number, viewW: number, a: number, b: number, max: number) {
+  if (x < viewW) return null;
+  for (let s = a; s <= b; s += 0.02) if (x - panAt(s, a, b, max) < viewW) return s;
+  return b;
+}
+
+const GridScroll: React.FC<{ off: number; total: number; view: number; o: number }> = ({ off, total, view, o }) => (
+  <div style={{ height: 5, borderRadius: 3, background: C.alt, marginTop: 8, position: "relative", opacity: o }}>
+    <div style={{ position: "absolute", top: 0, height: 5, borderRadius: 3, background: C.borderStrong, width: `${(view / total) * 100}%`, left: `${(off / total) * 100}%` }} />
+  </div>
+);
+
 export const TriangleCard: React.FC<{ t: number }> = ({ t }) => {
-  const cell = 13.4;
-  const gap = 1.2;
-  const labelW = 44;
+  const labelW = 54;
+  const colW = 57;
+  const rowH = 20;
+  const viewW = 626 - labelW;
+  const total = MAX_DEV * colW;
+  const maxOff = total - viewW;
+  const P0 = 2.0;
+  const P1 = 5.2;
+  // Eski yılların ucundan başla (sağ), genç kaza yıllarının dolu kısmında bitir (sol).
+  const off = maxOff - panAt(t, P0, P1, maxOff);
+  const mono: React.CSSProperties = { fontFamily: MONO, fontSize: 10.5, fontVariantNumeric: "tabular-nums" };
   return (
-    <Card t={t} icon={I.grid} title="Incurred triangle · Fire Home" meta="10 accident years × 39 dev quarters">
-      <div style={{ display: "flex", flexDirection: "column", gap }}>
-        {AYS.map((ay, ri) => {
-          const n = INC[ay].length;
-          return (
-            <div key={ay} style={{ display: "flex", alignItems: "center", gap }}>
-              <div style={{ width: labelW, fontFamily: MONO, fontSize: 10, color: C.muted }}>AY{ay}</div>
-              {Array.from({ length: MAX_DEV }, (_, d) => {
-                const dev = d + 1;
-                if (dev > n) return <div key={d} style={{ width: cell, height: cell }} />;
-                const isNew = dev === n; // 2026Q3 diyagonali
-                const cal = ri * 4 + dev; // takvim çeyreği sırası
-                const appear = isNew ? 2.0 + ri * 0.11 : 0.15 + cal * 0.035;
-                const o = ease(t, appear, appear + 0.25);
-                const glow = isNew ? lin(t, appear, appear + 0.15) * (1 - ease(t, appear + 0.4, appear + 1.6)) : 0;
-                const isLarge = ay === 2023 && isNew;
-                return (
-                  <div
-                    key={d}
-                    style={{
-                      width: cell,
-                      height: cell,
-                      borderRadius: 2.5,
-                      background: glow > 0.02 ? "#3b82f6" : blue(Math.sqrt(INC_CLEAN[ay][d] / MAX_CELL)),
-                      opacity: o,
-                      boxShadow: glow > 0.02 ? `0 0 ${10 * glow}px ${2 * glow}px rgba(59,130,246,${0.7 * glow})` : undefined,
-                      outline: isNew && t > appear + 1.6 ? `1.5px solid ${isLarge ? C.primary : "rgba(29,78,216,.55)"}` : undefined,
-                      outlineOffset: -1.5,
-                      transform: `scale(${0.6 + 0.4 * o + 0.18 * glow})`,
-                    }}
-                  />
-                );
-              })}
+    <Card t={t} icon={I.grid} title="Incurred triangle · Fire Home" meta="cumulative · TRY m · 10 AY × 39 dev quarters">
+      <div style={{ display: "flex" }}>
+        <div style={{ width: labelW, flexShrink: 0 }}>
+          <div style={{ height: rowH, ...mono, fontSize: 9.5, color: C.muted, display: "flex", alignItems: "center" }}>AY · dev</div>
+          {AYS.map((ay) => (
+            <div key={ay} style={{ height: rowH, ...mono, color: C.mutedStrong, display: "flex", alignItems: "center" }}>{ay}</div>
+          ))}
+        </div>
+        <div style={{ width: viewW, overflow: "hidden", position: "relative" }}>
+          <div style={{ width: total, transform: `translateX(${-off}px)` }}>
+            <div style={{ display: "flex", height: rowH }}>
+              {Array.from({ length: MAX_DEV }, (_, d) => (
+                <div key={d} style={{ width: colW, ...mono, fontSize: 9.5, color: C.muted, textAlign: "right", paddingRight: 6, lineHeight: `${rowH}px`, borderBottom: `1px solid ${C.border}` }}>
+                  {d + 1}
+                </div>
+              ))}
             </div>
-          );
-        })}
+            {AYS.map((ay, ri) => {
+              const row = INC[ay];
+              return (
+                <div key={ay} style={{ display: "flex", height: rowH }}>
+                  {Array.from({ length: MAX_DEV }, (_, d) => {
+                    if (d >= row.length) return <div key={d} style={{ width: colW }} />;
+                    const isNew = d === row.length - 1;
+                    const x = d * colW;
+                    const appear = Math.min(1.6, 0.2 + ri * 0.05 + Math.min(MAX_DEV - 1 - d, 11) * 0.03);
+                    const o = ease(t, appear, appear + 0.3);
+                    let g = 0;
+                    let shown = 1;
+                    if (isNew) {
+                      const enter = enterTime(maxOff - x + colW * 0.6, viewW, P0, P1, maxOff) ?? 0.9 + ri * 0.08;
+                      shown = ease(t, enter, enter + 0.2);
+                      g = lin(t, enter, enter + 0.12) * (1 - ease(t, enter + 0.3, enter + 1.4));
+                    }
+                    const k = Math.sqrt(row[d] / MAX_CELL);
+                    return (
+                      <div
+                        key={d}
+                        style={{
+                          width: colW,
+                          height: rowH - 2,
+                          marginTop: 1,
+                          ...mono,
+                          textAlign: "right",
+                          paddingRight: 6,
+                          lineHeight: `${rowH - 2}px`,
+                          borderRadius: 3,
+                          color: isNew ? C.primary : C.fg,
+                          fontWeight: isNew ? 600 : 400,
+                          background: isNew ? `rgba(219,231,255,${shown})` : tint(k),
+                          boxShadow: isNew
+                            ? `inset 0 0 0 ${1.2 * shown}px rgba(29,78,216,.55), 0 0 ${12 * g}px ${3 * g}px rgba(59,130,246,${0.55 * g})`
+                            : undefined,
+                          opacity: isNew ? shown : o,
+                        }}
+                      >
+                        {fmt(row[d])}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
-      <div style={{ display: "flex", gap: 18, marginTop: 12, fontSize: 11.5, color: C.mutedStrong, opacity: ease(t, 3.4, 3.9) }}>
+      <GridScroll off={off} total={total} view={viewW} o={ease(t, 1.0, 1.4)} />
+      <div style={{ display: "flex", gap: 18, marginTop: 10, fontSize: 11.5, color: C.mutedStrong, opacity: ease(t, 5.0, 5.5) }}>
         <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{ width: 10, height: 10, borderRadius: 2, outline: `1.5px solid ${C.primary}`, background: blue(0.8) }} />
+          <span style={{ width: 10, height: 10, borderRadius: 2, background: "#dbe7ff", boxShadow: `inset 0 0 0 1.2px rgba(29,78,216,.55)` }} />
           New diagonal · 2026Q3 (10 cells)
         </span>
         <span>210 cells · 18,412 claim files</span>
-        <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{ width: 40, height: 6, borderRadius: 3, background: `linear-gradient(90deg, ${blue(0.1)}, ${blue(1)})` }} /> incurred amount
-        </span>
       </div>
     </Card>
   );
 };
 
-// ─── 2. LDF tablosu ───────────────────────────────────────────────────────────
-const LDF_COLS = [11, 12, 13, 14];
-const LDF_ROWS = [2019, 2020, 2021, 2022, 2023];
-export const LdfCard: React.FC<{ t: number }> = ({ t }) => {
-  const pulse = t > 1.2 ? 0.5 + 0.5 * Math.sin((t - 1.2) * 5) : 0;
-  const hl = ease(t, 1.0, 1.5);
-  const th: React.CSSProperties = { fontSize: 11, color: C.muted, fontWeight: 500, textAlign: "right", padding: "6px 10px", fontFamily: MONO };
-  const td: React.CSSProperties = { fontSize: 12.5, textAlign: "right", padding: "6px 10px", fontFamily: MONO, color: C.fg };
+// ─── 2. LDF üçgeni (inceleme / hücre hariç) ───────────────────────────────────
+export const LdfTriangleCard: React.FC<{ t: number; mode: "review" | "excluded" }> = ({ t, mode }) => {
+  const labelW = 54;
+  const colW = 56;
+  const rowH = 21;
+  const viewW = 626 - labelW;
+  const cols = 38;
+  const total = cols * colW;
+  const target = (OUT_DEV - 7) * colW; // 8→9 … 17→18 görünür
+  const review = mode === "review";
+  const off = review ? ease(t, 0.5, 2.0, 0, target) : target;
+  const hl = review ? ease(t, 2.1, 2.5) : 1;
+  const pulse = review && t > 2.1 ? 0.5 + 0.5 * Math.sin((t - 2.1) * 5) : 0;
+  const ex = review ? 0 : ease(t, 0.5, 0.9); // hücreyi hariç tutma
+  const roll = review ? 0 : ease(t, 0.8, 1.9);
+  const rows = AYS;
+  const mono: React.CSSProperties = { fontFamily: MONO, fontSize: 10.5, fontVariantNumeric: "tabular-nums" };
+  const vBefore = vwa(INC, OUT_DEV);
+  const vAfter = vwa(INC_CLEAN, OUT_DEV);
   return (
-    <Card t={t} icon={I.chart} title="Age-to-age factors · incurred" meta="volume-weighted · last 8 AYs">
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
-        <thead>
-          <tr style={{ borderBottom: `1px solid ${C.border}` }}>
-            <th style={{ ...th, textAlign: "left" }}>AY</th>
-            {LDF_COLS.map((d) => (
-              <th key={d} style={th}>{`${d}→${d + 1}`}</th>
+    <Card
+      t={t}
+      icon={I.chart}
+      title={review ? "Age-to-age factors · incurred" : "Factors updated"}
+      meta={review ? "volume-weighted · last 8 AYs" : `AY${OUT_AY} · ${OUT_DEV}→${OUT_DEV + 1} excluded`}
+    >
+      <div style={{ display: "flex" }}>
+        <div style={{ width: labelW, flexShrink: 0 }}>
+          <div style={{ height: rowH, ...mono, fontSize: 9.5, color: C.muted, display: "flex", alignItems: "center" }}>AY</div>
+          {rows.map((ay) => (
+            <div key={ay} style={{ height: rowH, ...mono, color: C.mutedStrong, display: "flex", alignItems: "center" }}>{ay}</div>
+          ))}
+          <div style={{ height: rowH + 4, ...mono, color: C.fg, fontWeight: 600, display: "flex", alignItems: "center", borderTop: `1px solid ${C.border}` }}>VWA</div>
+        </div>
+        <div style={{ width: viewW, overflow: "hidden" }}>
+          <div style={{ width: total, transform: `translateX(${-off}px)` }}>
+            <div style={{ display: "flex", height: rowH }}>
+              {Array.from({ length: cols }, (_, i) => (
+                <div key={i} style={{ width: colW, ...mono, fontSize: 9.5, color: C.muted, textAlign: "right", paddingRight: 7, lineHeight: `${rowH}px`, borderBottom: `1px solid ${C.border}` }}>
+                  {`${i + 1}→${i + 2}`}
+                </div>
+              ))}
+            </div>
+            {rows.map((ay, ri) => (
+              <div key={ay} style={{ display: "flex", height: rowH, opacity: review ? ease(t, 0.1 + ri * 0.04, 0.4 + ri * 0.04) : 1 }}>
+                {Array.from({ length: cols }, (_, i) => {
+                  const d = i + 1;
+                  const v = ata(INC, ay, d);
+                  if (v === null) return <div key={i} style={{ width: colW }} />;
+                  const isOut = ay === OUT_AY && d === OUT_DEV;
+                  return (
+                    <div
+                      key={i}
+                      style={{
+                        width: colW,
+                        height: rowH - 3,
+                        marginTop: 1.5,
+                        ...mono,
+                        textAlign: "right",
+                        paddingRight: 7,
+                        lineHeight: `${rowH - 3}px`,
+                        borderRadius: 3,
+                        position: "relative",
+                        color: isOut ? (ex > 0.5 ? C.muted : C.danger) : C.fg,
+                        fontWeight: isOut ? 700 : 400,
+                        textDecoration: isOut && ex > 0.5 ? "line-through" : undefined,
+                        background: isOut
+                          ? ex > 0
+                            ? `repeating-linear-gradient(135deg, ${C.alt}, ${C.alt} 3px, #e5e9ef 3px, #e5e9ef 6px)`
+                            : `rgba(254,226,226,${hl * (0.55 + 0.45 * pulse)})`
+                          : undefined,
+                        boxShadow: isOut && ex === 0 ? `inset 0 0 0 ${1.5 * hl}px rgba(185,28,28,${0.5 + 0.3 * pulse})` : undefined,
+                      }}
+                    >
+                      {v.toFixed(3)}
+                    </div>
+                  );
+                })}
+              </div>
             ))}
-          </tr>
-        </thead>
-        <tbody>
-          {LDF_ROWS.map((ay, ri) => (
-            <tr key={ay} style={{ borderBottom: `1px solid ${C.alt}`, opacity: ease(t, 0.2 + ri * 0.08, 0.5 + ri * 0.08) }}>
-              <td style={{ ...td, textAlign: "left", color: C.mutedStrong }}>{ay}</td>
-              {LDF_COLS.map((d) => {
-                const v = ata(INC, ay, d);
-                const isOut = ay === 2023 && d === 14;
+            <div style={{ display: "flex", height: rowH + 4, borderTop: `1px solid ${C.border}` }}>
+              {Array.from({ length: cols }, (_, i) => {
+                const d = i + 1;
+                const isCol = d === OUT_DEV;
+                const v = isCol ? vBefore + (vAfter - vBefore) * roll : vwa(INC_CLEAN, d);
                 return (
-                  <td
-                    key={d}
+                  <div
+                    key={i}
                     style={{
-                      ...td,
-                      color: isOut ? C.danger : v === null ? C.borderStrong : C.fg,
-                      fontWeight: isOut ? 700 : 400,
-                      background: isOut ? `rgba(254,226,226,${hl * (0.55 + 0.45 * pulse)})` : undefined,
-                      boxShadow: isOut ? `inset 0 0 0 ${1.5 * hl}px rgba(185,28,28,${0.5 + 0.3 * pulse})` : undefined,
-                      borderRadius: 4,
+                      width: colW,
+                      ...mono,
+                      fontWeight: 600,
+                      textAlign: "right",
+                      paddingRight: 7,
+                      lineHeight: `${rowH + 4}px`,
+                      color: isCol ? (review ? C.danger : roll > 0.98 ? C.success : C.fg) : C.fg,
+                      background: isCol && !review ? `rgba(220,252,231,${ease(t, 1.8, 2.1) * (1 - ease(t, 3.4, 4.4))})` : undefined,
+                      borderRadius: 3,
+                      opacity: review ? ease(t, 0.6, 0.9) : 1,
                     }}
                   >
-                    {v === null ? "—" : v.toFixed(3)}
-                  </td>
+                    {v.toFixed(3)}
+                  </div>
                 );
               })}
-            </tr>
-          ))}
-          <tr style={{ opacity: ease(t, 0.7, 1.0) }}>
-            <td style={{ ...td, textAlign: "left", color: C.muted, fontSize: 11 }}>VWA</td>
-            {LDF_COLS.map((d) => (
-              <td key={d} style={{ ...td, fontWeight: 600 }}>{vwa(INC_CLEAN, d).toFixed(3)}</td>
-            ))}
-          </tr>
-        </tbody>
-      </table>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, padding: "8px 10px", borderRadius: 8, background: C.dangerSoft, color: C.danger, fontSize: 12, opacity: ease(t, 1.6, 2.0) }}>
-        <Icon d={I.alert} size={13} />
-        <span>
-          <b>AY2023 · 14→15</b> is {ata(INC, 2023, 14)!.toFixed(3)} vs a column average of {vwa(INC_CLEAN, 14).toFixed(3)} (latest diagonal)
-        </span>
+            </div>
+          </div>
+        </div>
       </div>
+      {review ? (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, padding: "8px 10px", borderRadius: 8, background: C.dangerSoft, color: C.danger, fontSize: 12, opacity: ease(t, 2.5, 2.9) }}>
+          <Icon d={I.alert} size={13} />
+          <span>
+            <b>
+              AY{OUT_AY} · {OUT_DEV}→{OUT_DEV + 1}
+            </b>{" "}
+            is {ata(INC, OUT_AY, OUT_DEV)!.toFixed(3)} against 1.000–1.001 for other years and lifts the column VWA to {vBefore.toFixed(3)}
+          </span>
+        </div>
+      ) : (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, padding: "8px 12px", borderRadius: 8, background: C.successSoft, color: C.success, fontSize: 12.5, opacity: ease(t, 2.0, 2.4), transform: `translateY(${ease(t, 2.0, 2.5, 6, 0)}px)` }}>
+          <Icon d={I.check} size={13} sw={3} />
+          <span>
+            VWA {OUT_DEV}→{OUT_DEV + 1}: {vBefore.toFixed(3)} → <b>{vAfter.toFixed(3)}</b> · avoids overstating IBNR by <b>{OVERSTATEMENT.toFixed(1)}m</b>
+          </span>
+        </div>
+      )}
     </Card>
   );
 };
@@ -535,81 +654,95 @@ export const TailCard: React.FC<{ t: number }> = ({ t }) => {
   );
 };
 
-// ─── 7. Faktör güncellemesi (büyük hasar çıkarılınca) ─────────────────────────
-const Roll: React.FC<{ from: number; to: number; p: number; dp?: number }> = ({ from, to, p, dp = 3 }) => (
-  <span style={{ fontFamily: MONO, fontVariantNumeric: "tabular-nums" }}>{(from + (to - from) * p).toFixed(dp)}</span>
-);
-export const LdfUpdateCard: React.FC<{ t: number }> = ({ t }) => {
-  const p = ease(t, 0.6, 1.8);
-  const before = ata(INC, 2023, 14)!;
-  const after = ata(INC_CLEAN, 2023, 14)!;
-  const colB = vwa(INC, 14);
-  const colA = vwa(INC_CLEAN, 14);
-  const Box: React.FC<{ label: string; children: React.ReactNode; tone?: string }> = ({ label, children, tone }) => (
-    <div style={{ flex: 1, padding: "10px 12px", borderRadius: 8, background: C.alt, border: `1px solid ${C.border}` }}>
-      <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>{label}</div>
-      <div style={{ fontSize: 20, fontWeight: 600, color: tone ?? C.fg }}>{children}</div>
-    </div>
-  );
+// ─── 7. BF tablosu (uygulamadaki BF sekmesiyle aynı sütunlar) ──────────────────
+export const BfTableCard: React.FC<{ t: number }> = ({ t }) => {
+  const basisOn = ease(t, 1.0, 1.5);
+  const formula = ease(t, 2.0, 2.4);
+  const evalOn = ease(t, 2.6, 3.0);
+  const ultP = ease(t, 3.0, 4.0);
+  const th: React.CSSProperties = { fontSize: 9, color: C.mutedStrong, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.3, textAlign: "right", padding: "6px 5px", lineHeight: 1.25, verticalAlign: "bottom" };
+  const td: React.CSSProperties = { fontFamily: MONO, fontSize: 10.5, textAlign: "right", padding: "0 5px", height: 21, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap", overflow: "hidden" };
+  const latestTot = SUMMARY.reduce((s, r) => s + r.latest, 0);
+  const epTot = SUMMARY.reduce((s, r) => s + r.ep, 0);
+  const basisFrom = LR_BASIS[0];
+  const basisTo = LR_BASIS[LR_BASIS.length - 1];
   return (
-    <Card t={t} icon={I.layers} title="Factors updated" meta={`${LARGE_FILE} held outside the triangle`}>
-      <div style={{ display: "flex", gap: 10 }}>
-        <Box label="AY2023 · 14→15" tone={p < 0.5 ? C.danger : C.fg}>
-          <Roll from={before} to={after} p={p} />
-        </Box>
-        <Box label="Column 14→15 (VWA)">
-          <Roll from={colB} to={colA} p={p} />
-        </Box>
-        <Box label="Large claim, reserved separately">
-          <span style={{ fontFamily: MONO }}>{LARGE.toFixed(1)}m</span>
-        </Box>
+    <Card t={t} icon={I.chart} title="BF — Selected Loss Ratio Method" meta={`BF on AY2026 · prior vw(${basisFrom}:${basisTo})`}>
+      <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
+        <colgroup>
+          {[64, 66, 60, 38, 70, 66, 150, 112].map((w, i) => (
+            <col key={i} style={{ width: w }} />
+          ))}
+        </colgroup>
+        <thead>
+          <tr style={{ background: C.alt }}>
+            <th style={{ ...th, textAlign: "left" }}>Accident Year</th>
+            <th style={th}>Latest</th>
+            <th style={th}>Exposure</th>
+            <th style={th}>Corr.</th>
+            <th style={th}>% Developed</th>
+            <th style={th}>Pattern Ratio</th>
+            <th style={th}>Selected LR</th>
+            <th style={th}>New Ultimate</th>
+          </tr>
+        </thead>
+        <tbody>
+          {SUMMARY.map((r, i) => {
+            const inBasis = LR_BASIS.includes(r.ay);
+            const isBf = r.bf;
+            const o = ease(t, 0.15 + i * 0.05, 0.45 + i * 0.05);
+            return (
+              <tr key={r.ay} style={{ borderTop: `1px solid ${C.border}`, opacity: o, background: isBf ? `rgba(234,240,255,${ease(t, 1.9, 2.3)})` : undefined }}>
+                <td style={{ ...td, fontFamily: SANS, fontWeight: 500, textAlign: "left", fontSize: 11.5 }}>{r.ay}</td>
+                <td style={td}>{fmt(r.latest)}</td>
+                <td style={td}>{fmt(r.ep, 0)}</td>
+                <td style={{ ...td, color: C.muted }}>×1</td>
+                <td style={{ ...td, color: C.mutedStrong }}>{(100 / r.cdf).toFixed(1)}%</td>
+                <td style={{ ...td, color: inBasis ? C.primary : C.mutedStrong, fontWeight: inBasis ? 600 : 400, position: "relative" }}>
+                  <span
+                    style={{
+                      position: "absolute",
+                      inset: "1px 0",
+                      borderRadius: 4,
+                      background: inBasis ? `rgba(29,78,216,${0.1 * basisOn})` : undefined,
+                      boxShadow: inBasis ? `inset 2px 0 0 rgba(29,78,216,${basisOn})` : undefined,
+                    }}
+                  />
+                  <span style={{ position: "relative" }}>{(r.pattern * 100).toFixed(1)}%</span>
+                </td>
+                <td style={{ ...td, textAlign: "right" }}>
+                  {isBf ? (
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, opacity: formula }}>
+                      <span style={{ padding: "1px 5px", borderRadius: 4, border: `1px solid ${C.primaryBorder}`, background: C.surface, color: C.primary, fontSize: 10 }}>
+                        vw({basisFrom}:{basisTo})
+                      </span>
+                      <b style={{ opacity: evalOn }}>{(PRIOR_LR * 100).toFixed(1)}%</b>
+                    </span>
+                  ) : (
+                    <span style={{ color: C.borderStrong }}>—</span>
+                  )}
+                </td>
+                <td style={{ ...td, fontWeight: 600, color: isBf ? C.success : C.borderStrong }}>{isBf ? fmt(r.ult * ultP) : "—"}</td>
+              </tr>
+            );
+          })}
+          <tr style={{ borderTop: `2px solid ${C.borderStrong}`, background: C.alt, opacity: ease(t, 0.7, 1.0) }}>
+            <td style={{ ...td, fontFamily: SANS, fontWeight: 600, textAlign: "left", fontSize: 11.5 }}>Total</td>
+            <td style={{ ...td, fontWeight: 600 }}>{fmt(latestTot)}</td>
+            <td style={{ ...td, fontWeight: 600 }}>{fmt(epTot, 0)}</td>
+            <td />
+            <td />
+            <td />
+            <td />
+            <td />
+          </tr>
+        </tbody>
+      </table>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, fontSize: 12, color: C.mutedStrong, opacity: ease(t, 1.4, 1.8) }}>
+        <span style={{ width: 10, height: 10, borderRadius: 2, background: "rgba(29,78,216,.12)", boxShadow: "inset 2px 0 0 #1d4ed8" }} />
+        Prior loss ratio basis: AY{basisFrom}–{basisTo}, premium-weighted
+        <span style={{ marginLeft: "auto", color: C.muted }}>AY2017–2025 stay on chain-ladder</span>
       </div>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          marginTop: 10,
-          padding: "8px 12px",
-          borderRadius: 8,
-          background: C.successSoft,
-          color: C.success,
-          fontSize: 12.5,
-          opacity: ease(t, 1.9, 2.3),
-          transform: `translateY(${ease(t, 1.9, 2.4, 6, 0)}px)`,
-        }}
-      >
-        <Icon d={I.check} size={13} sw={3} />
-        <span>
-          Avoids overstating IBNR by <b>{OVERSTATEMENT.toFixed(1)}m</b> (the jump would have flowed into AY2024's projection)
-        </span>
-      </div>
-    </Card>
-  );
-};
-
-// ─── 8. BF ────────────────────────────────────────────────────────────────────
-export const BfCard: React.FC<{ t: number }> = ({ t }) => {
-  const rows = SUMMARY.filter((r) => r.ay >= 2025);
-  return (
-    <Card t={t} icon={I.chart} title="Bornhuetter–Ferguson · AY2025–2026" meta="prior LR 62% (3-year average)">
-      {rows.map((r, i) => {
-        const rep = 1 / r.cdf;
-        const p = ease(t, 0.3 + i * 0.25, 1.4 + i * 0.25);
-        return (
-          <div key={r.ay} style={{ display: "flex", alignItems: "center", gap: 12, marginTop: i ? 10 : 0 }}>
-            <span style={{ width: 56, fontFamily: MONO, fontSize: 12, color: C.mutedStrong }}>AY{r.ay}</span>
-            <div style={{ flex: 1, height: 18, borderRadius: 5, background: C.alt, overflow: "hidden", position: "relative" }}>
-              <div style={{ width: `${rep * 100 * p}%`, height: "100%", background: C.primary, borderRadius: 5 }} />
-              <div style={{ position: "absolute", left: `${rep * 100 * p}%`, top: 0, height: "100%", width: `${(1 - rep) * 100 * p}%`, background: `repeating-linear-gradient(135deg, ${C.primarySoft}, ${C.primarySoft} 4px, #d6e2ff 4px, #d6e2ff 8px)` }} />
-            </div>
-            <span style={{ width: 120, fontSize: 12, color: C.mutedStrong, textAlign: "right" }}>
-              <b style={{ color: C.fg, fontFamily: MONO }}>{(rep * 100 * p).toFixed(1)}%</b> reported
-            </span>
-            <span style={{ width: 96, fontSize: 12, textAlign: "right", fontFamily: MONO }}>IBNR {fmt(r.ibnr * p)}m</span>
-          </div>
-        );
-      })}
     </Card>
   );
 };
@@ -645,7 +778,8 @@ export const ResultCard: React.FC<{ t: number }> = ({ t }) => {
         </div>
         <div style={{ marginLeft: "auto", marginBottom: 6, fontSize: 12, color: C.muted, textAlign: "right", opacity: ease(t, 2.2, 2.6) }}>
           Ultimate <b style={{ color: C.fg, fontFamily: MONO }}>{fmt(SUMMARY.reduce((s, r) => s + r.ult, 0))}m</b>
-          <br />+ large claim held separately <b style={{ color: C.fg, fontFamily: MONO }}>{LARGE.toFixed(1)}m</b>
+          <br />
+          chain-ladder AY2017–25 · BF AY2026
         </div>
       </div>
       <svg width={W} height={H} style={{ display: "block", marginTop: 10 }}>

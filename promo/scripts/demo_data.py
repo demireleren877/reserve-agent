@@ -38,44 +38,53 @@ q2_2026=[v*EP_Q2_2026/EP[2026] for v in inc[2026][:2]]
 LARGE=18.6
 inc_l={ay:r[:] for ay,r in inc.items()}
 inc_l[2023][14]+=LARGE   # dev15 (index14) of AY2023 = 2026Q3
-def factors(tri,last_dev_map,cols=range(1,39),win=8):
+def factors(tri,win=8):
     f={}
-    for d in cols:
-        pairs=[(ay,tri[ay][d-1],tri[ay][d]) for ay in AYS if len(tri[ay])>d]
-        pairs=pairs[-win:] if pairs else []
-        if pairs: f[d]=sum(p[2] for p in pairs)/sum(p[1] for p in pairs)
+    for d in range(1,39):
+        pairs=[(tri[ay][d-1],tri[ay][d]) for ay in AYS if len(tri[ay])>d][-win:]
+        if pairs: f[d]=sum(b for a,b in pairs)/sum(a for a,b in pairs)
     return f
-def ibnr(tri,ep26,cl_ays,bf_ays,lr=.62,tail=TAIL):
-    f=factors(tri,None)
-    tot=0;per={}
+def cdfs(tri,f,tail=TAIL):
+    out={}
     for ay in AYS:
-        row=tri[ay]; n=len(row); cdf=tail
-        for d in range(n,39): cdf*=f.get(d,1.0)
-        if ay in bf_ays:
-            ep=ep26 if ay==2026 else EP[ay]
-            u=row[-1]+ep*lr*(1-1/cdf)
-        else:
-            u=row[-1]*cdf
-        per[ay]=(row[-1],u,u-row[-1],cdf); tot+=u-row[-1]
+        c=tail
+        for d in range(len(tri[ay]),39): c*=f.get(d,1.0)
+        out[ay]=c
+    return out
+def project(latest_tri,fac_tri,ep,lr,bf_ays=(2026,)):
+    """latest_tri: projeksiyonun uygulandığı son köşegen; fac_tri: faktörlerin hesaplandığı üçgen."""
+    f=factors(fac_tri); c=cdfs(latest_tri,f); per={}; tot=0
+    for ay in AYS:
+        lat=latest_tri[ay][-1]
+        cl=lat*c[ay]
+        ult=lat+ep[ay]*lr*(1-1/c[ay]) if ay in bf_ays else cl
+        per[ay]=dict(latest=lat,ep=ep[ay],cdf=c[ay],cl=cl,pattern=cl/ep[ay],ult=ult,ibnr=ult-lat,bf=ay in bf_ays)
+        tot+=ult-lat
     return tot,per,f
+def vw_lr(per,ays):
+    return sum(per[a]["cl"] for a in ays)/sum(per[a]["ep"] for a in ays)
+
+EP3=dict(EP); EP2=dict(EP); EP2[2026]=EP_Q2_2026
 q2={ay:(r[:-1] if ay!=2026 else q2_2026) for ay,r in inc.items()}
-I2,p2,f2=ibnr(q2,EP_Q2_2026,None,[2025,2026])
-I3,p3,f3=ibnr(inc,EP[2026],None,[2025,2026])
-I3L,p3L,f3L=ibnr(inc_l,EP[2026],None,[2025,2026])
-print("Q2 IBNR %.1f  Q3 clean %.1f  Q3 with large %.1f  diff %.1f"%(I2,I3,I3L,I3L-I3))
-print("f14->15 clean %.4f with large %.4f"%(f3[15-1+0] if False else f3[14],f3L[14]))
-# per-AY factor 14->15 for AY2023
-r=inc_l[2023]; print("AY2023 14->15 with large %.4f clean %.4f"%(r[14]/r[13],inc[2023][14]/inc[2023][13]))
-print("col avg 14->15 others", [round(inc[a][14]/inc[a][13],4) for a in AYS if len(inc[a])>14])
-for ay in AYS: print(ay, len(inc[ay]), "inc %.1f ult %.1f ibnr %.1f cdf %.4f"%p3[ay])
-# new exposure effect: BF on AY2026 extra earned
-_,pq,_=ibnr({**q2},EP[2026],None,[2025,2026])
-print("new exposure (2026 EP Q2->Q3 at Q2 maturity) %.1f"%(pq[2026][2]-p2[2026][2]))
+BASIS=[2020,2021,2022,2023,2024]
+# Q3: faktörler AY2023·14→15 hariç (temiz üçgen), projeksiyon gerçek köşegene (hasar dahil)
+_,pre,_=project(inc_l,inc,EP3,0.62)
+LR=vw_lr(pre,BASIS)
+I3,p3,f3=project(inc_l,inc,EP3,LR)          # son hâl: hücre hariç
+I3L,p3L,f3L=project(inc_l,inc_l,EP3,LR)     # hücre dahil olsaydı
+_,pq2,_=project(q2,q2,EP2,0.62)
+LR2=vw_lr(pq2,BASIS)
+I2,p2,_=project(q2,q2,EP2,LR2)
+newexp=(EP[2026]-EP_Q2_2026)*LR*(1-1/p3[2026]["cdf"])
+r=inc_l[2023]
+print("LR prior Q3 %.4f Q2 %.4f"%(LR,LR2))
+print("I2 %.1f I3 %.1f I3L %.1f over %.1f newexp %.1f release %.1f"%(I2,I3,I3L,I3L-I3,newexp,I3-I2-newexp))
+print("AY2023 14->15 with %.4f clean %.4f share %.0f%%"%(r[14]/r[13],inc[2023][14]/inc[2023][13],100*LARGE/(r[14]-r[13])))
+print("VWA14 with %.4f clean %.4f"%(f3L[14],f3[14]))
+for ay in AYS: print(ay,{k:(round(v,4) if isinstance(v,float) else v) for k,v in p3[ay].items()})
 OUT=os.path.join(os.path.dirname(__file__),"..","src","demo","data.json")
-payload={"inc":{str(a):[round(v,2) for v in inc_l[a]] for a in AYS},"pat":pat,"I2":I2,"I3":I3,"I3L":I3L,"p3":{str(a):p3[a] for a in AYS},"f3":f3,"f3L":f3L}
-# Köprü: yeni maruziyet (AY2026 Q3 kazanılan primi, BF) ve kalan = önceki dönemlerin gelişimi
-cdf26=p3[2026][3]
-payload["newexp"]=(EP[2026]-EP_Q2_2026)*.62*(1-1/cdf26)
-payload["release"]=I3-I2-payload["newexp"]
+payload={"inc":{str(a):[round(v,3) for v in inc_l[a]] for a in AYS},"incClean":{str(a):[round(v,3) for v in inc[a]] for a in AYS},
+ "pat":pat,"I2":I2,"I3":I3,"I3L":I3L,"lr":LR,"basis":BASIS,"newexp":newexp,"release":I3-I2-newexp,
+ "rows":{str(a):p3[a] for a in AYS}}
 json.dump(payload,open(OUT,"w"))
 print("wrote",OUT)

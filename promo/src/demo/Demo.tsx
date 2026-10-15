@@ -13,18 +13,17 @@ import {
   staticFile,
   useCurrentFrame,
 } from "remotion";
-import { LARGE_FILE, LARGE_SHARE, Q3_IBNR, TAIL, fmt } from "./data";
+import { LARGE_FILE, LARGE_SHARE, LR_BASIS, PRIOR_LR, Q3_IBNR, TAIL, fmt } from "./data";
 import {
   AgentText,
   AskCard,
-  BfCard,
+  BfTableCard,
   C,
   ClaimsMessageCard,
   ClaimsReply,
   I,
   Icon,
-  LdfCard,
-  LdfUpdateCard,
+  LdfTriangleCard,
   ResultCard,
   SANS,
   SavedLine,
@@ -57,9 +56,9 @@ const PROMPT = "Close Q3 for Fire Home. Roll forward from Q2, review the factors
 const TYPE_START = 0.9;
 const TYPE_CPS = 30;
 const SEND = TYPE_START + PROMPT.length / TYPE_CPS + 0.4;
-const ASK_AT = 22.6;
-const YES_CLICK = 25.0; // mutlak
-const REPLY_AT = 38.8;
+const ASK_AT = 24.0;
+const YES_CLICK = 26.4; // mutlak
+const REPLY_AT = 40.0;
 
 type Item = { at: number; until?: number; node: (t: number) => React.ReactNode; key: string };
 const step = (key: string, at: number, name: string, args: string | undefined, dur: number, first = false): Item => ({
@@ -67,6 +66,9 @@ const step = (key: string, at: number, name: string, args: string | undefined, d
   at,
   node: (t) => <ToolStep name={name} args={args} t={t} dur={dur} first={first} />,
 });
+
+const BASIS = `vw(${LR_BASIS[0]}:${LR_BASIS[LR_BASIS.length - 1]})`;
+const LR_TXT = `${(PRIOR_LR * 100).toFixed(1)}%`;
 
 const ITEMS: Item[] = [
   { key: "u1", at: SEND + 0.1, node: (t) => <UserBubble text={PROMPT} t={t} /> },
@@ -76,15 +78,15 @@ const ITEMS: Item[] = [
   { key: "tri", at: SEND + 3.4, node: (t) => <TriangleCard t={t} /> },
   {
     key: "a1",
-    at: SEND + 8.0,
-    node: (t) => <AgentText t={t} text="Rolled forward to **2026Q3**: 10 accident years, quarterly development. Checking the new diagonal against the factors…" />,
+    at: 14.0,
+    node: (t) => <AgentText t={t} text="Rolled forward to **2026Q3**: 10 new cells on the latest diagonal. Checking them against the development factors…" />,
   },
-  step("s3", 14.6, "get_analysis_state", "ldf · incurred", 0.7),
-  step("s4", 15.4, "get_file_summary", "AY2023 · 2026Q3", 0.8),
-  { key: "ldf", at: 16.4, node: (t) => <LdfCard t={t} /> },
+  step("s3", 15.4, "get_analysis_state", "ldf · incurred", 0.7),
+  step("s4", 16.2, "get_file_summary", "AY2023 · 2026Q3", 0.8),
+  { key: "ldf", at: 17.2, node: (t) => <LdfTriangleCard t={t} mode="review" /> },
   {
     key: "a2",
-    at: 19.4,
+    at: 20.8,
     node: (t) => (
       <AgentText
         t={t}
@@ -96,86 +98,91 @@ const ITEMS: Item[] = [
   { key: "u2", at: YES_CLICK + 0.35, node: (t) => <UserBubble text="Yes, ask them." t={t} /> },
   step("s5", YES_CLICK + 0.9, "ask_claims_team", LARGE_FILE, 0.9, true),
   { key: "msg", at: YES_CLICK + 2.0, node: (t) => <ClaimsMessageCard t={t} repliedAt={REPLY_AT - (YES_CLICK + 2.0)} /> },
-  { key: "a3", at: 30.2, node: (t) => <AgentText t={t} text="Sent. I'll carry on with the rest of the model meanwhile." /> },
-  step("s6", 31.4, "set_method", "volume_weighted", 0.5),
-  step("s7", 32.0, "set_window", "8 accident years", 0.5),
-  step("s8", 32.6, "set_curve_model", "inverse_power", 0.9),
-  { key: "tail", at: 33.7, node: (t) => <TailCard t={t} /> },
+  { key: "a3", at: 31.4, node: (t) => <AgentText t={t} text="Sent. I'll carry on with the rest of the model meanwhile." /> },
+  step("s6", 32.4, "set_method", "volume_weighted", 0.5),
+  step("s7", 33.0, "set_window", "8 accident years", 0.5),
+  step("s8", 33.6, "set_curve_model", "inverse_power", 0.9),
+  { key: "tail", at: 34.7, node: (t) => <TailCard t={t} /> },
   { key: "reply", at: REPLY_AT, node: (t) => <ClaimsReply t={t} /> },
   {
     key: "a4",
-    at: 42.4,
+    at: 43.2,
     node: (t) => (
       <AgentText
         t={t}
         avatar
-        text="Confirmed as a one-off. I'll exclude it from the factors and reserve the file separately as a large claim."
+        text="Confirmed as a one-off with no further development. I'll exclude that cell from the factor selection so it doesn't drive the projection of the younger years."
       />
     ),
   },
-  step("s9", 44.4, "exclude_cells", "AY2023 · 14→15", 0.6),
-  step("s10", 45.1, "load_large", `${LARGE_FILE} · 18.6m`, 0.7),
-  { key: "upd", at: 46.0, node: (t) => <LdfUpdateCard t={t} /> },
-  step("s11", 51.0, "set_basis", "BF · AY2025–2026", 0.5),
-  step("s12", 51.6, "simulate_bf", "loss ratio 62%", 0.8),
+  step("s9", 45.6, "exclude_cells", "AY2023 · 14→15", 0.6),
+  { key: "ldf2", at: 46.5, node: (t) => <LdfTriangleCard t={t} mode="excluded" /> },
+  step("s10", 51.6, "set_basis", "BF · AY2026", 0.5),
+  step("s11", 52.2, "simulate_bf", `prior ${BASIS}`, 0.8),
   {
     key: "a5",
-    at: 52.6,
-    node: (t) => <AgentText t={t} text="AY2025–26 are too immature for chain-ladder alone, so I'm using Bornhuetter–Ferguson with a **62%** prior loss ratio." />,
+    at: 53.2,
+    node: (t) => (
+      <AgentText
+        t={t}
+        text={`AY2026 has only 3 quarters of development, so I'm using Bornhuetter–Ferguson for it. The prior loss ratio is **${BASIS}**: the premium-weighted pattern ratio of AY${LR_BASIS[0]}–${LR_BASIS[LR_BASIS.length - 1]}, **${LR_TXT}**.`}
+      />
+    ),
   },
-  { key: "bf", at: 54.2, node: (t) => <BfCard t={t} /> },
-  step("s13", 57.6, "run_chain_ladder", "all accident years", 1.1),
-  { key: "res", at: 58.9, node: (t) => <ResultCard t={t} /> },
+  { key: "bf", at: 55.6, node: (t) => <BfTableCard t={t} /> },
+  step("s12", 61.6, "run_chain_ladder", "all accident years", 1.1),
+  { key: "res", at: 62.9, node: (t) => <ResultCard t={t} /> },
   {
     key: "a6",
-    at: 66.6,
+    at: 69.6,
     node: (t) => (
       <AgentText
         t={t}
         wps={22}
-        text={`**Q3 close is ready for your review.**\n• Rolled forward to 2026Q3\n• ${LARGE_FILE} (18.6m) reserved outside the triangle, confirmed by claims\n• Volume-weighted, 8 AYs · inverse-power tail ${TAIL.toFixed(3)}\n• BF for AY2025–26 at 62%\n• IBNR **${fmt(Q3_IBNR)}m TRY**`}
+        text={`**Q3 close is ready for your review.**\n• Rolled forward to 2026Q3\n• AY2023 · 14→15 excluded from the factors (one-off total loss, confirmed by claims)\n• Volume-weighted, 8 AYs · inverse-power tail ${TAIL.toFixed(3)}\n• BF for AY2026, prior ${BASIS} = ${LR_TXT}\n• IBNR **${fmt(Q3_IBNR)}m TRY**`}
       />
     ),
   },
-  step("s14", 71.6, "create_version", "Q3 close · v1", 0.7),
-  { key: "saved", at: 72.6, node: (t) => <SavedLine t={t} steps={14} /> },
-  { key: "sugg", at: 73.6, node: (t) => <Suggestions t={t} /> },
+  step("s13", 74.4, "create_version", "Q3 close · v1", 0.7),
+  { key: "saved", at: 75.3, node: (t) => <SavedLine t={t} steps={13} /> },
+  { key: "sugg", at: 76.2, node: (t) => <Suggestions t={t} /> },
 ];
 
 // Bölüm rayı (sol): demo izleyicisine nerede olduğumuzu söyler.
 const CHAPTERS: { at: number; label: string }[] = [
   { at: 0, label: "Request" },
   { at: SEND + 1.3, label: "Roll forward" },
-  { at: 14.6, label: "Review factors" },
-  { at: 22.6, label: "Ask the claims team" },
-  { at: 31.4, label: "Method & tail" },
-  { at: 38.8, label: "Claims reply" },
-  { at: 51.0, label: "Bornhuetter–Ferguson" },
-  { at: 57.6, label: "Reserve summary" },
-  { at: 71.6, label: "Save & audit" },
+  { at: 15.4, label: "Review factors" },
+  { at: ASK_AT, label: "Ask the claims team" },
+  { at: 32.4, label: "Method & tail" },
+  { at: REPLY_AT, label: "Exclude the outlier" },
+  { at: 51.6, label: "Bornhuetter–Ferguson" },
+  { at: 61.6, label: "Reserve summary" },
+  { at: 74.4, label: "Save & audit" },
 ];
 
 // Kamera: [sn, ölçek, dikey kayma(px)]
 const CAM: [number, number, number][] = [
   [0, 1.0, 0],
   [5, 1.0, 0],
-  [8, 1.07, -40],
-  [13, 1.07, -40],
-  [16, 1.1, -70],
-  [21.5, 1.1, -70],
-  [24, 1.12, -110],
-  [26.5, 1.12, -110],
-  [29, 1.06, -50],
-  [36, 1.08, -60],
-  [39.5, 1.12, -100],
-  [43, 1.06, -50],
-  [47, 1.1, -80],
-  [50.5, 1.1, -80],
-  [55, 1.06, -40],
-  [59.5, 1.1, -60],
-  [65.5, 1.1, -60],
-  [69, 1.04, -20],
-  [76, 1.0, 0],
+  [8, 1.06, -40],
+  [13.5, 1.06, -40],
+  [17, 1.1, -70],
+  [23, 1.1, -70],
+  [25.5, 1.12, -110],
+  [28, 1.12, -110],
+  [30, 1.06, -50],
+  [37, 1.08, -60],
+  [40.5, 1.12, -100],
+  [44, 1.06, -50],
+  [47.5, 1.1, -80],
+  [51, 1.1, -80],
+  [55.5, 1.08, -60],
+  [60.5, 1.08, -60],
+  [63.5, 1.1, -60],
+  [68.5, 1.1, -60],
+  [71.5, 1.04, -20],
+  [78, 1.0, 0],
   [90, 1.0, 0],
 ];
 

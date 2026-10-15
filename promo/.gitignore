@@ -2,3 +2,4 @@ node_modules/
 out/
 .remotion/
 public/score.wav
+public/demo-score.wav

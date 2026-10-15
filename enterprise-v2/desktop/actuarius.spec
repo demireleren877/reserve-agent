@@ -30,6 +30,8 @@ hiddenimports = [
     "app.main",
     "bcrypt",
     "jwt",
+    # Kurumsal ağ sertifikaları için Windows güven deposu (agent/client.py).
+    "truststore",
 ]
 
 # Dinamik import'ları olan paketleri tam topla.

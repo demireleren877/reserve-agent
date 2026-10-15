@@ -10,10 +10,26 @@ from __future__ import annotations
 
 import json
 import os
+import ssl
 from dataclasses import dataclass
 from typing import Any
 
 import httpx
+
+
+def _tls_verify() -> ssl.SSLContext | bool:
+    """Sertifika doğrulaması için işletim sisteminin güven deposu.
+
+    Kurumsal ağlarda trafik, şirketin kendi kök sertifikasıyla yeniden imzalanır
+    (TLS inceleme). Bu sertifika Windows deposunda kuruludur ama Python'un kendi
+    listesinde (certifi) yoktur → "self-signed certificate in certificate chain".
+    truststore Windows/macOS/Linux deposunu kullanır; yoksa varsayılana düşülür.
+    """
+    try:
+        import truststore
+    except ImportError:
+        return True
+    return truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
 
 
 @dataclass
@@ -75,7 +91,7 @@ class AgentClient:
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
 
-        with httpx.Client(timeout=self.timeout) as client:
+        with httpx.Client(timeout=self.timeout, verify=_tls_verify()) as client:
             resp = client.post(
                 f"{self.base_url}/chat/completions", json=payload, headers=headers
             )

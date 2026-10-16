@@ -64,27 +64,62 @@ def project(latest_tri,fac_tri,ep,lr,bf_ays=(2026,)):
 def vw_lr(per,ays):
     return sum(per[a]["cl"] for a in ays)/sum(per[a]["ep"] for a in ays)
 
-EP3=dict(EP); EP2=dict(EP); EP2[2026]=EP_Q2_2026
-q2={ay:(r[:-1] if ay!=2026 else q2_2026) for ay,r in inc.items()}
-BASIS=[2020,2021,2022,2023,2024]
-# Q3: faktörler AY2023·14→15 hariç (temiz üçgen), projeksiyon gerçek köşegene (hasar dahil)
-_,pre,_=project(inc_l,inc,EP3,0.62)
-LR=vw_lr(pre,BASIS)
-I3,p3,f3=project(inc_l,inc,EP3,LR)          # son hâl: hücre hariç
-I3L,p3L,f3L=project(inc_l,inc_l,EP3,LR)     # hücre dahil olsaydı
-_,pq2,_=project(q2,q2,EP2,0.62)
-LR2=vw_lr(pq2,BASIS)
-I2,p2,_=project(q2,q2,EP2,LR2)
-newexp=(EP[2026]-EP_Q2_2026)*LR*(1-1/p3[2026]["cdf"])
+# ─── Rapor tarihi bazında değerleme ──────────────────────────────────────────
+# Takvim çeyreği c: AY y'nin dev d hücresi c = (y-2017)*4 + d (2017Q1 = 1, 2026Q3 = 39).
+EP_FULL=dict(EP); EP_FULL[2026]=EP[2026]*4/3   # 2026: 3 çeyrekte 1890 → yıllık 2520
+def qlabel(c): return f"{2017+(c-1)//4}Q{(c-1)%4+1}"
+def as_of(tri,c):
+    out={}
+    for ay in AYS:
+        k=c-(ay-2017)*4
+        if k>=1: out[ay]=tri[ay][:min(k,len(tri[ay]))]
+    return out
+def ep_at(c):
+    return {ay:EP_FULL[ay]*min(1,(c-(ay-2017)*4)/4) for ay in AYS if c-(ay-2017)*4>=1}
+def value(c,exclude=False):
+    """c tarihindeki değerleme: CL tüm AY'ler, son AY için BF; ön LR = vw(Y-6:Y-2)."""
+    lat=as_of(inc_l,c); fac=as_of(inc if exclude else inc_l,c); ep=ep_at(c)
+    ays=sorted(lat); Y=ays[-1]
+    f=factors_on(fac,ays); cd=cdfs_on(lat,f,ays)
+    basis=[a for a in range(Y-6,Y-1) if a in lat]
+    lr=sum(lat[a][-1]*cd[a] for a in basis)/sum(ep[a] for a in basis)
+    rows={}
+    for a in ays:
+        l=lat[a][-1]; cl=l*cd[a]
+        u=l+ep[a]*lr*(1-1/cd[a]) if a==Y else cl
+        rows[a]=dict(latest=l,ep=ep[a],cdf=cd[a],cl=cl,pattern=cl/ep[a],ult=u,ibnr=u-l,bf=a==Y)
+    tot=lambda k: sum(r[k] for r in rows.values())
+    return dict(label=qlabel(c),ep=tot("ep"),inc=tot("latest"),ibnr=tot("ibnr"),ult=tot("ult"),lr=lr,basis=basis,rows=rows)
+def factors_on(tri,ays,win=8):
+    f={}
+    for d in range(1,39):
+        pairs=[(tri[a][d-1],tri[a][d]) for a in ays if a in tri and len(tri[a])>d][-win:]
+        if pairs: f[d]=sum(y for x,y in pairs)/sum(x for x,y in pairs)
+    return f
+def cdfs_on(tri,f,ays,tail=TAIL):
+    out={}
+    for a in ays:
+        c=tail
+        for d in range(len(tri[a]),39): c*=f.get(d,1.0)
+        out[a]=c
+    return out
+
+Q3=value(39,exclude=True)      # son hâl: aykırı hücre faktörlerden hariç
+Q3L=value(39,exclude=False)    # hücre dahil olsaydı
+Q2=value(38)
+HIST=[value(c) for c in range(36,39)]+[Q3]   # 2025Q4 … 2026Q3
+I3,I3L,I2=Q3["ibnr"],Q3L["ibnr"],Q2["ibnr"]
+LR=Q3["lr"]; BASIS=Q3["basis"]
+cdf26=Q3["rows"][2026]["cdf"]
+newexp=(Q3["rows"][2026]["ep"]-Q2["rows"][2026]["ep"])*LR*(1-1/cdf26)
 r=inc_l[2023]
-print("LR prior Q3 %.4f Q2 %.4f"%(LR,LR2))
+print("LR %.4f basis %s"%(LR,BASIS))
 print("I2 %.1f I3 %.1f I3L %.1f over %.1f newexp %.1f release %.1f"%(I2,I3,I3L,I3L-I3,newexp,I3-I2-newexp))
-print("AY2023 14->15 with %.4f clean %.4f share %.0f%%"%(r[14]/r[13],inc[2023][14]/inc[2023][13],100*LARGE/(r[14]-r[13])))
-print("VWA14 with %.4f clean %.4f"%(f3L[14],f3[14]))
-for ay in AYS: print(ay,{k:(round(v,4) if isinstance(v,float) else v) for k,v in p3[ay].items()})
+for h in HIST: print(h["label"],"EP %.0f inc %.1f ibnr %.1f ult %.1f ULR %.1f%%"%(h["ep"],h["inc"],h["ibnr"],h["ult"],100*h["ult"]/h["ep"]))
 OUT=os.path.join(os.path.dirname(__file__),"..","src","demo","data.json")
 payload={"inc":{str(a):[round(v,3) for v in inc_l[a]] for a in AYS},"incClean":{str(a):[round(v,3) for v in inc[a]] for a in AYS},
  "pat":pat,"I2":I2,"I3":I3,"I3L":I3L,"lr":LR,"basis":BASIS,"newexp":newexp,"release":I3-I2-newexp,
- "rows":{str(a):p3[a] for a in AYS}}
+ "rows":{str(a):Q3["rows"][a] for a in AYS},
+ "history":[{k:h[k] for k in ("label","ep","inc","ibnr","ult")} for h in HIST]}
 json.dump(payload,open(OUT,"w"))
 print("wrote",OUT)

@@ -25,6 +25,7 @@ type Raw = {
   newexp: number;
   release: number;
   rows: Record<string, Row>;
+  history: { label: string; ep: number; inc: number; ibnr: number; ult: number }[];
 };
 const R = raw as unknown as Raw;
 
@@ -74,6 +75,9 @@ export const NEW_EXPOSURE = R.newexp;
 export const DEV_PRIOR = R.release;
 export const PRIOR_LR = R.lr;
 export const LR_BASIS = R.basis;
+
+/** Rapor tarihi bazında toplamlar (2025Q4 → 2026Q3), her biri o tarihteki verilerle değerlenmiş. */
+export const HISTORY = R.history;
 
 export const SUMMARY = AYS.map((a) => ({ ay: a, ...R.rows[String(a)], dev: INC[a].length }));
 

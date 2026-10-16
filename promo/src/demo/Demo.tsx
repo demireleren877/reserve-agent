@@ -35,6 +35,7 @@ import {
   Typing,
   UserBubble,
   ease,
+  type HistoryMode,
 } from "./ui";
 
 export const DEMO_FPS = 60;
@@ -67,6 +68,7 @@ const step = (key: string, at: number, name: string, args: string | undefined, d
   node: (t) => <ToolStep name={name} args={args} t={t} dur={dur} first={first} />,
 });
 
+let HISTORY: HistoryMode = "chart";
 const BASIS = `vw(${LR_BASIS[0]}:${LR_BASIS[LR_BASIS.length - 1]})`;
 const LR_TXT = `${(PRIOR_LR * 100).toFixed(1)}%`;
 
@@ -131,7 +133,7 @@ const ITEMS: Item[] = [
   },
   { key: "bf", at: 55.6, node: (t) => <BfTableCard t={t} /> },
   step("s12", 61.6, "run_chain_ladder", "all accident years", 1.1),
-  { key: "res", at: 62.9, node: (t) => <ResultCard t={t} /> },
+  { key: "res", at: 62.9, node: (t) => <ResultCard t={t} history={HISTORY} /> },
   {
     key: "a6",
     at: 69.6,
@@ -282,7 +284,8 @@ const Pointer: React.FC<{ x: number; y: number; click: number; o: number }> = ({
 );
 
 // ─── Ana bileşen ──────────────────────────────────────────────────────────────
-export const AgentDemo: React.FC = () => {
+export const AgentDemo: React.FC<{ history?: HistoryMode }> = ({ history = "chart" }) => {
+  HISTORY = history;
   const frame = useCurrentFrame();
   const s = frame / DEMO_FPS;
 

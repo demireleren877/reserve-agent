@@ -747,8 +747,159 @@ export const BfTableCard: React.FC<{ t: number }> = ({ t }) => {
   );
 };
 
+// ─── 9b. Tarihsel görünüm (kaza yılı bazında EP · Incurred · IBNR) ─────────────
+export type HistoryMode = "table" | "chart";
+const INC_C = C.primary; // görülen kısım
+const IBNR_C = "#5b87ec"; // görülmemiş kısım (aynı tonun açığı; doğrulandı)
+
+const HistoryTable: React.FC<{ t: number }> = ({ t }) => {
+  const th: React.CSSProperties = { fontSize: 9, color: C.mutedStrong, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.3, textAlign: "right", padding: "6px 6px" };
+  const td: React.CSSProperties = { fontFamily: MONO, fontSize: 10.5, textAlign: "right", padding: "0 6px", height: 19, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" };
+  const tot = SUMMARY.reduce((s, r) => ({ ep: s.ep + r.ep, inc: s.inc + r.latest, ibnr: s.ibnr + r.ibnr, ult: s.ult + r.ult }), { ep: 0, inc: 0, ibnr: 0, ult: 0 });
+  const maxShare = Math.max(...SUMMARY.map((r) => r.ibnr / r.ult));
+  return (
+    <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
+      <colgroup>
+        {[64, 92, 92, 150, 92, 70].map((w, i) => (
+          <col key={i} style={{ width: w }} />
+        ))}
+      </colgroup>
+      <thead>
+        <tr style={{ background: C.alt }}>
+          <th style={{ ...th, textAlign: "left" }}>Accident Year</th>
+          <th style={th}>Earned premium</th>
+          <th style={th}>Incurred</th>
+          <th style={th}>IBNR</th>
+          <th style={th}>Ultimate</th>
+          <th style={th}>Ult. LR</th>
+        </tr>
+      </thead>
+      <tbody>
+        {SUMMARY.map((r, i) => {
+          const o = ease(t, i * 0.06, 0.3 + i * 0.06);
+          const share = r.ibnr / r.ult;
+          const bar = ease(t, 0.4 + i * 0.06, 1.1 + i * 0.06);
+          return (
+            <tr key={r.ay} style={{ borderTop: `1px solid ${C.border}`, opacity: o, background: r.bf ? C.primarySoft : undefined }}>
+              <td style={{ ...td, fontFamily: SANS, fontWeight: 500, textAlign: "left", fontSize: 11 }}>
+                {r.ay}
+                {r.bf && <span style={{ marginLeft: 6, fontSize: 8.5, fontWeight: 600, color: C.primary, border: `1px solid ${C.primaryBorder}`, borderRadius: 3, padding: "0 3px" }}>BF</span>}
+              </td>
+              <td style={td}>{fmt(r.ep, 0)}</td>
+              <td style={td}>{fmt(r.latest)}</td>
+              <td style={{ ...td }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8 }}>
+                  <div style={{ width: 60, height: 6, borderRadius: 3, background: C.alt, overflow: "hidden" }}>
+                    <div style={{ width: `${(share / maxShare) * 100 * bar}%`, height: "100%", borderRadius: 3, background: IBNR_C }} />
+                  </div>
+                  <span style={{ width: 48 }}>{fmt(r.ibnr)}</span>
+                </div>
+              </td>
+              <td style={{ ...td, fontWeight: 600 }}>{fmt(r.ult)}</td>
+              <td style={{ ...td, color: C.mutedStrong }}>{((r.ult / r.ep) * 100).toFixed(1)}%</td>
+            </tr>
+          );
+        })}
+        <tr style={{ borderTop: `2px solid ${C.borderStrong}`, background: C.alt, opacity: ease(t, 0.7, 1.0) }}>
+          <td style={{ ...td, fontFamily: SANS, fontWeight: 600, textAlign: "left", fontSize: 11 }}>Total</td>
+          <td style={{ ...td, fontWeight: 600 }}>{fmt(tot.ep, 0)}</td>
+          <td style={{ ...td, fontWeight: 600 }}>{fmt(tot.inc)}</td>
+          <td style={{ ...td, fontWeight: 600 }}>{fmt(tot.ibnr)}</td>
+          <td style={{ ...td, fontWeight: 600 }}>{fmt(tot.ult)}</td>
+          <td style={{ ...td, fontWeight: 600, color: C.mutedStrong }}>{((tot.ult / tot.ep) * 100).toFixed(1)}%</td>
+        </tr>
+      </tbody>
+    </table>
+  );
+};
+
+const HistoryChart: React.FC<{ t: number }> = ({ t }) => {
+  const W = 626;
+  const H = 210;
+  const pad = { l: 40, r: 8, t: 22, b: 22 };
+  const yMax = 2400;
+  const y = (v: number) => pad.t + (1 - v / yMax) * (H - pad.t - pad.b);
+  const band = (W - pad.l - pad.r) / SUMMARY.length;
+  const bw = 26;
+  const GAP = 2; // segmentler arası yüzey boşluğu
+  return (
+    <div>
+      <svg width={W} height={H} style={{ display: "block" }}>
+        {[500, 1000, 1500, 2000].map((v) => (
+          <g key={v}>
+            <line x1={pad.l} x2={W - pad.r} y1={y(v)} y2={y(v)} stroke={C.alt} />
+            <text x={pad.l - 6} y={y(v) + 3} fontSize={9} textAnchor="end" fill={C.muted} fontFamily={MONO}>
+              {v.toLocaleString("en-US")}
+            </text>
+          </g>
+        ))}
+        <line x1={pad.l} x2={W - pad.r} y1={y(0)} y2={y(0)} stroke={C.borderStrong} />
+        {SUMMARY.map((r, i) => {
+          const cx = pad.l + band * (i + 0.5);
+          const a = i * 0.08;
+          const pInc = ease(t, a, a + 0.7);
+          const pIb = ease(t, a + 0.5, a + 1.1);
+          const incTop = y(r.latest * pInc);
+          const incH = y(0) - incTop;
+          const ibH = Math.max(0, (y(0) - y(r.ibnr)) * pIb - (r.ibnr > 2 ? GAP : 0));
+          const ibTop = incTop - GAP - ibH;
+          const epY = y(r.ep);
+          const epO = ease(t, 1.2 + i * 0.05, 1.5 + i * 0.05);
+          const showLabel = r.ay >= 2025;
+          const top = ibH > 0.5 ? ibTop : incTop;
+          return (
+            <g key={r.ay}>
+              {/* Incurred — taban çizgisine oturur */}
+              <rect x={cx - bw / 2} y={incTop} width={bw} height={Math.max(0, incH)} fill={INC_C} rx={ibH > 0.5 ? 0 : 4} />
+              {ibH <= 0.5 && incH > 4 && <rect x={cx - bw / 2} y={incTop + 4} width={bw} height={Math.max(0, incH - 4)} fill={INC_C} />}
+              {/* IBNR — üstte, 4px yuvarlak uç */}
+              {ibH > 0.5 && (
+                <>
+                  <rect x={cx - bw / 2} y={ibTop} width={bw} height={ibH} fill={IBNR_C} rx={Math.min(4, ibH / 2)} />
+                  {ibH > 4 && <rect x={cx - bw / 2} y={ibTop + 4} width={bw} height={ibH - 4} fill={IBNR_C} />}
+                </>
+              )}
+              {/* EP — referans çentiği */}
+              <line x1={cx - bw / 2 - 6} x2={cx + bw / 2 + 6} y1={epY} y2={epY} stroke={C.fg} strokeWidth={2} strokeLinecap="round" opacity={epO} />
+              {showLabel && (
+                <text x={cx} y={Math.min(top, epY) - 7} fontSize={10} textAnchor="middle" fill={C.fg} fontWeight={600} fontFamily={MONO} opacity={ease(t, 1.4, 1.8)}>
+                  {fmt(r.ibnr)}
+                </text>
+              )}
+              <text x={cx} y={H - 6} fontSize={9.5} textAnchor="middle" fill={r.bf ? C.primary : C.muted} fontWeight={r.bf ? 600 : 400} fontFamily={MONO}>
+                {r.ay}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+      <div style={{ display: "flex", gap: 16, fontSize: 11.5, color: C.mutedStrong, marginTop: 4, opacity: ease(t, 1.0, 1.4) }}>
+        <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ width: 10, height: 10, borderRadius: 2, background: INC_C }} /> Incurred
+        </span>
+        <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ width: 10, height: 10, borderRadius: 2, background: IBNR_C }} /> IBNR
+        </span>
+        <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ width: 14, height: 2, borderRadius: 1, background: C.fg }} /> Earned premium
+        </span>
+        <span style={{ marginLeft: "auto", color: C.muted }}>TRY m · labels show IBNR</span>
+      </div>
+    </div>
+  );
+};
+
+const HistoryPanel: React.FC<{ t: number; mode: HistoryMode }> = ({ t, mode }) => (
+  <div style={{ marginTop: 12, borderTop: `1px solid ${C.border}`, paddingTop: 10 }}>
+    <div style={{ fontSize: 11, color: C.muted, letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 8, opacity: ease(t, 0, 0.3) }}>
+      By accident year · earned premium, incurred and IBNR
+    </div>
+    {mode === "table" ? <HistoryTable t={t} /> : <HistoryChart t={t} />}
+  </div>
+);
+
 // ─── 9. Sonuç ─────────────────────────────────────────────────────────────────
-export const ResultCard: React.FC<{ t: number }> = ({ t }) => {
+export const ResultCard: React.FC<{ t: number; history?: HistoryMode }> = ({ t, history = "chart" }) => {
   const count = ease(t, 0.3, 2.2);
   const chg = Q3_IBNR - Q2_IBNR;
   // Köprü grafiği
@@ -812,14 +963,7 @@ export const ResultCard: React.FC<{ t: number }> = ({ t }) => {
           );
         })}
       </svg>
-      <div style={{ marginTop: 10, borderTop: `1px solid ${C.border}`, paddingTop: 10, display: "grid", gridTemplateColumns: "repeat(10, 1fr)", gap: 4, opacity: ease(t, 4.4, 4.9) }}>
-        {SUMMARY.map((r, i) => (
-          <div key={r.ay} style={{ textAlign: "center", padding: "5px 0", borderRadius: 6, background: C.alt, opacity: ease(t, 4.4 + i * 0.05, 4.8 + i * 0.05) }}>
-            <div style={{ fontSize: 9.5, color: C.muted, fontFamily: MONO }}>AY{String(r.ay).slice(2)}</div>
-            <div style={{ fontSize: 11.5, color: C.fg, fontFamily: MONO, fontWeight: 500 }}>{fmt(r.ibnr)}</div>
-          </div>
-        ))}
-      </div>
+      <HistoryPanel t={t - 4.4} mode={history} />
     </Card>
   );
 };

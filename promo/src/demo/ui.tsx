@@ -794,57 +794,109 @@ const HistoryTable: React.FC<{ t: number }> = ({ t }) => {
   );
 };
 
-/** Küçük çoklu grafik: her ölçü kendi ekseninde (EP ile IBNR'ın ölçekleri çok farklı). */
-const MiniBars: React.FC<{ t: number; title: string; values: number[]; dp?: number; delay: number; accent?: boolean }> = ({ t, title, values, dp = 1, delay, accent }) => {
-  const W = 198;
-  const H = 150;
-  const pad = { t: 22, b: 20 };
-  const max = Math.max(...values) * 1.12;
-  const bw = 30;
-  const band = W / values.length;
-  const y = (v: number) => pad.t + (1 - v / max) * (H - pad.t - pad.b);
+/** EP + Ultimate sütun (sol eksen, kısaltılmış tutar) · ULR çizgi (sağ eksen). */
+const EP_C = "#6f97f0";
+const ULT_C = C.primary;
+const ULR_C = "#c2410c";
+const bn = (m: number) => `${(m / 1000).toFixed(m % 1000 === 0 ? 0 : 1)}bn`;
+
+const HistoryChart: React.FC<{ t: number }> = ({ t }) => {
+  const W = 626;
+  const H = 230;
+  const pad = { l: 44, r: 44, t: 18, b: 24 };
+  const iw = W - pad.l - pad.r;
+  const ih = H - pad.t - pad.b;
+  const yMax = 15000; // TRY m — sütunlar alt bölgede, ULR çizgisi üstte kalsın
+  const y = (v: number) => pad.t + (1 - v / yMax) * ih;
+  const rLo = 0.3;
+  const rHi = 0.7;
+  const yr = (r: number) => pad.t + (1 - (r - rLo) / (rHi - rLo)) * ih;
+  const band = iw / HISTORY.length;
+  const bw = 34;
+  const gap = 2;
+  const pts = HISTORY.map((h, i) => ({ x: pad.l + band * (i + 0.5), r: h.ult / h.ep }));
+  const lineP = ease(t, 1.3, 2.4);
+  const path = pts.map((p, i) => `${i ? "L" : "M"}${p.x.toFixed(1)},${yr(p.r).toFixed(1)}`).join(" ");
   return (
-    <div style={{ width: W }}>
-      <div style={{ fontSize: 11.5, fontWeight: 600, color: C.fg, marginBottom: 4 }}>{title}</div>
+    <div>
       <svg width={W} height={H} style={{ display: "block" }}>
-        <line x1={0} x2={W} y1={y(0)} y2={y(0)} stroke={C.borderStrong} />
-        {values.map((v, i) => {
-          const cur = i === values.length - 1;
-          const p = ease(t, delay + i * 0.12, delay + 0.6 + i * 0.12);
-          const cx = band * (i + 0.5);
-          const top = y(v * p);
-          const h = y(0) - top;
-          const fill = cur ? C.primary : accent ? "#9db8f4" : "#c7d6f7";
+        {/* sol eksen: tutar */}
+        {[0, 5000, 10000, 15000].map((v) => (
+          <g key={v}>
+            <line x1={pad.l} x2={W - pad.r} y1={y(v)} y2={y(v)} stroke={v === 0 ? C.borderStrong : C.alt} />
+            <text x={pad.l - 7} y={y(v) + 3} fontSize={9.5} textAnchor="end" fill={C.muted} fontFamily={MONO}>
+              {v === 0 ? "0" : bn(v)}
+            </text>
+          </g>
+        ))}
+        {/* sağ eksen: ULR (çizgiyle aynı renk) */}
+        {[0.3, 0.4, 0.5, 0.6, 0.7].map((r) => (
+          <text key={r} x={W - pad.r + 7} y={yr(r) + 3} fontSize={9.5} textAnchor="start" fill={ULR_C} fontFamily={MONO}>
+            {Math.round(r * 100)}%
+          </text>
+        ))}
+        <text x={pad.l - 7} y={pad.t - 7} fontSize={9} textAnchor="end" fill={C.muted} fontFamily={SANS}>TRY</text>
+        <text x={W - pad.r + 7} y={pad.t - 7} fontSize={9} textAnchor="start" fill={ULR_C} fontFamily={SANS}>ULR</text>
+        {HISTORY.map((h, i) => {
+          const cx = pad.l + band * (i + 0.5);
+          const cur = i === HISTORY.length - 1;
+          const bars = [
+            { v: h.ep, c: EP_C, x: cx - bw - gap / 2 },
+            { v: h.ult, c: ULT_C, x: cx + gap / 2 },
+          ];
           return (
-            <g key={i}>
-              <rect x={cx - bw / 2} y={top} width={bw} height={Math.max(0, h)} rx={4} fill={fill} />
-              {h > 4 && <rect x={cx - bw / 2} y={top + 4} width={bw} height={Math.max(0, h - 4)} fill={fill} />}
-              <text x={cx} y={top - 6} fontSize={9.5} textAnchor="middle" fill={C.fg} fontWeight={cur ? 700 : 500} fontFamily={MONO} opacity={ease(t, delay + 0.4 + i * 0.12, delay + 0.7 + i * 0.12)}>
-                {fmt(v, dp)}
+            <g key={h.label}>
+              {bars.map((b, j) => {
+                const p = ease(t, i * 0.12 + j * 0.15, i * 0.12 + j * 0.15 + 0.7);
+                const top = y(b.v * p);
+                const hh = y(0) - top;
+                return (
+                  <g key={j}>
+                    <rect x={b.x} y={top} width={bw} height={Math.max(0, hh)} rx={4} fill={b.c} />
+                    {hh > 4 && <rect x={b.x} y={top + 4} width={bw} height={hh - 4} fill={b.c} />}
+                    <text x={b.x + bw / 2} y={top - 5} fontSize={9.5} textAnchor="middle" fill={C.fg} fontFamily={MONO} fontWeight={cur ? 700 : 500} opacity={ease(t, 0.8 + i * 0.12, 1.1 + i * 0.12)}>
+                      {bn(b.v)}
+                    </text>
+                  </g>
+                );
+              })}
+              <text x={cx} y={H - 6} fontSize={10.5} textAnchor="middle" fill={cur ? C.primary : C.mutedStrong} fontWeight={cur ? 700 : 500} fontFamily={MONO}>
+                {h.label}
               </text>
-              <text x={cx} y={H - 5} fontSize={9} textAnchor="middle" fill={cur ? C.primary : C.muted} fontWeight={cur ? 600 : 400} fontFamily={MONO}>
-                {HISTORY[i].label.slice(2)}
+            </g>
+          );
+        })}
+        {/* ULR çizgisi */}
+        <path d={path} fill="none" stroke={ULR_C} strokeWidth={2.5} strokeLinejoin="round" pathLength={1} strokeDasharray={1} strokeDashoffset={1 - lineP} />
+        {pts.map((p, i) => {
+          const o = ease(t, 1.3 + i * 0.28, 1.5 + i * 0.28);
+          return (
+            <g key={i} opacity={o}>
+              <circle cx={p.x} cy={yr(p.r)} r={5} fill={ULR_C} stroke="#fff" strokeWidth={2} />
+              <rect x={p.x - 22} y={yr(p.r) - 24} width={44} height={16} rx={4} fill="#fff" stroke="#fed7aa" />
+              <text x={p.x} y={yr(p.r) - 12.5} fontSize={10} textAnchor="middle" fill={ULR_C} fontWeight={700} fontFamily={MONO}>
+                {(p.r * 100).toFixed(1)}%
               </text>
             </g>
           );
         })}
       </svg>
+      <div style={{ display: "flex", gap: 16, fontSize: 11.5, color: C.mutedStrong, marginTop: 4, opacity: ease(t, 0.9, 1.3) }}>
+        <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ width: 10, height: 10, borderRadius: 2, background: EP_C }} /> Earned premium
+        </span>
+        <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ width: 10, height: 10, borderRadius: 2, background: ULT_C }} /> Ultimate
+        </span>
+        <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ width: 14, height: 2.5, borderRadius: 1, background: ULR_C }} />
+          <span style={{ color: ULR_C }}>Ultimate loss ratio (right axis)</span>
+        </span>
+        <span style={{ marginLeft: "auto", color: C.muted }}>cumulative AY2017–2026</span>
+      </div>
     </div>
   );
 };
-
-const HistoryChart: React.FC<{ t: number }> = ({ t }) => (
-  <div>
-    <div style={{ display: "flex", justifyContent: "space-between" }}>
-      <MiniBars t={t} title="Earned premium" values={HISTORY.map((h) => h.ep)} dp={0} delay={0} />
-      <MiniBars t={t} title="Incurred" values={HISTORY.map((h) => h.inc)} delay={0.3} />
-      <MiniBars t={t} title="IBNR" values={HISTORY.map((h) => h.ibnr)} delay={0.6} accent />
-    </div>
-    <div style={{ fontSize: 11, color: C.muted, marginTop: 6, opacity: ease(t, 1.2, 1.6) }}>
-      Cumulative across AY2017–2026 · TRY m · each panel on its own scale · current report date highlighted
-    </div>
-  </div>
-);
 
 const HistoryPanel: React.FC<{ t: number; mode: HistoryMode }> = ({ t, mode }) => (
   <div style={{ marginTop: 12, borderTop: `1px solid ${C.border}`, paddingTop: 10 }}>

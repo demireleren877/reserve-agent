@@ -68,7 +68,7 @@ const step = (key: string, at: number, name: string, args: string | undefined, d
   node: (t) => <ToolStep name={name} args={args} t={t} dur={dur} first={first} />,
 });
 
-let HISTORY: HistoryMode = "chart";
+let HISTORY: HistoryMode = "chart"; // özet sahnesi: EP/Ultimate sütun + ULR çizgi
 const BASIS = `vw(${LR_BASIS[0]}:${LR_BASIS[LR_BASIS.length - 1]})`;
 const LR_TXT = `${(PRIOR_LR * 100).toFixed(1)}%`;
 
@@ -136,7 +136,7 @@ const ITEMS: Item[] = [
   { key: "res", at: 62.9, node: (t) => <ResultCard t={t} history={HISTORY} /> },
   {
     key: "a6",
-    at: 69.6,
+    at: 71.6,
     node: (t) => (
       <AgentText
         t={t}
@@ -145,9 +145,9 @@ const ITEMS: Item[] = [
       />
     ),
   },
-  step("s13", 74.4, "create_version", "Q3 close · v1", 0.7),
-  { key: "saved", at: 75.3, node: (t) => <SavedLine t={t} steps={13} /> },
-  { key: "sugg", at: 76.2, node: (t) => <Suggestions t={t} /> },
+  step("s13", 76.4, "create_version", "Q3 close · v1", 0.7),
+  { key: "saved", at: 77.3, node: (t) => <SavedLine t={t} steps={13} /> },
+  { key: "sugg", at: 78.2, node: (t) => <Suggestions t={t} /> },
 ];
 
 // Bölüm rayı (sol): demo izleyicisine nerede olduğumuzu söyler.
@@ -160,7 +160,7 @@ const CHAPTERS: { at: number; label: string }[] = [
   { at: REPLY_AT, label: "Exclude the outlier" },
   { at: 51.6, label: "Bornhuetter–Ferguson" },
   { at: 61.6, label: "Reserve summary" },
-  { at: 74.4, label: "Save & audit" },
+  { at: 76.4, label: "Save & audit" },
 ];
 
 // Kamera: [sn, ölçek, dikey kayma(px)]
@@ -182,9 +182,9 @@ const CAM: [number, number, number][] = [
   [55.5, 1.08, -60],
   [60.5, 1.08, -60],
   [63.5, 1.1, -60],
-  [68.5, 1.1, -60],
-  [71.5, 1.04, -20],
-  [78, 1.0, 0],
+  [70.5, 1.1, -60],
+  [73.5, 1.04, -20],
+  [80, 1.0, 0],
   [90, 1.0, 0],
 ];
 
